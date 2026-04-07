@@ -1,0 +1,202 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeLite_Project Name="libmodbuspp" Version="10.0.0" InternalType="Console">
+  <Plugins>
+    <Plugin Name="qmake">
+      <![CDATA[00020001N0005Debug0000000000000001N0007Release000000000000]]>
+    </Plugin>
+  </Plugins>
+  <VirtualDirectory Name="include">
+    <VirtualDirectory Name="modbuspp">
+      <File Name="include/modbuspp/swap.h"/>
+      <File Name="include/modbuspp/global.h"/>
+      <File Name="include/modbuspp/data.h"/>
+      <File Name="include/modbuspp/device.h"/>
+      <File Name="include/modbuspp/master.h"/>
+      <File Name="include/modbuspp/netlayer.h"/>
+      <File Name="include/modbuspp/rtulayer.h"/>
+      <File Name="include/modbuspp/slave.h"/>
+      <File Name="include/modbuspp/tcplayer.h"/>
+      <File Name="include/modbuspp/timeout.h"/>
+      <File Name="include/modbuspp/server.h"/>
+      <File Name="include/modbuspp/bufferedslave.h"/>
+      <File Name="include/modbuspp/message.h"/>
+      <File Name="include/modbuspp/slavereport.h"/>
+      <File Name="include/modbuspp/popl.h"/>
+      <File Name="include/modbuspp/request.h"/>
+      <File Name="include/modbuspp/response.h"/>
+      <File Name="include/modbuspp/router.h"/>
+      <File Name="include/modbuspp/pimp.h"/>
+    </VirtualDirectory>
+    <File Name="include/modbuspp.h"/>
+  </VirtualDirectory>
+  <VirtualDirectory Name="doc">
+    <File Name="doc/DoxygenLayout.xml"/>
+    <File Name="doc/build_main_page.sh.in"/>
+    <File Name="doc/Doxyfile.in"/>
+    <File Name="doc/main_page_footer.dox"/>
+    <File Name="doc/main_page_header.dox"/>
+    <File Name="doc/CMakeLists.txt"/>
+  </VirtualDirectory>
+  <VirtualDirectory Name="dev">
+    <VirtualDirectory Name="codelite">
+      <VirtualDirectory Name="executable-modbuspp">
+        <File Name="dev/codelite/executable-modbuspp/main.cpp"/>
+      </VirtualDirectory>
+      <VirtualDirectory Name="unit-test-modbuspp">
+        <File Name="dev/codelite/unit-test-modbuspp/main.cpp"/>
+      </VirtualDirectory>
+    </VirtualDirectory>
+    <VirtualDirectory Name="bin">
+      <File Name="dev/bin/git-version"/>
+    </VirtualDirectory>
+    <VirtualDirectory Name="cmake">
+      <File Name="dev/cmake/GitVersion.cmake"/>
+      <File Name="dev/cmake/FindGzip.cmake"/>
+      <File Name="dev/cmake/GetDate.cmake"/>
+      <File Name="dev/cmake/SubDirList.cmake"/>
+    </VirtualDirectory>
+    <File Name="dev/CMakeLists.txt"/>
+  </VirtualDirectory>
+  <Description/>
+  <Dependencies/>
+  <VirtualDirectory Name="src">
+    <File Name="src/device.cpp"/>
+    <File Name="src/master.cpp"/>
+    <File Name="src/netlayer.cpp"/>
+    <File Name="src/rtulayer.cpp"/>
+    <File Name="src/tcplayer.cpp"/>
+    <File Name="src/device_p.h"/>
+    <File Name="src/master_p.h"/>
+    <File Name="src/netlayer_p.h"/>
+    <File Name="src/rtulayer_p.h"/>
+    <File Name="src/slave_p.h"/>
+    <File Name="src/tcplayer_p.h"/>
+    <File Name="src/timeout.cpp"/>
+    <File Name="src/server_p.h"/>
+    <File Name="src/slave.cpp"/>
+    <File Name="src/server.cpp"/>
+    <File Name="src/bufferedslave.cpp"/>
+    <File Name="src/bufferedslave_p.h"/>
+    <File Name="src/message.cpp"/>
+    <File Name="src/message_p.h"/>
+    <File Name="src/request.cpp"/>
+    <File Name="src/response.cpp"/>
+    <File Name="src/router.cpp"/>
+    <File Name="src/router_p.h"/>
+    <File Name="src/json_p.h"/>
+    <File Name="src/response_p.h"/>
+    <File Name="src/request_p.h"/>
+  </VirtualDirectory>
+  <VirtualDirectory Name="lib">
+    <File Name="lib/CMakeLists.txt"/>
+  </VirtualDirectory>
+  <VirtualDirectory Name="resources">
+    <File Name="CMakeLists.txt"/>
+    <File Name="modbuspp-config.cmake.in"/>
+    <File Name="modbuspp-config-version.cmake.in"/>
+    <File Name="modbuspp.pc.in"/>
+    <File Name="config.h.in"/>
+    <File Name="version.h.in"/>
+  </VirtualDirectory>
+  <VirtualDirectory Name="libmodbuspp">
+    <File Name="AUTHORS"/>
+    <File Name="cmake_uninstall.cmake.in"/>
+    <File Name="COPYING.LESSER"/>
+    <File Name="README.md"/>
+  </VirtualDirectory>
+  <VirtualDirectory Name="tests">
+    <File Name="tests/CMakeLists.txt"/>
+  </VirtualDirectory>
+  <Settings Type="Executable">
+    <GlobalSettings>
+      <Compiler Options="" C_Options="" Assembler="">
+        <IncludePath Value="."/>
+      </Compiler>
+      <Linker Options="">
+        <LibraryPath Value="."/>
+      </Linker>
+      <ResourceCompiler Options=""/>
+    </GlobalSettings>
+    <Configuration Name="Debug" CompilerType="gnu g++" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
+      <Compiler Options="-g;-O0;-Wall" C_Options="-g;-O0;-Wall" Assembler="" Required="yes" PreCompiledHeader="" PCHInCommandLine="no" PCHFlags="" PCHFlagsPolicy="0">
+        <IncludePath Value="."/>
+      </Compiler>
+      <Linker Options="" Required="yes"/>
+      <ResourceCompiler Options="" Required="no"/>
+      <General OutputFile="" IntermediateDirectory="./Debug" Command="$(WorkspacePath)/cmake-build-$(WorkspaceConfiguration)/bin/$(ProjectName)" CommandArguments="" UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="$(IntermediateDirectory)" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>
+      <BuildSystem Name="CMake">-DCMAKE_BUILD_TYPE=Debug</BuildSystem>
+      <Environment EnvVarSetName="&lt;Use Defaults&gt;" DbgSetName="&lt;Use Defaults&gt;">
+        <![CDATA[]]>
+      </Environment>
+      <Debugger IsRemote="no" RemoteHostName="" RemoteHostPort="" DebuggerPath="" IsExtended="no">
+        <DebuggerSearchPaths/>
+        <PostConnectCommands/>
+        <StartupCommands/>
+      </Debugger>
+      <PreBuild/>
+      <PostBuild/>
+      <CustomBuild Enabled="no">
+        <RebuildCommand/>
+        <CleanCommand/>
+        <BuildCommand/>
+        <PreprocessFileCommand/>
+        <SingleFileCommand/>
+        <MakefileGenerationCommand/>
+        <ThirdPartyToolName>None</ThirdPartyToolName>
+        <WorkingDirectory/>
+      </CustomBuild>
+      <AdditionalRules>
+        <CustomPostBuild/>
+        <CustomPreBuild/>
+      </AdditionalRules>
+      <Completion EnableCpp11="yes" EnableCpp14="no">
+        <ClangCmpFlagsC/>
+        <ClangCmpFlags/>
+        <ClangPP/>
+        <SearchPaths/>
+      </Completion>
+    </Configuration>
+    <Configuration Name="Release" CompilerType="gnu g++" DebuggerType="GNU gdb debugger" Type="Executable" BuildCmpWithGlobalSettings="append" BuildLnkWithGlobalSettings="append" BuildResWithGlobalSettings="append">
+      <Compiler Options="-O2;-Wall" C_Options="-O2;-Wall" Assembler="" Required="yes" PreCompiledHeader="" PCHInCommandLine="no" PCHFlags="" PCHFlagsPolicy="0">
+        <IncludePath Value="."/>
+        <Preprocessor Value="NDEBUG"/>
+      </Compiler>
+      <Linker Options="" Required="yes"/>
+      <ResourceCompiler Options="" Required="no"/>
+      <General OutputFile="" IntermediateDirectory="./Release" Command="$(WorkspacePath)/cmake-build-$(WorkspaceConfiguration)/bin/$(ProjectName)" CommandArguments="" UseSeparateDebugArgs="no" DebugArguments="" WorkingDirectory="$(IntermediateDirectory)" PauseExecWhenProcTerminates="yes" IsGUIProgram="no" IsEnabled="yes"/>
+      <BuildSystem Name="CMake">-DMODBUSPP_WITH_DOXYGEN_DOC=1</BuildSystem>
+      <Environment EnvVarSetName="&lt;Use Defaults&gt;" DbgSetName="&lt;Use Defaults&gt;">
+        <![CDATA[]]>
+      </Environment>
+      <Debugger IsRemote="no" RemoteHostName="" RemoteHostPort="" DebuggerPath="" IsExtended="no">
+        <DebuggerSearchPaths/>
+        <PostConnectCommands/>
+        <StartupCommands/>
+      </Debugger>
+      <PreBuild/>
+      <PostBuild/>
+      <CustomBuild Enabled="no">
+        <RebuildCommand/>
+        <CleanCommand/>
+        <BuildCommand/>
+        <PreprocessFileCommand/>
+        <SingleFileCommand/>
+        <MakefileGenerationCommand/>
+        <ThirdPartyToolName>None</ThirdPartyToolName>
+        <WorkingDirectory/>
+      </CustomBuild>
+      <AdditionalRules>
+        <CustomPostBuild/>
+        <CustomPreBuild/>
+      </AdditionalRules>
+      <Completion EnableCpp11="yes" EnableCpp14="no">
+        <ClangCmpFlagsC/>
+        <ClangCmpFlags/>
+        <ClangPP/>
+        <SearchPaths/>
+      </Completion>
+    </Configuration>
+  </Settings>
+  <Dependencies Name="Debug"/>
+  <Dependencies Name="Release"/>
+</CodeLite_Project>

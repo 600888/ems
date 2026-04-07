@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<CodeLite_Workspace Name="modbuspp" Database="" Version="10.0.0">
+  <Project Name="libmodbuspp" Path="libmodbuspp.project" Active="Yes"/>
+  <Project Name="libmodbuspp-doc" Path="doc/libmodbuspp-doc.project" Active="No"/>
+  <VirtualDirectory Name="examples">
+    <VirtualDirectory Name="master">
+      <Project Name="read-coils" Path="examples/master/read-coils/read-coils.project" Active="No"/>
+      <Project Name="read-holding-data" Path="examples/master/read-holding-data/read-holding-data.project" Active="No"/>
+      <Project Name="read-input-registers" Path="examples/master/read-input-registers/read-input-registers.project" Active="No"/>
+      <Project Name="report-slave-id" Path="examples/master/report-slave-id/report-slave-id.project" Active="No"/>
+      <Project Name="write-holding-data" Path="examples/master/write-holding-data/write-holding-data.project" Active="No"/>
+      <Project Name="rw-holding-json" Path="examples/master/rw-holding-json/rw-holding-json.project" Active="No"/>
+    </VirtualDirectory>
+    <VirtualDirectory Name="server">
+      <Project Name="clock-server-json" Path="examples/server/clock-server-json/clock-server-json.project" Active="No"/>
+      <Project Name="clock-server" Path="examples/server/clock-server/clock-server.project" Active="No"/>
+      <Project Name="callback-server-json" Path="examples/server/callback-server-json/callback-server-json.project" Active="No"/>
+      <Project Name="simple-server-json" Path="examples/server/simple-server-json/simple-server-json.project" Active="No"/>
+    </VirtualDirectory>
+    <VirtualDirectory Name="router">
+      <Project Name="router-json" Path="examples/router/router-json/router-json.project" Active="No"/>
+      <Project Name="router-simple" Path="examples/router/router-simple/router-simple.project" Active="No"/>
+    </VirtualDirectory>
+  </VirtualDirectory>
+  <VirtualDirectory Name="tests">
+    <Project Name="unit-test-server" Path="tests/unit-test-server/unit-test-server.project" Active="No"/>
+    <Project Name="unit-test-device" Path="tests/unit-test-device/unit-test-device.project" Active="No"/>
+  </VirtualDirectory>
+  <BuildMatrix>
+    <WorkspaceConfiguration Name="Debug" Selected="no">
+      <Environment/>
+      <Project Name="libmodbuspp" ConfigName="Debug"/>
+      <Project Name="libmodbuspp-doc" ConfigName="Debug"/>
+      <Project Name="rw-holding-json" ConfigName="Debug"/>
+      <Project Name="clock-server-json" ConfigName="Debug"/>
+      <Project Name="router-json" ConfigName="Debug"/>
+      <Project Name="clock-server" ConfigName="Debug"/>
+      <Project Name="router-simple" ConfigName="Debug"/>
+      <Project Name="unit-test-server" ConfigName="Debug"/>
+      <Project Name="unit-test-device" ConfigName="Debug"/>
+      <Project Name="callback-server-json" ConfigName="Debug"/>
+      <Project Name="simple-server-json" ConfigName="Debug"/>
+    </WorkspaceConfiguration>
+    <WorkspaceConfiguration Name="Release" Selected="yes">
+      <Environment/>
+      <Project Name="libmodbuspp" ConfigName="Release"/>
+      <Project Name="libmodbuspp-doc" ConfigName="Release"/>
+      <Project Name="rw-holding-json" ConfigName="Release"/>
+      <Project Name="clock-server-json" ConfigName="Release"/>
+      <Project Name="router-json" ConfigName="Release"/>
+      <Project Name="clock-server" ConfigName="Release"/>
+      <Project Name="router-simple" ConfigName="Release"/>
+      <Project Name="unit-test-server" ConfigName="Release"/>
+      <Project Name="unit-test-device" ConfigName="Release"/>
+      <Project Name="callback-server-json" ConfigName="Release"/>
+      <Project Name="simple-server-json" ConfigName="Release"/>
+    </WorkspaceConfiguration>
+  </BuildMatrix>
+</CodeLite_Workspace>

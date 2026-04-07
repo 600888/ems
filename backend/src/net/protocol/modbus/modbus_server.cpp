@@ -1,0 +1,454 @@
+/**
+ * @file modbus_server.cpp
+ * @brief Modbus 服务端实现
+ */
+#include "modbus_server.h"
+#include <algorithm>
+#include <iostream>
+
+namespace ems {
+namespace net {
+namespace modbus {
+
+ModbusServer::ModbusServer(NetType type, const std::string& connection, const std::string& settings)
+    : net_type_(type), connection_(connection), settings_(settings) {
+    Modbus::Net net = (type == NetType::RTU) ? Modbus::Net::Rtu : Modbus::Net::Tcp;
+    server_.setBackend(net, connection_, settings_);
+}
+
+ModbusServer::~ModbusServer() {
+    stop();
+}
+
+bool ModbusServer::start() {
+    if (running_.load()) {
+        return false;
+    }
+
+    try {
+        if (!server_.open()) {
+            std::cerr << "ModbusServer: failed to open\n";
+            return false;
+        }
+
+        running_ = true;
+        server_thread_ = std::make_unique<std::thread>(&ModbusServer::runLoop, this);
+
+        return true;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer: exception: " << e.what() << "\n";
+        return false;
+    }
+}
+
+void ModbusServer::stop() {
+    if (!running_.load()) {
+        return;
+    }
+
+    running_ = false;
+
+    if (server_thread_ && server_thread_->joinable()) {
+        server_thread_->join();
+    }
+
+    server_.close();
+}
+
+bool ModbusServer::isRunning() const {
+    return running_.load();
+}
+
+void ModbusServer::join() {
+    if (server_thread_ && server_thread_->joinable()) {
+        server_thread_->join();
+    }
+}
+
+int ModbusServer::addSlave(int slave_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    if (slaves_.find(slave_id) != slaves_.end()) {
+        return -1;
+    }
+
+    try {
+        auto& slave = server_.addSlave(slave_id);
+        slaves_[slave_id] = std::shared_ptr<Modbus::BufferedSlave>(&slave, [](Modbus::BufferedSlave*){});
+        return 0;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::addSlave: " << e.what() << "\n";
+        return -1;
+    }
+}
+
+bool ModbusServer::removeSlave(int slave_id) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return false;
+    }
+
+    slaves_.erase(it);
+    return true;
+}
+
+bool ModbusServer::hasSlave(int slave_id) const {
+    std::lock_guard<std::mutex> lock(mutex_);
+    return slaves_.find(slave_id) != slaves_.end();
+}
+
+bool ModbusServer::setHoldingRegisterBlock(int slave_id, int start_addr, int count) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return false;
+    }
+
+    try {
+        it->second->setBlock(Modbus::Table::HoldingRegister, count, start_addr);
+        return true;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::setHoldingRegisterBlock: " << e.what() << "\n";
+        return false;
+    }
+}
+
+bool ModbusServer::setInputRegisterBlock(int slave_id, int start_addr, int count) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return false;
+    }
+
+    try {
+        it->second->setBlock(Modbus::Table::InputRegister, count, start_addr);
+        return true;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::setInputRegisterBlock: " << e.what() << "\n";
+        return false;
+    }
+}
+
+bool ModbusServer::setCoilBlock(int slave_id, int start_addr, int count) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return false;
+    }
+
+    try {
+        it->second->setBlock(Modbus::Table::Coil, count, start_addr);
+        return true;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::setCoilBlock: " << e.what() << "\n";
+        return false;
+    }
+}
+
+bool ModbusServer::setDiscreteInputBlock(int slave_id, int start_addr, int count) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return false;
+    }
+
+    try {
+        it->second->setBlock(Modbus::Table::DiscreteInput, count, start_addr);
+        return true;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::setDiscreteInputBlock: " << e.what() << "\n";
+        return false;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::writeHoldingRegister(int slave_id, int addr, uint16_t value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->writeRegister(addr, value);
+        if (data_change_callback_) {
+            data_change_callback_(slave_id, Modbus::Table::HoldingRegister, addr, 1);
+        }
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::writeHoldingRegister: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::writeHoldingRegisters(int slave_id, int addr, const uint16_t* src, int nb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->writeRegisters(addr, src, nb);
+        if (data_change_callback_) {
+            data_change_callback_(slave_id, Modbus::Table::HoldingRegister, addr, nb);
+        }
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::writeHoldingRegisters: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::writeInputRegister(int slave_id, int addr, uint16_t value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->writeInputRegister(addr, value);
+        if (data_change_callback_) {
+            data_change_callback_(slave_id, Modbus::Table::InputRegister, addr, 1);
+        }
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::writeInputRegister: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::writeInputRegisters(int slave_id, int addr, const uint16_t* src, int nb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->writeInputRegisters(addr, src, nb);
+        if (data_change_callback_) {
+            data_change_callback_(slave_id, Modbus::Table::InputRegister, addr, nb);
+        }
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::writeInputRegisters: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::writeCoil(int slave_id, int addr, bool value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->writeCoil(addr, value);
+        if (data_change_callback_) {
+            data_change_callback_(slave_id, Modbus::Table::Coil, addr, 1);
+        }
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::writeCoil: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::writeCoils(int slave_id, int addr, const bool* src, int nb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->writeCoils(addr, src, nb);
+        if (data_change_callback_) {
+            data_change_callback_(slave_id, Modbus::Table::Coil, addr, nb);
+        }
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::writeCoils: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::readHoldingRegister(int slave_id, int addr, uint16_t& value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->readRegister(addr, value);
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::readHoldingRegister: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::readHoldingRegisters(int slave_id, int addr, uint16_t* dest, int nb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->readRegisters(addr, dest, nb);
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::readHoldingRegisters: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::readInputRegister(int slave_id, int addr, uint16_t& value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->readInputRegister(addr, value);
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::readInputRegister: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::readInputRegisters(int slave_id, int addr, uint16_t* dest, int nb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->readInputRegisters(addr, dest, nb);
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::readInputRegisters: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::readCoil(int slave_id, int addr, bool& value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->readCoils(addr, &value, 1);
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::readCoil: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::readCoils(int slave_id, int addr, bool* dest, int nb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->readCoils(addr, dest, nb);
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::readCoils: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::readDiscreteInput(int slave_id, int addr, bool& value) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->readDiscreteInputs(addr, &value, 1);
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::readDiscreteInput: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+ModbusServer::ErrorCode ModbusServer::readDiscreteInputs(int slave_id, int addr, bool* dest, int nb) {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    auto it = slaves_.find(slave_id);
+    if (it == slaves_.end()) {
+        return ErrorCode::Unknown;
+    }
+
+    try {
+        it->second->readDiscreteInputs(addr, dest, nb);
+        return ErrorCode::Success;
+    }
+    catch (const std::exception& e) {
+        std::cerr << "ModbusServer::readDiscreteInputs: " << e.what() << "\n";
+        return ErrorCode::Unknown;
+    }
+}
+
+void ModbusServer::runLoop() {
+    while (running_.load()) {
+        server_.poll(100);
+    }
+}
+
+} // namespace modbus
+} // namespace net
+} // namespace ems
