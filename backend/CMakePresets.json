@@ -1,0 +1,62 @@
+{
+  "version": 6,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 21,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "linux-native",
+      "displayName": "Linux Native",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/linux-native",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "ON",
+        "EMS_ENABLE_ARCH_TUNING": "ON"
+      }
+    },
+    {
+      "name": "linux-arm-native",
+      "displayName": "Linux ARM Native",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/linux-arm-native",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "OFF",
+        "EMS_ENABLE_ARCH_TUNING": "ON",
+        "EMS_TARGET_LINUX_ARM": "ON"
+      }
+    },
+    {
+      "name": "linux-arm-cross",
+      "displayName": "Linux ARM Cross (from x86_64 host)",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/linux-arm-cross",
+      "toolchainFile": "${sourceDir}/cmake/toolchains/linux-arm-aarch64-linux-gnu.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "OFF",
+        "EMS_ENABLE_ARCH_TUNING": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "linux-native",
+      "configurePreset": "linux-native",
+      "jobs": 0
+    },
+    {
+      "name": "linux-arm-native",
+      "configurePreset": "linux-arm-native",
+      "jobs": 0
+    },
+    {
+      "name": "linux-arm-cross",
+      "configurePreset": "linux-arm-cross",
+      "jobs": 0
+    }
+  ]
+}

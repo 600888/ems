@@ -6,6 +6,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BUILD_TESTS "Build tests" ON)
+option(EMS_ENABLE_ARCH_TUNING "Enable architecture-specific tuning flags" ON)
+option(EMS_TARGET_LINUX_ARM "Enable Linux ARM target configuration" OFF)
 
 if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(EMS_ROOT_PROJECT ON)
@@ -14,6 +16,22 @@ endif()
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -pedantic -Werror=return-type")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -g -O0 -DDEBUG")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
+
+string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" EMS_SYSTEM_PROCESSOR_LOWER)
+set(EMS_IS_ARM64 OFF)
+if(EMS_SYSTEM_PROCESSOR_LOWER MATCHES "^(aarch64|arm64)$")
+    set(EMS_IS_ARM64 ON)
+endif()
+
+if(EMS_ENABLE_ARCH_TUNING AND EMS_IS_ARM64)
+    include(CheckCXXCompilerFlag)
+
+    # Generic ARMv8 baseline for ARM64 Linux builds.
+    check_cxx_compiler_flag("-march=armv8-a" EMS_FLAG_MARCH_ARMV8A_SUPPORTED)
+    if(EMS_FLAG_MARCH_ARMV8A_SUPPORTED)
+        add_compile_options(-march=armv8-a)
+    endif()
+endif()
 
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
@@ -54,4 +72,8 @@ message(STATUS "Source directory: ${CMAKE_CURRENT_SOURCE_DIR}")
 message(STATUS "Build directory: ${CMAKE_CURRENT_BINARY_DIR}")
 message(STATUS "Build tests: ${BUILD_TESTS}")
 message(STATUS "Build examples: ON")
+message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
+message(STATUS "ARM64 detected: ${EMS_IS_ARM64}")
+message(STATUS "Arch tuning enabled: ${EMS_ENABLE_ARCH_TUNING}")
+message(STATUS "Linux ARM target requested: ${EMS_TARGET_LINUX_ARM}")
 message(STATUS "========================================")

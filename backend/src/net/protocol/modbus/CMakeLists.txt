@@ -14,6 +14,6 @@ target_include_directories(modbus_protocol PUBLIC
 
 target_link_libraries(modbus_protocol PUBLIC
     ${LIBMODBUS_LIBRARIES}
-    modbuspp
+    modbuspp-shared
     Threads::Threads
 )

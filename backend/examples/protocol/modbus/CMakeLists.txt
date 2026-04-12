@@ -17,8 +17,7 @@ foreach(src ${EXAMPLE_SOURCES})
         ${CMAKE_SOURCE_DIR}/inc
     )
     target_link_libraries(${target} PRIVATE
-        modbuspp
-        modbus
+        modbuspp-shared
         modbus_protocol
         Threads::Threads
     )

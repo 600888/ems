@@ -9,7 +9,7 @@
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y pkg-config libhiredis-dev
+sudo apt-get install -y pkg-config libhiredis-dev libmodbus-dev
 ```
 
 ### CentOS/RHEL
@@ -31,6 +31,41 @@ cd backend
 mkdir -p build && cd build
 cmake ..
 make
+```
+
+## Linux ARM (ARM64) 构建
+
+### 1) 板端原生构建（推荐）
+
+在 Linux ARM64 设备上执行：
+
+```bash
+./scripts/build_linux_arm.sh native Release
+```
+
+说明：该脚本默认 `BUILD_TESTS=OFF`，优先保证部署构建成功。
+
+### 2) x86_64 主机交叉编译
+
+先安装交叉工具链：
+
+```bash
+sudo apt-get update
+sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+```
+
+然后执行：
+
+```bash
+./scripts/build_linux_arm.sh cross Release
+```
+
+### 3) 使用 CMake Preset
+
+```bash
+cd backend
+cmake --preset linux-arm-native
+cmake --build --preset linux-arm-native
 ```
 
 ## C++ 标准
