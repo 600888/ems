@@ -12,22 +12,22 @@
 namespace ems {
 namespace net {
 
-class RTDBManager {
+class RtDbManager {
 public:
-    RTDBManager();
-    ~RTDBManager();
+    RtDbManager();
+    ~RtDbManager();
 
-    bool initialize(const RTDBConfig& config);
+    bool initialize(const RtDbConfig& config);
     void shutdown();
 
-    std::shared_ptr<RTDB> getRTDB() const { return rtdb_; }
-    std::shared_ptr<RTDBConfigCache> getConfigCache() const { return config_cache_; }
-    std::shared_ptr<RTDBPointManager> getPointManager() const { return point_manager_; }
+    std::shared_ptr<RtDb> getRtDb() const { return rtdb_; }
+    std::shared_ptr<RtDbConfigCache> getConfigCache() const { return config_cache_; }
+    std::shared_ptr<RtDbPointManager> getPointManager() const { return point_manager_; }
 
-    bool loadYCConfigsFromDB();
-    bool loadYXConfigsFromDB();
-    bool loadYKConfigsFromDB();
-    bool loadYTConfigsFromDB();
+    bool loadYcConfigsFromDb();
+    bool loadYxConfigsFromDb();
+    bool loadYkConfigsFromDb();
+    bool loadYtConfigsFromDb();
     bool loadAllConfigs();
 
     using DataChangeCallback = std::function<void(
@@ -38,44 +38,44 @@ public:
 
     void setDataChangeCallback(DataChangeCallback callback);
 
-    bool updateYC(const std::string& code, const YCPoint& data);
-    bool updateYX(const std::string& code, const YXPoint& data);
-    bool updateYK(const std::string& code, const YKPoint& data);
-    bool updateYT(const std::string& code, const YTPoint& data);
+    bool updateYc(const std::string& code, const YcPoint& data);
+    bool updateYx(const std::string& code, const YxPoint& data);
+    bool updateYk(const std::string& code, const YkPoint& data);
+    bool updateYt(const std::string& code, const YtPoint& data);
 
-    bool batchUpdateYC(const std::map<std::string, YCPoint>& data_map);
-    bool batchUpdateYX(const std::map<std::string, YXPoint>& data_map);
-    bool batchUpdateYK(const std::map<std::string, YKPoint>& data_map);
-    bool batchUpdateYT(const std::map<std::string, YTPoint>& data_map);
+    bool batchUpdateYC(const std::map<std::string, YcPoint>& data_map);
+    bool batchUpdateYX(const std::map<std::string, YxPoint>& data_map);
+    bool batchUpdateYK(const std::map<std::string, YkPoint>& data_map);
+    bool batchUpdateYT(const std::map<std::string, YtPoint>& data_map);
 
-    bool getYC(const std::string& code, YCPoint& data);
-    bool getYX(const std::string& code, YXPoint& data);
-    bool getYK(const std::string& code, YKPoint& data);
-    bool getYT(const std::string& code, YTPoint& data);
+    bool getYc(const std::string& code, YcPoint& data);
+    bool getYx(const std::string& code, YxPoint& data);
+    bool getYk(const std::string& code, YkPoint& data);
+    bool getYt(const std::string& code, YtPoint& data);
 
-    bool getYCFull(const std::string& code, 
-                   RTDBPointManager::YCFullPoint& full_point);
-    bool getYXFull(const std::string& code, 
-                   RTDBPointManager::YXFullPoint& full_point);
-    bool getYKFull(const std::string& code, 
-                   RTDBPointManager::YKFullPoint& full_point);
-    bool getYTFull(const std::string& code, 
-                   RTDBPointManager::YTFullPoint& full_point);
+    bool getYcFull(const std::string& code, 
+                   RtDbPointManager::YCFullPoint& fullPoint);
+    bool getYxFull(const std::string& code, 
+                   RtDbPointManager::YXFullPoint& fullPoint);
+    bool getYkFull(const std::string& code, 
+                   RtDbPointManager::YKFullPoint& fullPoint);
+    bool getYtFull(const std::string& code, 
+                   RtDbPointManager::YTFullPoint& fullPoint);
 
-    std::vector<YCPoint> getAllYCData();
-    std::vector<YXPoint> getAllYXData();
-    std::vector<YKPoint> getAllYKData();
-    std::vector<YTPoint> getAllYTData();
+    std::vector<YcPoint> getAllYcData();
+    std::vector<YxPoint> getAllYxData();
+    std::vector<YkPoint> getAllYkData();
+    std::vector<YtPoint> getAllYtData();
 
-    std::vector<RTDBPointManager::YCFullPoint> getAllYCFullPoints();
-    std::vector<RTDBPointManager::YXFullPoint> getAllYXFullPoints();
-    std::vector<RTDBPointManager::YKFullPoint> getAllYKFullPoints();
-    std::vector<RTDBPointManager::YTFullPoint> getAllYTFullPoints();
+    std::vector<RtDbPointManager::YCFullPoint> getAllYcFullPoints();
+    std::vector<RtDbPointManager::YXFullPoint> getAllYxFullPoints();
+    std::vector<RtDbPointManager::YKFullPoint> getAllYkFullPoints();
+    std::vector<RtDbPointManager::YTFullPoint> getAllYtFullPoints();
 
-    size_t getYCDataCount();
-    size_t getYXDataCount();
-    size_t getYKDataCount();
-    size_t getYTDataCount();
+    size_t getYcDataCount();
+    size_t getYxDataCount();
+    size_t getYkDataCount();
+    size_t getYtDataCount();
 
     bool isConnected() const { return rtdb_ && rtdb_->isConnected(); }
     std::string getLastError() const { 
@@ -85,13 +85,13 @@ public:
     void clearAllData();
 
 private:
-    std::shared_ptr<RTDB> rtdb_;
-    std::shared_ptr<RTDBConfigCache> config_cache_;
-    std::shared_ptr<RTDBPointManager> point_manager_;
+    std::shared_ptr<RtDb> rtdb_;
+    std::shared_ptr<RtDbConfigCache> config_cache_;
+    std::shared_ptr<RtDbPointManager> point_manager_;
     DataChangeCallback data_change_callback_;
 };
 
-std::unique_ptr<RTDBManager> createRTDBManager(const RTDBConfig& config);
+std::unique_ptr<RtDbManager> createRTDBManager(const RtDbConfig& config);
 
 }
 }

@@ -20,7 +20,7 @@ class Redis;
 namespace ems {
 namespace net {
 
-struct RTDBConfig {
+struct RtDbConfig {
     std::string host;
     int port;
     std::string password;
@@ -30,12 +30,12 @@ struct RTDBConfig {
     std::string prefix;
 };
 
-class RTDB {
+class RtDb {
 public:
-    RTDB();
-    ~RTDB();
+    RtDb();
+    ~RtDb();
 
-    bool initialize(const RTDBConfig& config);
+    bool initialize(const RtDbConfig& config);
     void shutdown();
 
     bool set(const std::string& key, const std::string& value);
@@ -64,31 +64,31 @@ public:
     bool publish(const std::string& channel, const std::string& message);
     bool subscribe(const std::string& channel, std::function<void(const std::string&, const std::string&)> callback);
 
-    bool setYC(const std::string& point_code, const YCPoint& point);
-    bool getYC(const std::string& point_code, YCPoint& point);
-    std::vector<YCPoint> getYCPoints(const std::string& pattern);
+    bool setYc(const std::string& pointCode, const YcPoint& point);
+    bool getYc(const std::string& pointCode, YcPoint& point);
+    std::vector<YcPoint> getYCPoints(const std::string& pattern);
 
-    bool setYX(const std::string& point_code, const YXPoint& point);
-    bool getYX(const std::string& point_code, YXPoint& point);
-    std::vector<YXPoint> getYXPoints(const std::string& pattern);
+    bool setYx(const std::string& pointCode, const YxPoint& point);
+    bool getYx(const std::string& pointCode, YxPoint& point);
+    std::vector<YxPoint> getYXPoints(const std::string& pattern);
 
-    bool setYK(const std::string& point_code, const YKPoint& point);
-    bool getYK(const std::string& point_code, YKPoint& point);
-    std::vector<YKPoint> getYKPoints(const std::string& pattern);
+    bool setYk(const std::string& pointCode, const YkPoint& point);
+    bool getYk(const std::string& pointCode, YkPoint& point);
+    std::vector<YkPoint> getYKPoints(const std::string& pattern);
 
-    bool setYT(const std::string& point_code, const YTPoint& point);
-    bool getYT(const std::string& point_code, YTPoint& point);
-    std::vector<YTPoint> getYTPoints(const std::string& pattern);
+    bool setYt(const std::string& pointCode, const YtPoint& point);
+    bool getYt(const std::string& pointCode, YtPoint& point);
+    std::vector<YtPoint> getYTPoints(const std::string& pattern);
 
-    bool deleteYC(const std::string& point_code);
-    bool deleteYX(const std::string& point_code);
-    bool deleteYK(const std::string& point_code);
-    bool deleteYT(const std::string& point_code);
+    bool deleteYc(const std::string& pointCode);
+    bool deleteYx(const std::string& pointCode);
+    bool deleteYk(const std::string& pointCode);
+    bool deleteYt(const std::string& pointCode);
 
-    std::vector<std::string> getYCCodes(const std::string& pattern = "*");
-    std::vector<std::string> getYXCodes(const std::string& pattern = "*");
-    std::vector<std::string> getYKCodes(const std::string& pattern = "*");
-    std::vector<std::string> getYTCodes(const std::string& pattern = "*");
+    std::vector<std::string> getYcCodes(const std::string& pattern = "*");
+    std::vector<std::string> getYxCodes(const std::string& pattern = "*");
+    std::vector<std::string> getYkCodes(const std::string& pattern = "*");
+    std::vector<std::string> getYtCodes(const std::string& pattern = "*");
 
     bool isConnected() const { return connected_.load(); }
     std::string getLastError() const { return last_error_; }
@@ -104,14 +104,14 @@ private:
     std::string buildYtKey(const std::string& point_code) const;
 
     std::unique_ptr<sw::redis::Redis> redis_;
-    RTDBConfig config_;
+    RtDbConfig config_;
     std::atomic<bool> connected_;
     std::string last_error_;
     std::mutex mutex_;
     std::atomic<uint64_t> cmd_count_;
 };
 
-std::unique_ptr<RTDB> createRTDB(const RTDBConfig& config);
+std::unique_ptr<RtDb> createRtDb(const RtDbConfig& config);
 
 }
 }

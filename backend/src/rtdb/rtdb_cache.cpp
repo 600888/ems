@@ -4,7 +4,7 @@
 namespace ems {
 namespace net {
 
-void RTDBConfigCache::loadYCConfigs(const std::vector<YCConfig>& configs) {
+void RtDbConfigCache::loadYcConfigs(const std::vector<YcConfig>& configs) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     yc_configs_.clear();
     for (const auto& config : configs) {
@@ -12,7 +12,7 @@ void RTDBConfigCache::loadYCConfigs(const std::vector<YCConfig>& configs) {
     }
 }
 
-void RTDBConfigCache::loadYXConfigs(const std::vector<YXConfig>& configs) {
+void RtDbConfigCache::loadYxConfigs(const std::vector<YxConfig>& configs) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     yx_configs_.clear();
     for (const auto& config : configs) {
@@ -20,7 +20,7 @@ void RTDBConfigCache::loadYXConfigs(const std::vector<YXConfig>& configs) {
     }
 }
 
-void RTDBConfigCache::loadYKConfigs(const std::vector<YKConfig>& configs) {
+void RtDbConfigCache::loadYkConfigs(const std::vector<YkConfig>& configs) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     yk_configs_.clear();
     for (const auto& config : configs) {
@@ -28,7 +28,7 @@ void RTDBConfigCache::loadYKConfigs(const std::vector<YKConfig>& configs) {
     }
 }
 
-void RTDBConfigCache::loadYTConfigs(const std::vector<YTConfig>& configs) {
+void RtDbConfigCache::loadYtConfigs(const std::vector<YtConfig>& configs) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     yt_configs_.clear();
     for (const auto& config : configs) {
@@ -36,7 +36,7 @@ void RTDBConfigCache::loadYTConfigs(const std::vector<YTConfig>& configs) {
     }
 }
 
-bool RTDBConfigCache::getYCConfig(const std::string& code, YCConfig& config) const {
+bool RtDbConfigCache::getYcConfig(const std::string& code, YcConfig& config) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     auto it = yc_configs_.find(code);
     if (it != yc_configs_.end()) {
@@ -46,7 +46,7 @@ bool RTDBConfigCache::getYCConfig(const std::string& code, YCConfig& config) con
     return false;
 }
 
-bool RTDBConfigCache::getYXConfig(const std::string& code, YXConfig& config) const {
+bool RtDbConfigCache::getYxConfig(const std::string& code, YxConfig& config) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     auto it = yx_configs_.find(code);
     if (it != yx_configs_.end()) {
@@ -56,7 +56,7 @@ bool RTDBConfigCache::getYXConfig(const std::string& code, YXConfig& config) con
     return false;
 }
 
-bool RTDBConfigCache::getYKConfig(const std::string& code, YKConfig& config) const {
+bool RtDbConfigCache::getYkConfig(const std::string& code, YkConfig& config) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     auto it = yk_configs_.find(code);
     if (it != yk_configs_.end()) {
@@ -66,7 +66,7 @@ bool RTDBConfigCache::getYKConfig(const std::string& code, YKConfig& config) con
     return false;
 }
 
-bool RTDBConfigCache::getYTConfig(const std::string& code, YTConfig& config) const {
+bool RtDbConfigCache::getYtConfig(const std::string& code, YtConfig& config) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     auto it = yt_configs_.find(code);
     if (it != yt_configs_.end()) {
@@ -76,7 +76,7 @@ bool RTDBConfigCache::getYTConfig(const std::string& code, YTConfig& config) con
     return false;
 }
 
-std::vector<std::string> RTDBConfigCache::getYCConfigCodes() const {
+std::vector<std::string> RtDbConfigCache::getYcConfigCodes() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     std::vector<std::string> codes;
     codes.reserve(yc_configs_.size());
@@ -87,7 +87,7 @@ std::vector<std::string> RTDBConfigCache::getYCConfigCodes() const {
     return codes;
 }
 
-std::vector<std::string> RTDBConfigCache::getYXConfigCodes() const {
+std::vector<std::string> RtDbConfigCache::getYxConfigCodes() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     std::vector<std::string> codes;
     codes.reserve(yx_configs_.size());
@@ -98,7 +98,7 @@ std::vector<std::string> RTDBConfigCache::getYXConfigCodes() const {
     return codes;
 }
 
-std::vector<std::string> RTDBConfigCache::getYKConfigCodes() const {
+std::vector<std::string> RtDbConfigCache::getYkConfigCodes() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     std::vector<std::string> codes;
     codes.reserve(yk_configs_.size());
@@ -109,7 +109,7 @@ std::vector<std::string> RTDBConfigCache::getYKConfigCodes() const {
     return codes;
 }
 
-std::vector<std::string> RTDBConfigCache::getYTConfigCodes() const {
+std::vector<std::string> RtDbConfigCache::getYtConfigCodes() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     std::vector<std::string> codes;
     codes.reserve(yt_configs_.size());
@@ -120,27 +120,27 @@ std::vector<std::string> RTDBConfigCache::getYTConfigCodes() const {
     return codes;
 }
 
-size_t RTDBConfigCache::getYCConfigCount() const {
+size_t RtDbConfigCache::getYcConfigCount() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     return yc_configs_.size();
 }
 
-size_t RTDBConfigCache::getYXConfigCount() const {
+size_t RtDbConfigCache::getYxConfigCount() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     return yx_configs_.size();
 }
 
-size_t RTDBConfigCache::getYKConfigCount() const {
+size_t RtDbConfigCache::getYkConfigCount() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     return yk_configs_.size();
 }
 
-size_t RTDBConfigCache::getYTConfigCount() const {
+size_t RtDbConfigCache::getYtConfigCount() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     return yt_configs_.size();
 }
 
-void RTDBConfigCache::clear() {
+void RtDbConfigCache::clear() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     yc_configs_.clear();
     yx_configs_.clear();
@@ -148,121 +148,121 @@ void RTDBConfigCache::clear() {
     yt_configs_.clear();
 }
 
-void RTDBConfigCache::clearYC() {
+void RtDbConfigCache::clearYc() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     yc_configs_.clear();
 }
 
-void RTDBConfigCache::clearYX() {
+void RtDbConfigCache::clearYx() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     yx_configs_.clear();
 }
 
-void RTDBConfigCache::clearYK() {
+void RtDbConfigCache::clearYk() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     yk_configs_.clear();
 }
 
-void RTDBConfigCache::clearYT() {
+void RtDbConfigCache::clearYt() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     yt_configs_.clear();
 }
 
-bool RTDBConfigCache::hasYCConfig(const std::string& code) const {
+bool RtDbConfigCache::hasYcConfig(const std::string& code) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     return yc_configs_.find(code) != yc_configs_.end();
 }
 
-bool RTDBConfigCache::hasYXConfig(const std::string& code) const {
+bool RtDbConfigCache::hasYxConfig(const std::string& code) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     return yx_configs_.find(code) != yx_configs_.end();
 }
 
-bool RTDBConfigCache::hasYKConfig(const std::string& code) const {
+bool RtDbConfigCache::hasYkConfig(const std::string& code) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     return yk_configs_.find(code) != yk_configs_.end();
 }
 
-bool RTDBConfigCache::hasYTConfig(const std::string& code) const {
+bool RtDbConfigCache::hasYtConfig(const std::string& code) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     return yt_configs_.find(code) != yt_configs_.end();
 }
 
-void RTDBConfigCache::setUpdateCallback(UpdateCallback callback) {
+void RtDbConfigCache::setUpdateCallback(UpdateCallback callback) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
     update_callback_ = callback;
 }
 
-void RTDBPointManager::setConfigCache(std::shared_ptr<RTDBConfigCache> cache) {
+void RtDbPointManager::setConfigCache(std::shared_ptr<RtDbConfigCache> cache) {
     config_cache_ = cache;
 }
 
-bool RTDBPointManager::getYCFullPoint(const std::string& code, 
-                                      const YCPoint& data, 
+bool RtDbPointManager::getYCFullPoint(const std::string& code, 
+                                      const YcPoint& data, 
                                       YCFullPoint& full_point) const {
     if (!config_cache_) {
         return false;
     }
     
-    if (config_cache_->getYCConfig(code, full_point.config)) {
+    if (config_cache_->getYcConfig(code, full_point.config)) {
         full_point.data = data;
         return true;
     }
     return false;
 }
 
-bool RTDBPointManager::getYXFullPoint(const std::string& code, 
-                                      const YXPoint& data, 
+bool RtDbPointManager::getYXFullPoint(const std::string& code, 
+                                      const YxPoint& data, 
                                       YXFullPoint& full_point) const {
     if (!config_cache_) {
         return false;
     }
     
-    if (config_cache_->getYXConfig(code, full_point.config)) {
+    if (config_cache_->getYxConfig(code, full_point.config)) {
         full_point.data = data;
         return true;
     }
     return false;
 }
 
-bool RTDBPointManager::getYKFullPoint(const std::string& code, 
-                                      const YKPoint& data, 
+bool RtDbPointManager::getYKFullPoint(const std::string& code, 
+                                      const YkPoint& data, 
                                       YKFullPoint& full_point) const {
     if (!config_cache_) {
         return false;
     }
     
-    if (config_cache_->getYKConfig(code, full_point.config)) {
+    if (config_cache_->getYkConfig(code, full_point.config)) {
         full_point.data = data;
         return true;
     }
     return false;
 }
 
-bool RTDBPointManager::getYTFullPoint(const std::string& code, 
-                                      const YTPoint& data, 
+bool RtDbPointManager::getYTFullPoint(const std::string& code, 
+                                      const YtPoint& data, 
                                       YTFullPoint& full_point) const {
     if (!config_cache_) {
         return false;
     }
     
-    if (config_cache_->getYTConfig(code, full_point.config)) {
+    if (config_cache_->getYtConfig(code, full_point.config)) {
         full_point.data = data;
         return true;
     }
     return false;
 }
 
-std::vector<RTDBPointManager::YCFullPoint> 
-RTDBPointManager::getYCFullPoints(const std::vector<YCPoint>& data_points) {
+std::vector<RtDbPointManager::YCFullPoint> 
+RtDbPointManager::getYCFullPoints(const std::vector<YcPoint>& data_points) {
     std::vector<YCFullPoint> result;
     
     if (!config_cache_) {
         return result;
     }
     
-    auto codes = config_cache_->getYCConfigCodes();
-    std::unordered_map<std::string, YCPoint> data_map;
+    auto codes = config_cache_->getYcConfigCodes();
+    std::unordered_map<std::string, YcPoint> data_map;
     for (const auto& dp : data_points) {
         data_map[codes.empty() ? "" : ""] = dp;
     }
@@ -271,7 +271,7 @@ RTDBPointManager::getYCFullPoints(const std::vector<YCPoint>& data_points) {
         auto data_it = data_map.find(code);
         if (data_it != data_map.end()) {
             YCFullPoint full_point;
-            if (config_cache_->getYCConfig(code, full_point.config)) {
+            if (config_cache_->getYcConfig(code, full_point.config)) {
                 full_point.data = data_it->second;
                 result.push_back(full_point);
             }
@@ -281,19 +281,19 @@ RTDBPointManager::getYCFullPoints(const std::vector<YCPoint>& data_points) {
     return result;
 }
 
-std::vector<RTDBPointManager::YXFullPoint> 
-RTDBPointManager::getYXFullPoints(const std::vector<YXPoint>& data_points) {
+std::vector<RtDbPointManager::YXFullPoint> 
+RtDbPointManager::getYXFullPoints(const std::vector<YxPoint>& data_points) {
     std::vector<YXFullPoint> result;
     
     if (!config_cache_) {
         return result;
     }
     
-    auto codes = config_cache_->getYXConfigCodes();
+    auto codes = config_cache_->getYxConfigCodes();
     
     for (const auto& code : codes) {
         YXFullPoint full_point;
-        if (config_cache_->getYXConfig(code, full_point.config)) {
+        if (config_cache_->getYxConfig(code, full_point.config)) {
             result.push_back(full_point);
         }
     }
@@ -301,19 +301,19 @@ RTDBPointManager::getYXFullPoints(const std::vector<YXPoint>& data_points) {
     return result;
 }
 
-std::vector<RTDBPointManager::YKFullPoint> 
-RTDBPointManager::getYKFullPoints(const std::vector<YKPoint>& data_points) {
+std::vector<RtDbPointManager::YKFullPoint> 
+RtDbPointManager::getYKFullPoints(const std::vector<YkPoint>& data_points) {
     std::vector<YKFullPoint> result;
     
     if (!config_cache_) {
         return result;
     }
     
-    auto codes = config_cache_->getYKConfigCodes();
+    auto codes = config_cache_->getYkConfigCodes();
     
     for (const auto& code : codes) {
         YKFullPoint full_point;
-        if (config_cache_->getYKConfig(code, full_point.config)) {
+        if (config_cache_->getYkConfig(code, full_point.config)) {
             result.push_back(full_point);
         }
     }
@@ -321,19 +321,19 @@ RTDBPointManager::getYKFullPoints(const std::vector<YKPoint>& data_points) {
     return result;
 }
 
-std::vector<RTDBPointManager::YTFullPoint> 
-RTDBPointManager::getYTFullPoints(const std::vector<YTPoint>& data_points) {
+std::vector<RtDbPointManager::YTFullPoint> 
+RtDbPointManager::getYTFullPoints(const std::vector<YtPoint>& data_points) {
     std::vector<YTFullPoint> result;
     
     if (!config_cache_) {
         return result;
     }
     
-    auto codes = config_cache_->getYTConfigCodes();
+    auto codes = config_cache_->getYtConfigCodes();
     
     for (const auto& code : codes) {
         YTFullPoint full_point;
-        if (config_cache_->getYTConfig(code, full_point.config)) {
+        if (config_cache_->getYtConfig(code, full_point.config)) {
             result.push_back(full_point);
         }
     }
@@ -341,23 +341,23 @@ RTDBPointManager::getYTFullPoints(const std::vector<YTPoint>& data_points) {
     return result;
 }
 
-double RTDBPointManager::transformYCValue(double raw_value, 
-                                         const RTDBConfigCache::YCConfig& config) const {
+double RtDbPointManager::transformYCValue(double raw_value, 
+                                         const RtDbConfigCache::YcConfig& config) const {
     return raw_value * config.mul_coe + config.add_coe;
 }
 
-double RTDBPointManager::transformYTValue(double raw_value, 
-                                         const RTDBConfigCache::YTConfig& config) const {
+double RtDbPointManager::transformYTValue(double raw_value, 
+                                         const RtDbConfigCache::YtConfig& config) const {
     return raw_value * config.mul_coe + config.add_coe;
 }
 
-bool RTDBPointManager::validateYCValue(double value, 
-                                       const RTDBConfigCache::YCConfig& config) const {
+bool RtDbPointManager::validateYCValue(double value, 
+                                       const RtDbConfigCache::YcConfig& config) const {
     return value >= config.min_limit && value <= config.max_limit;
 }
 
-bool RTDBPointManager::validateYTValue(double value, 
-                                       const RTDBConfigCache::YTConfig& config) const {
+bool RtDbPointManager::validateYTValue(double value, 
+                                       const RtDbConfigCache::YtConfig& config) const {
     return value >= config.min_limit && value <= config.max_limit;
 }
 

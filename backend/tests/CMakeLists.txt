@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.15)
 project(ems_models_test VERSION 1.0.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
@@ -23,7 +23,8 @@ target_compile_definitions(test_models PRIVATE
 )
 
 enable_testing()
-add_test(NAME test_models COMMAND test_models)
+
+add_subdirectory(net)
 
 message(STATUS "========================================")
 message(STATUS "EMS Models Test Configuration")

@@ -38,10 +38,10 @@ public:
     std::string rtu_addr{"1"};
     int timeout{5};
     
-    std::vector<std::shared_ptr<class PointYC>> yc_points;
-    std::vector<std::shared_ptr<class PointYX>> yx_points;
-    std::vector<std::shared_ptr<class PointYK>> yk_points;
-    std::vector<std::shared_ptr<class PointYT>> yt_points;
+    std::vector<std::shared_ptr<class PointYc>> yc_points;
+    std::vector<std::shared_ptr<class PointYx>> yx_points;
+    std::vector<std::shared_ptr<class PointYk>> yk_points;
+    std::vector<std::shared_ptr<class PointYt>> yt_points;
     std::vector<std::shared_ptr<class Slave>> slaves;
     
     json to_json() const override {

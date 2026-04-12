@@ -49,13 +49,13 @@ RTDBEMS::~RTDBEMS() {
     shutdown();
 }
 
-bool RTDBEMS::initialize(const RTDBConfig& config) {
+bool RTDBEMS::initialize(const RtDbConfig& config) {
     config_ = config;
     if (config_.prefix.empty()) {
         config_.prefix = "ems:";
     }
     
-    rtdb_ = createRTDB(config_);
+    rtdb_ = createRtDb(config_);
     if (!rtdb_ || !rtdb_->isConnected()) {
         return false;
     }
@@ -651,7 +651,7 @@ bool RTDBEMS::executeWithLock(const std::string& device_id, const std::string& o
     }
 }
 
-std::unique_ptr<RTDBEMS> createRTDBEMS(const RTDBConfig& config) {
+std::unique_ptr<RTDBEMS> createRTDBEMS(const RtDbConfig& config) {
     auto rtdb_ems = std::make_unique<RTDBEMS>();
     if (!rtdb_ems->initialize(config)) {
         return nullptr;

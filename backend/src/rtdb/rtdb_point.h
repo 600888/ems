@@ -23,21 +23,21 @@ enum class PointQuality {
     Error = 3
 };
 
-struct YCPoint {
+struct YcPoint {
     double value{0.0};
     uint64_t timestamp{0};
     int quality{0};
     int status{0};
 };
 
-struct YXPoint {
+struct YxPoint {
     int value{0};
     uint64_t timestamp{0};
     int quality{0};
     int status{0};
 };
 
-struct YKPoint {
+struct YkPoint {
     int value{0};
     int command_type{0};
     uint64_t timestamp{0};
@@ -45,7 +45,7 @@ struct YKPoint {
     int result{0};
 };
 
-struct YTPoint {
+struct YtPoint {
     double value{0.0};
     uint64_t timestamp{0};
     int quality{0};

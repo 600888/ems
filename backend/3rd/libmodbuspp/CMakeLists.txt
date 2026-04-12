@@ -179,9 +179,9 @@ add_subdirectory (doc)
 # Add all targets to the build-tree export set
 if (MODBUSPP_WITH_STATIC)
   set (exported_targets modbuspp-shared modbuspp-static)
-else(MODBUSPP_WITH_STATIC)
+else()
   set (exported_targets modbuspp-shared)
-endif(MODBUSPP_WITH_STATIC)
+endif()
 
 export(TARGETS ${exported_targets}
   FILE "${PROJECT_BINARY_DIR}/modbuspp.cmake")
@@ -289,9 +289,9 @@ if (CPACK_GENERATOR STREQUAL "DEB")
       execute_process(COMMAND ${dpkg_cmd} --print-architecture RESULT_VARIABLE ret OUTPUT_VARIABLE arch OUTPUT_STRIP_TRAILING_WHITESPACE)
       if (ret EQUAL 0)
         set(CPACK_DEBIAN_PACKAGE_ARCHITECTURE "${arch}")
-      else (ret EQUAL 0)
+      else()
         message(WARNING "Unable to get debian architecture !")
-      endif (ret EQUAL 0)
+      endif()
     endif (dpkg_cmd)
   endif (NOT CPACK_DEBIAN_PACKAGE_ARCHITECTURE)
 

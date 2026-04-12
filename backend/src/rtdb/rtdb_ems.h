@@ -57,7 +57,7 @@ public:
     RTDBEMS();
     ~RTDBEMS();
 
-    bool initialize(const RTDBConfig& config);
+    bool initialize(const RtDbConfig& config);
     void shutdown();
 
     bool setDeviceSnapshot(const std::string& device_id, const DeviceSnapshot& snapshot);
@@ -114,16 +114,16 @@ private:
     std::string buildTopologyKey(const std::string& topology_id) const;
     std::string buildTopologyIndexKey() const;
     
-    bool checkSOCForDischarge(const std::string& device_id, double target_soc);
-    bool executeControlWithSOCCheck(const std::string& device_id, const std::string& point_code,
+    bool checkSocForDischarge(const std::string& deviceId, double targetSoc);
+    bool executeControlWithSocCheck(const std::string& deviceId, const std::string& pointCode,
                                    double value, const std::string& owner_id);
 
-    std::unique_ptr<RTDB> rtdb_;
-    RTDBConfig config_;
+    std::unique_ptr<RtDb> rtdb_;
+    RtDbConfig config_;
     bool initialized_{false};
 };
 
-std::unique_ptr<RTDBEMS> createRTDBEMS(const RTDBConfig& config);
+std::unique_ptr<RTDBEMS> createRTDBEMS(const RtDbConfig& config);
 
 }
 }

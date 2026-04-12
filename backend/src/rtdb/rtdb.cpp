@@ -7,16 +7,16 @@
 namespace ems {
 namespace net {
 
-RTDB::RTDB()
+RtDb::RtDb()
     : connected_(false)
     , cmd_count_(0) {
 }
 
-RTDB::~RTDB() {
+RtDb::~RtDb() {
     shutdown();
 }
 
-bool RTDB::initialize(const RTDBConfig& config) {
+bool RtDb::initialize(const RtDbConfig& config) {
     config_ = config;
     if (config_.host.empty()) {
         config_.host = "localhost";
@@ -37,11 +37,11 @@ bool RTDB::initialize(const RTDBConfig& config) {
     return connect();
 }
 
-void RTDB::shutdown() {
+void RtDb::shutdown() {
     disconnect();
 }
 
-bool RTDB::connect() {
+bool RtDb::connect() {
     std::lock_guard<std::mutex> lock(mutex_);
 
     try {
@@ -80,18 +80,18 @@ bool RTDB::connect() {
     }
 }
 
-void RTDB::disconnect() {
+void RtDb::disconnect() {
     std::lock_guard<std::mutex> lock(mutex_);
     redis_.reset();
     connected_ = false;
 }
 
-bool RTDB::reconnect() {
+bool RtDb::reconnect() {
     disconnect();
     return connect();
 }
 
-bool RTDB::set(const std::string& key, const std::string& value) {
+bool RtDb::set(const std::string& key, const std::string& value) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -112,19 +112,19 @@ bool RTDB::set(const std::string& key, const std::string& value) {
     }
 }
 
-bool RTDB::set(const std::string& key, double value) {
+bool RtDb::set(const std::string& key, double value) {
     std::ostringstream oss;
     oss << value;
     return set(key, oss.str());
 }
 
-bool RTDB::set(const std::string& key, int value) {
+bool RtDb::set(const std::string& key, int value) {
     std::ostringstream oss;
     oss << value;
     return set(key, oss.str());
 }
 
-bool RTDB::get(const std::string& key, std::string& value) {
+bool RtDb::get(const std::string& key, std::string& value) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -149,7 +149,7 @@ bool RTDB::get(const std::string& key, std::string& value) {
     }
 }
 
-bool RTDB::get(const std::string& key, double& value) {
+bool RtDb::get(const std::string& key, double& value) {
     std::string str;
     if (get(key, str)) {
         try {
@@ -162,7 +162,7 @@ bool RTDB::get(const std::string& key, double& value) {
     return false;
 }
 
-bool RTDB::get(const std::string& key, int& value) {
+bool RtDb::get(const std::string& key, int& value) {
     std::string str;
     if (get(key, str)) {
         try {
@@ -175,7 +175,7 @@ bool RTDB::get(const std::string& key, int& value) {
     return false;
 }
 
-bool RTDB::setHash(const std::string& key, const std::map<std::string, std::string>& fields) {
+bool RtDb::setHash(const std::string& key, const std::map<std::string, std::string>& fields) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -198,7 +198,7 @@ bool RTDB::setHash(const std::string& key, const std::map<std::string, std::stri
     }
 }
 
-bool RTDB::getHash(const std::string& key, std::map<std::string, std::string>& fields) {
+bool RtDb::getHash(const std::string& key, std::map<std::string, std::string>& fields) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -219,7 +219,7 @@ bool RTDB::getHash(const std::string& key, std::map<std::string, std::string>& f
     }
 }
 
-bool RTDB::setHashField(const std::string& key, const std::string& field, const std::string& value) {
+bool RtDb::setHashField(const std::string& key, const std::string& field, const std::string& value) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -240,7 +240,7 @@ bool RTDB::setHashField(const std::string& key, const std::string& field, const 
     }
 }
 
-bool RTDB::deleteKey(const std::string& key) {
+bool RtDb::deleteKey(const std::string& key) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -261,7 +261,7 @@ bool RTDB::deleteKey(const std::string& key) {
     }
 }
 
-bool RTDB::exists(const std::string& key) {
+bool RtDb::exists(const std::string& key) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -282,7 +282,7 @@ bool RTDB::exists(const std::string& key) {
     }
 }
 
-std::vector<std::string> RTDB::keys(const std::string& pattern) {
+std::vector<std::string> RtDb::keys(const std::string& pattern) {
     std::vector<std::string> result;
     if (!connected_ || !redis_) {
         if (!reconnect()) {
@@ -308,7 +308,7 @@ std::vector<std::string> RTDB::keys(const std::string& pattern) {
     return result;
 }
 
-bool RTDB::setWithExpire(const std::string& key, const std::string& value, int expire_seconds) {
+bool RtDb::setWithExpire(const std::string& key, const std::string& value, int expire_seconds) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -329,7 +329,7 @@ bool RTDB::setWithExpire(const std::string& key, const std::string& value, int e
     }
 }
 
-bool RTDB::expire(const std::string& key, int seconds) {
+bool RtDb::expire(const std::string& key, int seconds) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -350,7 +350,7 @@ bool RTDB::expire(const std::string& key, int seconds) {
     }
 }
 
-bool RTDB::append(const std::string& key, const std::string& value) {
+bool RtDb::append(const std::string& key, const std::string& value) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -371,7 +371,7 @@ bool RTDB::append(const std::string& key, const std::string& value) {
     }
 }
 
-bool RTDB::incr(const std::string& key, int64_t& result) {
+bool RtDb::incr(const std::string& key, int64_t& result) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -392,7 +392,7 @@ bool RTDB::incr(const std::string& key, int64_t& result) {
     }
 }
 
-bool RTDB::incrByFloat(const std::string& key, double value, double& result) {
+bool RtDb::incrByFloat(const std::string& key, double value, double& result) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -413,7 +413,7 @@ bool RTDB::incrByFloat(const std::string& key, double value, double& result) {
     }
 }
 
-bool RTDB::publish(const std::string& channel, const std::string& message) {
+bool RtDb::publish(const std::string& channel, const std::string& message) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -434,27 +434,27 @@ bool RTDB::publish(const std::string& channel, const std::string& message) {
     }
 }
 
-bool RTDB::subscribe(const std::string& channel, std::function<void(const std::string&, const std::string&)> callback) {
+bool RtDb::subscribe(const std::string& channel, std::function<void(const std::string&, const std::string&)> callback) {
     return false;
 }
 
-std::string RTDB::buildYcKey(const std::string& point_code) const {
+std::string RtDb::buildYcKey(const std::string& point_code) const {
     return config_.prefix + "rtdb:yc:" + point_code;
 }
 
-std::string RTDB::buildYxKey(const std::string& point_code) const {
+std::string RtDb::buildYxKey(const std::string& point_code) const {
     return config_.prefix + "rtdb:yx:" + point_code;
 }
 
-std::string RTDB::buildYkKey(const std::string& point_code) const {
+std::string RtDb::buildYkKey(const std::string& point_code) const {
     return config_.prefix + "rtdb:yk:" + point_code;
 }
 
-std::string RTDB::buildYtKey(const std::string& point_code) const {
+std::string RtDb::buildYtKey(const std::string& point_code) const {
     return config_.prefix + "rtdb:yt:" + point_code;
 }
 
-bool RTDB::setYC(const std::string& point_code, const YCPoint& point) {
+bool RtDb::setYc(const std::string& pointCode, const YcPoint& point) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -462,7 +462,7 @@ bool RTDB::setYC(const std::string& point_code, const YCPoint& point) {
     }
 
     try {
-        std::string fullKey = buildYcKey(point_code);
+        std::string fullKey = buildYcKey(pointCode);
         
         redis_->hset(fullKey, "v", std::to_string(point.value));
         redis_->hset(fullKey, "t", std::to_string(point.timestamp));
@@ -480,7 +480,7 @@ bool RTDB::setYC(const std::string& point_code, const YCPoint& point) {
     }
 }
 
-bool RTDB::getYC(const std::string& point_code, YCPoint& point) {
+bool RtDb::getYc(const std::string& pointCode, YcPoint& point) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -488,7 +488,7 @@ bool RTDB::getYC(const std::string& point_code, YCPoint& point) {
     }
 
     try {
-        std::string fullKey = buildYcKey(point_code);
+        std::string fullKey = buildYcKey(pointCode);
         
         auto v_result = redis_->hget(fullKey, "v");
         auto t_result = redis_->hget(fullKey, "t");
@@ -523,20 +523,20 @@ bool RTDB::getYC(const std::string& point_code, YCPoint& point) {
     }
 }
 
-std::vector<YCPoint> RTDB::getYCPoints(const std::string& pattern) {
-    std::vector<YCPoint> points;
-    auto codes = getYCCodes(pattern);
+std::vector<YcPoint> RtDb::getYCPoints(const std::string& pattern) {
+    std::vector<YcPoint> points;
+    auto codes = getYcCodes(pattern);
     
     for (const auto& code : codes) {
-        YCPoint point;
-        if (getYC(code, point)) {
+        YcPoint point;
+        if (getYc(code, point)) {
             points.push_back(point);
         }
     }
     return points;
 }
 
-bool RTDB::setYX(const std::string& point_code, const YXPoint& point) {
+bool RtDb::setYx(const std::string& pointCode, const YxPoint& point) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -544,7 +544,7 @@ bool RTDB::setYX(const std::string& point_code, const YXPoint& point) {
     }
 
     try {
-        std::string fullKey = buildYxKey(point_code);
+        std::string fullKey = buildYxKey(pointCode);
         
         redis_->hset(fullKey, "v", std::to_string(point.value));
         redis_->hset(fullKey, "t", std::to_string(point.timestamp));
@@ -562,7 +562,7 @@ bool RTDB::setYX(const std::string& point_code, const YXPoint& point) {
     }
 }
 
-bool RTDB::getYX(const std::string& point_code, YXPoint& point) {
+bool RtDb::getYx(const std::string& pointCode, YxPoint& point) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -570,7 +570,7 @@ bool RTDB::getYX(const std::string& point_code, YXPoint& point) {
     }
 
     try {
-        std::string fullKey = buildYxKey(point_code);
+        std::string fullKey = buildYxKey(pointCode);
         
         auto v_result = redis_->hget(fullKey, "v");
         auto t_result = redis_->hget(fullKey, "t");
@@ -605,20 +605,20 @@ bool RTDB::getYX(const std::string& point_code, YXPoint& point) {
     }
 }
 
-std::vector<YXPoint> RTDB::getYXPoints(const std::string& pattern) {
-    std::vector<YXPoint> points;
-    auto codes = getYXCodes(pattern);
+std::vector<YxPoint> RtDb::getYXPoints(const std::string& pattern) {
+    std::vector<YxPoint> points;
+    auto codes = getYxCodes(pattern);
     
     for (const auto& code : codes) {
-        YXPoint point;
-        if (getYX(code, point)) {
+        YxPoint point;
+        if (getYx(code, point)) {
             points.push_back(point);
         }
     }
     return points;
 }
 
-bool RTDB::setYK(const std::string& point_code, const YKPoint& point) {
+bool RtDb::setYk(const std::string& pointCode, const YkPoint& point) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -626,7 +626,7 @@ bool RTDB::setYK(const std::string& point_code, const YKPoint& point) {
     }
 
     try {
-        std::string fullKey = buildYkKey(point_code);
+        std::string fullKey = buildYkKey(pointCode);
         
         redis_->hset(fullKey, "v", std::to_string(point.value));
         redis_->hset(fullKey, "t", std::to_string(point.timestamp));
@@ -645,7 +645,7 @@ bool RTDB::setYK(const std::string& point_code, const YKPoint& point) {
     }
 }
 
-bool RTDB::getYK(const std::string& point_code, YKPoint& point) {
+bool RtDb::getYk(const std::string& pointCode, YkPoint& point) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -653,7 +653,7 @@ bool RTDB::getYK(const std::string& point_code, YKPoint& point) {
     }
 
     try {
-        std::string fullKey = buildYkKey(point_code);
+        std::string fullKey = buildYkKey(pointCode);
         
         auto v_result = redis_->hget(fullKey, "v");
         auto t_result = redis_->hget(fullKey, "t");
@@ -693,20 +693,20 @@ bool RTDB::getYK(const std::string& point_code, YKPoint& point) {
     }
 }
 
-std::vector<YKPoint> RTDB::getYKPoints(const std::string& pattern) {
-    std::vector<YKPoint> points;
-    auto codes = getYKCodes(pattern);
+std::vector<YkPoint> RtDb::getYKPoints(const std::string& pattern) {
+    std::vector<YkPoint> points;
+    auto codes = getYkCodes(pattern);
     
     for (const auto& code : codes) {
-        YKPoint point;
-        if (getYK(code, point)) {
+        YkPoint point;
+        if (getYk(code, point)) {
             points.push_back(point);
         }
     }
     return points;
 }
 
-bool RTDB::setYT(const std::string& point_code, const YTPoint& point) {
+bool RtDb::setYt(const std::string& pointCode, const YtPoint& point) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -714,7 +714,7 @@ bool RTDB::setYT(const std::string& point_code, const YTPoint& point) {
     }
 
     try {
-        std::string fullKey = buildYtKey(point_code);
+        std::string fullKey = buildYtKey(pointCode);
         
         redis_->hset(fullKey, "v", std::to_string(point.value));
         redis_->hset(fullKey, "t", std::to_string(point.timestamp));
@@ -732,7 +732,7 @@ bool RTDB::setYT(const std::string& point_code, const YTPoint& point) {
     }
 }
 
-bool RTDB::getYT(const std::string& point_code, YTPoint& point) {
+bool RtDb::getYt(const std::string& pointCode, YtPoint& point) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -740,7 +740,7 @@ bool RTDB::getYT(const std::string& point_code, YTPoint& point) {
     }
 
     try {
-        std::string fullKey = buildYtKey(point_code);
+        std::string fullKey = buildYtKey(pointCode);
         
         auto v_result = redis_->hget(fullKey, "v");
         auto t_result = redis_->hget(fullKey, "t");
@@ -775,36 +775,36 @@ bool RTDB::getYT(const std::string& point_code, YTPoint& point) {
     }
 }
 
-std::vector<YTPoint> RTDB::getYTPoints(const std::string& pattern) {
-    std::vector<YTPoint> points;
-    auto codes = getYTCodes(pattern);
+std::vector<YtPoint> RtDb::getYTPoints(const std::string& pattern) {
+    std::vector<YtPoint> points;
+    auto codes = getYtCodes(pattern);
     
     for (const auto& code : codes) {
-        YTPoint point;
-        if (getYT(code, point)) {
+        YtPoint point;
+        if (getYt(code, point)) {
             points.push_back(point);
         }
     }
     return points;
 }
 
-bool RTDB::deleteYC(const std::string& point_code) {
-    return deleteKey(buildYcKey(point_code));
+bool RtDb::deleteYc(const std::string& pointCode) {
+    return deleteKey(buildYcKey(pointCode));
 }
 
-bool RTDB::deleteYX(const std::string& point_code) {
-    return deleteKey(buildYxKey(point_code));
+bool RtDb::deleteYx(const std::string& pointCode) {
+    return deleteKey(buildYxKey(pointCode));
 }
 
-bool RTDB::deleteYK(const std::string& point_code) {
-    return deleteKey(buildYkKey(point_code));
+bool RtDb::deleteYk(const std::string& pointCode) {
+    return deleteKey(buildYkKey(pointCode));
 }
 
-bool RTDB::deleteYT(const std::string& point_code) {
-    return deleteKey(buildYtKey(point_code));
+bool RtDb::deleteYt(const std::string& pointCode) {
+    return deleteKey(buildYtKey(pointCode));
 }
 
-std::vector<std::string> RTDB::getYCCodes(const std::string& pattern) {
+std::vector<std::string> RtDb::getYcCodes(const std::string& pattern) {
     std::vector<std::string> codes;
     auto fullPattern = config_.prefix + "rtdb:yc:" + pattern;
     
@@ -829,7 +829,7 @@ std::vector<std::string> RTDB::getYCCodes(const std::string& pattern) {
     return codes;
 }
 
-std::vector<std::string> RTDB::getYXCodes(const std::string& pattern) {
+std::vector<std::string> RtDb::getYxCodes(const std::string& pattern) {
     std::vector<std::string> codes;
     auto fullPattern = config_.prefix + "rtdb:yx:" + pattern;
     
@@ -854,7 +854,7 @@ std::vector<std::string> RTDB::getYXCodes(const std::string& pattern) {
     return codes;
 }
 
-std::vector<std::string> RTDB::getYKCodes(const std::string& pattern) {
+std::vector<std::string> RtDb::getYkCodes(const std::string& pattern) {
     std::vector<std::string> codes;
     auto fullPattern = config_.prefix + "rtdb:yk:" + pattern;
     
@@ -879,7 +879,7 @@ std::vector<std::string> RTDB::getYKCodes(const std::string& pattern) {
     return codes;
 }
 
-std::vector<std::string> RTDB::getYTCodes(const std::string& pattern) {
+std::vector<std::string> RtDb::getYtCodes(const std::string& pattern) {
     std::vector<std::string> codes;
     auto fullPattern = config_.prefix + "rtdb:yt:" + pattern;
     
@@ -904,8 +904,8 @@ std::vector<std::string> RTDB::getYTCodes(const std::string& pattern) {
     return codes;
 }
 
-std::unique_ptr<RTDB> createRTDB(const RTDBConfig& config) {
-    auto rtdb = std::make_unique<RTDB>();
+std::unique_ptr<RtDb> createRtDb(const RtDbConfig& config) {
+    auto rtdb = std::make_unique<RtDb>();
     if (rtdb->initialize(config)) {
         return rtdb;
     }

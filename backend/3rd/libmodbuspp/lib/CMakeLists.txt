@@ -39,6 +39,14 @@ target_include_directories(objlib BEFORE PRIVATE
 # shared libraries need PIC
 set_property(TARGET objlib PROPERTY POSITION_INDEPENDENT_CODE 1)
 
+target_compile_options(objlib PRIVATE
+    -Wno-switch
+    -Wno-sign-compare
+    -Wno-unused-variable
+    -Wno-unused-parameter
+    -Wno-parentheses
+)
+
 # shared and static libraries built from the same object files
 add_library(modbuspp-shared SHARED $<TARGET_OBJECTS:objlib>)
 target_link_libraries(modbuspp-shared PRIVATE nlohmann_json::nlohmann_json)

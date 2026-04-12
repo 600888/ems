@@ -76,11 +76,11 @@ void test_channel() {
 void test_point_yc() {
     std::cout << "Testing PointYC..." << std::endl;
     
-    auto point = std::make_shared<PointYC>();
+    auto point = std::make_shared<PointYc>();
     point->id = 1;
     point->code = "voltage_a";
     point->name = "A相电压";
-    point->reg_addr = "0";
+    point->rtu_addr = 10;
     point->mul_coe = 0.1;
     point->add_coe = 0.0;
     point->max_limit = 250.0;
@@ -90,7 +90,7 @@ void test_point_yc() {
     json j = point->to_json();
     std::cout << "PointYC JSON: " << j.dump(2) << std::endl;
     
-    auto point2 = std::make_shared<PointYC>();
+    auto point2 = std::make_shared<PointYc>();
     point2->from_json(j);
     assert(point2->code == point->code);
     assert(point2->transform_value(2200) == 220.0);
@@ -102,18 +102,18 @@ void test_point_yc() {
 void test_point_yx() {
     std::cout << "Testing PointYX..." << std::endl;
     
-    auto point = std::make_shared<PointYX>();
+    auto point = std::make_shared<PointYx>();
     point->id = 1;
     point->code = "breaker_status";
     point->name = "断路器状态";
-    point->reg_addr = "0";
+    point->rtu_addr = 10;
     point->bit = 0;
     point->reverse = true;
     
     json j = point->to_json();
     std::cout << "PointYX JSON: " << j.dump(2) << std::endl;
     
-    auto point2 = std::make_shared<PointYX>();
+    auto point2 = std::make_shared<PointYx>();
     point2->from_json(j);
     assert(point2->code == point->code);
     assert(point2->transform_value(false) == true);  // reverse=true
@@ -124,17 +124,17 @@ void test_point_yx() {
 void test_point_yk() {
     std::cout << "Testing PointYK..." << std::endl;
     
-    auto point = std::make_shared<PointYK>();
+    auto point = std::make_shared<PointYk>();
     point->id = 1;
     point->code = "yk_breaker_001";
     point->name = "断路器遥控";
-    point->reg_addr = "0";
+    point->rtu_addr = 10;
     point->command_type = YKCommandType::Pulse;
     
     json j = point->to_json();
     std::cout << "PointYK JSON: " << j.dump(2) << std::endl;
     
-    auto point2 = std::make_shared<PointYK>();
+    auto point2 = std::make_shared<PointYk>();
     point2->from_json(j);
     assert(point2->code == point->code);
     assert(point2->get_command_type_name() == "Pulse");
@@ -145,11 +145,11 @@ void test_point_yk() {
 void test_point_yt() {
     std::cout << "Testing PointYT..." << std::endl;
     
-    auto point = std::make_shared<PointYT>();
+    auto point = std::make_shared<PointYt>();
     point->id = 1;
     point->code = "yt_tap_001";
     point->name = "分接头调节";
-    point->reg_addr = "10";
+    point->rtu_addr = 10;
     point->mul_coe = 0.01;
     point->min_limit = 0;
     point->max_limit = 100;
@@ -157,7 +157,7 @@ void test_point_yt() {
     json j = point->to_json();
     std::cout << "PointYT JSON: " << j.dump(2) << std::endl;
     
-    auto point2 = std::make_shared<PointYT>();
+    auto point2 = std::make_shared<PointYt>();
     point2->from_json(j);
     assert(point2->code == point->code);
     assert(point2->is_value_valid(50.0));
