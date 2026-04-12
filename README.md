@@ -54,9 +54,26 @@ sudo apt-get update
 sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
 ```
 
+如果需要构建 `iec104` 的 Python 绑定，再安装 ARM64 Python 开发包：
+
+```bash
+sudo dpkg --add-architecture arm64
+sudo apt-get update
+sudo apt-get install -y python3-dev:arm64 libpython3-dev:arm64
+```
+
 然后执行：
 
 ```bash
+./scripts/build_linux_arm.sh cross Release
+```
+
+如果 Python 头文件或库不在默认路径，可以通过环境变量覆盖：
+
+```bash
+PYTHON_EXECUTABLE=/usr/bin/python3 \
+PYTHON_INCLUDE_DIR=/usr/include/aarch64-linux-gnu/python3.12 \
+PYTHON_LIBRARY=/usr/lib/aarch64-linux-gnu/libpython3.12.so \
 ./scripts/build_linux_arm.sh cross Release
 ```
 
