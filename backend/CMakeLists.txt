@@ -36,18 +36,9 @@ endif()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 
 find_package(Threads REQUIRED)
-find_package(nlohmann_json 3.9.0 QUIET)
 
-if(NOT nlohmann_json_FOUND)
-    include(FetchContent)
-    FetchContent_Declare(json
-        GIT_REPOSITORY https://github.com/nlohmann/json.git
-        GIT_TAG v3.10.5
-        GIT_SHALLOW TRUE
-    )
-    FetchContent_MakeAvailable(json)
-    set(nlohmann_json_FOUND TRUE)
-endif()
+# Find nlohmann_json
+set(nlohmann_json_DIR "${CMAKE_CURRENT_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json")
 
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(LIBMODBUS REQUIRED libmodbus>=3.1.6)
