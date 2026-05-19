@@ -47,17 +47,17 @@
     {
       "name": "linux-native",
       "configurePreset": "linux-native",
-      "jobs": 0
+      "jobs": 2
     },
     {
       "name": "linux-arm-native",
       "configurePreset": "linux-arm-native",
-      "jobs": 0
+      "jobs": 2
     },
     {
       "name": "linux-arm-cross",
       "configurePreset": "linux-arm-cross",
-      "jobs": 0
+      "jobs": 2
     }
   ]
 }

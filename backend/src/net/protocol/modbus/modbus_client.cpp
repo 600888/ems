@@ -12,7 +12,7 @@ namespace net {
 namespace modbus {
 
 ModbusClient::ModbusClient(NetType type, const std::string& connection, const std::string& settings)
-    : net_type_(type), connection_(connection), settings_(settings) {
+    : netType_(type), connection_(connection), settings_(settings) {
     Modbus::Net net = (type == NetType::RTU) ? Modbus::Net::Rtu : Modbus::Net::Tcp;
     master_.setBackend(net, connection_, settings_);
 }
@@ -28,7 +28,7 @@ bool ModbusClient::connect() {
 
     try {
         if (!master_.open()) {
-            last_error_msg_ = "Failed to open Modbus connection";
+            lastErrorMsg_ = "Failed to open Modbus connection";
             return false;
         }
 
@@ -36,7 +36,7 @@ bool ModbusClient::connect() {
         return true;
     }
     catch (const std::exception& e) {
-        last_error_msg_ = e.what();
+        lastErrorMsg_ = e.what();
         return false;
     }
 }
@@ -65,32 +65,32 @@ void ModbusClient::setDebug(bool enable) {
     master_.setDebug(enable);
 }
 
-Modbus::Slave* ModbusClient::getSlave(int slave_id) {
-    auto it = slaves_.find(slave_id);
+Modbus::Slave* ModbusClient::getSlave(int slaveId) {
+    auto it = slaves_.find(slaveId);
     if (it != slaves_.end()) {
         return it->second.get();
     }
     if (!isConnected()) {
         return nullptr;
     }
-    auto& slave = slaves_[slave_id];
-    slave = std::make_unique<Modbus::Slave>(slave_id, &master_);
+    auto& slave = slaves_[slaveId];
+    slave = std::make_unique<Modbus::Slave>(slaveId, &master_);
     return slave.get();
 }
 
-bool ModbusClient::addSlave(int slave_id) {
+bool ModbusClient::addSlave(int slaveId) {
     if (!isConnected()) {
         return false;
     }
-    if (slaves_.find(slave_id) != slaves_.end()) {
+    if (slaves_.find(slaveId) != slaves_.end()) {
         return false;
     }
-    slaves_[slave_id] = std::make_unique<Modbus::Slave>(slave_id, &master_);
+    slaves_[slaveId] = std::make_unique<Modbus::Slave>(slaveId, &master_);
     return true;
 }
 
-bool ModbusClient::removeSlave(int slave_id) {
-    auto it = slaves_.find(slave_id);
+bool ModbusClient::removeSlave(int slaveId) {
+    auto it = slaves_.find(slaveId);
     if (it == slaves_.end()) {
         return false;
     }
@@ -98,12 +98,12 @@ bool ModbusClient::removeSlave(int slave_id) {
     return true;
 }
 
-bool ModbusClient::hasSlave(int slave_id) const {
-    return slaves_.find(slave_id) != slaves_.end();
+bool ModbusClient::hasSlave(int slaveId) const {
+    return slaves_.find(slaveId) != slaves_.end();
 }
 
-ModbusClient::ErrorCode ModbusClient::translateError(int modbus_ret) {
-    if (modbus_ret >= 0) {
+ModbusClient::ErrorCode ModbusClient::translateError(int modbusRet) {
+    if (modbusRet >= 0) {
         return ModbusClient::ErrorCode::Success;
     }
 
@@ -111,30 +111,30 @@ ModbusClient::ErrorCode ModbusClient::translateError(int modbus_ret) {
         case EBADMSG:
         case EINVAL:
         case EPROTO:
-            last_error_ = errno;
-            last_error_msg_ = std::strerror(errno);
+            lastError_ = errno;
+            lastErrorMsg_ = std::strerror(errno);
             return ErrorCode::SlaveError;
 
         case EBUSY:
-            last_error_ = errno;
-            last_error_msg_ = "Slave busy";
+            lastError_ = errno;
+            lastErrorMsg_ = "Slave busy";
             return ErrorCode::SlaveError;
 
         case ETIMEDOUT:
         case ECOMM:
-            last_error_ = errno;
-            last_error_msg_ = "Communication timeout";
+            lastError_ = errno;
+            lastErrorMsg_ = "Communication timeout";
             return ErrorCode::Timeout;
 
         default:
-            last_error_ = errno;
-            last_error_msg_ = std::strerror(errno);
+            lastError_ = errno;
+            lastErrorMsg_ = std::strerror(errno);
             return ErrorCode::Unknown;
     }
 }
 
-ModbusClient::ErrorCode ModbusClient::readCoils(int slave_id, int addr, bool* dest, int nb) {
-    auto* slave = getSlave(slave_id);
+ModbusClient::ErrorCode ModbusClient::readCoils(int slaveId, int addr, bool* dest, int nb) {
+    auto* slave = getSlave(slaveId);
     if (!slave) {
         return ErrorCode::ConnectionFailed;
     }
@@ -142,8 +142,8 @@ ModbusClient::ErrorCode ModbusClient::readCoils(int slave_id, int addr, bool* de
     return translateError(ret);
 }
 
-ModbusClient::ErrorCode ModbusClient::readDiscreteInputs(int slave_id, int addr, bool* dest, int nb) {
-    auto* slave = getSlave(slave_id);
+ModbusClient::ErrorCode ModbusClient::readDiscreteInputs(int slaveId, int addr, bool* dest, int nb) {
+    auto* slave = getSlave(slaveId);
     if (!slave) {
         return ErrorCode::ConnectionFailed;
     }
@@ -151,8 +151,8 @@ ModbusClient::ErrorCode ModbusClient::readDiscreteInputs(int slave_id, int addr,
     return translateError(ret);
 }
 
-ModbusClient::ErrorCode ModbusClient::readHoldingRegisters(int slave_id, int addr, uint16_t* dest, int nb) {
-    auto* slave = getSlave(slave_id);
+ModbusClient::ErrorCode ModbusClient::readHoldingRegisters(int slaveId, int addr, uint16_t* dest, int nb) {
+    auto* slave = getSlave(slaveId);
     if (!slave) {
         return ErrorCode::ConnectionFailed;
     }
@@ -160,8 +160,8 @@ ModbusClient::ErrorCode ModbusClient::readHoldingRegisters(int slave_id, int add
     return translateError(ret);
 }
 
-ModbusClient::ErrorCode ModbusClient::readInputRegisters(int slave_id, int addr, uint16_t* dest, int nb) {
-    auto* slave = getSlave(slave_id);
+ModbusClient::ErrorCode ModbusClient::readInputRegisters(int slaveId, int addr, uint16_t* dest, int nb) {
+    auto* slave = getSlave(slaveId);
     if (!slave) {
         return ErrorCode::ConnectionFailed;
     }
@@ -169,8 +169,8 @@ ModbusClient::ErrorCode ModbusClient::readInputRegisters(int slave_id, int addr,
     return translateError(ret);
 }
 
-ModbusClient::ErrorCode ModbusClient::writeSingleCoil(int slave_id, int addr, bool value) {
-    auto* slave = getSlave(slave_id);
+ModbusClient::ErrorCode ModbusClient::writeSingleCoil(int slaveId, int addr, bool value) {
+    auto* slave = getSlave(slaveId);
     if (!slave) {
         return ErrorCode::ConnectionFailed;
     }
@@ -178,8 +178,8 @@ ModbusClient::ErrorCode ModbusClient::writeSingleCoil(int slave_id, int addr, bo
     return translateError(ret);
 }
 
-ModbusClient::ErrorCode ModbusClient::writeSingleRegister(int slave_id, int addr, uint16_t value) {
-    auto* slave = getSlave(slave_id);
+ModbusClient::ErrorCode ModbusClient::writeSingleRegister(int slaveId, int addr, uint16_t value) {
+    auto* slave = getSlave(slaveId);
     if (!slave) {
         return ErrorCode::ConnectionFailed;
     }
@@ -187,8 +187,8 @@ ModbusClient::ErrorCode ModbusClient::writeSingleRegister(int slave_id, int addr
     return translateError(ret);
 }
 
-ModbusClient::ErrorCode ModbusClient::writeMultipleCoils(int slave_id, int addr, const bool* src, int nb) {
-    auto* slave = getSlave(slave_id);
+ModbusClient::ErrorCode ModbusClient::writeMultipleCoils(int slaveId, int addr, const bool* src, int nb) {
+    auto* slave = getSlave(slaveId);
     if (!slave) {
         return ErrorCode::ConnectionFailed;
     }
@@ -196,8 +196,8 @@ ModbusClient::ErrorCode ModbusClient::writeMultipleCoils(int slave_id, int addr,
     return translateError(ret);
 }
 
-ModbusClient::ErrorCode ModbusClient::writeMultipleRegisters(int slave_id, int addr, const uint16_t* src, int nb) {
-    auto* slave = getSlave(slave_id);
+ModbusClient::ErrorCode ModbusClient::writeMultipleRegisters(int slaveId, int addr, const uint16_t* src, int nb) {
+    auto* slave = getSlave(slaveId);
     if (!slave) {
         return ErrorCode::ConnectionFailed;
     }
@@ -205,13 +205,13 @@ ModbusClient::ErrorCode ModbusClient::writeMultipleRegisters(int slave_id, int a
     return translateError(ret);
 }
 
-ModbusClient::ErrorCode ModbusClient::writeReadRegisters(int slave_id, int write_addr, const uint16_t* src, int write_nb,
-                                           int read_addr, uint16_t* dest, int read_nb) {
-    auto* slave = getSlave(slave_id);
+ModbusClient::ErrorCode ModbusClient::writeReadRegisters(int slaveId, int writeAddr, const uint16_t* src, int writeNb,
+                                           int readAddr, uint16_t* dest, int readNb) {
+    auto* slave = getSlave(slaveId);
     if (!slave) {
         return ErrorCode::ConnectionFailed;
     }
-    int ret = slave->writeReadRegisters(write_addr, src, write_nb, read_addr, dest, read_nb);
+    int ret = slave->writeReadRegisters(writeAddr, src, writeNb, readAddr, dest, readNb);
     return translateError(ret);
 }
 

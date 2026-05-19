@@ -103,8 +103,8 @@ public:
     ModbusRegister() : value_(0) {}
     explicit ModbusRegister(uint16_t v) : value_(v) {}
 
-    uint16_t value_8() const { return value_; }
-    int16_t value_s16() const { return static_cast<int16_t>(value_); }
+    uint16_t value8() const { return value_; }
+    int16_t valueS16() const { return static_cast<int16_t>(value_); }
     float toFloat(Modbus::Endian e = Modbus::EndianBig) const;
     double toDouble(Modbus::Endian e = Modbus::EndianBig) const;
 
@@ -124,9 +124,9 @@ class ModbusRegister32 {
 public:
     ModbusRegister32() { value_[0] = value_[1] = 0; }
 
-    uint32_t value_u32(Modbus::Endian e = Modbus::EndianBig) const;
-    int32_t value_s32(Modbus::Endian e = Modbus::EndianBig) const;
-    float value_float(Modbus::Endian e = Modbus::EndianBig) const;
+    uint32_t valueU32(Modbus::Endian e = Modbus::EndianBig) const;
+    int32_t valueS32(Modbus::Endian e = Modbus::EndianBig) const;
+    float valueFloat(Modbus::Endian e = Modbus::EndianBig) const;
 
     void setValue(uint32_t v, Modbus::Endian e = Modbus::EndianBig);
     void setValue(int32_t v, Modbus::Endian e = Modbus::EndianBig);
@@ -144,9 +144,9 @@ class ModbusRegister64 {
 public:
     ModbusRegister64() { value_[0] = value_[1] = value_[2] = value_[3] = 0; }
 
-    uint64_t value_u64(Modbus::Endian e = Modbus::EndianBig) const;
-    int64_t value_s64(Modbus::Endian e = Modbus::EndianBig) const;
-    double value_double(Modbus::Endian e = Modbus::EndianBig) const;
+    uint64_t valueU64(Modbus::Endian e = Modbus::EndianBig) const;
+    int64_t valueS64(Modbus::Endian e = Modbus::EndianBig) const;
+    double valueDouble(Modbus::Endian e = Modbus::EndianBig) const;
 
     void setValue(uint64_t v, Modbus::Endian e = Modbus::EndianBig);
     void setValue(int64_t v, Modbus::Endian e = Modbus::EndianBig);

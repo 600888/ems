@@ -52,26 +52,26 @@ public:
     void setByteTimeout(int ms);
     void setDebug(bool enable);
 
-    ErrorCode readCoils(int slave_id, int addr, bool* dest, int nb = 1);
-    ErrorCode readDiscreteInputs(int slave_id, int addr, bool* dest, int nb = 1);
-    ErrorCode readHoldingRegisters(int slave_id, int addr, uint16_t* dest, int nb = 1);
-    ErrorCode readInputRegisters(int slave_id, int addr, uint16_t* dest, int nb = 1);
+    ErrorCode readCoils(int slaveId, int addr, bool* dest, int nb = 1);
+    ErrorCode readDiscreteInputs(int slaveId, int addr, bool* dest, int nb = 1);
+    ErrorCode readHoldingRegisters(int slaveId, int addr, uint16_t* dest, int nb = 1);
+    ErrorCode readInputRegisters(int slaveId, int addr, uint16_t* dest, int nb = 1);
 
-    ErrorCode writeSingleCoil(int slave_id, int addr, bool value);
-    ErrorCode writeSingleRegister(int slave_id, int addr, uint16_t value);
-    ErrorCode writeMultipleCoils(int slave_id, int addr, const bool* src, int nb);
-    ErrorCode writeMultipleRegisters(int slave_id, int addr, const uint16_t* src, int nb);
-    ErrorCode writeReadRegisters(int slave_id, int write_addr, const uint16_t* src, int write_nb,
-                                  int read_addr, uint16_t* dest, int read_nb);
+    ErrorCode writeSingleCoil(int slaveId, int addr, bool value);
+    ErrorCode writeSingleRegister(int slaveId, int addr, uint16_t value);
+    ErrorCode writeMultipleCoils(int slaveId, int addr, const bool* src, int nb);
+    ErrorCode writeMultipleRegisters(int slaveId, int addr, const uint16_t* src, int nb);
+    ErrorCode writeReadRegisters(int slaveId, int writeAddr, const uint16_t* src, int writeNb,
+                                  int readAddr, uint16_t* dest, int readNb);
 
-    bool addSlave(int slave_id);
-    bool removeSlave(int slave_id);
-    bool hasSlave(int slave_id) const;
+    bool addSlave(int slaveId);
+    bool removeSlave(int slaveId);
+    bool hasSlave(int slaveId) const;
 
     template<typename T, Modbus::Endian E = Modbus::EndianBig>
-    ErrorCode readData(int slave_id, int addr, Modbus::Data<T, E>& data) {
-        int reg_count = sizeof(T) / 2;
-        auto ret = readHoldingRegisters(slave_id, addr, data.registers().data(), reg_count);
+    ErrorCode readData(int slaveId, int addr, Modbus::Data<T, E>& data) {
+        int regCount = sizeof(T) / 2;
+        auto ret = readHoldingRegisters(slaveId, addr, data.registers().data(), regCount);
         if (ret == ErrorCode::Success) {
             data.updateValue();
         }
@@ -79,25 +79,25 @@ public:
     }
 
     template<typename T, Modbus::Endian E = Modbus::EndianBig>
-    ErrorCode writeData(int slave_id, int addr, const Modbus::Data<T, E>& data) {
-        int reg_count = sizeof(T) / 2;
-        return writeMultipleRegisters(slave_id, addr, data.registers().data(), reg_count);
+    ErrorCode writeData(int slaveId, int addr, const Modbus::Data<T, E>& data) {
+        int regCount = sizeof(T) / 2;
+        return writeMultipleRegisters(slaveId, addr, data.registers().data(), regCount);
     }
 
-    int getLastError() const { return last_error_; }
-    std::string getLastErrorMsg() const { return last_error_msg_; }
+    int getLastError() const { return lastError_; }
+    std::string getLastErrorMsg() const { return lastErrorMsg_; }
 
 private:
-    ErrorCode translateError(int modbus_ret);
-    Modbus::Slave* getSlave(int slave_id);
+    ErrorCode translateError(int modbusRet);
+    Modbus::Slave* getSlave(int slaveId);
 
-    NetType net_type_;
+    NetType netType_;
     Modbus::Master master_;
     std::string connection_;
     std::string settings_;
     std::map<int, std::unique_ptr<Modbus::Slave>> slaves_;
-    int last_error_{0};
-    std::string last_error_msg_;
+    int lastError_{0};
+    std::string lastErrorMsg_;
     bool connected_{false};
 };
 
@@ -105,8 +105,8 @@ template<Modbus::Endian E = Modbus::EndianBig>
 class ModbusClientWithData {
 public:
     ModbusClientWithData(typename ModbusClient::NetType type, const std::string& connection,
-                         const std::string& settings, int slave_id = 1)
-        : client_(type, connection, settings), slave_id_(slave_id) {}
+                         const std::string& settings, int slaveId = 1)
+        : client_(type, connection, settings), slave_id_(slaveId) {}
 
     bool connect() {
         return client_.connect();
@@ -115,7 +115,7 @@ public:
     void disconnect() { client_.disconnect(); }
     bool isConnected() const { return client_.isConnected(); }
 
-    void setSlaveId(int slave_id) { slave_id_ = slave_id; }
+    void setSlaveId(int slaveId) { slave_id_ = slaveId; }
     int getSlaveId() const { return slave_id_; }
 
     typename ModbusClient::ErrorCode readInt16(int addr, int16_t& value) {

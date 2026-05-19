@@ -273,35 +273,35 @@ TEST(ModbusServerHandler, WriteCallback) {
     config["port"] = 5031;
     handler.initialize(config);
     
-    bool callback_called = false;
-    int received_slave_id = 0;
-    int received_func_code = 0;
-    int received_address = 0;
+    bool callbackCalled = false;
+    int receivedSlaveId = 0;
+    int receivedFuncCode = 0;
+    int receivedAddress = 0;
     
     struct MockCallback : public ModbusWriteCallback {
         bool& called;
-        int& slave_id;
-        int& func_code;
+        int& slaveId;
+        int& funcCode;
         int& address;
         
         MockCallback(bool& c, int& s, int& f, int& a)
-            : called(c), slave_id(s), func_code(f), address(a) {}
+            : called(c), slaveId(s), funcCode(f), address(a) {}
         
-        void on_modbus_client_write(int s, int f, int a,
+        void onModbusClientWrite(int s, int f, int a,
                                      const std::vector<int>& values) override {
             called = true;
-            slave_id = s;
-            func_code = f;
+            slaveId = s;
+            funcCode = f;
             address = a;
         }
     };
     
-    auto callback = std::make_shared<MockCallback>(callback_called, received_slave_id,
-                                                     received_func_code, received_address);
+    auto callback = std::make_shared<MockCallback>(callbackCalled, receivedSlaveId,
+                                                     receivedFuncCode, receivedAddress);
     handler.setWriteCallback(callback);
     
-    auto start_future = handler.start();
-    start_future.get();
+    auto startFuture = handler.start();
+    startFuture.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
     
     handler.stop();

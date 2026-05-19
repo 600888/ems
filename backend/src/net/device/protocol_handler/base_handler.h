@@ -55,11 +55,14 @@ public:
     
     bool isRunning() const { return running_.load(); }
     
-    std::shared_ptr<MessageCapture> getMessageCapture() const { return message_capture_; }
-    void set_message_capture(std::shared_ptr<MessageCapture> capture) { message_capture_ = capture; }
+    std::shared_ptr<MessageCapture> getMessageCapture() const { return messageCapture_; }
+    void setMessageCapture(std::shared_ptr<MessageCapture> capture) { messageCapture_ = capture; }
     
     void addTxMessage(const std::vector<uint8_t>& data, const std::string& description = "");
     void addRxMessage(const std::vector<uint8_t>& data, const std::string& description = "");
+
+    void addTx(const std::vector<uint8_t>& data, const std::string& description = "");
+    void addRx(const std::vector<uint8_t>& data, const std::string& description = "");
     
     virtual void initialize(const std::unordered_map<std::string, ValueType>& config) = 0;
     virtual std::future<bool> start() = 0;
@@ -94,7 +97,7 @@ protected:
     ProtocolHandler() = default;
     
     std::unordered_map<std::string, ValueType> config_;
-    std::shared_ptr<MessageCapture> message_capture_;
+    std::shared_ptr<MessageCapture> messageCapture_;
     std::atomic<bool> running_{false};
 };
 
@@ -103,8 +106,8 @@ class ServerHandler : public ProtocolHandler<PointT> {
 public:
     virtual ~ServerHandler() = default;
     
-    virtual ValueType getValueByAddress(int func_code, int slave_id, int address) = 0;
-    virtual void setValueByAddress(int func_code, int slave_id, int address, const ValueType& value) = 0;
+    virtual ValueType getValueByAddress(int funcCode, int slaveId, int address) = 0;
+    virtual void setValueByAddress(int funcCode, int slaveId, int address, const ValueType& value) = 0;
     
     virtual std::future<bool> start() = 0;
     virtual std::future<bool> stop() = 0;
@@ -134,15 +137,29 @@ public:
 
 template<typename PointT>
 void ProtocolHandler<PointT>::addTxMessage(const std::vector<uint8_t>& data, const std::string& description) {
-    if (message_capture_) {
-        message_capture_->addTx(data, description);
+    if (messageCapture_) {
+        messageCapture_->addTx(data, description);
     }
 }
 
 template<typename PointT>
 void ProtocolHandler<PointT>::addRxMessage(const std::vector<uint8_t>& data, const std::string& description) {
-    if (message_capture_) {
-        message_capture_->addRx(data, description);
+    if (messageCapture_) {
+        messageCapture_->addRx(data, description);
+    }
+}
+
+template<typename PointT>
+void ProtocolHandler<PointT>::addTx(const std::vector<uint8_t>& data, const std::string& description) {
+    if (messageCapture_) {
+        messageCapture_->addTx(data, description);
+    }
+}
+
+template<typename PointT>
+void ProtocolHandler<PointT>::addRx(const std::vector<uint8_t>& data, const std::string& description) {
+    if (messageCapture_) {
+        messageCapture_->addRx(data, description);
     }
 }
 
@@ -157,23 +174,23 @@ std::optional<ValueType> ProtocolHandler<PointT>::getConfig(const std::string& k
 
 template<typename PointT>
 std::vector<CapturedMessage> ProtocolHandler<PointT>::getCapturedMessages(int limit) const {
-    if (message_capture_) {
-        return message_capture_->getMessages(limit);
+    if (messageCapture_) {
+        return messageCapture_->getMessages(limit);
     }
     return {};
 }
 
 template<typename PointT>
 void ProtocolHandler<PointT>::clearCapturedMessages() {
-    if (message_capture_) {
-        message_capture_->clear();
+    if (messageCapture_) {
+        messageCapture_->clear();
     }
 }
 
 template<typename PointT>
 AvgTimeStats ProtocolHandler<PointT>::getAvgTime() const {
-    if (message_capture_) {
-        return message_capture_->getAvgTime();
+    if (messageCapture_) {
+        return messageCapture_->getAvgTime();
     }
     return {};
 }

@@ -13,7 +13,7 @@
 #include "rtdb_point.h"
 
 namespace ems {
-namespace net {
+namespace rtdb {
 
 class RtDbConfigCache {
 public:
@@ -23,11 +23,11 @@ public:
     struct YcConfig {
         std::string code;
         std::string name;
-        int64_t channel_id{0};
-        double mul_coe{1.0};
-        double add_coe{0.0};
-        double max_limit{9999999.0};
-        double min_limit{-9999999.0};
+        int64_t channelId{0};
+        double mulCoe{1.0};
+        double addCoe{0.0};
+        double maxLimit{9999999.0};
+        double minLimit{-9999999.0};
         std::string unit;
         int status{0};
     };
@@ -35,7 +35,7 @@ public:
     struct YxConfig {
         std::string code;
         std::string name;
-        int64_t channel_id{0};
+        int64_t channelId{0};
         int bit{0};
         bool reverse{false};
         int status{0};
@@ -44,21 +44,21 @@ public:
     struct YkConfig {
         std::string code;
         std::string name;
-        int64_t channel_id{0};
+        int64_t channelId{0};
         int bit{0};
-        int command_type{0};
-        int64_t related_yx_id{0};
+        int commandType{0};
+        int64_t relatedYxId{0};
         int status{0};
     };
 
     struct YtConfig {
         std::string code;
         std::string name;
-        int64_t channel_id{0};
-        double mul_coe{1.0};
-        double add_coe{0.0};
-        double max_limit{9999999.0};
-        double min_limit{-9999999.0};
+        int64_t channelId{0};
+        double mulCoe{1.0};
+        double addCoe{0.0};
+        double maxLimit{9999999.0};
+        double minLimit{-9999999.0};
         std::string unit;
         int status{0};
     };
@@ -94,18 +94,33 @@ public:
     bool hasYkConfig(const std::string& code) const;
     bool hasYtConfig(const std::string& code) const;
 
+    bool getPointConfig(const std::string& code, PointConfig& config) const;
+    bool setPointConfig(const PointConfig& config);
+    bool deletePointConfig(const std::string& code);
+    std::vector<PointConfig> getAllPointConfigs() const;
+
     using UpdateCallback = std::function<void(const std::string& code)>;
     void setUpdateCallback(UpdateCallback callback);
 
 private:
+    YcConfig toYcConfig(const PointConfig& pc) const;
+    YxConfig toYxConfig(const PointConfig& pc) const;
+    YkConfig toYkConfig(const PointConfig& pc) const;
+    YtConfig toYtConfig(const PointConfig& pc) const;
+    PointConfig toPointConfig(const YcConfig& yc) const;
+    PointConfig toPointConfig(const YxConfig& yx) const;
+    PointConfig toPointConfig(const YkConfig& yk) const;
+    PointConfig toPointConfig(const YtConfig& yt) const;
+
     mutable std::shared_mutex mutex_;
 
-    std::unordered_map<std::string, YcConfig> yc_configs_;
-    std::unordered_map<std::string, YxConfig> yx_configs_;
-    std::unordered_map<std::string, YkConfig> yk_configs_;
-    std::unordered_map<std::string, YtConfig> yt_configs_;
+    std::unordered_map<std::string, YcConfig> ycConfigs_;
+    std::unordered_map<std::string, YxConfig> yxConfigs_;
+    std::unordered_map<std::string, YkConfig> ykConfigs_;
+    std::unordered_map<std::string, YtConfig> ytConfigs_;
+    std::unordered_map<std::string, ChannelConfig> channelConfigs_;
 
-    UpdateCallback update_callback_;
+    UpdateCallback updateCallback_;
 };
 
 class RtDbPointManager {
@@ -113,54 +128,54 @@ public:
     RtDbPointManager() = default;
     ~RtDbPointManager() = default;
 
-    struct YCFullPoint {
+    struct YcFullPoint {
         RtDbConfigCache::YcConfig config;
         YcPoint data;
     };
 
-    struct YXFullPoint {
+    struct YxFullPoint {
         RtDbConfigCache::YxConfig config;
         YxPoint data;
     };
 
-    struct YKFullPoint {
+    struct YkFullPoint {
         RtDbConfigCache::YkConfig config;
         YkPoint data;
     };
 
-    struct YTFullPoint {
+    struct YtFullPoint {
         RtDbConfigCache::YtConfig config;
         YtPoint data;
     };
 
     void setConfigCache(std::shared_ptr<RtDbConfigCache> cache);
 
-    bool getYCFullPoint(const std::string& code, 
-                       const YcPoint& data, 
-                       YCFullPoint& full_point) const;
-    bool getYXFullPoint(const std::string& code, 
-                       const YxPoint& data, 
-                       YXFullPoint& full_point) const;
-    bool getYKFullPoint(const std::string& code, 
-                       const YkPoint& data, 
-                       YKFullPoint& full_point) const;
-    bool getYTFullPoint(const std::string& code, 
-                       const YtPoint& data, 
-                       YTFullPoint& full_point) const;
+    bool getYcFullPoint(const std::string& code,
+                       const YcPoint& data,
+                       YcFullPoint& fullPoint) const;
+    bool getYxFullPoint(const std::string& code,
+                       const YxPoint& data,
+                       YxFullPoint& fullPoint) const;
+    bool getYkFullPoint(const std::string& code,
+                       const YkPoint& data,
+                       YkFullPoint& fullPoint) const;
+    bool getYtFullPoint(const std::string& code,
+                       const YtPoint& data,
+                       YtFullPoint& fullPoint) const;
 
-    std::vector<YCFullPoint> getYCFullPoints(const std::vector<YcPoint>& data_points);
-    std::vector<YXFullPoint> getYXFullPoints(const std::vector<YxPoint>& data_points);
-    std::vector<YKFullPoint> getYKFullPoints(const std::vector<YkPoint>& data_points);
-    std::vector<YTFullPoint> getYTFullPoints(const std::vector<YtPoint>& data_points);
+    std::vector<YcFullPoint> getYcFullPoints(const std::vector<YcPoint>& dataPoints);
+    std::vector<YxFullPoint> getYxFullPoints(const std::vector<YxPoint>& dataPoints);
+    std::vector<YkFullPoint> getYkFullPoints(const std::vector<YkPoint>& dataPoints);
+    std::vector<YtFullPoint> getYtFullPoints(const std::vector<YtPoint>& dataPoints);
 
-    double transformYCValue(double raw_value, const RtDbConfigCache::YcConfig& config) const;
-    double transformYTValue(double raw_value, const RtDbConfigCache::YtConfig& config) const;
+    double transformYcValue(double rawValue, const RtDbConfigCache::YcConfig& config) const;
+    double transformYtValue(double rawValue, const RtDbConfigCache::YtConfig& config) const;
 
-    bool validateYCValue(double value, const RtDbConfigCache::YcConfig& config) const;
-    bool validateYTValue(double value, const RtDbConfigCache::YtConfig& config) const;
+    bool validateYcValue(double value, const RtDbConfigCache::YcConfig& config) const;
+    bool validateYtValue(double value, const RtDbConfigCache::YtConfig& config) const;
 
 private:
-    std::shared_ptr<RtDbConfigCache> config_cache_;
+    std::shared_ptr<RtDbConfigCache> configCache_;
 };
 
 }

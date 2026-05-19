@@ -2,14 +2,15 @@
 #include <sstream>
 #include <chrono>
 #include <iterator>
+#include <future>
 #include <sw/redis++/redis++.h>
 
 namespace ems {
-namespace net {
+namespace rtdb {
 
 RtDb::RtDb()
     : connected_(false)
-    , cmd_count_(0) {
+    , cmdCount_(0) {
 }
 
 RtDb::~RtDb() {
@@ -21,19 +22,22 @@ bool RtDb::initialize(const RtDbConfig& config) {
     if (config_.host.empty()) {
         config_.host = "localhost";
     }
-    if(config_.password.empty()) {
+    if (config_.password.empty()) {
         config_.password = "888888";
     }
     if (config_.port == 0) {
         config_.port = 6379;
     }
-    if (config_.pool_size == 0) {
-        config_.pool_size = 10;
+    if (config_.poolSize == 0) {
+        config_.poolSize = 10;
     }
-    if (config_.timeout_ms == 0) {
-        config_.timeout_ms = 5000;
+    if (config_.timeoutMs == 0) {
+        config_.timeoutMs = 5000;
     }
 
+    if (config_.useSentinel) {
+        return connectSentinel();
+    }
     return connect();
 }
 
@@ -48,33 +52,94 @@ bool RtDb::connect() {
         sw::redis::ConnectionOptions opts;
         opts.host = config_.host;
         opts.port = config_.port;
-        
+
         if (!config_.password.empty()) {
             opts.password = config_.password;
         }
-        
+
         if (config_.db != 0) {
             opts.db = config_.db;
         }
 
-        opts.socket_timeout = std::chrono::milliseconds(config_.timeout_ms);
-        opts.connect_timeout = std::chrono::milliseconds(config_.timeout_ms);
+        opts.socket_timeout = std::chrono::milliseconds(config_.timeoutMs);
+        opts.connect_timeout = std::chrono::milliseconds(config_.timeoutMs);
 
-        sw::redis::ConnectionPoolOptions pool_opts;
-        pool_opts.size = config_.pool_size;
-        pool_opts.wait_timeout = std::chrono::milliseconds(config_.timeout_ms);
+        sw::redis::ConnectionPoolOptions poolOpts;
+        poolOpts.size = config_.poolSize;
+        poolOpts.wait_timeout = std::chrono::milliseconds(config_.timeoutMs);
 
-        redis_ = std::make_unique<sw::redis::Redis>(opts, pool_opts);
-        
+        redis_ = std::make_unique<sw::redis::Redis>(opts, poolOpts);
+
         redis_->ping();
         connected_ = true;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         connected_ = false;
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
+        connected_ = false;
+        return false;
+    }
+}
+
+bool RtDb::connectSentinel() {
+    std::lock_guard<std::mutex> lock(mutex_);
+
+    try {
+        sw::redis::SentinelOptions sentinelOpts;
+        for (const auto& node : config_.sentinelNodes) {
+            auto pos = node.find(':');
+            if (pos != std::string::npos) {
+                sentinelOpts.nodes.emplace_back(
+                    node.substr(0, pos),
+                    std::stoi(node.substr(pos + 1))
+                );
+            }
+        }
+
+        if (!config_.password.empty()) {
+            sentinelOpts.password = config_.password;
+        }
+
+        sentinelOpts.connect_timeout = std::chrono::milliseconds(config_.timeoutMs);
+        sentinelOpts.socket_timeout = std::chrono::milliseconds(config_.timeoutMs);
+
+        sw::redis::ConnectionOptions connectionOpts;
+        connectionOpts.host = config_.host;
+        connectionOpts.port = config_.port;
+        if (!config_.password.empty()) {
+            connectionOpts.password = config_.password;
+        }
+        if (config_.db != 0) {
+            connectionOpts.db = config_.db;
+        }
+        connectionOpts.socket_timeout = std::chrono::milliseconds(config_.timeoutMs);
+        connectionOpts.connect_timeout = std::chrono::milliseconds(config_.timeoutMs);
+
+        sw::redis::ConnectionPoolOptions poolOpts;
+        poolOpts.size = config_.poolSize;
+        poolOpts.wait_timeout = std::chrono::milliseconds(config_.timeoutMs);
+
+        auto sentinel = std::make_shared<sw::redis::Sentinel>(sentinelOpts);
+        redis_ = std::make_unique<sw::redis::Redis>(
+            sentinel,
+            config_.sentinelMasterName,
+            sw::redis::Role::MASTER,
+            connectionOpts,
+            poolOpts
+        );
+
+        redis_->ping();
+        connected_ = true;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        connected_ = false;
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
         connected_ = false;
         return false;
     }
@@ -88,6 +153,9 @@ void RtDb::disconnect() {
 
 bool RtDb::reconnect() {
     disconnect();
+    if (config_.useSentinel) {
+        return connectSentinel();
+    }
     return connect();
 }
 
@@ -101,13 +169,13 @@ bool RtDb::set(const std::string& key, const std::string& value) {
     try {
         std::string fullKey = config_.prefix + key;
         redis_->set(fullKey, value);
-        cmd_count_++;
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -136,15 +204,15 @@ bool RtDb::get(const std::string& key, std::string& value) {
         auto result = redis_->get(fullKey);
         if (result) {
             value = *result;
-            cmd_count_++;
+            cmdCount_++;
             return true;
         }
         return false;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -187,13 +255,13 @@ bool RtDb::setHash(const std::string& key, const std::map<std::string, std::stri
         for (const auto& field : fields) {
             redis_->hset(fullKey, field.first, field.second);
         }
-        cmd_count_ += fields.size();
+        cmdCount_ += fields.size();
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -208,13 +276,13 @@ bool RtDb::getHash(const std::string& key, std::map<std::string, std::string>& f
     try {
         std::string fullKey = config_.prefix + key;
         redis_->hgetall(fullKey, std::inserter(fields, fields.end()));
-        cmd_count_++;
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -229,13 +297,13 @@ bool RtDb::setHashField(const std::string& key, const std::string& field, const 
     try {
         std::string fullKey = config_.prefix + key;
         redis_->hset(fullKey, field, value);
-        cmd_count_++;
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -250,13 +318,13 @@ bool RtDb::deleteKey(const std::string& key) {
     try {
         std::string fullKey = config_.prefix + key;
         redis_->del(fullKey);
-        cmd_count_++;
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -271,13 +339,13 @@ bool RtDb::exists(const std::string& key) {
     try {
         std::string fullKey = config_.prefix + key;
         auto result = redis_->exists(fullKey);
-        cmd_count_++;
+        cmdCount_++;
         return result > 0;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -293,22 +361,22 @@ std::vector<std::string> RtDb::keys(const std::string& pattern) {
     try {
         std::string fullPattern = config_.prefix + pattern;
         redis_->keys(fullPattern, std::back_inserter(result));
-        
+
         for (auto& key : result) {
             if (!config_.prefix.empty() && key.find(config_.prefix) == 0) {
                 key = key.substr(config_.prefix.length());
             }
         }
-        cmd_count_++;
+        cmdCount_++;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
     }
     return result;
 }
 
-bool RtDb::setWithExpire(const std::string& key, const std::string& value, int expire_seconds) {
+bool RtDb::setWithExpire(const std::string& key, const std::string& value, int expireSeconds) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -317,14 +385,14 @@ bool RtDb::setWithExpire(const std::string& key, const std::string& value, int e
 
     try {
         std::string fullKey = config_.prefix + key;
-        redis_->setex(fullKey, expire_seconds, value);
-        cmd_count_++;
+        redis_->setex(fullKey, expireSeconds, value);
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -339,13 +407,13 @@ bool RtDb::expire(const std::string& key, int seconds) {
     try {
         std::string fullKey = config_.prefix + key;
         redis_->expire(fullKey, seconds);
-        cmd_count_++;
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -360,13 +428,13 @@ bool RtDb::append(const std::string& key, const std::string& value) {
     try {
         std::string fullKey = config_.prefix + key;
         redis_->append(fullKey, value);
-        cmd_count_++;
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -381,13 +449,13 @@ bool RtDb::incr(const std::string& key, int64_t& result) {
     try {
         std::string fullKey = config_.prefix + key;
         result = redis_->incr(fullKey);
-        cmd_count_++;
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -402,13 +470,13 @@ bool RtDb::incrByFloat(const std::string& key, double value, double& result) {
     try {
         std::string fullKey = config_.prefix + key;
         result = redis_->incrbyfloat(fullKey, value);
-        cmd_count_++;
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -423,13 +491,13 @@ bool RtDb::publish(const std::string& channel, const std::string& message) {
     try {
         std::string fullChannel = config_.prefix + channel;
         redis_->publish(fullChannel, message);
-        cmd_count_++;
+        cmdCount_++;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -438,20 +506,20 @@ bool RtDb::subscribe(const std::string& channel, std::function<void(const std::s
     return false;
 }
 
-std::string RtDb::buildYcKey(const std::string& point_code) const {
-    return config_.prefix + "rtdb:yc:" + point_code;
+std::string RtDb::buildYcKey(const std::string& pointCode) const {
+    return config_.prefix + "rtdb:yc:" + pointCode;
 }
 
-std::string RtDb::buildYxKey(const std::string& point_code) const {
-    return config_.prefix + "rtdb:yx:" + point_code;
+std::string RtDb::buildYxKey(const std::string& pointCode) const {
+    return config_.prefix + "rtdb:yx:" + pointCode;
 }
 
-std::string RtDb::buildYkKey(const std::string& point_code) const {
-    return config_.prefix + "rtdb:yk:" + point_code;
+std::string RtDb::buildYkKey(const std::string& pointCode) const {
+    return config_.prefix + "rtdb:yk:" + pointCode;
 }
 
-std::string RtDb::buildYtKey(const std::string& point_code) const {
-    return config_.prefix + "rtdb:yt:" + point_code;
+std::string RtDb::buildYtKey(const std::string& pointCode) const {
+    return config_.prefix + "rtdb:yt:" + pointCode;
 }
 
 bool RtDb::setYc(const std::string& pointCode, const YcPoint& point) {
@@ -463,19 +531,19 @@ bool RtDb::setYc(const std::string& pointCode, const YcPoint& point) {
 
     try {
         std::string fullKey = buildYcKey(pointCode);
-        
-        redis_->hset(fullKey, "v", std::to_string(point.value));
-        redis_->hset(fullKey, "t", std::to_string(point.timestamp));
-        redis_->hset(fullKey, "q", std::to_string(point.quality));
-        redis_->hset(fullKey, "s", std::to_string(point.status));
-        
-        cmd_count_ += 4;
+
+        redis_->hset(fullKey, "v", std::to_string(point.value_));
+        redis_->hset(fullKey, "t", std::to_string(point.timestamp_));
+        redis_->hset(fullKey, "q", std::to_string(static_cast<int>(point.quality_)));
+        redis_->hset(fullKey, "s", std::to_string(point.status_));
+
+        cmdCount_ += 4;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -489,44 +557,44 @@ bool RtDb::getYc(const std::string& pointCode, YcPoint& point) {
 
     try {
         std::string fullKey = buildYcKey(pointCode);
-        
-        auto v_result = redis_->hget(fullKey, "v");
-        auto t_result = redis_->hget(fullKey, "t");
-        auto q_result = redis_->hget(fullKey, "q");
-        auto s_result = redis_->hget(fullKey, "s");
 
-        if (v_result) {
-            point.value = std::stod(*v_result);
-            
-            if (t_result) {
-                point.timestamp = std::stoull(*t_result);
+        auto vResult = redis_->hget(fullKey, "v");
+        auto tResult = redis_->hget(fullKey, "t");
+        auto qResult = redis_->hget(fullKey, "q");
+        auto sResult = redis_->hget(fullKey, "s");
+
+        if (vResult) {
+            point.value_ = std::stod(*vResult);
+
+            if (tResult) {
+                point.timestamp_ = std::stoull(*tResult);
             }
-            
-            if (q_result) {
-                point.quality = std::stoi(*q_result);
+
+            if (qResult) {
+                point.quality_ = static_cast<PointQuality>(std::stoi(*qResult));
             }
-            
-            if (s_result) {
-                point.status = std::stoi(*s_result);
+
+            if (sResult) {
+                point.status_ = std::stoi(*sResult);
             }
-            
-            cmd_count_ += 4;
+
+            cmdCount_ += 4;
             return true;
         }
         return false;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
 
-std::vector<YcPoint> RtDb::getYCPoints(const std::string& pattern) {
+std::vector<YcPoint> RtDb::getYcPoints(const std::string& pattern) {
     std::vector<YcPoint> points;
     auto codes = getYcCodes(pattern);
-    
+
     for (const auto& code : codes) {
         YcPoint point;
         if (getYc(code, point)) {
@@ -545,19 +613,19 @@ bool RtDb::setYx(const std::string& pointCode, const YxPoint& point) {
 
     try {
         std::string fullKey = buildYxKey(pointCode);
-        
-        redis_->hset(fullKey, "v", std::to_string(point.value));
-        redis_->hset(fullKey, "t", std::to_string(point.timestamp));
-        redis_->hset(fullKey, "q", std::to_string(point.quality));
-        redis_->hset(fullKey, "s", std::to_string(point.status));
-        
-        cmd_count_ += 4;
+
+        redis_->hset(fullKey, "v", std::to_string(point.value_));
+        redis_->hset(fullKey, "t", std::to_string(point.timestamp_));
+        redis_->hset(fullKey, "q", std::to_string(static_cast<int>(point.quality_)));
+        redis_->hset(fullKey, "s", std::to_string(point.status_));
+
+        cmdCount_ += 4;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -571,44 +639,44 @@ bool RtDb::getYx(const std::string& pointCode, YxPoint& point) {
 
     try {
         std::string fullKey = buildYxKey(pointCode);
-        
-        auto v_result = redis_->hget(fullKey, "v");
-        auto t_result = redis_->hget(fullKey, "t");
-        auto q_result = redis_->hget(fullKey, "q");
-        auto s_result = redis_->hget(fullKey, "s");
 
-        if (v_result) {
-            point.value = std::stoi(*v_result);
-            
-            if (t_result) {
-                point.timestamp = std::stoull(*t_result);
+        auto vResult = redis_->hget(fullKey, "v");
+        auto tResult = redis_->hget(fullKey, "t");
+        auto qResult = redis_->hget(fullKey, "q");
+        auto sResult = redis_->hget(fullKey, "s");
+
+        if (vResult) {
+            point.value_ = std::stoi(*vResult);
+
+            if (tResult) {
+                point.timestamp_ = std::stoull(*tResult);
             }
-            
-            if (q_result) {
-                point.quality = std::stoi(*q_result);
+
+            if (qResult) {
+                point.quality_ = static_cast<PointQuality>(std::stoi(*qResult));
             }
-            
-            if (s_result) {
-                point.status = std::stoi(*s_result);
+
+            if (sResult) {
+                point.status_ = std::stoi(*sResult);
             }
-            
-            cmd_count_ += 4;
+
+            cmdCount_ += 4;
             return true;
         }
         return false;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
 
-std::vector<YxPoint> RtDb::getYXPoints(const std::string& pattern) {
+std::vector<YxPoint> RtDb::getYxPoints(const std::string& pattern) {
     std::vector<YxPoint> points;
     auto codes = getYxCodes(pattern);
-    
+
     for (const auto& code : codes) {
         YxPoint point;
         if (getYx(code, point)) {
@@ -627,20 +695,20 @@ bool RtDb::setYk(const std::string& pointCode, const YkPoint& point) {
 
     try {
         std::string fullKey = buildYkKey(pointCode);
-        
-        redis_->hset(fullKey, "v", std::to_string(point.value));
-        redis_->hset(fullKey, "t", std::to_string(point.timestamp));
-        redis_->hset(fullKey, "c", std::to_string(point.command_type));
-        redis_->hset(fullKey, "s", std::to_string(static_cast<int>(point.status)));
-        redis_->hset(fullKey, "r", std::to_string(point.result));
-        
-        cmd_count_ += 5;
+
+        redis_->hset(fullKey, "v", std::to_string(point.value_));
+        redis_->hset(fullKey, "t", std::to_string(point.timestamp_));
+        redis_->hset(fullKey, "c", std::to_string(point.commandType_));
+        redis_->hset(fullKey, "s", std::to_string(static_cast<int>(point.status_)));
+        redis_->hset(fullKey, "r", point.result_);
+
+        cmdCount_ += 5;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -654,49 +722,49 @@ bool RtDb::getYk(const std::string& pointCode, YkPoint& point) {
 
     try {
         std::string fullKey = buildYkKey(pointCode);
-        
-        auto v_result = redis_->hget(fullKey, "v");
-        auto t_result = redis_->hget(fullKey, "t");
-        auto c_result = redis_->hget(fullKey, "c");
-        auto s_result = redis_->hget(fullKey, "s");
-        auto r_result = redis_->hget(fullKey, "r");
 
-        if (v_result) {
-            point.value = std::stoi(*v_result);
-            
-            if (t_result) {
-                point.timestamp = std::stoull(*t_result);
+        auto vResult = redis_->hget(fullKey, "v");
+        auto tResult = redis_->hget(fullKey, "t");
+        auto cResult = redis_->hget(fullKey, "c");
+        auto sResult = redis_->hget(fullKey, "s");
+        auto rResult = redis_->hget(fullKey, "r");
+
+        if (vResult) {
+            point.value_ = std::stoi(*vResult);
+
+            if (tResult) {
+                point.timestamp_ = std::stoull(*tResult);
             }
-            
-            if (c_result) {
-                point.command_type = std::stoi(*c_result);
+
+            if (cResult) {
+                point.commandType_ = std::stoi(*cResult);
             }
-            
-            if (s_result) {
-                point.status = static_cast<YKStatus>(std::stoi(*s_result));
+
+            if (sResult) {
+                point.status_ = static_cast<YKStatus>(std::stoi(*sResult));
             }
-            
-            if (r_result) {
-                point.result = std::stoi(*r_result);
+
+            if (rResult) {
+                point.result_ = *rResult;
             }
-            
-            cmd_count_ += 5;
+
+            cmdCount_ += 5;
             return true;
         }
         return false;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
 
-std::vector<YkPoint> RtDb::getYKPoints(const std::string& pattern) {
+std::vector<YkPoint> RtDb::getYkPoints(const std::string& pattern) {
     std::vector<YkPoint> points;
     auto codes = getYkCodes(pattern);
-    
+
     for (const auto& code : codes) {
         YkPoint point;
         if (getYk(code, point)) {
@@ -715,19 +783,19 @@ bool RtDb::setYt(const std::string& pointCode, const YtPoint& point) {
 
     try {
         std::string fullKey = buildYtKey(pointCode);
-        
-        redis_->hset(fullKey, "v", std::to_string(point.value));
-        redis_->hset(fullKey, "t", std::to_string(point.timestamp));
-        redis_->hset(fullKey, "q", std::to_string(point.quality));
-        redis_->hset(fullKey, "s", std::to_string(point.status));
-        
-        cmd_count_ += 4;
+
+        redis_->hset(fullKey, "v", std::to_string(point.value_));
+        redis_->hset(fullKey, "t", std::to_string(point.timestamp_));
+        redis_->hset(fullKey, "q", std::to_string(static_cast<int>(point.quality_)));
+        redis_->hset(fullKey, "s", std::to_string(point.status_));
+
+        cmdCount_ += 4;
         return true;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
@@ -741,44 +809,44 @@ bool RtDb::getYt(const std::string& pointCode, YtPoint& point) {
 
     try {
         std::string fullKey = buildYtKey(pointCode);
-        
-        auto v_result = redis_->hget(fullKey, "v");
-        auto t_result = redis_->hget(fullKey, "t");
-        auto q_result = redis_->hget(fullKey, "q");
-        auto s_result = redis_->hget(fullKey, "s");
 
-        if (v_result) {
-            point.value = std::stod(*v_result);
-            
-            if (t_result) {
-                point.timestamp = std::stoull(*t_result);
+        auto vResult = redis_->hget(fullKey, "v");
+        auto tResult = redis_->hget(fullKey, "t");
+        auto qResult = redis_->hget(fullKey, "q");
+        auto sResult = redis_->hget(fullKey, "s");
+
+        if (vResult) {
+            point.value_ = std::stod(*vResult);
+
+            if (tResult) {
+                point.timestamp_ = std::stoull(*tResult);
             }
-            
-            if (q_result) {
-                point.quality = std::stoi(*q_result);
+
+            if (qResult) {
+                point.quality_ = static_cast<PointQuality>(std::stoi(*qResult));
             }
-            
-            if (s_result) {
-                point.status = std::stoi(*s_result);
+
+            if (sResult) {
+                point.status_ = std::stoi(*sResult);
             }
-            
-            cmd_count_ += 4;
+
+            cmdCount_ += 4;
             return true;
         }
         return false;
     } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     } catch (const std::exception& e) {
-        last_error_ = e.what();
+        lastError_ = e.what();
         return false;
     }
 }
 
-std::vector<YtPoint> RtDb::getYTPoints(const std::string& pattern) {
+std::vector<YtPoint> RtDb::getYtPoints(const std::string& pattern) {
     std::vector<YtPoint> points;
     auto codes = getYtCodes(pattern);
-    
+
     for (const auto& code : codes) {
         YtPoint point;
         if (getYt(code, point)) {
@@ -789,127 +857,432 @@ std::vector<YtPoint> RtDb::getYTPoints(const std::string& pattern) {
 }
 
 bool RtDb::deleteYc(const std::string& pointCode) {
-    return deleteKey(buildYcKey(pointCode));
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        std::string fullKey = buildYcKey(pointCode);
+        redis_->del(fullKey);
+        cmdCount_++;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
 }
 
 bool RtDb::deleteYx(const std::string& pointCode) {
-    return deleteKey(buildYxKey(pointCode));
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        std::string fullKey = buildYxKey(pointCode);
+        redis_->del(fullKey);
+        cmdCount_++;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
 }
 
 bool RtDb::deleteYk(const std::string& pointCode) {
-    return deleteKey(buildYkKey(pointCode));
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        std::string fullKey = buildYkKey(pointCode);
+        redis_->del(fullKey);
+        cmdCount_++;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
 }
 
 bool RtDb::deleteYt(const std::string& pointCode) {
-    return deleteKey(buildYtKey(pointCode));
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        std::string fullKey = buildYtKey(pointCode);
+        redis_->del(fullKey);
+        cmdCount_++;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
 }
 
 std::vector<std::string> RtDb::getYcCodes(const std::string& pattern) {
-    std::vector<std::string> codes;
-    auto fullPattern = config_.prefix + "rtdb:yc:" + pattern;
-    
-    try {
-        std::vector<std::string> keys;
-        redis_->keys(fullPattern, std::back_inserter(keys));
-        
-        for (const auto& key : keys) {
-            std::string code = key;
-            auto pos = code.rfind(':');
-            if (pos != std::string::npos) {
-                code = code.substr(pos + 1);
-                codes.push_back(code);
-            }
-        }
-        cmd_count_++;
-    } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
-    } catch (const std::exception& e) {
-        last_error_ = e.what();
-    }
-    return codes;
+    return keys("rtdb:yc:" + pattern);
 }
 
 std::vector<std::string> RtDb::getYxCodes(const std::string& pattern) {
-    std::vector<std::string> codes;
-    auto fullPattern = config_.prefix + "rtdb:yx:" + pattern;
-    
-    try {
-        std::vector<std::string> keys;
-        redis_->keys(fullPattern, std::back_inserter(keys));
-        
-        for (const auto& key : keys) {
-            std::string code = key;
-            auto pos = code.rfind(':');
-            if (pos != std::string::npos) {
-                code = code.substr(pos + 1);
-                codes.push_back(code);
-            }
-        }
-        cmd_count_++;
-    } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
-    } catch (const std::exception& e) {
-        last_error_ = e.what();
-    }
-    return codes;
+    return keys("rtdb:yx:" + pattern);
 }
 
 std::vector<std::string> RtDb::getYkCodes(const std::string& pattern) {
-    std::vector<std::string> codes;
-    auto fullPattern = config_.prefix + "rtdb:yk:" + pattern;
-    
-    try {
-        std::vector<std::string> keys;
-        redis_->keys(fullPattern, std::back_inserter(keys));
-        
-        for (const auto& key : keys) {
-            std::string code = key;
-            auto pos = code.rfind(':');
-            if (pos != std::string::npos) {
-                code = code.substr(pos + 1);
-                codes.push_back(code);
-            }
-        }
-        cmd_count_++;
-    } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
-    } catch (const std::exception& e) {
-        last_error_ = e.what();
-    }
-    return codes;
+    return keys("rtdb:yk:" + pattern);
 }
 
 std::vector<std::string> RtDb::getYtCodes(const std::string& pattern) {
-    std::vector<std::string> codes;
-    auto fullPattern = config_.prefix + "rtdb:yt:" + pattern;
-    
-    try {
-        std::vector<std::string> keys;
-        redis_->keys(fullPattern, std::back_inserter(keys));
-        
-        for (const auto& key : keys) {
-            std::string code = key;
-            auto pos = code.rfind(':');
-            if (pos != std::string::npos) {
-                code = code.substr(pos + 1);
-                codes.push_back(code);
-            }
-        }
-        cmd_count_++;
-    } catch (const sw::redis::Error& e) {
-        last_error_ = e.what();
-    } catch (const std::exception& e) {
-        last_error_ = e.what();
-    }
-    return codes;
+    return keys("rtdb:yt:" + pattern);
 }
 
-std::unique_ptr<RtDb> createRtDb(const RtDbConfig& config) {
-    auto rtdb = std::make_unique<RtDb>();
-    if (rtdb->initialize(config)) {
-        return rtdb;
+bool RtDb::batchSetYc(const std::map<std::string, YcPoint>& points) {
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
     }
-    return nullptr;
+
+    try {
+        auto pipe = redis_->pipeline();
+        for (const auto& [code, point] : points) {
+            std::string fullKey = buildYcKey(code);
+            pipe.hset(fullKey, "v", std::to_string(point.value_));
+            pipe.hset(fullKey, "t", std::to_string(point.timestamp_));
+            pipe.hset(fullKey, "q", std::to_string(static_cast<int>(point.quality_)));
+            pipe.hset(fullKey, "s", std::to_string(point.status_));
+        }
+        pipe.exec();
+        cmdCount_ += points.size() * 4;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
+}
+
+bool RtDb::batchSetYx(const std::map<std::string, YxPoint>& points) {
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        auto pipe = redis_->pipeline();
+        for (const auto& [code, point] : points) {
+            std::string fullKey = buildYxKey(code);
+            pipe.hset(fullKey, "v", std::to_string(point.value_));
+            pipe.hset(fullKey, "t", std::to_string(point.timestamp_));
+            pipe.hset(fullKey, "q", std::to_string(static_cast<int>(point.quality_)));
+            pipe.hset(fullKey, "s", std::to_string(point.status_));
+        }
+        pipe.exec();
+        cmdCount_ += points.size() * 4;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
+}
+
+bool RtDb::batchSetYk(const std::map<std::string, YkPoint>& points) {
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        auto pipe = redis_->pipeline();
+        for (const auto& [code, point] : points) {
+            std::string fullKey = buildYkKey(code);
+            pipe.hset(fullKey, "v", std::to_string(point.value_));
+            pipe.hset(fullKey, "t", std::to_string(point.timestamp_));
+            pipe.hset(fullKey, "c", std::to_string(point.commandType_));
+            pipe.hset(fullKey, "s", std::to_string(static_cast<int>(point.status_)));
+            pipe.hset(fullKey, "r", point.result_);
+        }
+        pipe.exec();
+        cmdCount_ += points.size() * 5;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
+}
+
+bool RtDb::batchSetYt(const std::map<std::string, YtPoint>& points) {
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        auto pipe = redis_->pipeline();
+        for (const auto& [code, point] : points) {
+            std::string fullKey = buildYtKey(code);
+            pipe.hset(fullKey, "v", std::to_string(point.value_));
+            pipe.hset(fullKey, "t", std::to_string(point.timestamp_));
+            pipe.hset(fullKey, "q", std::to_string(static_cast<int>(point.quality_)));
+            pipe.hset(fullKey, "s", std::to_string(point.status_));
+        }
+        pipe.exec();
+        cmdCount_ += points.size() * 4;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
+}
+
+bool RtDb::batchGetYc(const std::vector<std::string>& codes, std::vector<YcPoint>& points) {
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        auto pipe = redis_->pipeline();
+
+        for (const auto& code : codes) {
+            std::string fullKey = buildYcKey(code);
+            pipe.hget(fullKey, "v");
+            pipe.hget(fullKey, "t");
+            pipe.hget(fullKey, "q");
+            pipe.hget(fullKey, "s");
+        }
+
+        auto replies = pipe.exec();
+
+        for (size_t i = 0; i < codes.size(); i++) {
+            YcPoint point;
+            size_t base = i * 4;
+            auto valueResult = replies.template get<sw::redis::OptionalString>(base);
+            auto timeResult = replies.template get<sw::redis::OptionalString>(base + 1);
+            auto qualResult = replies.template get<sw::redis::OptionalString>(base + 2);
+            auto statResult = replies.template get<sw::redis::OptionalString>(base + 3);
+
+            if (valueResult) {
+                point.value_ = std::stod(*valueResult);
+                if (timeResult) point.timestamp_ = std::stoull(*timeResult);
+                if (qualResult) point.quality_ = static_cast<PointQuality>(std::stoi(*qualResult));
+                if (statResult) point.status_ = std::stoi(*statResult);
+                points.push_back(point);
+            }
+        }
+
+        cmdCount_ += codes.size() * 4;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
+}
+
+bool RtDb::batchGetYx(const std::vector<std::string>& codes, std::vector<YxPoint>& points) {
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        auto pipe = redis_->pipeline();
+
+        for (const auto& code : codes) {
+            std::string fullKey = buildYxKey(code);
+            pipe.hget(fullKey, "v");
+            pipe.hget(fullKey, "t");
+            pipe.hget(fullKey, "q");
+            pipe.hget(fullKey, "s");
+        }
+
+        auto replies = pipe.exec();
+
+        for (size_t i = 0; i < codes.size(); i++) {
+            YxPoint point;
+            size_t base = i * 4;
+            auto valueResult = replies.template get<sw::redis::OptionalString>(base);
+            auto timeResult = replies.template get<sw::redis::OptionalString>(base + 1);
+            auto qualResult = replies.template get<sw::redis::OptionalString>(base + 2);
+            auto statResult = replies.template get<sw::redis::OptionalString>(base + 3);
+
+            if (valueResult) {
+                point.value_ = std::stoi(*valueResult);
+                if (timeResult) point.timestamp_ = std::stoull(*timeResult);
+                if (qualResult) point.quality_ = static_cast<PointQuality>(std::stoi(*qualResult));
+                if (statResult) point.status_ = std::stoi(*statResult);
+                points.push_back(point);
+            }
+        }
+
+        cmdCount_ += codes.size() * 4;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
+}
+
+bool RtDb::batchGetYk(const std::vector<std::string>& codes, std::vector<YkPoint>& points) {
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        auto pipe = redis_->pipeline();
+
+        for (const auto& code : codes) {
+            std::string fullKey = buildYkKey(code);
+            pipe.hget(fullKey, "v");
+            pipe.hget(fullKey, "t");
+            pipe.hget(fullKey, "c");
+            pipe.hget(fullKey, "s");
+            pipe.hget(fullKey, "r");
+        }
+
+        auto replies = pipe.exec();
+
+        for (size_t i = 0; i < codes.size(); i++) {
+            YkPoint point;
+            size_t base = i * 5;
+            auto valueResult = replies.template get<sw::redis::OptionalString>(base);
+            auto timeResult = replies.template get<sw::redis::OptionalString>(base + 1);
+            auto cmdResult = replies.template get<sw::redis::OptionalString>(base + 2);
+            auto statResult = replies.template get<sw::redis::OptionalString>(base + 3);
+            auto resResult = replies.template get<sw::redis::OptionalString>(base + 4);
+
+            if (valueResult) {
+                point.value_ = std::stoi(*valueResult);
+                if (timeResult) point.timestamp_ = std::stoull(*timeResult);
+                if (cmdResult) point.commandType_ = std::stoi(*cmdResult);
+                if (statResult) point.status_ = static_cast<YKStatus>(std::stoi(*statResult));
+                if (resResult) point.result_ = *resResult;
+                points.push_back(point);
+            }
+        }
+
+        cmdCount_ += codes.size() * 5;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
+}
+
+bool RtDb::batchGetYt(const std::vector<std::string>& codes, std::vector<YtPoint>& points) {
+    if (!connected_ || !redis_) {
+        if (!reconnect()) {
+            return false;
+        }
+    }
+
+    try {
+        auto pipe = redis_->pipeline();
+
+        for (const auto& code : codes) {
+            std::string fullKey = buildYtKey(code);
+            pipe.hget(fullKey, "v");
+            pipe.hget(fullKey, "t");
+            pipe.hget(fullKey, "q");
+            pipe.hget(fullKey, "s");
+        }
+
+        auto replies = pipe.exec();
+
+        for (size_t i = 0; i < codes.size(); i++) {
+            YtPoint point;
+            size_t base = i * 4;
+            auto valueResult = replies.template get<sw::redis::OptionalString>(base);
+            auto timeResult = replies.template get<sw::redis::OptionalString>(base + 1);
+            auto qualResult = replies.template get<sw::redis::OptionalString>(base + 2);
+            auto statResult = replies.template get<sw::redis::OptionalString>(base + 3);
+
+            if (valueResult) {
+                point.value_ = std::stod(*valueResult);
+                if (timeResult) point.timestamp_ = std::stoull(*timeResult);
+                if (qualResult) point.quality_ = static_cast<PointQuality>(std::stoi(*qualResult));
+                if (statResult) point.status_ = std::stoi(*statResult);
+                points.push_back(point);
+            }
+        }
+
+        cmdCount_ += codes.size() * 4;
+        return true;
+    } catch (const sw::redis::Error& e) {
+        lastError_ = e.what();
+        return false;
+    } catch (const std::exception& e) {
+        lastError_ = e.what();
+        return false;
+    }
+}
+
+std::future<bool> RtDb::asyncSet(const std::string& key, const std::string& value) {
+    return std::async(std::launch::async, [this, key, value]() {
+        return set(key, value);
+    });
+}
+
+std::future<std::string> RtDb::asyncGet(const std::string& key) {
+    return std::async(std::launch::async, [this, key]() {
+        std::string value;
+        if (get(key, value)) {
+            return value;
+        }
+        return std::string();
+    });
+}
+
+template<typename T>
+std::string RtDb::pointHashFields(const T& point) {
+    return "";
 }
 
 }

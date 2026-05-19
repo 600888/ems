@@ -75,7 +75,7 @@ private:
 class ModbusWriteCallback {
 public:
     virtual ~ModbusWriteCallback() = default;
-    virtual void on_modbus_client_write(int slave_id, int func_code, int address,
+    virtual void onModbusClientWrite(int slaveId, int funcCode, int address,
                                          const std::vector<int>& values) = 0;
 };
 
@@ -96,13 +96,13 @@ public:
     bool writeValue(const std::shared_ptr<PointT>& point, const ValueType& value) override;
     void addPoints(const std::vector<std::shared_ptr<PointT>>& points) override;
 
-    ValueType getValueByAddress(int func_code, int slave_id, int address) override;
-    void setValueByAddress(int func_code, int slave_id, int address,
+    ValueType getValueByAddress(int funcCode, int slaveId, int address) override;
+    void setValueByAddress(int funcCode, int slaveId, int address,
                                const ValueType& value) override;
 
-    ValueType getValueByAddressWithDecode(int func_code, int slave_id, int address,
+    ValueType getValueByAddressWithDecode(int funcCode, int slaveId, int address,
                                                const std::string& decode);
-    void setValueByAddressWithDecode(int func_code, int slave_id, int address,
+    void setValueByAddressWithDecode(int funcCode, int slaveId, int address,
                                           const ValueType& value, const std::string& decode);
 
     std::shared_ptr<modbus::ModbusServer> server() const { return server_; }
@@ -115,22 +115,22 @@ public:
     std::shared_ptr<modbus::ModbusServer> getServer() const { return server_; }
 
 private:
-    void onModbusWriteInternal(int slave_id, int func_code, int address,
+    void onModbusWriteInternal(int slaveId, int funcCode, int address,
                                     const std::vector<int>& values);
-    int parseAddress(const std::string& address_str) const;
+    int parseAddress(const std::string& addressStr) const;
     int getRegisterCount(const std::string& decode) const;
     bool valueToInt(const ValueType& value, int& result) const;
     std::shared_ptr<modbus::ModbusServer> server_;
 
     Logger logger_;
     std::vector<std::shared_ptr<PointT>> points_;
-    std::vector<int> slave_id_list_;
-    std::unordered_set<std::shared_ptr<PointT>> points_set_;
+    std::vector<int> slaveIdList_;
+    std::unordered_set<std::shared_ptr<PointT>> pointsSet_;
     std::mutex mutex_;
-    std::shared_ptr<ModbusWriteCallback> write_callback_;
-    std::atomic<bool> server_started_{false};
+    std::shared_ptr<ModbusWriteCallback> writeCallback_;
+    std::atomic<bool> serverStarted_{false};
 
-    modbus::ModbusServer::NetType net_type_;
+    modbus::ModbusServer::NetType netType_;
     std::string connection_;
     std::string settings_;
     int port_{502};
@@ -161,18 +161,18 @@ public:
     virtual void clearCapturedMessages() override;
     virtual AvgTimeStats getAvgTime() const override;
 
-    std::vector<int> readRegistersBatchAsync(int func_code, int slave_id,
-                                                  int start_address, int count);
-    std::vector<int> readHoldingRegisters(int slave_id, int start_address, int count);
-    std::vector<int> readInputRegisters(int slave_id, int start_address, int count);
-    CoilBits readCoils(int slave_id, int start_address, int count);
-    CoilBits readDiscreteInputs(int slave_id, int start_address, int count);
+    std::vector<int> readRegistersBatchAsync(int funcCode, int slaveId,
+                                                  int startAddress, int count);
+    std::vector<int> readHoldingRegisters(int slaveId, int startAddress, int count);
+    std::vector<int> readInputRegisters(int slaveId, int startAddress, int count);
+    CoilBits readCoils(int slaveId, int startAddress, int count);
+    CoilBits readDiscreteInputs(int slaveId, int startAddress, int count);
 
-    bool writeSingleRegister(int slave_id, int address, int value);
-    bool writeMultipleRegisters(int slave_id, int start_address,
+    bool writeSingleRegister(int slaveId, int address, int value);
+    bool writeMultipleRegisters(int slaveId, int startAddress,
                                     const std::vector<int>& values);
-    bool writeSingleCoil(int slave_id, int address, bool value);
-    bool writeMultipleCoils(int slave_id, int start_address,
+    bool writeSingleCoil(int slaveId, int address, bool value);
+    bool writeMultipleCoils(int slaveId, int startAddress,
                                const CoilBits& values);
 
     std::shared_ptr<modbus::ModbusClient> client() const { return client_; }
@@ -180,31 +180,31 @@ public:
 private:
     int extractBitValue(int value, int bit_offset) const;
     int applyBitValue(int current_value, int bit_offset, bool bit_value) const;
-    ValueType readValueInternal(int func_code, int slave_id, int address,
+    ValueType readValueInternal(int funcCode, int slaveId, int address,
                                    const std::string& decode);
-    int parseAddress(const std::string& address_str) const;
+    int parseAddress(const std::string& addressStr) const;
     int getRegisterCount(const std::string& decode) const;
     bool valueToInt(const ValueType& value, int& result) const;
 
     std::shared_ptr<modbus::ModbusClient> client_;
     Logger logger_;
     std::vector<std::shared_ptr<PointT>> points_;
-    std::unordered_set<std::shared_ptr<PointT>> points_set_;
+    std::unordered_set<std::shared_ptr<PointT>> pointsSet_;
     std::mutex mutex_;
     std::atomic<bool> connected_{false};
-    std::atomic<bool> client_initialized_{false};
+    std::atomic<bool> clientInitialized_{false};
 
-    modbus::ModbusClient::NetType net_type_;
+    modbus::ModbusClient::NetType netType_;
     std::string connection_;
     std::string settings_;
-    int default_slave_id_{1};
-    int response_timeout_ms_{1000};
-    int byte_timeout_ms_{1000};
+    int defaultSlaveId_{1};
+    int responseTimeoutMs_{1000};
+    int byteTimeoutMs_{1000};
 };
 
 template<typename PointT>
 ModbusServerHandler<PointT>::ModbusServerHandler()
-    : net_type_(modbus::ModbusServer::NetType::TCP)
+    : netType_(modbus::ModbusServer::NetType::TCP)
     , connection_("127.0.0.1")
     , settings_("502") {
 }
@@ -212,7 +212,7 @@ ModbusServerHandler<PointT>::ModbusServerHandler()
 template<typename PointT>
 ModbusServerHandler<PointT>::ModbusServerHandler(Logger logger)
     : logger_(logger)
-    , net_type_(modbus::ModbusServer::NetType::TCP)
+    , netType_(modbus::ModbusServer::NetType::TCP)
     , connection_("127.0.0.1")
     , settings_("502") {
 }
@@ -233,19 +233,19 @@ void ModbusServerHandler<PointT>::initialize(const std::unordered_map<std::strin
         }
     }
 
-    if (slave_id_list_.empty()) {
-        slave_id_list_ = {1};
+    if (slaveIdList_.empty()) {
+        slaveIdList_ = {1};
     }
 
     auto it_proto = config.find("protocol_type");
     if (it_proto != config.end()) {
         if (auto pval = std::get_if<int>(&it_proto->second)) {
-            net_type_ = (*pval == 0) ? modbus::ModbusServer::NetType::RTU
+            netType_ = (*pval == 0) ? modbus::ModbusServer::NetType::RTU
                                       : modbus::ModbusServer::NetType::TCP;
         }
     }
 
-    if (net_type_ == modbus::ModbusServer::NetType::RTU) {
+    if (netType_ == modbus::ModbusServer::NetType::RTU) {
         auto it_serial = config.find("serial_port");
         if (it_serial != config.end()) {
             if (auto pval = std::get_if<std::string>(&it_serial->second)) {
@@ -285,19 +285,19 @@ void ModbusServerHandler<PointT>::initialize(const std::unordered_map<std::strin
         settings_ = std::to_string(port_);
     }
 
-    server_ = std::make_shared<modbus::ModbusServer>(net_type_, connection_, settings_);
+    server_ = std::make_shared<modbus::ModbusServer>(netType_, connection_, settings_);
 
-    for (int slave_id : slave_id_list_) {
-        server_->addSlave(slave_id);
+    for (int slaveId : slaveIdList_) {
+        server_->addSlave(slaveId);
     }
 
     if (logger_) {
         std::ostringstream oss;
         oss << "Modbus 服务端初始化: port=" << port_
             << ", slave_id_list=[";
-        for (size_t i = 0; i < slave_id_list_.size(); ++i) {
+        for (size_t i = 0; i < slaveIdList_.size(); ++i) {
             if (i > 0) oss << ", ";
-            oss << slave_id_list_[i];
+            oss << slaveIdList_[i];
         }
         oss << "]";
         logger_(oss.str());
@@ -316,7 +316,7 @@ std::future<bool> ModbusServerHandler<PointT>::start() {
         }
 
         bool result = server_->start();
-        server_started_ = result;
+        serverStarted_ = result;
         this->running_ = result;
         return result;
     });
@@ -329,7 +329,7 @@ std::future<bool> ModbusServerHandler<PointT>::stop() {
         if (server_ && server_->isRunning()) {
             server_->stop();
         }
-        server_started_ = false;
+        serverStarted_ = false;
         this->running_ = false;
         return true;
     });
@@ -437,21 +437,20 @@ template<typename PointT>
 void ModbusServerHandler<PointT>::addPoints(const std::vector<std::shared_ptr<PointT>>& points) {
     std::lock_guard<std::mutex> lock(mutex_);
     for (const auto& p : points) {
-        if (points_set_.insert(p).second) {
+        if (pointsSet_.insert(p).second) {
             points_.push_back(p);
         }
     }
 }
 
 template<typename PointT>
-ValueType ModbusServerHandler<PointT>::getValueByAddress(int func_code, int slave_id,
+ValueType ModbusServerHandler<PointT>::getValueByAddress(int funcCode, int slaveId,
                                                               int address) {
-    return getValueByAddressWithDecode(func_code, slave_id, address, "0x41");
+    return getValueByAddressWithDecode(funcCode, slaveId, address, "0x41");
 }
 
 template<typename PointT>
-ValueType ModbusServerHandler<PointT>::getValueByAddressWithDecode(int func_code, int slave_id,
-                                                              int address,
+ValueType ModbusServerHandler<PointT>::getValueByAddressWithDecode(int funcCode, int slaveId, int address,
                                                               const std::string& decode) {
     if (!server_) {
         return 0;
@@ -460,10 +459,10 @@ ValueType ModbusServerHandler<PointT>::getValueByAddressWithDecode(int func_code
     uint16_t value = 0;
     modbus::ModbusServer::ErrorCode ret = modbus::ModbusServer::ErrorCode::Success;
 
-    switch (func_code) {
+    switch (funcCode) {
         case 1: {
             bool val;
-            ret = server_->readCoil(slave_id, address, val);
+            ret = server_->readCoil(slaveId, address, val);
             if (ret == modbus::ModbusServer::ErrorCode::Success) {
                 return val ? 1 : 0;
             }
@@ -471,18 +470,18 @@ ValueType ModbusServerHandler<PointT>::getValueByAddressWithDecode(int func_code
         }
         case 2: {
             bool val;
-            ret = server_->readDiscreteInput(slave_id, address, val);
+            ret = server_->readDiscreteInput(slaveId, address, val);
             if (ret == modbus::ModbusServer::ErrorCode::Success) {
                 return val ? 1 : 0;
             }
             break;
         }
         case 3: {
-            ret = server_->readHoldingRegister(slave_id, address, value);
+            ret = server_->readHoldingRegister(slaveId, address, value);
             break;
         }
         case 4: {
-            ret = server_->readInputRegister(slave_id, address, value);
+            ret = server_->readInputRegister(slaveId, address, value);
             break;
         }
     }
@@ -495,14 +494,14 @@ ValueType ModbusServerHandler<PointT>::getValueByAddressWithDecode(int func_code
 }
 
 template<typename PointT>
-void ModbusServerHandler<PointT>::setValueByAddress(int func_code, int slave_id,
+void ModbusServerHandler<PointT>::setValueByAddress(int funcCode, int slaveId,
                                                          int address,
                                                          const ValueType& value) {
-    setValueByAddressWithDecode(func_code, slave_id, address, value, "0x41");
+    setValueByAddressWithDecode(funcCode, slaveId, address, value, "0x41");
 }
 
 template<typename PointT>
-void ModbusServerHandler<PointT>::setValueByAddressWithDecode(int func_code, int slave_id,
+void ModbusServerHandler<PointT>::setValueByAddressWithDecode(int funcCode, int slaveId,
                                                          int address,
                                                          const ValueType& value,
                                                          const std::string& decode) {
@@ -511,45 +510,45 @@ void ModbusServerHandler<PointT>::setValueByAddressWithDecode(int func_code, int
     }
 
     modbus::ModbusServer::ErrorCode ret = modbus::ModbusServer::ErrorCode::Success;
-    int val_int = 0;
+    int valInt = 0;
 
-    if (valueToInt(value, val_int)) {
-        switch (func_code) {
+    if (valueToInt(value, valInt)) {
+        switch (funcCode) {
             case 5:
-                ret = server_->writeCoil(slave_id, address, (val_int != 0));
+                ret = server_->writeCoil(slaveId, address, (valInt != 0));
                 break;
             case 6:
-                ret = server_->writeHoldingRegister(slave_id, address, static_cast<uint16_t>(val_int));
+                ret = server_->writeHoldingRegister(slaveId, address, static_cast<uint16_t>(valInt));
                 break;
             case 15: {
                 CoilBits coils(1);
-                coils.set(0, (val_int != 0));
-                ret = server_->writeCoils(slave_id, address, coils.data(), 1);
+                coils.set(0, (valInt != 0));
+                ret = server_->writeCoils(slaveId, address, coils.data(), 1);
                 break;
             }
             case 16: {
-                std::vector<uint16_t> regs(1, static_cast<uint16_t>(val_int));
-                ret = server_->writeHoldingRegisters(slave_id, address, regs.data(), 1);
+                std::vector<uint16_t> regs(1, static_cast<uint16_t>(valInt));
+                ret = server_->writeHoldingRegisters(slaveId, address, regs.data(), 1);
                 break;
             }
         }
     } else if (auto val_bool = std::get_if<bool>(&value)) {
-        switch (func_code) {
+        switch (funcCode) {
             case 5:
-                ret = server_->writeCoil(slave_id, address, *val_bool);
+                ret = server_->writeCoil(slaveId, address, *val_bool);
                 break;
             case 6:
-                ret = server_->writeHoldingRegister(slave_id, address, (*val_bool ? 1 : 0));
+                ret = server_->writeHoldingRegister(slaveId, address, (*val_bool ? 1 : 0));
                 break;
             case 15: {
                 CoilBits coils(1);
                 coils.set(0, *val_bool);
-                ret = server_->writeCoils(slave_id, address, coils.data(), 1);
+                ret = server_->writeCoils(slaveId, address, coils.data(), 1);
                 break;
             }
             case 16: {
                 std::vector<uint16_t> regs(1, (*val_bool ? 1 : 0));
-                ret = server_->writeHoldingRegisters(slave_id, address, regs.data(), 1);
+                ret = server_->writeHoldingRegisters(slaveId, address, regs.data(), 1);
                 break;
             }
         }
@@ -574,14 +573,14 @@ AvgTimeStats ModbusServerHandler<PointT>::getAvgTime() const {
 template<typename PointT>
 void ModbusServerHandler<PointT>::setWriteCallback(std::shared_ptr<ModbusWriteCallback> callback) {
     std::lock_guard<std::mutex> lock(mutex_);
-    write_callback_ = callback;
+    writeCallback_ = callback;
 }
 
 template<typename PointT>
-void ModbusServerHandler<PointT>::onModbusWriteInternal(int slave_id, int func_code,
+void ModbusServerHandler<PointT>::onModbusWriteInternal(int slaveId, int funcCode,
                                                             int address,
                                                             const std::vector<int>& values) {
-    if (func_code != 5 && func_code != 6 && func_code != 15 && func_code != 16) {
+    if (funcCode != 5 && funcCode != 6 && funcCode != 15 && funcCode != 16) {
         return;
     }
 
@@ -592,7 +591,7 @@ void ModbusServerHandler<PointT>::onModbusWriteInternal(int slave_id, int func_c
     for (const auto& point : points_) {
         int point_slave_id = 1;
         int point_addr = 0;
-        int point_func_code = 3;
+        int pointFuncCode = 3;
         int register_cnt = 1;
 
         if constexpr (requires { std::declval<PointT>().rtu_addr; }) {
@@ -606,7 +605,7 @@ void ModbusServerHandler<PointT>::onModbusWriteInternal(int slave_id, int func_c
             }
         }
         if constexpr (requires { std::declval<PointT>().func_code; }) {
-            point_func_code = point->func_code;
+            pointFuncCode = point->func_code;
         }
         if constexpr (requires { std::declval<PointT>().register_cnt; }) {
             register_cnt = point->register_cnt;
@@ -618,21 +617,21 @@ void ModbusServerHandler<PointT>::onModbusWriteInternal(int slave_id, int func_c
             register_cnt = getRegisterCount(decode);
         }
 
-        if (point_slave_id != slave_id) {
+        if (point_slave_id != slaveId) {
             continue;
         }
 
-        bool is_holding_reg = (point_func_code == 3 || point_func_code == 6 || point_func_code == 16) &&
-                              (func_code == 6 || func_code == 16);
-        bool is_coil = (point_func_code == 1 || point_func_code == 5 || point_func_code == 15) &&
-                       (func_code == 5 || func_code == 15);
+        bool isHoldingReg = (pointFuncCode == 3 || pointFuncCode == 6 || pointFuncCode == 16) &&
+                              (funcCode == 6 || funcCode == 16);
+        bool isCoil = (pointFuncCode == 1 || pointFuncCode == 5 || pointFuncCode == 15) &&
+                       (funcCode == 5 || funcCode == 15);
 
-        if (is_holding_reg || is_coil) {
+        if (isHoldingReg || isCoil) {
             int point_end_addr = point_addr + register_cnt - 1;
 
             if (std::max(point_addr, write_start_addr) <= std::min(point_end_addr, write_end_addr)) {
-                if (write_callback_) {
-                    write_callback_->on_modbus_client_write(slave_id, func_code, address, values);
+                if (writeCallback_) {
+                    writeCallback_->onModbusClientWrite(slaveId, funcCode, address, values);
                 }
             }
         }
@@ -640,15 +639,15 @@ void ModbusServerHandler<PointT>::onModbusWriteInternal(int slave_id, int func_c
 }
 
 template<typename PointT>
-int ModbusServerHandler<PointT>::parseAddress(const std::string& address_str) const {
-    if (address_str.empty()) {
+int ModbusServerHandler<PointT>::parseAddress(const std::string& addressStr) const {
+    if (addressStr.empty()) {
         return 0;
     }
-    if (address_str.length() > 2 &&
-        (address_str.substr(0, 2) == "0x" || address_str.substr(0, 2) == "0X")) {
-        return std::stoi(address_str, nullptr, 16);
+    if (addressStr.length() > 2 &&
+        (addressStr.substr(0, 2) == "0x" || addressStr.substr(0, 2) == "0X")) {
+        return std::stoi(addressStr, nullptr, 16);
     }
-    return std::stoi(address_str);
+    return std::stoi(addressStr);
 }
 
 template<typename PointT>
@@ -692,7 +691,7 @@ bool ModbusServerHandler<PointT>::valueToInt(const ValueType& value, int& result
 
 template<typename PointT>
 ModbusClientHandler<PointT>::ModbusClientHandler()
-    : net_type_(modbus::ModbusClient::NetType::TCP)
+    : netType_(modbus::ModbusClient::NetType::TCP)
     , connection_("127.0.0.1")
     , settings_("502") {
 }
@@ -700,7 +699,7 @@ ModbusClientHandler<PointT>::ModbusClientHandler()
 template<typename PointT>
 ModbusClientHandler<PointT>::ModbusClientHandler(Logger logger)
     : logger_(logger)
-    , net_type_(modbus::ModbusClient::NetType::TCP)
+    , netType_(modbus::ModbusClient::NetType::TCP)
     , connection_("127.0.0.1")
     , settings_("502") {
 }
@@ -740,12 +739,12 @@ void ModbusClientHandler<PointT>::initialize(const std::unordered_map<std::strin
     auto it_proto = config.find("protocol_type");
     if (it_proto != config.end()) {
         if (auto pval = std::get_if<int>(&it_proto->second)) {
-            net_type_ = (*pval == 0) ? modbus::ModbusClient::NetType::RTU
+            netType_ = (*pval == 0) ? modbus::ModbusClient::NetType::RTU
                                       : modbus::ModbusClient::NetType::TCP;
         }
     }
 
-    if (net_type_ == modbus::ModbusClient::NetType::RTU) {
+    if (netType_ == modbus::ModbusClient::NetType::RTU) {
         auto it_serial = config.find("serial_port");
         if (it_serial != config.end()) {
             if (auto pval = std::get_if<std::string>(&it_serial->second)) {
@@ -782,30 +781,30 @@ void ModbusClientHandler<PointT>::initialize(const std::unordered_map<std::strin
         settings_ = std::to_string(baudrate) + parity + std::to_string(stopbits);
     }
 
-    auto it_slave = config.find("slave_id");
-    if (it_slave != config.end()) {
-        if (auto pval = std::get_if<int>(&it_slave->second)) {
-            default_slave_id_ = *pval;
+    auto itSlave = config.find("slave_id");
+    if (itSlave != config.end()) {
+        if (auto pval = std::get_if<int>(&itSlave->second)) {
+            defaultSlaveId_ = *pval;
         }
     }
 
-    auto it_timeout = config.find("response_timeout");
-    if (it_timeout != config.end()) {
-        if (auto pval = std::get_if<int>(&it_timeout->second)) {
-            response_timeout_ms_ = *pval;
+    auto itTimeout = config.find("response_timeout");
+    if (itTimeout != config.end()) {
+        if (auto pval = std::get_if<int>(&itTimeout->second)) {
+            responseTimeoutMs_ = *pval;
         }
     }
 
-    client_ = std::make_shared<modbus::ModbusClient>(net_type_, connection_, settings_);
-    client_->setResponseTimeout(response_timeout_ms_);
-    client_->addSlave(default_slave_id_);
-    client_initialized_ = true;
+    client_ = std::make_shared<modbus::ModbusClient>(netType_, connection_, settings_);
+    client_->setResponseTimeout(responseTimeoutMs_);
+    client_->addSlave(defaultSlaveId_);
+    clientInitialized_ = true;
 
     if (logger_) {
         std::ostringstream oss;
         oss << "Modbus 客户端初始化: ip=" << connection_
             << ", port=" << port
-            << ", slave_id=" << default_slave_id_;
+            << ", slave_id=" << defaultSlaveId_;
         logger_(oss.str());
     }
 }
@@ -874,13 +873,13 @@ ValueType ModbusClientHandler<PointT>::readValue(const std::shared_ptr<PointT>& 
         return {};
     }
 
-    int slave_id = default_slave_id_;
+    int slaveId = defaultSlaveId_;
     int address = 0;
     std::string decode = "0x41";
-    int func_code = 3;
+    int funcCode = 3;
 
     if constexpr (requires { std::declval<PointT>().rtu_addr; }) {
-        slave_id = point->rtu_addr;
+        slaveId = point->rtu_addr;
     }
     if constexpr (requires { std::declval<PointT>().address; }) {
         if constexpr (std::is_same_v<decltype(point->address), std::string>) {
@@ -893,22 +892,22 @@ ValueType ModbusClientHandler<PointT>::readValue(const std::shared_ptr<PointT>& 
         decode = point->decode;
     }
     if constexpr (requires { std::declval<PointT>().func_code; }) {
-        func_code = point->func_code;
+        funcCode = point->func_code;
     }
 
-    return readValueInternal(func_code, slave_id, address, decode);
+    return readValueInternal(funcCode, slaveId, address, decode);
 }
 
 template<typename PointT>
-ValueType ModbusClientHandler<PointT>::readValueInternal(int func_code, int slave_id,
+ValueType ModbusClientHandler<PointT>::readValueInternal(int funcCode, int slaveId,
                                                              int address,
                                                              const std::string& decode) {
     modbus::ModbusClient::ErrorCode ret = modbus::ModbusClient::ErrorCode::Success;
 
-    switch (func_code) {
+    switch (funcCode) {
         case 1: {
             bool val;
-            ret = client_->readCoils(slave_id, address, &val, 1);
+            ret = client_->readCoils(slaveId, address, &val, 1);
             if (ret == modbus::ModbusClient::ErrorCode::Success) {
                 return val ? 1 : 0;
             }
@@ -916,7 +915,7 @@ ValueType ModbusClientHandler<PointT>::readValueInternal(int func_code, int slav
         }
         case 2: {
             bool val;
-            ret = client_->readDiscreteInputs(slave_id, address, &val, 1);
+            ret = client_->readDiscreteInputs(slaveId, address, &val, 1);
             if (ret == modbus::ModbusClient::ErrorCode::Success) {
                 return val ? 1 : 0;
             }
@@ -924,7 +923,7 @@ ValueType ModbusClientHandler<PointT>::readValueInternal(int func_code, int slav
         }
         case 3: {
             uint16_t val;
-            ret = client_->readHoldingRegisters(slave_id, address, &val, 1);
+            ret = client_->readHoldingRegisters(slaveId, address, &val, 1);
             if (ret == modbus::ModbusClient::ErrorCode::Success) {
                 return static_cast<int>(val);
             }
@@ -932,7 +931,7 @@ ValueType ModbusClientHandler<PointT>::readValueInternal(int func_code, int slav
         }
         case 4: {
             uint16_t val;
-            ret = client_->readInputRegisters(slave_id, address, &val, 1);
+            ret = client_->readInputRegisters(slaveId, address, &val, 1);
             if (ret == modbus::ModbusClient::ErrorCode::Success) {
                 return static_cast<int>(val);
             }
@@ -950,12 +949,12 @@ bool ModbusClientHandler<PointT>::writeValue(const std::shared_ptr<PointT>& poin
         return false;
     }
 
-    int slave_id = default_slave_id_;
+    int slaveId = defaultSlaveId_;
     int address = 0;
-    int func_code = 6;
+    int funcCode = 6;
 
     if constexpr (requires { std::declval<PointT>().rtu_addr; }) {
-        slave_id = point->rtu_addr;
+        slaveId = point->rtu_addr;
     }
     if constexpr (requires { std::declval<PointT>().address; }) {
         if constexpr (std::is_same_v<decltype(point->address), std::string>) {
@@ -965,43 +964,43 @@ bool ModbusClientHandler<PointT>::writeValue(const std::shared_ptr<PointT>& poin
         }
     }
     if constexpr (requires { std::declval<PointT>().func_code; }) {
-        func_code = point->func_code;
+        funcCode = point->func_code;
     }
 
     modbus::ModbusClient::ErrorCode ret = modbus::ModbusClient::ErrorCode::Success;
-    int val_int = 0;
+    int valInt = 0;
 
-    if (valueToInt(value, val_int)) {
-        switch (func_code) {
+    if (valueToInt(value, valInt)) {
+        switch (funcCode) {
             case 5:
-                ret = client_->writeSingleCoil(slave_id, address, (val_int != 0));
+                ret = client_->writeSingleCoil(slaveId, address, (valInt != 0));
                 break;
             case 6:
-                ret = client_->writeSingleRegister(slave_id, address, static_cast<uint16_t>(val_int));
+                ret = client_->writeSingleRegister(slaveId, address, static_cast<uint16_t>(valInt));
                 break;
             case 15: {
                 CoilBits coils(1);
-                coils.set(0, (val_int != 0));
-                ret = client_->writeMultipleCoils(slave_id, address, coils.data(), 1);
+                coils.set(0, (valInt != 0));
+                ret = client_->writeMultipleCoils(slaveId, address, coils.data(), 1);
                 break;
             }
             case 16: {
-                std::vector<uint16_t> regs(1, static_cast<uint16_t>(val_int));
-                ret = client_->writeMultipleRegisters(slave_id, address, regs.data(), 1);
+                std::vector<uint16_t> regs(1, static_cast<uint16_t>(valInt));
+                ret = client_->writeMultipleRegisters(slaveId, address, regs.data(), 1);
                 break;
             }
             default:
-                ret = client_->writeSingleRegister(slave_id, address, static_cast<uint16_t>(val_int));
+                ret = client_->writeSingleRegister(slaveId, address, static_cast<uint16_t>(valInt));
                 break;
         }
     } else if (auto val_bool = std::get_if<bool>(&value)) {
-        switch (func_code) {
+        switch (funcCode) {
             case 5:
             case 1:
-                ret = client_->writeSingleCoil(slave_id, address, *val_bool);
+                ret = client_->writeSingleCoil(slaveId, address, *val_bool);
                 break;
             default:
-                ret = client_->writeSingleRegister(slave_id, address, (*val_bool ? 1 : 0));
+                ret = client_->writeSingleRegister(slaveId, address, (*val_bool ? 1 : 0));
                 break;
         }
     }
@@ -1013,7 +1012,7 @@ template<typename PointT>
 void ModbusClientHandler<PointT>::addPoints(const std::vector<std::shared_ptr<PointT>>& points) {
     std::lock_guard<std::mutex> lock(mutex_);
     for (const auto& p : points) {
-        if (points_set_.insert(p).second) {
+        if (pointsSet_.insert(p).second) {
             points_.push_back(p);
         }
     }

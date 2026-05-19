@@ -1,13 +1,15 @@
 #include "rtdb/rtdb_manager.h"
 #include <iostream>
+#include <fstream>
+#include <sstream>
 
 namespace ems {
-namespace net {
+namespace rtdb {
 
 RtDbManager::RtDbManager()
     : rtdb_(nullptr)
-    , config_cache_(nullptr)
-    , point_manager_(nullptr) {
+    , configCache_(nullptr)
+    , pointManager_(nullptr) {
 }
 
 RtDbManager::~RtDbManager() {
@@ -17,22 +19,22 @@ RtDbManager::~RtDbManager() {
 bool RtDbManager::initialize(const RtDbConfig& config) {
     rtdb_ = createRtDb(config);
     if (!rtdb_ || !rtdb_->isConnected()) {
-        std::cerr << "Failed to connect to Redis: " 
+        std::cerr << "Failed to connect to Redis: "
                   << (rtdb_ ? rtdb_->getLastError() : "Unknown error") << std::endl;
         return false;
     }
 
-    config_cache_ = std::make_shared<RtDbConfigCache>();
-    point_manager_ = std::make_shared<RtDbPointManager>();
-    point_manager_->setConfigCache(config_cache_);
+    configCache_ = std::make_shared<RtDbConfigCache>();
+    pointManager_ = std::make_shared<RtDbPointManager>();
+    pointManager_->setConfigCache(configCache_);
 
     return true;
 }
 
 void RtDbManager::shutdown() {
     rtdb_.reset();
-    config_cache_.reset();
-    point_manager_.reset();
+    configCache_.reset();
+    pointManager_.reset();
 }
 
 bool RtDbManager::loadYcConfigsFromDb() {
@@ -52,7 +54,7 @@ bool RtDbManager::loadYtConfigsFromDb() {
 }
 
 bool RtDbManager::loadAllConfigs() {
-    if (!config_cache_) {
+    if (!configCache_) {
         return false;
     }
 
@@ -73,7 +75,7 @@ bool RtDbManager::loadAllConfigs() {
 }
 
 void RtDbManager::setDataChangeCallback(DataChangeCallback callback) {
-    data_change_callback_ = callback;
+    dataChangeCallback_ = callback;
 }
 
 bool RtDbManager::updateYc(const std::string& code, const YcPoint& data) {
@@ -82,11 +84,11 @@ bool RtDbManager::updateYc(const std::string& code, const YcPoint& data) {
     }
 
     bool result = rtdb_->setYc(code, data);
-    
-    if (result && data_change_callback_) {
-        data_change_callback_("yc", code, &data);
+
+    if (result && dataChangeCallback_) {
+        dataChangeCallback_("yc", code, &data);
     }
-    
+
     return result;
 }
 
@@ -96,11 +98,11 @@ bool RtDbManager::updateYx(const std::string& code, const YxPoint& data) {
     }
 
     bool result = rtdb_->setYx(code, data);
-    
-    if (result && data_change_callback_) {
-        data_change_callback_("yx", code, &data);
+
+    if (result && dataChangeCallback_) {
+        dataChangeCallback_("yx", code, &data);
     }
-    
+
     return result;
 }
 
@@ -110,11 +112,11 @@ bool RtDbManager::updateYk(const std::string& code, const YkPoint& data) {
     }
 
     bool result = rtdb_->setYk(code, data);
-    
-    if (result && data_change_callback_) {
-        data_change_callback_("yk", code, &data);
+
+    if (result && dataChangeCallback_) {
+        dataChangeCallback_("yk", code, &data);
     }
-    
+
     return result;
 }
 
@@ -124,92 +126,100 @@ bool RtDbManager::updateYt(const std::string& code, const YtPoint& data) {
     }
 
     bool result = rtdb_->setYt(code, data);
-    
-    if (result && data_change_callback_) {
-        data_change_callback_("yt", code, &data);
+
+    if (result && dataChangeCallback_) {
+        dataChangeCallback_("yt", code, &data);
     }
-    
+
     return result;
 }
 
-bool RtDbManager::batchUpdateYC(const std::map<std::string, YcPoint>& data_map) {
+bool RtDbManager::batchUpdateYc(const std::map<std::string, YcPoint>& dataMap) {
     if (!rtdb_) {
         return false;
     }
 
-    for (const auto& pair : data_map) {
-        if (!rtdb_->setYc(pair.first, pair.second)) {
-            return false;
+    bool result = rtdb_->batchSetYc(dataMap);
+
+    if (result && dataChangeCallback_) {
+        for (const auto& pair : dataMap) {
+            dataChangeCallback_("yc", pair.first, &pair.second);
         }
     }
 
-    if (data_change_callback_) {
-        for (const auto& pair : data_map) {
-            data_change_callback_("yc", pair.first, &pair.second);
-        }
-    }
-
-    return true;
+    return result;
 }
 
-bool RtDbManager::batchUpdateYX(const std::map<std::string, YxPoint>& data_map) {
+bool RtDbManager::batchUpdateYx(const std::map<std::string, YxPoint>& dataMap) {
     if (!rtdb_) {
         return false;
     }
 
-    for (const auto& pair : data_map) {
-        if (!rtdb_->setYx(pair.first, pair.second)) {
-            return false;
+    bool result = rtdb_->batchSetYx(dataMap);
+
+    if (result && dataChangeCallback_) {
+        for (const auto& pair : dataMap) {
+            dataChangeCallback_("yx", pair.first, &pair.second);
         }
     }
 
-    if (data_change_callback_) {
-        for (const auto& pair : data_map) {
-            data_change_callback_("yx", pair.first, &pair.second);
-        }
-    }
-
-    return true;
+    return result;
 }
 
-bool RtDbManager::batchUpdateYK(const std::map<std::string, YkPoint>& data_map) {
+bool RtDbManager::batchUpdateYk(const std::map<std::string, YkPoint>& dataMap) {
     if (!rtdb_) {
         return false;
     }
 
-    for (const auto& pair : data_map) {
-        if (!rtdb_->setYk(pair.first, pair.second)) {
-            return false;
+    bool result = rtdb_->batchSetYk(dataMap);
+
+    if (result && dataChangeCallback_) {
+        for (const auto& pair : dataMap) {
+            dataChangeCallback_("yk", pair.first, &pair.second);
         }
     }
 
-    if (data_change_callback_) {
-        for (const auto& pair : data_map) {
-            data_change_callback_("yk", pair.first, &pair.second);
-        }
-    }
-
-    return true;
+    return result;
 }
 
-bool RtDbManager::batchUpdateYT(const std::map<std::string, YtPoint>& data_map) {
+bool RtDbManager::batchUpdateYt(const std::map<std::string, YtPoint>& dataMap) {
     if (!rtdb_) {
         return false;
     }
 
-    for (const auto& pair : data_map) {
-        if (!rtdb_->setYt(pair.first, pair.second)) {
-            return false;
+    bool result = rtdb_->batchSetYt(dataMap);
+
+    if (result && dataChangeCallback_) {
+        for (const auto& pair : dataMap) {
+            dataChangeCallback_("yt", pair.first, &pair.second);
         }
     }
 
-    if (data_change_callback_) {
-        for (const auto& pair : data_map) {
-            data_change_callback_("yt", pair.first, &pair.second);
-        }
-    }
+    return result;
+}
 
-    return true;
+std::future<bool> RtDbManager::asyncUpdateYc(const std::string& code, const YcPoint& data) {
+    return std::async(std::launch::async, [this, code, data]() {
+        return updateYc(code, data);
+    });
+}
+
+std::future<bool> RtDbManager::asyncUpdateYx(const std::string& code, const YxPoint& data) {
+    return std::async(std::launch::async, [this, code, data]() {
+        return updateYx(code, data);
+    });
+}
+
+std::future<bool> RtDbManager::asyncUpdateYk(const std::string& code, const YkPoint& data) {
+    return std::async(std::launch::async, [this, code, data]() {
+        return updateYk(code, data);
+    });
+}
+
+std::future<bool> RtDbManager::asyncUpdateYt(const std::string& code, const YtPoint& data) {
+    return std::async(std::launch::async, [this, code, data]() {
+        return updateYt(code, data);
+    });
 }
 
 bool RtDbManager::getYc(const std::string& code, YcPoint& data) {
@@ -240,38 +250,38 @@ bool RtDbManager::getYt(const std::string& code, YtPoint& data) {
     return rtdb_->getYt(code, data);
 }
 
-bool RtDbManager::getYcFull(const std::string& code, 
-                            RtDbPointManager::YCFullPoint& fullPoint) {
+bool RtDbManager::getYcFull(const std::string& code,
+                            RtDbPointManager::YcFullPoint& fullPoint) {
     YcPoint data;
     if (getYc(code, data)) {
-        return point_manager_->getYCFullPoint(code, data, fullPoint);
+        return pointManager_->getYcFullPoint(code, data, fullPoint);
     }
     return false;
 }
 
-bool RtDbManager::getYxFull(const std::string& code, 
-                            RtDbPointManager::YXFullPoint& fullPoint) {
+bool RtDbManager::getYxFull(const std::string& code,
+                            RtDbPointManager::YxFullPoint& fullPoint) {
     YxPoint data;
     if (getYx(code, data)) {
-        return point_manager_->getYXFullPoint(code, data, fullPoint);
+        return pointManager_->getYxFullPoint(code, data, fullPoint);
     }
     return false;
 }
 
-bool RtDbManager::getYkFull(const std::string& code, 
-                            RtDbPointManager::YKFullPoint& fullPoint) {
+bool RtDbManager::getYkFull(const std::string& code,
+                            RtDbPointManager::YkFullPoint& fullPoint) {
     YkPoint data;
     if (getYk(code, data)) {
-        return point_manager_->getYKFullPoint(code, data, fullPoint);
+        return pointManager_->getYkFullPoint(code, data, fullPoint);
     }
     return false;
 }
 
-bool RtDbManager::getYtFull(const std::string& code, 
-                            RtDbPointManager::YTFullPoint& fullPoint) {
+bool RtDbManager::getYtFull(const std::string& code,
+                            RtDbPointManager::YtFullPoint& fullPoint) {
     YtPoint data;
     if (getYt(code, data)) {
-        return point_manager_->getYTFullPoint(code, data, fullPoint);
+        return pointManager_->getYtFullPoint(code, data, fullPoint);
     }
     return false;
 }
@@ -280,96 +290,96 @@ std::vector<YcPoint> RtDbManager::getAllYcData() {
     if (!rtdb_) {
         return {};
     }
-    return rtdb_->getYCPoints("*");
+    return rtdb_->getYcPoints("*");
 }
 
 std::vector<YxPoint> RtDbManager::getAllYxData() {
     if (!rtdb_) {
         return {};
     }
-    return rtdb_->getYXPoints("*");
+    return rtdb_->getYxPoints("*");
 }
 
 std::vector<YkPoint> RtDbManager::getAllYkData() {
     if (!rtdb_) {
         return {};
     }
-    return rtdb_->getYKPoints("*");
+    return rtdb_->getYkPoints("*");
 }
 
 std::vector<YtPoint> RtDbManager::getAllYtData() {
     if (!rtdb_) {
         return {};
     }
-    return rtdb_->getYTPoints("*");
+    return rtdb_->getYtPoints("*");
 }
 
-std::vector<RtDbPointManager::YCFullPoint> RtDbManager::getAllYcFullPoints() {
-    std::vector<RtDbPointManager::YCFullPoint> result;
-    
-    if (!rtdb_ || !point_manager_ || !config_cache_) {
+std::vector<RtDbPointManager::YcFullPoint> RtDbManager::getAllYcFullPoints() {
+    std::vector<RtDbPointManager::YcFullPoint> result;
+
+    if (!rtdb_ || !pointManager_ || !configCache_) {
         return result;
     }
 
-    auto codes = config_cache_->getYcConfigCodes();
+    auto codes = configCache_->getYcConfigCodes();
     for (const auto& code : codes) {
-        RtDbPointManager::YCFullPoint full_point;
-        if (getYcFull(code, full_point)) {
-            result.push_back(full_point);
+        RtDbPointManager::YcFullPoint fullPoint;
+        if (getYcFull(code, fullPoint)) {
+            result.push_back(fullPoint);
         }
     }
 
     return result;
 }
 
-std::vector<RtDbPointManager::YXFullPoint> RtDbManager::getAllYxFullPoints() {
-    std::vector<RtDbPointManager::YXFullPoint> result;
-    
-    if (!rtdb_ || !point_manager_ || !config_cache_) {
+std::vector<RtDbPointManager::YxFullPoint> RtDbManager::getAllYxFullPoints() {
+    std::vector<RtDbPointManager::YxFullPoint> result;
+
+    if (!rtdb_ || !pointManager_ || !configCache_) {
         return result;
     }
 
-    auto codes = config_cache_->getYxConfigCodes();
+    auto codes = configCache_->getYxConfigCodes();
     for (const auto& code : codes) {
-        RtDbPointManager::YXFullPoint full_point;
-        if (getYxFull(code, full_point)) {
-            result.push_back(full_point);
+        RtDbPointManager::YxFullPoint fullPoint;
+        if (getYxFull(code, fullPoint)) {
+            result.push_back(fullPoint);
         }
     }
 
     return result;
 }
 
-std::vector<RtDbPointManager::YKFullPoint> RtDbManager::getAllYkFullPoints() {
-    std::vector<RtDbPointManager::YKFullPoint> result;
-    
-    if (!rtdb_ || !point_manager_ || !config_cache_) {
+std::vector<RtDbPointManager::YkFullPoint> RtDbManager::getAllYkFullPoints() {
+    std::vector<RtDbPointManager::YkFullPoint> result;
+
+    if (!rtdb_ || !pointManager_ || !configCache_) {
         return result;
     }
 
-    auto codes = config_cache_->getYkConfigCodes();
+    auto codes = configCache_->getYkConfigCodes();
     for (const auto& code : codes) {
-        RtDbPointManager::YKFullPoint full_point;
-        if (getYkFull(code, full_point)) {
-            result.push_back(full_point);
+        RtDbPointManager::YkFullPoint fullPoint;
+        if (getYkFull(code, fullPoint)) {
+            result.push_back(fullPoint);
         }
     }
 
     return result;
 }
 
-std::vector<RtDbPointManager::YTFullPoint> RtDbManager::getAllYtFullPoints() {
-    std::vector<RtDbPointManager::YTFullPoint> result;
-    
-    if (!rtdb_ || !point_manager_ || !config_cache_) {
+std::vector<RtDbPointManager::YtFullPoint> RtDbManager::getAllYtFullPoints() {
+    std::vector<RtDbPointManager::YtFullPoint> result;
+
+    if (!rtdb_ || !pointManager_ || !configCache_) {
         return result;
     }
 
-    auto codes = config_cache_->getYtConfigCodes();
+    auto codes = configCache_->getYtConfigCodes();
     for (const auto& code : codes) {
-        RtDbPointManager::YTFullPoint full_point;
-        if (getYtFull(code, full_point)) {
-            result.push_back(full_point);
+        RtDbPointManager::YtFullPoint fullPoint;
+        if (getYtFull(code, fullPoint)) {
+            result.push_back(fullPoint);
         }
     }
 
@@ -409,28 +419,117 @@ void RtDbManager::clearAllData() {
         return;
     }
 
-    auto yc_codes = rtdb_->getYcCodes("*");
-    for (const auto& code : yc_codes) {
+    auto ycCodes = rtdb_->getYcCodes("*");
+    for (const auto& code : ycCodes) {
         rtdb_->deleteYc(code);
     }
 
-    auto yx_codes = rtdb_->getYxCodes("*");
-    for (const auto& code : yx_codes) {
+    auto yxCodes = rtdb_->getYxCodes("*");
+    for (const auto& code : yxCodes) {
         rtdb_->deleteYx(code);
     }
 
-    auto yk_codes = rtdb_->getYkCodes("*");
-    for (const auto& code : yk_codes) {
+    auto ykCodes = rtdb_->getYkCodes("*");
+    for (const auto& code : ykCodes) {
         rtdb_->deleteYk(code);
     }
 
-    auto yt_codes = rtdb_->getYtCodes("*");
-    for (const auto& code : yt_codes) {
+    auto ytCodes = rtdb_->getYtCodes("*");
+    for (const auto& code : ytCodes) {
         rtdb_->deleteYt(code);
     }
 }
 
-std::unique_ptr<RtDbManager> createRTDBManager(const RtDbConfig& config) {
+bool RtDbManager::loadConfigFromJson(const std::string& filepath) {
+    std::ifstream file(filepath);
+    if (!file.is_open()) {
+        return false;
+    }
+
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    std::string content = buffer.str();
+
+    std::vector<RtDbConfigCache::YcConfig> ycConfigs;
+    std::vector<RtDbConfigCache::YxConfig> yxConfigs;
+    std::vector<RtDbConfigCache::YkConfig> ykConfigs;
+    std::vector<RtDbConfigCache::YtConfig> ytConfigs;
+
+    auto parseArray = [&](const std::string& key, auto& configs, auto parser) {
+        auto pos = content.find("\"" + key + "\"");
+        if (pos == std::string::npos) return;
+        pos = content.find("[", pos);
+        if (pos == std::string::npos) return;
+        pos++;
+        while (pos < content.size()) {
+            auto start = content.find("{", pos);
+            auto end = content.find("}", start);
+            if (start == std::string::npos || end == std::string::npos) break;
+            std::string item = content.substr(start, end - start + 1);
+            configs.push_back(parser(item));
+            pos = end + 1;
+        }
+    };
+
+    auto parseYcItem = [](const std::string& item) {
+        RtDbConfigCache::YcConfig cfg;
+        auto find = [&](const std::string& k) -> std::string {
+            auto p = item.find("\"" + k + "\"");
+            if (p == std::string::npos) return "";
+            p = item.find(":", p + k.size() + 2);
+            if (p == std::string::npos) return "";
+            p++;
+            while (p < item.size() && (item[p] == ' ' || item[p] == '\t')) p++;
+            if (p >= item.size()) return "";
+            if (item[p] == '"') {
+                p++;
+                std::string v;
+                while (p < item.size() && item[p] != '"') {
+                    if (item[p] == '\\' && p + 1 < item.size()) { p++; v += item[p]; }
+                    else { v += item[p]; }
+                    p++;
+                }
+                return v;
+            }
+            size_t e = p;
+            while (e < item.size() && item[e] != ',' && item[e] != '}' && item[e] != ' ') e++;
+            return item.substr(p, e - p);
+        };
+        cfg.code = find("code");
+        cfg.name = find("name");
+        try { cfg.channelId = std::stoll(find("channel_id")); } catch (...) {}
+        try { cfg.mulCoe = std::stod(find("mul_coe")); } catch (...) {}
+        try { cfg.addCoe = std::stod(find("add_coe")); } catch (...) {}
+        try { cfg.maxLimit = std::stod(find("max_limit")); } catch (...) {}
+        try { cfg.minLimit = std::stod(find("min_limit")); } catch (...) {}
+        cfg.unit = find("unit");
+        try { cfg.status = std::stoi(find("status")); } catch (...) {}
+        return cfg;
+    };
+
+    parseArray("yc_points", ycConfigs, parseYcItem);
+
+    if (!ycConfigs.empty()) {
+        configCache_->loadYcConfigs(ycConfigs);
+    }
+    if (!yxConfigs.empty()) {
+        configCache_->loadYxConfigs(yxConfigs);
+    }
+    if (!ykConfigs.empty()) {
+        configCache_->loadYkConfigs(ykConfigs);
+    }
+    if (!ytConfigs.empty()) {
+        configCache_->loadYtConfigs(ytConfigs);
+    }
+
+    return true;
+}
+
+bool RtDbManager::loadConfigFromCsv(const std::string& filepath) {
+    return false;
+}
+
+std::unique_ptr<RtDbManager> createRtdbManager(const RtDbConfig& config) {
     auto manager = std::make_unique<RtDbManager>();
     if (manager->initialize(config)) {
         return manager;

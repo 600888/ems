@@ -2,44 +2,44 @@
 #include <algorithm>
 
 namespace ems {
-namespace net {
+namespace rtdb {
 
 void RtDbConfigCache::loadYcConfigs(const std::vector<YcConfig>& configs) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    yc_configs_.clear();
+    ycConfigs_.clear();
     for (const auto& config : configs) {
-        yc_configs_[config.code] = config;
+        ycConfigs_[config.code] = config;
     }
 }
 
 void RtDbConfigCache::loadYxConfigs(const std::vector<YxConfig>& configs) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    yx_configs_.clear();
+    yxConfigs_.clear();
     for (const auto& config : configs) {
-        yx_configs_[config.code] = config;
+        yxConfigs_[config.code] = config;
     }
 }
 
 void RtDbConfigCache::loadYkConfigs(const std::vector<YkConfig>& configs) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    yk_configs_.clear();
+    ykConfigs_.clear();
     for (const auto& config : configs) {
-        yk_configs_[config.code] = config;
+        ykConfigs_[config.code] = config;
     }
 }
 
 void RtDbConfigCache::loadYtConfigs(const std::vector<YtConfig>& configs) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    yt_configs_.clear();
+    ytConfigs_.clear();
     for (const auto& config : configs) {
-        yt_configs_[config.code] = config;
+        ytConfigs_[config.code] = config;
     }
 }
 
 bool RtDbConfigCache::getYcConfig(const std::string& code, YcConfig& config) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    auto it = yc_configs_.find(code);
-    if (it != yc_configs_.end()) {
+    auto it = ycConfigs_.find(code);
+    if (it != ycConfigs_.end()) {
         config = it->second;
         return true;
     }
@@ -48,8 +48,8 @@ bool RtDbConfigCache::getYcConfig(const std::string& code, YcConfig& config) con
 
 bool RtDbConfigCache::getYxConfig(const std::string& code, YxConfig& config) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    auto it = yx_configs_.find(code);
-    if (it != yx_configs_.end()) {
+    auto it = yxConfigs_.find(code);
+    if (it != yxConfigs_.end()) {
         config = it->second;
         return true;
     }
@@ -58,8 +58,8 @@ bool RtDbConfigCache::getYxConfig(const std::string& code, YxConfig& config) con
 
 bool RtDbConfigCache::getYkConfig(const std::string& code, YkConfig& config) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    auto it = yk_configs_.find(code);
-    if (it != yk_configs_.end()) {
+    auto it = ykConfigs_.find(code);
+    if (it != ykConfigs_.end()) {
         config = it->second;
         return true;
     }
@@ -68,8 +68,8 @@ bool RtDbConfigCache::getYkConfig(const std::string& code, YkConfig& config) con
 
 bool RtDbConfigCache::getYtConfig(const std::string& code, YtConfig& config) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    auto it = yt_configs_.find(code);
-    if (it != yt_configs_.end()) {
+    auto it = ytConfigs_.find(code);
+    if (it != ytConfigs_.end()) {
         config = it->second;
         return true;
     }
@@ -79,8 +79,8 @@ bool RtDbConfigCache::getYtConfig(const std::string& code, YtConfig& config) con
 std::vector<std::string> RtDbConfigCache::getYcConfigCodes() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     std::vector<std::string> codes;
-    codes.reserve(yc_configs_.size());
-    for (const auto& pair : yc_configs_) {
+    codes.reserve(ycConfigs_.size());
+    for (const auto& pair : ycConfigs_) {
         codes.push_back(pair.first);
     }
     std::sort(codes.begin(), codes.end());
@@ -90,8 +90,8 @@ std::vector<std::string> RtDbConfigCache::getYcConfigCodes() const {
 std::vector<std::string> RtDbConfigCache::getYxConfigCodes() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     std::vector<std::string> codes;
-    codes.reserve(yx_configs_.size());
-    for (const auto& pair : yx_configs_) {
+    codes.reserve(yxConfigs_.size());
+    for (const auto& pair : yxConfigs_) {
         codes.push_back(pair.first);
     }
     std::sort(codes.begin(), codes.end());
@@ -101,8 +101,8 @@ std::vector<std::string> RtDbConfigCache::getYxConfigCodes() const {
 std::vector<std::string> RtDbConfigCache::getYkConfigCodes() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     std::vector<std::string> codes;
-    codes.reserve(yk_configs_.size());
-    for (const auto& pair : yk_configs_) {
+    codes.reserve(ykConfigs_.size());
+    for (const auto& pair : ykConfigs_) {
         codes.push_back(pair.first);
     }
     std::sort(codes.begin(), codes.end());
@@ -112,8 +112,8 @@ std::vector<std::string> RtDbConfigCache::getYkConfigCodes() const {
 std::vector<std::string> RtDbConfigCache::getYtConfigCodes() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
     std::vector<std::string> codes;
-    codes.reserve(yt_configs_.size());
-    for (const auto& pair : yt_configs_) {
+    codes.reserve(ytConfigs_.size());
+    for (const auto& pair : ytConfigs_) {
         codes.push_back(pair.first);
     }
     std::sort(codes.begin(), codes.end());
@@ -122,243 +122,416 @@ std::vector<std::string> RtDbConfigCache::getYtConfigCodes() const {
 
 size_t RtDbConfigCache::getYcConfigCount() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    return yc_configs_.size();
+    return ycConfigs_.size();
 }
 
 size_t RtDbConfigCache::getYxConfigCount() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    return yx_configs_.size();
+    return yxConfigs_.size();
 }
 
 size_t RtDbConfigCache::getYkConfigCount() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    return yk_configs_.size();
+    return ykConfigs_.size();
 }
 
 size_t RtDbConfigCache::getYtConfigCount() const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    return yt_configs_.size();
+    return ytConfigs_.size();
 }
 
 void RtDbConfigCache::clear() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    yc_configs_.clear();
-    yx_configs_.clear();
-    yk_configs_.clear();
-    yt_configs_.clear();
+    ycConfigs_.clear();
+    yxConfigs_.clear();
+    ykConfigs_.clear();
+    ytConfigs_.clear();
 }
 
 void RtDbConfigCache::clearYc() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    yc_configs_.clear();
+    ycConfigs_.clear();
 }
 
 void RtDbConfigCache::clearYx() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    yx_configs_.clear();
+    yxConfigs_.clear();
 }
 
 void RtDbConfigCache::clearYk() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    yk_configs_.clear();
+    ykConfigs_.clear();
 }
 
 void RtDbConfigCache::clearYt() {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    yt_configs_.clear();
+    ytConfigs_.clear();
 }
 
 bool RtDbConfigCache::hasYcConfig(const std::string& code) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    return yc_configs_.find(code) != yc_configs_.end();
+    return ycConfigs_.find(code) != ycConfigs_.end();
 }
 
 bool RtDbConfigCache::hasYxConfig(const std::string& code) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    return yx_configs_.find(code) != yx_configs_.end();
+    return yxConfigs_.find(code) != yxConfigs_.end();
 }
 
 bool RtDbConfigCache::hasYkConfig(const std::string& code) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    return yk_configs_.find(code) != yk_configs_.end();
+    return ykConfigs_.find(code) != ykConfigs_.end();
 }
 
 bool RtDbConfigCache::hasYtConfig(const std::string& code) const {
     std::shared_lock<std::shared_mutex> lock(mutex_);
-    return yt_configs_.find(code) != yt_configs_.end();
+    return ytConfigs_.find(code) != ytConfigs_.end();
 }
 
 void RtDbConfigCache::setUpdateCallback(UpdateCallback callback) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    update_callback_ = callback;
+    updateCallback_ = callback;
+}
+
+bool RtDbConfigCache::getPointConfig(const std::string& code, PointConfig& config) const {
+    std::shared_lock<std::shared_mutex> lock(mutex_);
+    {
+        auto it = ycConfigs_.find(code);
+        if (it != ycConfigs_.end()) {
+            config = toPointConfig(it->second);
+            return true;
+        }
+    }
+    {
+        auto it = yxConfigs_.find(code);
+        if (it != yxConfigs_.end()) {
+            config = toPointConfig(it->second);
+            return true;
+        }
+    }
+    {
+        auto it = ykConfigs_.find(code);
+        if (it != ykConfigs_.end()) {
+            config = toPointConfig(it->second);
+            return true;
+        }
+    }
+    {
+        auto it = ytConfigs_.find(code);
+        if (it != ytConfigs_.end()) {
+            config = toPointConfig(it->second);
+            return true;
+        }
+    }
+    return false;
+}
+
+bool RtDbConfigCache::setPointConfig(const PointConfig& config) {
+    std::unique_lock<std::shared_mutex> lock(mutex_);
+    switch (config.pointType_) {
+        case PointType::YC:
+            ycConfigs_[config.code_] = toYcConfig(config);
+            break;
+        case PointType::YX:
+            yxConfigs_[config.code_] = toYxConfig(config);
+            break;
+        case PointType::YK:
+            ykConfigs_[config.code_] = toYkConfig(config);
+            break;
+        case PointType::YT:
+            ytConfigs_[config.code_] = toYtConfig(config);
+            break;
+    }
+    return true;
+}
+
+bool RtDbConfigCache::deletePointConfig(const std::string& code) {
+    std::unique_lock<std::shared_mutex> lock(mutex_);
+    return ycConfigs_.erase(code) > 0 ||
+           yxConfigs_.erase(code) > 0 ||
+           ykConfigs_.erase(code) > 0 ||
+           ytConfigs_.erase(code) > 0;
+}
+
+std::vector<PointConfig> RtDbConfigCache::getAllPointConfigs() const {
+    std::shared_lock<std::shared_mutex> lock(mutex_);
+    std::vector<PointConfig> results;
+    results.reserve(ycConfigs_.size() + yxConfigs_.size() + ykConfigs_.size() + ytConfigs_.size());
+
+    for (const auto& [_, cfg] : ycConfigs_) {
+        results.push_back(toPointConfig(cfg));
+    }
+    for (const auto& [_, cfg] : yxConfigs_) {
+        results.push_back(toPointConfig(cfg));
+    }
+    for (const auto& [_, cfg] : ykConfigs_) {
+        results.push_back(toPointConfig(cfg));
+    }
+    for (const auto& [_, cfg] : ytConfigs_) {
+        results.push_back(toPointConfig(cfg));
+    }
+
+    return results;
+}
+
+RtDbConfigCache::YcConfig RtDbConfigCache::toYcConfig(const PointConfig& pc) const {
+    YcConfig cfg;
+    cfg.code = pc.code_;
+    cfg.name = pc.name_;
+    cfg.channelId = pc.channelId_;
+    cfg.mulCoe = pc.mulCoe_;
+    cfg.addCoe = pc.addCoe_;
+    cfg.maxLimit = pc.maxLimit_;
+    cfg.minLimit = pc.minLimit_;
+    cfg.unit = pc.unit_;
+    cfg.status = pc.status_;
+    return cfg;
+}
+
+RtDbConfigCache::YxConfig RtDbConfigCache::toYxConfig(const PointConfig& pc) const {
+    YxConfig cfg;
+    cfg.code = pc.code_;
+    cfg.name = pc.name_;
+    cfg.channelId = pc.channelId_;
+    cfg.bit = pc.bit_;
+    cfg.reverse = pc.reverse_;
+    cfg.status = pc.status_;
+    return cfg;
+}
+
+RtDbConfigCache::YkConfig RtDbConfigCache::toYkConfig(const PointConfig& pc) const {
+    YkConfig cfg;
+    cfg.code = pc.code_;
+    cfg.name = pc.name_;
+    cfg.channelId = pc.channelId_;
+    cfg.bit = pc.bit_;
+    cfg.commandType = pc.commandType_;
+    cfg.status = pc.status_;
+    return cfg;
+}
+
+RtDbConfigCache::YtConfig RtDbConfigCache::toYtConfig(const PointConfig& pc) const {
+    YtConfig cfg;
+    cfg.code = pc.code_;
+    cfg.name = pc.name_;
+    cfg.channelId = pc.channelId_;
+    cfg.mulCoe = pc.mulCoe_;
+    cfg.addCoe = pc.addCoe_;
+    cfg.maxLimit = pc.maxLimit_;
+    cfg.minLimit = pc.minLimit_;
+    cfg.unit = pc.unit_;
+    cfg.status = pc.status_;
+    return cfg;
+}
+
+PointConfig RtDbConfigCache::toPointConfig(const YcConfig& yc) const {
+    PointConfig pc;
+    pc.code_ = yc.code;
+    pc.name_ = yc.name;
+    pc.pointType_ = PointType::YC;
+    pc.channelId_ = yc.channelId;
+    pc.mulCoe_ = yc.mulCoe;
+    pc.addCoe_ = yc.addCoe;
+    pc.minLimit_ = yc.minLimit;
+    pc.maxLimit_ = yc.maxLimit;
+    pc.unit_ = yc.unit;
+    pc.status_ = yc.status;
+    return pc;
+}
+
+PointConfig RtDbConfigCache::toPointConfig(const YxConfig& yx) const {
+    PointConfig pc;
+    pc.code_ = yx.code;
+    pc.name_ = yx.name;
+    pc.pointType_ = PointType::YX;
+    pc.channelId_ = yx.channelId;
+    pc.bit_ = yx.bit;
+    pc.reverse_ = yx.reverse;
+    pc.status_ = yx.status;
+    return pc;
+}
+
+PointConfig RtDbConfigCache::toPointConfig(const YkConfig& yk) const {
+    PointConfig pc;
+    pc.code_ = yk.code;
+    pc.name_ = yk.name;
+    pc.pointType_ = PointType::YK;
+    pc.channelId_ = yk.channelId;
+    pc.bit_ = yk.bit;
+    pc.commandType_ = yk.commandType;
+    pc.status_ = yk.status;
+    return pc;
+}
+
+PointConfig RtDbConfigCache::toPointConfig(const YtConfig& yt) const {
+    PointConfig pc;
+    pc.code_ = yt.code;
+    pc.name_ = yt.name;
+    pc.pointType_ = PointType::YT;
+    pc.channelId_ = yt.channelId;
+    pc.mulCoe_ = yt.mulCoe;
+    pc.addCoe_ = yt.addCoe;
+    pc.minLimit_ = yt.minLimit;
+    pc.maxLimit_ = yt.maxLimit;
+    pc.unit_ = yt.unit;
+    pc.status_ = yt.status;
+    return pc;
 }
 
 void RtDbPointManager::setConfigCache(std::shared_ptr<RtDbConfigCache> cache) {
-    config_cache_ = cache;
+    configCache_ = cache;
 }
 
-bool RtDbPointManager::getYCFullPoint(const std::string& code, 
-                                      const YcPoint& data, 
-                                      YCFullPoint& full_point) const {
-    if (!config_cache_) {
+bool RtDbPointManager::getYcFullPoint(const std::string& code,
+                                      const YcPoint& data,
+                                      YcFullPoint& fullPoint) const {
+    if (!configCache_) {
         return false;
     }
-    
-    if (config_cache_->getYcConfig(code, full_point.config)) {
-        full_point.data = data;
+
+    if (configCache_->getYcConfig(code, fullPoint.config)) {
+        fullPoint.data = data;
         return true;
     }
     return false;
 }
 
-bool RtDbPointManager::getYXFullPoint(const std::string& code, 
-                                      const YxPoint& data, 
-                                      YXFullPoint& full_point) const {
-    if (!config_cache_) {
+bool RtDbPointManager::getYxFullPoint(const std::string& code,
+                                      const YxPoint& data,
+                                      YxFullPoint& fullPoint) const {
+    if (!configCache_) {
         return false;
     }
-    
-    if (config_cache_->getYxConfig(code, full_point.config)) {
-        full_point.data = data;
+
+    if (configCache_->getYxConfig(code, fullPoint.config)) {
+        fullPoint.data = data;
         return true;
     }
     return false;
 }
 
-bool RtDbPointManager::getYKFullPoint(const std::string& code, 
-                                      const YkPoint& data, 
-                                      YKFullPoint& full_point) const {
-    if (!config_cache_) {
+bool RtDbPointManager::getYkFullPoint(const std::string& code,
+                                      const YkPoint& data,
+                                      YkFullPoint& fullPoint) const {
+    if (!configCache_) {
         return false;
     }
-    
-    if (config_cache_->getYkConfig(code, full_point.config)) {
-        full_point.data = data;
+
+    if (configCache_->getYkConfig(code, fullPoint.config)) {
+        fullPoint.data = data;
         return true;
     }
     return false;
 }
 
-bool RtDbPointManager::getYTFullPoint(const std::string& code, 
-                                      const YtPoint& data, 
-                                      YTFullPoint& full_point) const {
-    if (!config_cache_) {
+bool RtDbPointManager::getYtFullPoint(const std::string& code,
+                                      const YtPoint& data,
+                                      YtFullPoint& fullPoint) const {
+    if (!configCache_) {
         return false;
     }
-    
-    if (config_cache_->getYtConfig(code, full_point.config)) {
-        full_point.data = data;
+
+    if (configCache_->getYtConfig(code, fullPoint.config)) {
+        fullPoint.data = data;
         return true;
     }
     return false;
 }
 
-std::vector<RtDbPointManager::YCFullPoint> 
-RtDbPointManager::getYCFullPoints(const std::vector<YcPoint>& data_points) {
-    std::vector<YCFullPoint> result;
-    
-    if (!config_cache_) {
+std::vector<RtDbPointManager::YcFullPoint>
+RtDbPointManager::getYcFullPoints(const std::vector<YcPoint>& dataPoints) {
+    std::vector<YcFullPoint> result;
+
+    if (!configCache_) {
         return result;
     }
-    
-    auto codes = config_cache_->getYcConfigCodes();
-    std::unordered_map<std::string, YcPoint> data_map;
-    for (const auto& dp : data_points) {
-        data_map[codes.empty() ? "" : ""] = dp;
-    }
-    
-    for (const auto& code : codes) {
-        auto data_it = data_map.find(code);
-        if (data_it != data_map.end()) {
-            YCFullPoint full_point;
-            if (config_cache_->getYcConfig(code, full_point.config)) {
-                full_point.data = data_it->second;
-                result.push_back(full_point);
-            }
+
+    for (const auto& data : dataPoints) {
+        YcFullPoint fullPoint;
+        if (configCache_->getYcConfig(data.code_, fullPoint.config)) {
+            fullPoint.data = data;
+            result.push_back(fullPoint);
         }
     }
-    
+
     return result;
 }
 
-std::vector<RtDbPointManager::YXFullPoint> 
-RtDbPointManager::getYXFullPoints(const std::vector<YxPoint>& data_points) {
-    std::vector<YXFullPoint> result;
-    
-    if (!config_cache_) {
+std::vector<RtDbPointManager::YxFullPoint>
+RtDbPointManager::getYxFullPoints(const std::vector<YxPoint>& dataPoints) {
+    std::vector<YxFullPoint> result;
+
+    if (!configCache_) {
         return result;
     }
-    
-    auto codes = config_cache_->getYxConfigCodes();
-    
-    for (const auto& code : codes) {
-        YXFullPoint full_point;
-        if (config_cache_->getYxConfig(code, full_point.config)) {
-            result.push_back(full_point);
+
+    for (const auto& data : dataPoints) {
+        YxFullPoint fullPoint;
+        if (configCache_->getYxConfig(data.code_, fullPoint.config)) {
+            fullPoint.data = data;
+            result.push_back(fullPoint);
         }
     }
-    
+
     return result;
 }
 
-std::vector<RtDbPointManager::YKFullPoint> 
-RtDbPointManager::getYKFullPoints(const std::vector<YkPoint>& data_points) {
-    std::vector<YKFullPoint> result;
-    
-    if (!config_cache_) {
+std::vector<RtDbPointManager::YkFullPoint>
+RtDbPointManager::getYkFullPoints(const std::vector<YkPoint>& dataPoints) {
+    std::vector<YkFullPoint> result;
+
+    if (!configCache_) {
         return result;
     }
-    
-    auto codes = config_cache_->getYkConfigCodes();
-    
-    for (const auto& code : codes) {
-        YKFullPoint full_point;
-        if (config_cache_->getYkConfig(code, full_point.config)) {
-            result.push_back(full_point);
+
+    for (const auto& data : dataPoints) {
+        YkFullPoint fullPoint;
+        if (configCache_->getYkConfig(data.code_, fullPoint.config)) {
+            fullPoint.data = data;
+            result.push_back(fullPoint);
         }
     }
-    
+
     return result;
 }
 
-std::vector<RtDbPointManager::YTFullPoint> 
-RtDbPointManager::getYTFullPoints(const std::vector<YtPoint>& data_points) {
-    std::vector<YTFullPoint> result;
-    
-    if (!config_cache_) {
+std::vector<RtDbPointManager::YtFullPoint>
+RtDbPointManager::getYtFullPoints(const std::vector<YtPoint>& dataPoints) {
+    std::vector<YtFullPoint> result;
+
+    if (!configCache_) {
         return result;
     }
-    
-    auto codes = config_cache_->getYtConfigCodes();
-    
-    for (const auto& code : codes) {
-        YTFullPoint full_point;
-        if (config_cache_->getYtConfig(code, full_point.config)) {
-            result.push_back(full_point);
+
+    for (const auto& data : dataPoints) {
+        YtFullPoint fullPoint;
+        if (configCache_->getYtConfig(data.code_, fullPoint.config)) {
+            fullPoint.data = data;
+            result.push_back(fullPoint);
         }
     }
-    
+
     return result;
 }
 
-double RtDbPointManager::transformYCValue(double raw_value, 
+double RtDbPointManager::transformYcValue(double rawValue,
                                          const RtDbConfigCache::YcConfig& config) const {
-    return raw_value * config.mul_coe + config.add_coe;
+    return rawValue * config.mulCoe + config.addCoe;
 }
 
-double RtDbPointManager::transformYTValue(double raw_value, 
+double RtDbPointManager::transformYtValue(double rawValue,
                                          const RtDbConfigCache::YtConfig& config) const {
-    return raw_value * config.mul_coe + config.add_coe;
+    return rawValue * config.mulCoe + config.addCoe;
 }
 
-bool RtDbPointManager::validateYCValue(double value, 
+bool RtDbPointManager::validateYcValue(double value,
                                        const RtDbConfigCache::YcConfig& config) const {
-    return value >= config.min_limit && value <= config.max_limit;
+    return value >= config.minLimit && value <= config.maxLimit;
 }
 
-bool RtDbPointManager::validateYTValue(double value, 
+bool RtDbPointManager::validateYtValue(double value,
                                        const RtDbConfigCache::YtConfig& config) const {
-    return value >= config.min_limit && value <= config.max_limit;
+    return value >= config.minLimit && value <= config.maxLimit;
 }
 
 }
