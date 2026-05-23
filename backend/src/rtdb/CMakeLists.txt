@@ -10,6 +10,8 @@ add_library(rtdb STATIC ${RTDB_SOURCES})
 
 target_include_directories(rtdb PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/inc
+    ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )
 
 find_package(PkgConfig REQUIRED)
@@ -17,6 +19,7 @@ pkg_check_modules(HIREDIS REQUIRED hiredis)
 
 target_include_directories(rtdb PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/inc
     ${HIREDIS_INCLUDE_DIRS}
 )
 
@@ -24,6 +27,7 @@ target_link_libraries(rtdb PUBLIC
     ${HIREDIS_LIBRARIES}
     redis++
     pthread
+    ems_models
 )
 
 set_target_properties(rtdb PROPERTIES

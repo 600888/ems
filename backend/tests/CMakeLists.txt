@@ -11,14 +11,7 @@ set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -DNDEBUG")
 
 include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../inc)
 include_directories(${CMAKE_CURRENT_SOURCE_DIR})
-
-add_executable(test_models test_models.cpp)
-
-target_link_libraries(test_models PRIVATE nlohmann_json::nlohmann_json)
-
-target_compile_definitions(test_models PRIVATE
-    EMS_VERSION=\"${PROJECT_VERSION}\"
-)
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/../3rd/libmodbuspp/3rdparty/json/single_include)
 
 enable_testing()
 

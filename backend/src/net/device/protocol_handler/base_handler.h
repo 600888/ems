@@ -22,6 +22,23 @@ namespace device {
 
 using ValueType = std::variant<int, int64_t, double, bool, std::string>;
 
+/**
+ * @brief 规约处理器可见的测点数据
+ *
+ * 去模板化后，规约处理器统一通过此结构体访问测点的协议相关字段。
+ * 不同数据源（RTDB / 测试）的测点只需构造或填充此结构体即可接入。
+ */
+struct ProtocolPoint {
+    int         rtu_addr      = 1;            // 从站地址 / 设备地址
+    int         address       = 0;            // 寄存器地址 / 信息体地址
+    int         func_code     = 3;            // 功能码
+    std::string decode        = "0x41";       // 解析码
+    int         bit           = -1;           // 位号 (-1 表示整寄存器)
+    int         register_cnt  = 1;            // 占用的寄存器数量
+
+    virtual ~ProtocolPoint() = default;
+};
+
 struct CapturedMessage {
     std::string direction;
     std::vector<uint8_t> data;
@@ -48,7 +65,6 @@ public:
     virtual AvgTimeStats getAvgTime() const = 0;
 };
 
-template<typename PointT>
 class ProtocolHandler {
 public:
     virtual ~ProtocolHandler() = default;
@@ -68,23 +84,23 @@ public:
     virtual std::future<bool> start() = 0;
     virtual std::future<bool> stop() = 0;
     
-    virtual ValueType readValue(const std::shared_ptr<PointT>& point) = 0;
+    virtual ValueType readValue(const std::shared_ptr<ProtocolPoint>& point) = 0;
     
-    std::future<ValueType> readValueAsync(const std::shared_ptr<PointT>& point) {
+    std::future<ValueType> readValueAsync(const std::shared_ptr<ProtocolPoint>& point) {
         return std::async(std::launch::async, [this, point]() {
             return readValue(point);
         });
     }
     
-    virtual bool writeValue(const std::shared_ptr<PointT>& point, const ValueType& value) = 0;
+    virtual bool writeValue(const std::shared_ptr<ProtocolPoint>& point, const ValueType& value) = 0;
     
-    std::future<bool> writeValueAsync(const std::shared_ptr<PointT>& point, const ValueType& value) {
+    std::future<bool> writeValueAsync(const std::shared_ptr<ProtocolPoint>& point, const ValueType& value) {
         return std::async(std::launch::async, [this, point, value]() {
             return writeValue(point, value);
         });
     }
     
-    virtual void addPoints(const std::vector<std::shared_ptr<PointT>>& points) = 0;
+    virtual void addPoints(const std::vector<std::shared_ptr<ProtocolPoint>>& points) = 0;
     
     void setConfig(const std::string& key, const ValueType& value) { config_[key] = value; }
     std::optional<ValueType> getConfig(const std::string& key) const;
@@ -101,8 +117,7 @@ protected:
     std::atomic<bool> running_{false};
 };
 
-template<typename PointT>
-class ServerHandler : public ProtocolHandler<PointT> {
+class ServerHandler : public ProtocolHandler {
 public:
     virtual ~ServerHandler() = default;
     
@@ -112,14 +127,13 @@ public:
     virtual std::future<bool> start() = 0;
     virtual std::future<bool> stop() = 0;
     
-    virtual ValueType readValue(const std::shared_ptr<PointT>& point) = 0;
-    virtual bool writeValue(const std::shared_ptr<PointT>& point, const ValueType& value) = 0;
-    virtual void addPoints(const std::vector<std::shared_ptr<PointT>>& points) = 0;
+    virtual ValueType readValue(const std::shared_ptr<ProtocolPoint>& point) = 0;
+    virtual bool writeValue(const std::shared_ptr<ProtocolPoint>& point, const ValueType& value) = 0;
+    virtual void addPoints(const std::vector<std::shared_ptr<ProtocolPoint>>& points) = 0;
     virtual void initialize(const std::unordered_map<std::string, ValueType>& config) = 0;
 };
 
-template<typename PointT>
-class ClientHandler : public ProtocolHandler<PointT> {
+class ClientHandler : public ProtocolHandler {
 public:
     virtual ~ClientHandler() = default;
     
@@ -129,74 +143,14 @@ public:
     virtual std::future<bool> start() = 0;
     virtual std::future<bool> stop() = 0;
     
-    virtual ValueType readValue(const std::shared_ptr<PointT>& point) = 0;
-    virtual bool writeValue(const std::shared_ptr<PointT>& point, const ValueType& value) = 0;
-    virtual void addPoints(const std::vector<std::shared_ptr<PointT>>& points) = 0;
+    virtual ValueType readValue(const std::shared_ptr<ProtocolPoint>& point) = 0;
+    virtual bool writeValue(const std::shared_ptr<ProtocolPoint>& point, const ValueType& value) = 0;
+    virtual void addPoints(const std::vector<std::shared_ptr<ProtocolPoint>>& points) = 0;
     virtual void initialize(const std::unordered_map<std::string, ValueType>& config) = 0;
 };
 
-template<typename PointT>
-void ProtocolHandler<PointT>::addTxMessage(const std::vector<uint8_t>& data, const std::string& description) {
-    if (messageCapture_) {
-        messageCapture_->addTx(data, description);
-    }
-}
-
-template<typename PointT>
-void ProtocolHandler<PointT>::addRxMessage(const std::vector<uint8_t>& data, const std::string& description) {
-    if (messageCapture_) {
-        messageCapture_->addRx(data, description);
-    }
-}
-
-template<typename PointT>
-void ProtocolHandler<PointT>::addTx(const std::vector<uint8_t>& data, const std::string& description) {
-    if (messageCapture_) {
-        messageCapture_->addTx(data, description);
-    }
-}
-
-template<typename PointT>
-void ProtocolHandler<PointT>::addRx(const std::vector<uint8_t>& data, const std::string& description) {
-    if (messageCapture_) {
-        messageCapture_->addRx(data, description);
-    }
-}
-
-template<typename PointT>
-std::optional<ValueType> ProtocolHandler<PointT>::getConfig(const std::string& key) const {
-    auto it = config_.find(key);
-    if (it != config_.end()) {
-        return it->second;
-    }
-    return std::nullopt;
-}
-
-template<typename PointT>
-std::vector<CapturedMessage> ProtocolHandler<PointT>::getCapturedMessages(int limit) const {
-    if (messageCapture_) {
-        return messageCapture_->getMessages(limit);
-    }
-    return {};
-}
-
-template<typename PointT>
-void ProtocolHandler<PointT>::clearCapturedMessages() {
-    if (messageCapture_) {
-        messageCapture_->clear();
-    }
-}
-
-template<typename PointT>
-AvgTimeStats ProtocolHandler<PointT>::getAvgTime() const {
-    if (messageCapture_) {
-        return messageCapture_->getAvgTime();
-    }
-    return {};
-}
-
-}
-}
-}
+} // namespace device
+} // namespace net
+} // namespace ems
 
 #endif // EMS_NET_DEVICE_PROTOCOL_HANDLER_BASE_H

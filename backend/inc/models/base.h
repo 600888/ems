@@ -124,14 +124,24 @@ enum class ConnectionType : int {
 };
 
 enum class DeviceType : int {
-    RTU = 0,
-    Protection = 1,
-    Meter = 2,
-    IED = 3,
-    PLC = 4,
-    Virtual = 5,
-    Gateway = 6,
-    Other = 99
+    // 通用设备类型
+    RTU         = 0,
+    Protection  = 1,
+    Meter       = 2,
+    IED         = 3,
+    PLC         = 4,
+    Virtual     = 5,
+    Gateway     = 6,
+    // 储能/能源专用设备类型
+    UNKNOWN         = 10,
+    INVERTER        = 11,
+    BATTERY         = 12,
+    BMS             = 13,
+    TRANSFORMER     = 14,
+    HVAC            = 15,
+    FIRE_CONTROL    = 16,
+    ENV_MONITOR     = 17,
+    Other   = 99
 };
 
 enum class PointType : int {
@@ -145,6 +155,43 @@ enum class YKCommandType : int {
     Pulse = 0,
     Latch = 1,
     Step = 2
+};
+
+/**
+ * @brief 解码方式枚举
+ */
+enum class DecodeCode : int {
+    UINT16 = 0,
+    INT16  = 1,
+    UINT32 = 2,
+    INT32  = 3,
+    FLOAT  = 4,
+    DOUBLE = 5,
+    UINT8  = 6,
+    INT8   = 7,
+    BOOL   = 8,
+    BIT    = 9
+};
+
+/**
+ * @brief 测点品质枚举
+ */
+enum class PointQuality : int {
+    Good     = 0,
+    Invalid  = 1,
+    Reserved = 2,
+    Error    = 3
+};
+
+/**
+ * @brief 遥控执行状态枚举
+ */
+enum class YKStatus : int {
+    Idle      = 0,
+    Pending   = 1,
+    Executing = 2,
+    Success   = 3,
+    Failed    = 4
 };
 
 class BasePoint : public BaseModelWithId {

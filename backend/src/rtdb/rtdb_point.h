@@ -1,210 +1,54 @@
 #ifndef EMS_RTDB_POINT_H
 #define EMS_RTDB_POINT_H
 
+/**
+ * @file rtdb_point.h
+ * @brief 运行时测点类型 - 引用共享模型定义 (point_runtime.hpp)
+ *
+ * 运行时测点数据结构已统一迁移至 inc/models/point_runtime.hpp。
+ * 本文件仅作为兼容层，将共享模型类型引入 ems::rtdb 命名空间，
+ * 同时保留 PointConfig 配置转换结构体。
+ */
+
+#include "models/point_runtime.hpp"
+
 #include <string>
-#include <vector>
 #include <cstdint>
-#include <memory>
-#include <map>
 
 namespace ems {
 namespace rtdb {
 
-enum class DecodeCode {
-    UINT16,
-    INT16,
-    UINT32,
-    INT32,
-    FLOAT,
-    DOUBLE,
-    UINT8,
-    INT8,
-    BOOL,
-    BIT
-};
+// ============================================================
+// 运行时测点类型别名（引用共享模型）
+// ============================================================
 
-enum class PointType {
-    YC,
-    YX,
-    YK,
-    YT
-};
+using BasePoint     = model::IRuntimePoint;
+using YcPoint       = model::YcPoint;
+using YxPoint       = model::YxPoint;
+using YkPoint       = model::YkPoint;
+using YtPoint       = model::YtPoint;
 
-enum class PointQuality {
-    Good = 0,
-    Invalid = 1,
-    Reserved = 2,
-    Error = 3
-};
+// 枚举类型别名（保持 rtdb 层兼容）
+using DecodeCode    = model::DecodeCode;
+using PointType     = model::PointType;
+using PointQuality  = model::PointQuality;
+using YKStatus      = model::YKStatus;
+using YKCommandType = model::YKCommandType;
 
-enum class YKStatus {
-    Idle = 0,
-    Pending = 1,
-    Executing = 2,
-    Success = 3,
-    Failed = 4
-};
+// ============================================================
+// 配置转换结构体（本层专用）
+// ============================================================
 
-class BasePoint {
-public:
-    virtual ~BasePoint() = default;
-
-    virtual std::string code() const = 0;
-    virtual std::string name() const = 0;
-    virtual PointType type() const = 0;
-    virtual uint64_t timestamp() const = 0;
-    virtual PointQuality quality() const = 0;
-
-    virtual void update(const BasePoint& other) = 0;
-    virtual std::string toJson() const = 0;
-    virtual void fromJson(const std::string& json) = 0;
-};
-
-struct YcPoint : public BasePoint {
-    std::string code_;
-    std::string name_;
-    DecodeCode decodeCode_{DecodeCode::UINT16};
-    double value_{0.0};
-    double rawValue_{0.0};
-    double mulCoe_{1.0};
-    double addCoe_{0.0};
-    double minLimit_{-9999999.0};
-    double maxLimit_{9999999.0};
-    std::string unit_;
-    uint64_t timestamp_{0};
-    PointQuality quality_{PointQuality::Good};
-    int status_{0};
-
-    std::string code() const override { return code_; }
-    std::string name() const override { return name_; }
-    PointType type() const override { return PointType::YC; }
-    uint64_t timestamp() const override { return timestamp_; }
-    PointQuality quality() const override { return quality_; }
-
-    double transformedValue() const {
-        return rawValue_ * mulCoe_ + addCoe_;
-    }
-
-    void update(const BasePoint& other) override {
-        if (other.type() == PointType::YC) {
-            const auto& yc = static_cast<const YcPoint&>(other);
-            value_ = yc.value_;
-            rawValue_ = yc.rawValue_;
-            timestamp_ = yc.timestamp_;
-            quality_ = yc.quality_;
-            status_ = yc.status_;
-        }
-    }
-
-    std::string toJson() const override;
-    void fromJson(const std::string& json) override;
-};
-
-struct YxPoint : public BasePoint {
-    std::string code_;
-    std::string name_;
-    DecodeCode decodeCode_{DecodeCode::BOOL};
-    int value_{0};
-    int bit_{0};
-    bool reverse_{false};
-    uint64_t timestamp_{0};
-    PointQuality quality_{PointQuality::Good};
-    int status_{0};
-
-    std::string code() const override { return code_; }
-    std::string name() const override { return name_; }
-    PointType type() const override { return PointType::YX; }
-    uint64_t timestamp() const override { return timestamp_; }
-    PointQuality quality() const override { return quality_; }
-
-    void update(const BasePoint& other) override {
-        if (other.type() == PointType::YX) {
-            const auto& yx = static_cast<const YxPoint&>(other);
-            value_ = yx.value_;
-            timestamp_ = yx.timestamp_;
-            quality_ = yx.quality_;
-            status_ = yx.status_;
-        }
-    }
-
-    std::string toJson() const override;
-    void fromJson(const std::string& json) override;
-};
-
-struct YkPoint : public BasePoint {
-    std::string code_;
-    std::string name_;
-    DecodeCode decodeCode_{DecodeCode::BOOL};
-    int value_{0};
-    int commandType_{0};
-    YKStatus status_{YKStatus::Idle};
-    uint64_t timestamp_{0};
-    uint64_t executeTime_{0};
-    std::string result_;
-
-    std::string code() const override { return code_; }
-    std::string name() const override { return name_; }
-    PointType type() const override { return PointType::YK; }
-    uint64_t timestamp() const override { return timestamp_; }
-    PointQuality quality() const override { return status_ == YKStatus::Success ? PointQuality::Good : PointQuality::Invalid; }
-
-    void update(const BasePoint& other) override {
-        if (other.type() == PointType::YK) {
-            const auto& yk = static_cast<const YkPoint&>(other);
-            value_ = yk.value_;
-            commandType_ = yk.commandType_;
-            status_ = yk.status_;
-            timestamp_ = yk.timestamp_;
-            executeTime_ = yk.executeTime_;
-            result_ = yk.result_;
-        }
-    }
-
-    std::string toJson() const override;
-    void fromJson(const std::string& json) override;
-};
-
-struct YtPoint : public BasePoint {
-    std::string code_;
-    std::string name_;
-    DecodeCode decodeCode_{DecodeCode::UINT16};
-    double value_{0.0};
-    double mulCoe_{1.0};
-    double addCoe_{0.0};
-    double minLimit_{-9999999.0};
-    double maxLimit_{9999999.0};
-    std::string unit_;
-    uint64_t timestamp_{0};
-    PointQuality quality_{PointQuality::Good};
-    int status_{0};
-
-    std::string code() const override { return code_; }
-    std::string name() const override { return name_; }
-    PointType type() const override { return PointType::YT; }
-    uint64_t timestamp() const override { return timestamp_; }
-    PointQuality quality() const override { return quality_; }
-
-    void update(const BasePoint& other) override {
-        if (other.type() == PointType::YT) {
-            const auto& yt = static_cast<const YtPoint&>(other);
-            value_ = yt.value_;
-            timestamp_ = yt.timestamp_;
-            quality_ = yt.quality_;
-            status_ = yt.status_;
-        }
-    }
-
-    std::string toJson() const override;
-    void fromJson(const std::string& json) override;
-};
-
+/**
+ * @brief 测点配置（用于 DB <-> 运行时配置 转换）
+ */
 struct PointConfig {
     std::string code_;
     std::string name_;
-    PointType pointType_{PointType::YC};
+    model::PointType pointType_{model::PointType::YC};
     int64_t channelId_{0};
     int64_t deviceId_{0};
-    DecodeCode decodeCode_{DecodeCode::UINT16};
+    model::DecodeCode decodeCode_{model::DecodeCode::UINT16};
 
     double mulCoe_{1.0};
     double addCoe_{0.0};
@@ -222,6 +66,9 @@ struct PointConfig {
     std::string updatedAt_;
 };
 
+/**
+ * @brief 通道配置（运行时用，简化版）
+ */
 struct ChannelConfig {
     int64_t id_{0};
     std::string name_;
@@ -235,7 +82,7 @@ struct ChannelConfig {
     int status_{1};
 };
 
-}
-}
+} // namespace rtdb
+} // namespace ems
 
-#endif
+#endif // EMS_RTDB_POINT_H

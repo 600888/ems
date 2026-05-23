@@ -1,0 +1,410 @@
+[
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/tests/net/device/protocol_handler",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/tests/../inc -I/home/cdy/project/ems/backend/tests -I/home/cdy/project/ems/backend/tests/../3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/lib/include -I/home/cdy/project/ems/backend/src/net/protocol/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googlemock/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest -isystem /home/cdy/project/ems/backend/3rd/googletest/googlemock  -Wall -Wextra -pedantic -Werror=return-type -Wall -Wextra -pedantic -O3 -DNDEBUG -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -DGTEST_HAS_PTHREAD=1 -o CMakeFiles/test_modbus_handler.dir/modbus_handler_test.cpp.o -c /home/cdy/project/ems/backend/tests/net/device/protocol_handler/modbus_handler_test.cpp",
+  "file": "/home/cdy/project/ems/backend/tests/net/device/protocol_handler/modbus_handler_test.cpp",
+  "output": "tests/net/device/protocol_handler/CMakeFiles/test_modbus_handler.dir/modbus_handler_test.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/tests/net/device/protocol_handler",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/tests/../inc -I/home/cdy/project/ems/backend/tests -I/home/cdy/project/ems/backend/tests/../3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/lib/include -I/home/cdy/project/ems/backend/src/net/protocol/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googlemock/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest -isystem /home/cdy/project/ems/backend/3rd/googletest/googlemock  -Wall -Wextra -pedantic -Werror=return-type -Wall -Wextra -pedantic -O3 -DNDEBUG -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -DGTEST_HAS_PTHREAD=1 -o CMakeFiles/test_modbus_handler.dir/__/__/__/__/src/net/device/protocol_handler/base_handler.cpp.o -c /home/cdy/project/ems/backend/src/net/device/protocol_handler/base_handler.cpp",
+  "file": "/home/cdy/project/ems/backend/src/net/device/protocol_handler/base_handler.cpp",
+  "output": "tests/net/device/protocol_handler/CMakeFiles/test_modbus_handler.dir/__/__/__/__/src/net/device/protocol_handler/base_handler.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/tests/net/device/protocol_handler",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/tests/../inc -I/home/cdy/project/ems/backend/tests -I/home/cdy/project/ems/backend/tests/../3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/lib/include -I/home/cdy/project/ems/backend/src/net/protocol/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googlemock/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest -isystem /home/cdy/project/ems/backend/3rd/googletest/googlemock  -Wall -Wextra -pedantic -Werror=return-type -Wall -Wextra -pedantic -O3 -DNDEBUG -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -DGTEST_HAS_PTHREAD=1 -o CMakeFiles/test_modbus_handler.dir/__/__/__/__/src/net/device/protocol_handler/modbus_handler.cpp.o -c /home/cdy/project/ems/backend/src/net/device/protocol_handler/modbus_handler.cpp",
+  "file": "/home/cdy/project/ems/backend/src/net/device/protocol_handler/modbus_handler.cpp",
+  "output": "tests/net/device/protocol_handler/CMakeFiles/test_modbus_handler.dir/__/__/__/__/src/net/device/protocol_handler/modbus_handler.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/bufferedslave.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/bufferedslave.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/bufferedslave.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/bufferedslave.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/device.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/device.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/device.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/device.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/master.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/master.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/master.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/master.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/message.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/message.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/message.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/message.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/netlayer.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/netlayer.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/netlayer.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/netlayer.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/request.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/request.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/request.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/request.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/response.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/response.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/response.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/response.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/router.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/router.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/router.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/router.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/rtulayer.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/rtulayer.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/rtulayer.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/rtulayer.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/server.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/server.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/server.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/server.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/slave.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/slave.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/slave.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/slave.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/tcplayer.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/tcplayer.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/tcplayer.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/tcplayer.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/3rd/libmodbuspp/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp/lib -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/build/linux-native/3rd/libmodbuspp  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++11 -fPIC -Wno-psabi -Wno-switch -Wno-sign-compare -Wno-unused-variable -Wno-unused-parameter -Wno-parentheses -o CMakeFiles/objlib.dir/__/src/timeout.cpp.o -c /home/cdy/project/ems/backend/3rd/libmodbuspp/src/timeout.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/libmodbuspp/src/timeout.cpp",
+  "output": "3rd/libmodbuspp/lib/CMakeFiles/objlib.dir/__/src/timeout.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/googletest/googlemock",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/googletest/googlemock/include -I/home/cdy/project/ems/backend/3rd/googletest/googlemock -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -Wall -Wshadow -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -DGTEST_HAS_PTHREAD=1 -o CMakeFiles/gmock.dir/src/gmock-all.cc.o -c /home/cdy/project/ems/backend/3rd/googletest/googlemock/src/gmock-all.cc",
+  "file": "/home/cdy/project/ems/backend/3rd/googletest/googlemock/src/gmock-all.cc",
+  "output": "3rd/googletest/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/googletest/googlemock",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -isystem /home/cdy/project/ems/backend/3rd/googletest/googlemock/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googlemock -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -Wall -Wshadow -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -DGTEST_HAS_PTHREAD=1 -o CMakeFiles/gmock_main.dir/src/gmock_main.cc.o -c /home/cdy/project/ems/backend/3rd/googletest/googlemock/src/gmock_main.cc",
+  "file": "/home/cdy/project/ems/backend/3rd/googletest/googlemock/src/gmock_main.cc",
+  "output": "3rd/googletest/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/googletest/googletest",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/googletest/googletest/include -I/home/cdy/project/ems/backend/3rd/googletest/googletest  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -Wall -Wshadow -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -o CMakeFiles/gtest.dir/src/gtest-all.cc.o -c /home/cdy/project/ems/backend/3rd/googletest/googletest/src/gtest-all.cc",
+  "file": "/home/cdy/project/ems/backend/3rd/googletest/googletest/src/gtest-all.cc",
+  "output": "3rd/googletest/googletest/CMakeFiles/gtest.dir/src/gtest-all.cc.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/googletest/googletest",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest/include -isystem /home/cdy/project/ems/backend/3rd/googletest/googletest  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -Wall -Wshadow -Wno-error=dangling-else -DGTEST_HAS_PTHREAD=1 -fexceptions -Wextra -Wno-unused-parameter -Wno-missing-field-initializers -DGTEST_HAS_PTHREAD=1 -o CMakeFiles/gtest_main.dir/src/gtest_main.cc.o -c /home/cdy/project/ems/backend/3rd/googletest/googletest/src/gtest_main.cc",
+  "file": "/home/cdy/project/ems/backend/3rd/googletest/googletest/src/gtest_main.cc",
+  "output": "3rd/googletest/googletest/CMakeFiles/gtest_main.dir/src/gtest_main.cc.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/command.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/command.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/command.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/command.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/command_options.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/command_options.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/command_options.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/command_options.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/connection.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/connection.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/connection.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/connection.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/connection_pool.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/connection_pool.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/connection_pool.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/connection_pool.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/crc16.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/crc16.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/crc16.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/crc16.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/errors.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/errors.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/errors.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/errors.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/pipeline.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/pipeline.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/pipeline.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/pipeline.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/redis.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/redis.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/redis_cluster.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis_cluster.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis_cluster.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/redis_cluster.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/redis_uri.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis_uri.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis_uri.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/redis_uri.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/reply.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/reply.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/reply.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/reply.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/sentinel.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/sentinel.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/sentinel.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/sentinel.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/shards.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/shards.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/shards.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/shards.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/shards_pool.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/shards_pool.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/shards_pool.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/shards_pool.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/subscriber.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/subscriber.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/subscriber.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/subscriber.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/transaction.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/transaction.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/transaction.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/transaction.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++_static.dir/src/sw/redis++/patterns/redlock.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/patterns/redlock.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/patterns/redlock.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++_static.dir/src/sw/redis++/patterns/redlock.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/command.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/command.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/command.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/command.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/command_options.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/command_options.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/command_options.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/command_options.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/connection.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/connection.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/connection.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/connection.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/connection_pool.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/connection_pool.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/connection_pool.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/connection_pool.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/crc16.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/crc16.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/crc16.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/crc16.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/errors.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/errors.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/errors.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/errors.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/pipeline.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/pipeline.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/pipeline.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/pipeline.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/redis.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/redis.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/redis_cluster.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis_cluster.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis_cluster.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/redis_cluster.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/redis_uri.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis_uri.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/redis_uri.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/redis_uri.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/reply.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/reply.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/reply.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/reply.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/sentinel.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/sentinel.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/sentinel.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/sentinel.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/shards.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/shards.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/shards.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/shards.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/shards_pool.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/shards_pool.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/shards_pool.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/shards_pool.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/subscriber.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/subscriber.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/subscriber.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/subscriber.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/transaction.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/transaction.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/transaction.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/transaction.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus",
+  "command": "/usr/bin/c++ -Dredis___EXPORTS -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -Wall -Wextra -Werror -o CMakeFiles/redis++.dir/src/sw/redis++/patterns/redlock.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/patterns/redlock.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/patterns/redlock.cpp",
+  "output": "3rd/redis-plus-plus/CMakeFiles/redis++.dir/src/sw/redis++/patterns/redlock.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/test",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/test/../src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/test/../src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/test/../src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17  -Wall -Wextra -pedantic -Werror=return-type -std=c++17 -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -o CMakeFiles/test_redis++.dir/src/sw/redis++/test_main.cpp.o -c /home/cdy/project/ems/backend/3rd/redis-plus-plus/test/src/sw/redis++/test_main.cpp",
+  "file": "/home/cdy/project/ems/backend/3rd/redis-plus-plus/test/src/sw/redis++/test_main.cpp",
+  "output": "3rd/redis-plus-plus/test/CMakeFiles/test_redis++.dir/src/sw/redis++/test_main.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/src/rtdb",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/rtdb -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/usr/include/hiredis -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -o CMakeFiles/rtdb.dir/rtdb.cpp.o -c /home/cdy/project/ems/backend/src/rtdb/rtdb.cpp",
+  "file": "/home/cdy/project/ems/backend/src/rtdb/rtdb.cpp",
+  "output": "src/rtdb/CMakeFiles/rtdb.dir/rtdb.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/src/rtdb",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/rtdb -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/usr/include/hiredis -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -o CMakeFiles/rtdb.dir/rtdb_cache.cpp.o -c /home/cdy/project/ems/backend/src/rtdb/rtdb_cache.cpp",
+  "file": "/home/cdy/project/ems/backend/src/rtdb/rtdb_cache.cpp",
+  "output": "src/rtdb/CMakeFiles/rtdb.dir/rtdb_cache.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/src/rtdb",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/rtdb -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/usr/include/hiredis -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -o CMakeFiles/rtdb.dir/rtdb_ems.cpp.o -c /home/cdy/project/ems/backend/src/rtdb/rtdb_ems.cpp",
+  "file": "/home/cdy/project/ems/backend/src/rtdb/rtdb_ems.cpp",
+  "output": "src/rtdb/CMakeFiles/rtdb.dir/rtdb_ems.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/src/rtdb",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/rtdb -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/usr/include/hiredis -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -o CMakeFiles/rtdb.dir/rtdb_manager.cpp.o -c /home/cdy/project/ems/backend/src/rtdb/rtdb_manager.cpp",
+  "file": "/home/cdy/project/ems/backend/src/rtdb/rtdb_manager.cpp",
+  "output": "src/rtdb/CMakeFiles/rtdb.dir/rtdb_manager.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/src/rtdb",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/rtdb -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include -I/usr/include/hiredis -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/no_tls -I/home/cdy/project/ems/backend/3rd/redis-plus-plus/src/sw/redis++/cxx17 -I/home/cdy/project/ems/backend/build/linux-native/3rd/redis-plus-plus/src  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -o CMakeFiles/rtdb.dir/rtdb_point.cpp.o -c /home/cdy/project/ems/backend/src/rtdb/rtdb_point.cpp",
+  "file": "/home/cdy/project/ems/backend/src/rtdb/rtdb_point.cpp",
+  "output": "src/rtdb/CMakeFiles/rtdb.dir/rtdb_point.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/src/net/protocol/modbus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/net/protocol/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/inc  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -o CMakeFiles/modbus_protocol.dir/modbus_client.cpp.o -c /home/cdy/project/ems/backend/src/net/protocol/modbus/modbus_client.cpp",
+  "file": "/home/cdy/project/ems/backend/src/net/protocol/modbus/modbus_client.cpp",
+  "output": "src/net/protocol/modbus/CMakeFiles/modbus_protocol.dir/modbus_client.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/src/net/protocol/modbus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/net/protocol/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/inc  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -o CMakeFiles/modbus_protocol.dir/modbus_server.cpp.o -c /home/cdy/project/ems/backend/src/net/protocol/modbus/modbus_server.cpp",
+  "file": "/home/cdy/project/ems/backend/src/net/protocol/modbus/modbus_server.cpp",
+  "output": "src/net/protocol/modbus/CMakeFiles/modbus_protocol.dir/modbus_server.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/src/net/para_loader",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/net/para_loader -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -o CMakeFiles/net_para_loader.dir/para_loader.cpp.o -c /home/cdy/project/ems/backend/src/net/para_loader/para_loader.cpp",
+  "file": "/home/cdy/project/ems/backend/src/net/para_loader/para_loader.cpp",
+  "output": "src/net/para_loader/CMakeFiles/net_para_loader.dir/para_loader.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/src/net/para_loader",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/net/para_loader -I/home/cdy/project/ems/backend/inc -I/home/cdy/project/ems/backend/3rd/libmodbuspp/3rdparty/json/single_include  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -fPIC -o CMakeFiles/net_para_loader.dir/point_import_caller.cpp.o -c /home/cdy/project/ems/backend/src/net/para_loader/point_import_caller.cpp",
+  "file": "/home/cdy/project/ems/backend/src/net/para_loader/point_import_caller.cpp",
+  "output": "src/net/para_loader/CMakeFiles/net_para_loader.dir/point_import_caller.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/examples/protocol/modbus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/net/protocol/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/inc  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -o CMakeFiles/tcp_client.dir/tcp_client.cpp.o -c /home/cdy/project/ems/backend/examples/protocol/modbus/tcp_client.cpp",
+  "file": "/home/cdy/project/ems/backend/examples/protocol/modbus/tcp_client.cpp",
+  "output": "examples/protocol/modbus/CMakeFiles/tcp_client.dir/tcp_client.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/examples/protocol/modbus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/net/protocol/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/inc  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -o CMakeFiles/rtu_client.dir/rtu_client.cpp.o -c /home/cdy/project/ems/backend/examples/protocol/modbus/rtu_client.cpp",
+  "file": "/home/cdy/project/ems/backend/examples/protocol/modbus/rtu_client.cpp",
+  "output": "examples/protocol/modbus/CMakeFiles/rtu_client.dir/rtu_client.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/examples/protocol/modbus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/net/protocol/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/inc  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -o CMakeFiles/tcp_server.dir/tcp_server.cpp.o -c /home/cdy/project/ems/backend/examples/protocol/modbus/tcp_server.cpp",
+  "file": "/home/cdy/project/ems/backend/examples/protocol/modbus/tcp_server.cpp",
+  "output": "examples/protocol/modbus/CMakeFiles/tcp_server.dir/tcp_server.cpp.o"
+},
+{
+  "directory": "/home/cdy/project/ems/backend/build/linux-native/examples/protocol/modbus",
+  "command": "/usr/bin/c++  -I/usr/include/modbus -I/home/cdy/project/ems/backend/src -I/home/cdy/project/ems/backend/src/net/protocol/modbus -I/home/cdy/project/ems/backend/3rd/libmodbuspp/include -I/home/cdy/project/ems/backend/inc  -Wall -Wextra -pedantic -Werror=return-type -O3 -DNDEBUG -O3 -DNDEBUG -std=c++20 -o CMakeFiles/rtu_server.dir/rtu_server.cpp.o -c /home/cdy/project/ems/backend/examples/protocol/modbus/rtu_server.cpp",
+  "file": "/home/cdy/project/ems/backend/examples/protocol/modbus/rtu_server.cpp",
+  "output": "examples/protocol/modbus/CMakeFiles/rtu_server.dir/rtu_server.cpp.o"
+}
+]

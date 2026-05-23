@@ -12,7 +12,7 @@ namespace device {
 namespace test {
 
 TEST(ModbusServerHandler, Constructor) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     EXPECT_NE(handler.server(), nullptr);
 }
 
@@ -23,12 +23,12 @@ TEST(ModbusServerHandler, ConstructorWithLogger) {
         EXPECT_TRUE(msg.find("Modbus") != std::string::npos);
     };
     
-    ModbusServerHandler<TestPoint> handler(logger);
+    ModbusServerHandler handler(logger);
     EXPECT_NE(handler.server(), nullptr);
 }
 
 TEST(ModbusServerHandler, InitializeWithTCPConfig) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5020;
     config["protocol_type"] = 1;
@@ -38,7 +38,7 @@ TEST(ModbusServerHandler, InitializeWithTCPConfig) {
 }
 
 TEST(ModbusServerHandler, InitializeWithRTUConfig) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["protocol_type"] = 0;
     config["serial_port"] = std::string("/dev/ttyUSB0");
@@ -51,7 +51,7 @@ TEST(ModbusServerHandler, InitializeWithRTUConfig) {
 }
 
 TEST(ModbusServerHandler, StartAndStop) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5021;
     handler.initialize(config);
@@ -68,7 +68,7 @@ TEST(ModbusServerHandler, StartAndStop) {
 }
 
 TEST(ModbusServerHandler, GetSetValueByAddressHoldingRegister) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5022;
     handler.initialize(config);
@@ -87,7 +87,7 @@ TEST(ModbusServerHandler, GetSetValueByAddressHoldingRegister) {
 }
 
 TEST(ModbusServerHandler, GetSetValueByAddressInputRegister) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5023;
     handler.initialize(config);
@@ -109,7 +109,7 @@ TEST(ModbusServerHandler, GetSetValueByAddressInputRegister) {
 }
 
 TEST(ModbusServerHandler, GetSetValueByAddressCoil) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5024;
     handler.initialize(config);
@@ -128,7 +128,7 @@ TEST(ModbusServerHandler, GetSetValueByAddressCoil) {
 }
 
 TEST(ModbusServerHandler, GetSetValueWithDecodeInt16) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5025;
     handler.initialize(config);
@@ -147,7 +147,7 @@ TEST(ModbusServerHandler, GetSetValueWithDecodeInt16) {
 }
 
 TEST(ModbusServerHandler, GetSetValueWithDecodeUInt32) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5026;
     handler.initialize(config);
@@ -167,22 +167,22 @@ TEST(ModbusServerHandler, GetSetValueWithDecodeUInt32) {
 }
 
 TEST(ModbusServerHandler, AddPoints) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5027;
     handler.initialize(config);
     
-    auto point1 = std::make_shared<TestPoint>();
+    auto point1 = std::make_shared<ProtocolPoint>();
     point1->rtu_addr = 1;
     point1->address = 0;
     point1->func_code = 3;
     
-    auto point2 = std::make_shared<TestPoint>();
+    auto point2 = std::make_shared<ProtocolPoint>();
     point2->rtu_addr = 1;
     point2->address = 1;
     point2->func_code = 3;
     
-    std::vector<std::shared_ptr<TestPoint>> points = {point1, point2};
+    std::vector<std::shared_ptr<ProtocolPoint>> points = {point1, point2};
     handler.addPoints(points);
     
     auto start_future = handler.start();
@@ -202,12 +202,12 @@ TEST(ModbusServerHandler, AddPoints) {
 }
 
 TEST(ModbusServerHandler, WriteValueToPoint) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5028;
     handler.initialize(config);
     
-    auto point = std::make_shared<TestPoint>();
+    auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 3;
@@ -228,7 +228,7 @@ TEST(ModbusServerHandler, WriteValueToPoint) {
 }
 
 TEST(ModbusServerHandler, CapturedMessages) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5029;
     handler.initialize(config);
@@ -251,7 +251,7 @@ TEST(ModbusServerHandler, CapturedMessages) {
 }
 
 TEST(ModbusServerHandler, AvgTimeStats) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5030;
     handler.initialize(config);
@@ -268,7 +268,7 @@ TEST(ModbusServerHandler, AvgTimeStats) {
 }
 
 TEST(ModbusServerHandler, WriteCallback) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5031;
     handler.initialize(config);
@@ -313,12 +313,12 @@ TEST(ModbusClientHandler, ConstructorWithLogger) {
         logger_called = true;
     };
     
-    ModbusClientHandler<TestPoint> handler(logger);
+    ModbusClientHandler handler(logger);
     EXPECT_NE(handler.client(), nullptr);
 }
 
 TEST(ModbusClientHandler, InitializeWithTCPConfig) {
-    ModbusClientHandler<TestPoint> handler;
+    ModbusClientHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["ip"] = std::string("127.0.0.1");
     config["port"] = 5020;
@@ -330,7 +330,7 @@ TEST(ModbusClientHandler, InitializeWithTCPConfig) {
 }
 
 TEST(ModbusClientHandler, InitializeWithRTUConfig) {
-    ModbusClientHandler<TestPoint> handler;
+    ModbusClientHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["protocol_type"] = 0;
     config["serial_port"] = std::string("/dev/ttyUSB0");
@@ -343,8 +343,8 @@ TEST(ModbusClientHandler, InitializeWithRTUConfig) {
 }
 
 TEST(ModbusClientHandler, ConnectAndDisconnect) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5032;
@@ -374,8 +374,8 @@ TEST(ModbusClientHandler, ConnectAndDisconnect) {
 }
 
 TEST(ModbusClientHandler, ReadHoldingRegisters) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5033;
@@ -405,8 +405,8 @@ TEST(ModbusClientHandler, ReadHoldingRegisters) {
 }
 
 TEST(ModbusClientHandler, ReadInputRegisters) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5034;
@@ -437,8 +437,8 @@ TEST(ModbusClientHandler, ReadInputRegisters) {
 }
 
 TEST(ModbusClientHandler, ReadCoils) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5035;
@@ -470,8 +470,8 @@ TEST(ModbusClientHandler, ReadCoils) {
 }
 
 TEST(ModbusClientHandler, WriteSingleRegister) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5036;
@@ -501,8 +501,8 @@ TEST(ModbusClientHandler, WriteSingleRegister) {
 }
 
 TEST(ModbusClientHandler, WriteMultipleRegisters) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5037;
@@ -535,8 +535,8 @@ TEST(ModbusClientHandler, WriteMultipleRegisters) {
 }
 
 TEST(ModbusClientHandler, WriteSingleCoil) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5038;
@@ -566,8 +566,8 @@ TEST(ModbusClientHandler, WriteSingleCoil) {
 }
 
 TEST(ModbusClientHandler, WriteMultipleCoils) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5039;
@@ -604,8 +604,8 @@ TEST(ModbusClientHandler, WriteMultipleCoils) {
 }
 
 TEST(ModbusClientHandler, ReadValueFromPoint) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5040;
@@ -626,7 +626,7 @@ TEST(ModbusClientHandler, ReadValueFromPoint) {
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
     
-    auto point = std::make_shared<TestPoint>();
+    auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 3;
@@ -640,8 +640,8 @@ TEST(ModbusClientHandler, ReadValueFromPoint) {
 }
 
 TEST(ModbusClientHandler, WriteValueToPoint) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5041;
@@ -660,7 +660,7 @@ TEST(ModbusClientHandler, WriteValueToPoint) {
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
     
-    auto point = std::make_shared<TestPoint>();
+    auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 6;
@@ -676,8 +676,8 @@ TEST(ModbusClientHandler, WriteValueToPoint) {
 }
 
 TEST(ModbusClientHandler, ReadValueAsync) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5042;
@@ -698,7 +698,7 @@ TEST(ModbusClientHandler, ReadValueAsync) {
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
     
-    auto point = std::make_shared<TestPoint>();
+    auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 3;
@@ -713,8 +713,8 @@ TEST(ModbusClientHandler, ReadValueAsync) {
 }
 
 TEST(ModbusClientHandler, WriteValueAsync) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5043;
@@ -733,7 +733,7 @@ TEST(ModbusClientHandler, WriteValueAsync) {
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
     
-    auto point = std::make_shared<TestPoint>();
+    auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 6;
@@ -750,8 +750,8 @@ TEST(ModbusClientHandler, WriteValueAsync) {
 }
 
 TEST(ModbusClientHandler, ReadRegistersBatch) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
     
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5044;
@@ -800,7 +800,7 @@ TEST(ValueTypeConversion, IntConversion) {
 }
 
 TEST(ProtocolHandler, MessageCapture) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5045;
     handler.initialize(config);
@@ -823,7 +823,7 @@ TEST(ProtocolHandler, MessageCapture) {
 }
 
 TEST(ProtocolHandler, RunningState) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5046;
     handler.initialize(config);
@@ -843,7 +843,7 @@ TEST(ProtocolHandler, RunningState) {
 }
 
 TEST(ModbusServerHandler, MultipleSlaves) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5047;
     handler.initialize(config);
@@ -864,7 +864,7 @@ TEST(ModbusServerHandler, MultipleSlaves) {
 }
 
 TEST(ModbusServerHandler, ReadWriteMultipleAddresses) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5048;
     handler.initialize(config);
@@ -889,7 +889,7 @@ TEST(ModbusServerHandler, ReadWriteMultipleAddresses) {
 }
 
 TEST(ModbusServerHandler, DifferentFunctionCodes) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5049;
     handler.initialize(config);
@@ -914,8 +914,8 @@ TEST(ModbusServerHandler, DifferentFunctionCodes) {
 }
 
 TEST(ModbusClientHandler, DifferentSlaves) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
 
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5050;
@@ -950,7 +950,7 @@ TEST(ModbusClientHandler, DifferentSlaves) {
 }
 
 TEST(ModbusServerHandler, EdgeCaseZeroValue) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5052;
     handler.initialize(config);
@@ -967,7 +967,7 @@ TEST(ModbusServerHandler, EdgeCaseZeroValue) {
 }
 
 TEST(ModbusServerHandler, EdgeCaseMaxValue) {
-    ModbusServerHandler<TestPoint> handler;
+    ModbusServerHandler handler;
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5053;
     handler.initialize(config);
@@ -985,8 +985,8 @@ TEST(ModbusServerHandler, EdgeCaseMaxValue) {
 }
 
 TEST(ModbusClientHandler, ReadMultipleRegisters) {
-    ModbusClientHandler<TestPoint> client_handler;
-    ModbusServerHandler<TestPoint> server_handler;
+    ModbusClientHandler client_handler;
+    ModbusServerHandler server_handler;
 
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5054;

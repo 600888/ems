@@ -9,12 +9,9 @@
 #include "device_group.h"
 #include "device.h"
 #include "channel.h"
-#include "point_yc.h"
-#include "point_yx.h"
-#include "point_yk.h"
-#include "point_yt.h"
 #include "slave.h"
 #include "point_mapping.h"
+#include "point_runtime.hpp"
 
 namespace ems {
 namespace model {
