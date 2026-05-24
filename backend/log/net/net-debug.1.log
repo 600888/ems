@@ -1,0 +1,38 @@
+[2026-05-24 22:26:19.975][160268:160268][info][para_loader.cpp:31]<initialize> - 初始化参数加载器: host=127.0.0.1, port=3306, db=ems, user=cdy
+[2026-05-24 22:26:19.991][160268:160268][info][para_loader.cpp:36]<initialize> - 数据库连接成功
+[2026-05-24 22:26:19.991][160268:160268][debug][para_loader.cpp:62]<load_devices> - 加载设备: 共1个启用设备
+[2026-05-24 22:26:19.991][160268:160268][debug][para_loader.cpp:103]<load_channels> - 加载通道: device_id=0, 共1个启用通道
+[2026-05-24 22:26:19.991][160268:160268][info][collect_engine.cpp:39]<initialize> - 初始化采集引擎: 插件目录=/home/cdy/ems/backend/build/linux-native/lib, Redis=127.0.0.1:6379, 默认周期=1000ms
+[2026-05-24 22:26:19.991][160268:160268][info][data_dispatcher.cpp:46]<initialize> - 初始化数据分发器: Redis=127.0.0.1:6379, db=0, 前缀=ems:
+[2026-05-24 22:26:19.992][160268:160268][info][data_dispatcher.cpp:68]<initialize> - 数据分发器初始化成功
+[2026-05-24 22:26:19.992][160268:160268][info][plugin_manager.cpp:88]<load> - 加载插件[ModbusTCP] 动态库=/home/cdy/ems/backend/build/linux-native/lib/libproto_modbus.so
+[2026-05-24 22:26:19.992][160268:160268][info][collect_engine.cpp:64]<initialize> - 采集引擎初始化成功
+[2026-05-24 22:26:19.994][160268:160268][info][plugin_manager.cpp:121]<load> - 插件[ModbusTCP] 加载成功, 版本=1.0.0, 描述=Modbus TCP/RTU protocol plugin for EMS data acquisition
+[2026-05-24 22:26:19.994][160268:160268][info][channel_thread.cpp:71]<start> - 通道[1] 启动, 名称=Modbus-TCP-1, 状态=0
+[2026-05-24 22:26:19.994][160268:160295][info][channel_thread.cpp:153]<run> - 通道[1] 开始运行, 名称=Modbus-TCP-1, 协议=ModbusTCP, 连接=127.0.0.1:10502, 周期=1000ms
+[2026-05-24 22:26:19.994][160268:160295][info][channel_thread.cpp:185]<run> - 通道[1] 插件初始化成功
+[2026-05-24 22:26:19.994][160268:160295][info][channel_thread.cpp:272]<reconnect> - 通道[1] 开始重连, 最大重试次数=5
+[2026-05-24 22:26:19.994][160268:160295][debug][channel_thread.cpp:277]<reconnect> - 通道[1] 重连第1次, 等待1000ms...
+[2026-05-24 22:26:20.995][160268:160295][error][channel_thread.cpp:290]<reconnect> - 通道[1] 重连失败: Reconnect attempt 1 failed: 
+[2026-05-24 22:26:20.995][160268:160295][debug][channel_thread.cpp:277]<reconnect> - 通道[1] 重连第2次, 等待1000ms...
+[2026-05-24 22:26:21.997][160268:160295][error][channel_thread.cpp:290]<reconnect> - 通道[1] 重连失败: Reconnect attempt 2 failed: 
+[2026-05-24 22:26:21.997][160268:160295][debug][channel_thread.cpp:277]<reconnect> - 通道[1] 重连第3次, 等待1000ms...
+[2026-05-24 22:26:22.998][160268:160295][error][channel_thread.cpp:290]<reconnect> - 通道[1] 重连失败: Reconnect attempt 3 failed: 
+[2026-05-24 22:26:22.998][160268:160295][debug][channel_thread.cpp:277]<reconnect> - 通道[1] 重连第4次, 等待1000ms...
+[2026-05-24 22:26:23.999][160268:160295][error][channel_thread.cpp:290]<reconnect> - 通道[1] 重连失败: Reconnect attempt 4 failed: 
+[2026-05-24 22:26:23.999][160268:160295][debug][channel_thread.cpp:277]<reconnect> - 通道[1] 重连第5次, 等待1000ms...
+[2026-05-24 22:26:25.000][160268:160295][error][channel_thread.cpp:290]<reconnect> - 通道[1] 重连失败: Reconnect attempt 5 failed: 
+[2026-05-24 22:26:25.000][160268:160295][error][channel_thread.cpp:295]<reconnect> - 通道[1] 重连达到最大次数(5), 放弃重连
+[2026-05-24 22:26:25.000][160268:160295][error][channel_thread.cpp:193]<run> - 通道[1] 连接最终失败: Failed to connect channel 1
+[2026-05-24 22:26:25.000][160268:160295][debug][plugin_manager.cpp:133]<unload> - 插件[Modbus-TCP-1] 未加载, 无需卸载
+[2026-05-24 22:26:30.524][160268:160268][info][collect_engine.cpp:246]<stop_all> - 停止所有通道, 当前通道数=0
+[2026-05-24 22:26:30.524][160268:160268][debug][plugin_manager.cpp:138]<unload> - 插件[ModbusTCP] 引用计数--, count=0
+[2026-05-24 22:26:30.524][160268:160268][debug][collect_engine.cpp:268]<stop_all> - 卸载插件: ModbusTCP
+[2026-05-24 22:26:30.524][160268:160268][info][plugin_manager.cpp:141]<unload> - 卸载插件[ModbusTCP]
+[2026-05-24 22:26:30.524][160268:160268][info][collect_engine.cpp:282]<shutdown> - 关闭采集引擎
+[2026-05-24 22:26:30.524][160268:160268][info][collect_engine.cpp:246]<stop_all> - 停止所有通道, 当前通道数=0
+[2026-05-24 22:26:30.524][160268:160268][info][collect_engine.cpp:278]<stop_all> - 所有通道已停止
+[2026-05-24 22:26:30.524][160268:160268][info][collect_engine.cpp:278]<stop_all> - 所有通道已停止
+[2026-05-24 22:26:30.524][160268:160268][info][data_dispatcher.cpp:73]<shutdown> - 关闭数据分发器
+[2026-05-24 22:26:30.524][160268:160268][info][collect_engine.cpp:289]<shutdown> - 采集引擎已关闭
+[2026-05-24 22:26:30.524][160268:160268][info][data_dispatcher.cpp:73]<shutdown> - 关闭数据分发器

@@ -3,12 +3,13 @@
 #include <iostream>
 #include <string>
 #include <unordered_map>
+#include <filesystem>
 #include "spdlog/async.h"
 #include "spdlog/spdlog.h"
 // #include "spdlog/sinks/basic_file_sink.h"
 #include "spdlog/sinks/rotating_file_sink.h"
 #include "spdlog/sinks/stdout_color_sinks.h"
-#include "util/json_opt.hpp"
+#include <nlohmann/json.hpp>
 
 #include "util/conf.hpp"
 
@@ -66,41 +67,38 @@ private:
         try {
             std::ifstream in(logConfPath(), std::ios::in);
             if (!in.is_open()) {
-                throw std::runtime_error("无法打开设备配置文件!");
+                std::cerr << "无法打开日志配置文件: " << logConfPath() << std::endl;
+                return logConfMap;
             }
             std::string jsonContent((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
             in.close();
 
-            JsonDoc jsonDoc;
-            if (jsonDoc.Parse(jsonContent.c_str()).HasParseError()) {
-                throw std::runtime_error("读取json错误!");
-            }
+            nlohmann::json jsonDoc = nlohmann::json::parse(jsonContent);
 
             // 遍历所有模块并打印其级别和文件大小
-            if (jsonDoc.HasMember("modules") && jsonDoc["modules"].IsObject()) {
+            if (jsonDoc.contains("modules") && jsonDoc["modules"].is_object()) {
                 LogInfo logInfo;
-                for (auto it = jsonDoc["modules"].MemberBegin(); it != jsonDoc["modules"].MemberEnd(); ++it) {
-                    std::string modulesStr = std::string(it->name.GetString());
-                    if (it->value.HasMember("level") && it->value["level"].IsString()) {
-                        auto level = it->value["level"].GetString();
-                        std::string levelStr = std::string(level);
+                for (auto it = jsonDoc["modules"].begin(); it != jsonDoc["modules"].end(); ++it) {
+                    std::string modulesStr = it.key();
+                    auto& mod = it.value();
+                    if (mod.contains("level") && mod["level"].is_string()) {
+                        std::string levelStr = mod["level"].get<std::string>();
                         if (auto isFind = logLevelMap.find(levelStr) != logLevelMap.end()) {
                             logInfo.level = logLevelMap[levelStr];
                         }
                     }
-                    if (it->value.HasMember("file_size") && it->value["file_size"].IsInt()) {
-                        auto fileSize = it->value["file_size"].GetInt();
+                    if (mod.contains("file_size") && mod["file_size"].is_number_integer()) {
+                        auto fileSize = mod["file_size"].get<int>();
                         logInfo.fileSize = fileSize;
                     }
-                    if (it->value.HasMember("count") && it->value["count"].IsInt()) {
-                        auto count = it->value["count"].GetInt();
+                    if (mod.contains("count") && mod["count"].is_number_integer()) {
+                        auto count = mod["count"].get<int>();
                         logInfo.count = count;
                     }
                     logConfMap[modulesStr] = logInfo;
                 }
             }
-        } catch (const std::exception& e) {
-            throw std::runtime_error("导入配置文件失败!");
+        } catch (...) {
         }
         return logConfMap;
     }
@@ -134,7 +132,10 @@ private:
             }
 
             // 日志路径
-            std::string logFilePath = logPath() + defaultLoggerName + "/" + defaultLoggerName;
+            std::string logDir = logPath() + defaultLoggerName;
+            std::filesystem::create_directories(logDir);
+
+            std::string logFilePath = logDir + "/" + defaultLoggerName;
             if (logLevel == LV::debug) {
                 logFilePath += "-debug.log";
             } else {

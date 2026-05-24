@@ -1,0 +1,17 @@
+[2026-05-24 22:26:19.994][160268:160295][debug][modbus_plugin.cpp:66]<ems_plugin_init> - Modbus插件初始化: config={"baud_rate":0,"channel_id":1,"connection":"127.0.0.1:10502","data_bits":0,"name":"Modbus-TCP-1","parity":"none","protocol":"ModbusTCP","settings":"{\"rtu_addr\":\"1\",\"timeout\":5}","stop_bits":0}
+[2026-05-24 22:26:19.994][160268:160295][info][modbus_plugin.cpp:68]<ems_plugin_init> - Modbus插件初始化成功
+[2026-05-24 22:26:20.995][160268:160295][info][modbus_client.cpp:31]<connect> - Modbus客户端连接: type=1, connection=127.0.0.1, settings=10502
+[2026-05-24 22:26:20.995][160268:160295][error][modbus_client.cpp:36]<connect> - Modbus客户端打开连接失败: Failed to open Modbus connection
+[2026-05-24 22:26:20.995][160268:160295][info][modbus_plugin.cpp:82]<ems_plugin_connect> - Modbus插件连接: 失败
+[2026-05-24 22:26:21.996][160268:160295][info][modbus_client.cpp:31]<connect> - Modbus客户端连接: type=1, connection=127.0.0.1, settings=10502
+[2026-05-24 22:26:21.996][160268:160295][error][modbus_client.cpp:36]<connect> - Modbus客户端打开连接失败: Failed to open Modbus connection
+[2026-05-24 22:26:21.997][160268:160295][info][modbus_plugin.cpp:82]<ems_plugin_connect> - Modbus插件连接: 失败
+[2026-05-24 22:26:22.997][160268:160295][info][modbus_client.cpp:31]<connect> - Modbus客户端连接: type=1, connection=127.0.0.1, settings=10502
+[2026-05-24 22:26:22.998][160268:160295][error][modbus_client.cpp:36]<connect> - Modbus客户端打开连接失败: Failed to open Modbus connection
+[2026-05-24 22:26:22.998][160268:160295][info][modbus_plugin.cpp:82]<ems_plugin_connect> - Modbus插件连接: 失败
+[2026-05-24 22:26:23.998][160268:160295][info][modbus_client.cpp:31]<connect> - Modbus客户端连接: type=1, connection=127.0.0.1, settings=10502
+[2026-05-24 22:26:23.999][160268:160295][error][modbus_client.cpp:36]<connect> - Modbus客户端打开连接失败: Failed to open Modbus connection
+[2026-05-24 22:26:23.999][160268:160295][info][modbus_plugin.cpp:82]<ems_plugin_connect> - Modbus插件连接: 失败
+[2026-05-24 22:26:24.999][160268:160295][info][modbus_client.cpp:31]<connect> - Modbus客户端连接: type=1, connection=127.0.0.1, settings=10502
+[2026-05-24 22:26:25.000][160268:160295][error][modbus_client.cpp:36]<connect> - Modbus客户端打开连接失败: Failed to open Modbus connection
+[2026-05-24 22:26:25.000][160268:160295][info][modbus_plugin.cpp:82]<ems_plugin_connect> - Modbus插件连接: 失败

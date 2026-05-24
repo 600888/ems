@@ -26,6 +26,7 @@
 #include <cstdint>
 
 #include "net/protocol/common/protocol_plugin_api.h"
+#include "net/log.h"
 #include "rtdb/rtdb_channel.h"
 #include "data_dispatcher.h"
 #include "plugin_manager.h"
@@ -175,6 +176,11 @@ public:
      * @brief 获取通道配置
      */
     const ChannelConfig& channel_config() const { return channel_config_; }
+
+    /**
+     * @brief 获取通道编码（用于日志标识）
+     */
+    const std::string& chanCode() const { return channel_config_.name_; }
 
     /**
      * @brief 获取通道 ID

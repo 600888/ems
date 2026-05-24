@@ -9,7 +9,7 @@
 #endif
 
 #ifndef DEFAULT_ROOT_DIR
-#define DEFAULT_ROOT_DIR "/usr/ems"
+#define DEFAULT_ROOT_DIR "/home/cdy/ems/backend/build"
 #endif
 
 inline std::string rootPath()

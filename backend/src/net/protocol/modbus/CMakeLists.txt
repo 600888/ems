@@ -11,6 +11,7 @@ add_library(modbus_protocol STATIC
 
 target_include_directories(modbus_protocol PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/3rd
     ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/include
     ${CMAKE_SOURCE_DIR}/inc
 )
@@ -40,6 +41,7 @@ target_include_directories(proto_modbus PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/inc
+    ${CMAKE_SOURCE_DIR}/3rd
     ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/include
     ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )

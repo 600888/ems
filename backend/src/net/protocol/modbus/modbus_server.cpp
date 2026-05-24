@@ -3,8 +3,10 @@
  * @brief Modbus 服务端实现
  */
 #include "modbus_server.h"
+#include "net/log.h"
 #include <algorithm>
 #include <iostream>
+#include <spdlog/fmt/bundled/format.h>
 
 namespace ems {
 namespace net {
@@ -27,17 +29,18 @@ bool ModbusServer::start() {
 
     try {
         if (!server_.open()) {
-            std::cerr << "ModbusServer: failed to open\n";
+            LOG_ERROR(fmt::format("ModbusServer[{}:{}]: failed to open", connection_, settings_).c_str());
             return false;
         }
 
         running_ = true;
         serverThread_ = std::make_unique<std::thread>(&ModbusServer::runLoop, this);
 
+        LOG_INFO(fmt::format("ModbusServer[{}:{}] 启动成功", connection_, settings_).c_str());
         return true;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer: exception: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer[{}:{}] 启动异常: {}", connection_, settings_, e.what()).c_str());
         return false;
     }
 }
@@ -79,7 +82,7 @@ int ModbusServer::addSlave(int slaveId) {
         return 0;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::addSlave: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::addSlave[{}] 异常: {}", slaveId, e.what()).c_str());
         return -1;
     }
 }
@@ -114,7 +117,7 @@ bool ModbusServer::setHoldingRegisterBlock(int slaveId, int startAddr, int count
         return true;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::setHoldingRegisterBlock: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::setHoldingRegisterBlock[slave={}]: {}", slaveId, e.what()).c_str());
         return false;
     }
 }
@@ -132,7 +135,7 @@ bool ModbusServer::setInputRegisterBlock(int slaveId, int startAddr, int count) 
         return true;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::setInputRegisterBlock: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::setInputRegisterBlock[slave={}]: {}", slaveId, e.what()).c_str());
         return false;
     }
 }
@@ -150,7 +153,7 @@ bool ModbusServer::setCoilBlock(int slaveId, int startAddr, int count) {
         return true;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::setCoilBlock: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::setCoilBlock[slave={}]: {}", slaveId, e.what()).c_str());
         return false;
     }
 }
@@ -168,7 +171,7 @@ bool ModbusServer::setDiscreteInputBlock(int slaveId, int startAddr, int count) 
         return true;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::setDiscreteInputBlock: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::setDiscreteInputBlock[slave={}]: {}", slaveId, e.what()).c_str());
         return false;
     }
 }
@@ -189,7 +192,7 @@ ModbusServer::ErrorCode ModbusServer::writeHoldingRegister(int slaveId, int addr
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::writeHoldingRegister: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::writeHoldingRegister[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -210,7 +213,7 @@ ModbusServer::ErrorCode ModbusServer::writeHoldingRegisters(int slaveId, int add
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::writeHoldingRegisters: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::writeHoldingRegisters[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -231,7 +234,7 @@ ModbusServer::ErrorCode ModbusServer::writeInputRegister(int slaveId, int addr, 
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::writeInputRegister: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::writeInputRegister[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -252,7 +255,7 @@ ModbusServer::ErrorCode ModbusServer::writeInputRegisters(int slaveId, int addr,
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::writeInputRegisters: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::writeInputRegisters[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -273,7 +276,7 @@ ModbusServer::ErrorCode ModbusServer::writeCoil(int slaveId, int addr, bool valu
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::writeCoil: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::writeCoil[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -294,7 +297,7 @@ ModbusServer::ErrorCode ModbusServer::writeCoils(int slaveId, int addr, const bo
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::writeCoils: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::writeCoils[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -312,7 +315,7 @@ ModbusServer::ErrorCode ModbusServer::readHoldingRegister(int slaveId, int addr,
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::readHoldingRegister: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::readHoldingRegister[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -330,7 +333,7 @@ ModbusServer::ErrorCode ModbusServer::readHoldingRegisters(int slaveId, int addr
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::readHoldingRegisters: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::readHoldingRegisters[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -348,7 +351,7 @@ ModbusServer::ErrorCode ModbusServer::readInputRegister(int slaveId, int addr, u
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::readInputRegister: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::readInputRegister[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -366,7 +369,7 @@ ModbusServer::ErrorCode ModbusServer::readInputRegisters(int slaveId, int addr, 
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::readInputRegisters: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::readInputRegisters[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -384,7 +387,7 @@ ModbusServer::ErrorCode ModbusServer::readCoil(int slaveId, int addr, bool& valu
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::readCoil: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::readCoil[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -402,7 +405,7 @@ ModbusServer::ErrorCode ModbusServer::readCoils(int slaveId, int addr, bool* des
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::readCoils: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::readCoils[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -420,7 +423,7 @@ ModbusServer::ErrorCode ModbusServer::readDiscreteInput(int slaveId, int addr, b
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::readDiscreteInput: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::readDiscreteInput[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }
@@ -438,7 +441,7 @@ ModbusServer::ErrorCode ModbusServer::readDiscreteInputs(int slaveId, int addr, 
         return ErrorCode::Success;
     }
     catch (const std::exception& e) {
-        std::cerr << "ModbusServer::readDiscreteInputs: " << e.what() << "\n";
+        LOG_ERROR(fmt::format("ModbusServer::readDiscreteInputs[slave={},addr={}]: {}", slaveId, addr, e.what()).c_str());
         return ErrorCode::Unknown;
     }
 }

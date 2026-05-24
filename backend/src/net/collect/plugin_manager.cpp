@@ -3,11 +3,13 @@
  * @brief 协议插件管理器实现
  */
 #include "plugin_manager.h"
+#include "net/log.h"
 #include <dlfcn.h>
 #include <cstring>
 #include <algorithm>
 #include <type_traits>
 #include <filesystem>
+#include <spdlog/fmt/bundled/format.h>
 
 namespace fs = std::filesystem;
 
@@ -71,6 +73,7 @@ void* PluginManager::load(const std::string& protocol_name) {
     auto it = loaded_plugins_.find(protocol_name);
     if (it != loaded_plugins_.end()) {
         it->second.ref_count++;
+        LOG_DEBUG(fmt::format("插件[{}] 引用计数++, count={}", protocol_name, it->second.ref_count).c_str());
         return it->second.fns.create_fn();
     }
 
@@ -78,13 +81,17 @@ void* PluginManager::load(const std::string& protocol_name) {
     auto lib_path = resolve_lib_path(protocol_name);
     if (lib_path.empty()) {
         last_err_ = "Unknown protocol: " + protocol_name;
+        LOG_ERROR(fmt::format("插件[{}] 未知协议: {}", protocol_name, last_err_).c_str());
         return nullptr;
     }
+
+    LOG_INFO(fmt::format("加载插件[{}] 动态库={}", protocol_name, lib_path).c_str());
 
     // 3. dlopen 加载
     auto* handle = dlopen(lib_path.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (!handle) {
         last_err_ = "dlopen failed for " + lib_path + ": " + (dlerror() ? dlerror() : "unknown error");
+        LOG_ERROR(fmt::format("插件[{}] dlopen失败: {}", protocol_name, last_err_).c_str());
         return nullptr;
     }
 
@@ -92,6 +99,7 @@ void* PluginManager::load(const std::string& protocol_name) {
     PluginEntry entry;
     entry.dl_handle = handle;
     if (!load_symbols(handle, entry.fns)) {
+        LOG_ERROR(fmt::format("插件[{}] 符号解析失败: {}", protocol_name, last_err_).c_str());
         dlclose(handle);
         return nullptr;
     }
@@ -100,6 +108,8 @@ void* PluginManager::load(const std::string& protocol_name) {
     auto* info = entry.fns.info_fn();
     if (!info || info->api_version != EMS_PLUGIN_API_VERSION) {
         last_err_ = "Plugin API version mismatch for " + protocol_name;
+        LOG_ERROR(fmt::format("插件[{}] API版本不匹配: {}, 期望={}",
+                              protocol_name, info ? info->api_version : -1, EMS_PLUGIN_API_VERSION).c_str());
         dlclose(handle);
         return nullptr;
     }
@@ -107,6 +117,9 @@ void* PluginManager::load(const std::string& protocol_name) {
     // 6. 缓存
     entry.ref_count = 1;
     loaded_plugins_[protocol_name] = std::move(entry);
+
+    LOG_INFO(fmt::format("插件[{}] 加载成功, 版本={}, 描述={}",
+                         protocol_name, info->version, info->description).c_str());
 
     // 7. 创建实例返回
     return loaded_plugins_[protocol_name].fns.create_fn();
@@ -116,10 +129,16 @@ void PluginManager::unload(const std::string& protocol_name) {
     std::lock_guard lock(mutex_);
 
     auto it = loaded_plugins_.find(protocol_name);
-    if (it == loaded_plugins_.end()) return;
+    if (it == loaded_plugins_.end()) {
+        LOG_DEBUG(fmt::format("插件[{}] 未加载, 无需卸载", protocol_name).c_str());
+        return;
+    }
 
     it->second.ref_count--;
+    LOG_DEBUG(fmt::format("插件[{}] 引用计数--, count={}", protocol_name, it->second.ref_count).c_str());
+
     if (it->second.ref_count <= 0) {
+        LOG_INFO(fmt::format("卸载插件[{}]", protocol_name).c_str());
         if (it->second.dl_handle) {
             dlclose(it->second.dl_handle);
         }

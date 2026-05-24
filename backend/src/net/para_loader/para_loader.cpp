@@ -6,8 +6,10 @@
  * 测点配置加载为运行时配置，供采集线程初始化使用。
  */
 #include "para_loader.h"
+#include "net/log.h"
 #include <algorithm>
 #include <unordered_map>
+#include <spdlog/fmt/bundled/format.h>
 
 namespace ems {
 namespace net {
@@ -21,13 +23,20 @@ ParaLoader::ParaLoader()
 ParaLoader::~ParaLoader() = default;
 
 bool ParaLoader::initialize(const ems::db::DbConfig& config) {
-    if (initialized_) return true;
+    if (initialized_) {
+        LOG_INFO("参数加载器已初始化, 跳过");
+        return true;
+    }
 
+    LOG_INFO(fmt::format("初始化参数加载器: host={}, port={}, db={}, user={}",
+                         config.host, config.port, config.dbname, config.user).c_str());
     bool ok = dbm_->connect(config);
     if (ok) {
         initialized_ = true;
+        LOG_INFO("数据库连接成功");
     } else {
         last_err_ = dbm_->last_error();
+        LOG_ERROR(fmt::format("数据库连接失败: {}", last_err_).c_str());
     }
     return ok;
 }
@@ -37,7 +46,10 @@ bool ParaLoader::initialize(const ems::db::DbConfig& config) {
 // ============================================================
 
 std::vector<ems::db::device> ParaLoader::load_devices() {
-    if (!initialized_) return {};
+    if (!initialized_) {
+        LOG_ERROR("参数加载器未初始化, 无法加载设备");
+        return {};
+    }
 
     auto devices = dbm_->query_all_devices();
 
@@ -47,6 +59,7 @@ std::vector<ems::db::device> ParaLoader::load_devices() {
             [](const ems::db::device& d) { return d.enable == 0; }),
         devices.end());
 
+    LOG_DEBUG(fmt::format("加载设备: 共{}个启用设备", devices.size()).c_str());
     return devices;
 }
 
@@ -69,7 +82,10 @@ ems::db::device ParaLoader::load_device_by_code(const std::string& code) {
 // ============================================================
 
 std::vector<ems::db::channel> ParaLoader::load_channels(int64_t device_id) {
-    if (!initialized_) return {};
+    if (!initialized_) {
+        LOG_ERROR("参数加载器未初始化, 无法加载通道");
+        return {};
+    }
 
     std::vector<ems::db::channel> channels;
     if (device_id > 0) {
@@ -84,6 +100,7 @@ std::vector<ems::db::channel> ParaLoader::load_channels(int64_t device_id) {
             [](const ems::db::channel& c) { return c.enable == 0; }),
         channels.end());
 
+    LOG_DEBUG(fmt::format("加载通道: device_id={}, 共{}个启用通道", device_id, channels.size()).c_str());
     return channels;
 }
 
@@ -213,6 +230,7 @@ bool ParaLoader::load_all_as_config(
 {
     if (!initialized_) {
         last_err_ = "ParaLoader not initialized";
+        LOG_ERROR("参数加载器未初始化");
         return false;
     }
 
@@ -220,16 +238,19 @@ bool ParaLoader::load_all_as_config(
     auto dev_entities = load_devices();
     auto ch_entities  = load_channels();
 
+    LOG_INFO(fmt::format("加载全量配置: {}个设备, {}个通道", dev_entities.size(), ch_entities.size()).c_str());
+
     // 2. 转换为运行时配置
     channels = to_channel_configs(ch_entities);
     devices  = to_device_configs(dev_entities, ch_entities);
 
     // 3. 加载测点配置 (全量)
-    if (yc_points) *yc_points = load_yc_points();
-    if (yx_points) *yx_points = load_yx_points();
-    if (yk_points) *yk_points = load_yk_points();
-    if (yt_points) *yt_points = load_yt_points();
+    if (yc_points) { *yc_points = load_yc_points(); LOG_DEBUG(fmt::format("加载YC测点: {}个", yc_points->size()).c_str()); }
+    if (yx_points) { *yx_points = load_yx_points(); LOG_DEBUG(fmt::format("加载YX测点: {}个", yx_points->size()).c_str()); }
+    if (yk_points) { *yk_points = load_yk_points(); LOG_DEBUG(fmt::format("加载YK测点: {}个", yk_points->size()).c_str()); }
+    if (yt_points) { *yt_points = load_yt_points(); LOG_DEBUG(fmt::format("加载YT测点: {}个", yt_points->size()).c_str()); }
 
+    LOG_INFO("全量配置加载完成");
     return true;
 }
 

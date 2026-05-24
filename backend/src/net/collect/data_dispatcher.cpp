@@ -3,11 +3,13 @@
  * @brief 采集数据分发器实现
  */
 #include "data_dispatcher.h"
+#include "net/log.h"
 #include "rtdb/rtdb_manager.h"
 #include <algorithm>
 #include <chrono>
 #include <sstream>
 #include <unordered_map>
+#include <spdlog/fmt/bundled/format.h>
 
 namespace ems {
 namespace net {
@@ -36,8 +38,14 @@ DataDispatcher::~DataDispatcher() {
 // ============================================================
 
 bool DataDispatcher::initialize(const DataDispatcherConfig& config) {
-    if (initialized_.load()) return true;
+    if (initialized_.load()) {
+        LOG_INFO("数据分发器已初始化, 跳过");
+        return true;
+    }
 
+    LOG_INFO(fmt::format("初始化数据分发器: Redis={}:{}, db={}, 前缀={}",
+                         config.redisHost_, config.redisPort_, config.redisDb_,
+                         config.keyPrefix_).c_str());
     config_ = config;
 
     ems::rtdb::RtDbConfig rtdbConfig;
@@ -51,15 +59,18 @@ bool DataDispatcher::initialize(const DataDispatcherConfig& config) {
 
     rtdb_mgr_ = std::make_shared<ems::rtdb::RtDbManager>();
     if (!rtdb_mgr_->initialize(rtdbConfig)) {
+        LOG_ERROR(fmt::format("RTDB管理器初始化失败: host={}, port={}", config.redisHost_, config.redisPort_).c_str());
         rtdb_mgr_.reset();
         return false;
     }
 
     initialized_.store(true);
+    LOG_INFO("数据分发器初始化成功");
     return true;
 }
 
 void DataDispatcher::shutdown() {
+    LOG_INFO("关闭数据分发器");
     initialized_.store(false);
     if (rtdb_mgr_) {
         rtdb_mgr_->shutdown();
@@ -175,7 +186,10 @@ bool DataDispatcher::update_yt(const std::string& pointCode, double value,
 // ============================================================
 
 int DataDispatcher::batch_update(const std::vector<PointValue>& results) {
-    if (!initialized_.load() || !rtdb_mgr_) return -1;
+    if (!initialized_.load() || !rtdb_mgr_) {
+        LOG_ERROR("数据分发器未初始化, 无法批量更新");
+        return -1;
+    }
 
     std::map<std::string, model::YcPoint> ycBatch;
     std::map<std::string, model::YxPoint> yxBatch;
@@ -197,10 +211,12 @@ int DataDispatcher::batch_update(const std::vector<PointValue>& results) {
     if (!ycBatch.empty()) {
         int n = batch_update_yc(ycBatch);
         total += (n >= 0) ? n : 0;
+        LOG_DEBUG(fmt::format("批量更新YC: {}点, 成功{}点", ycBatch.size(), total).c_str());
     }
     if (!yxBatch.empty()) {
         int n = batch_update_yx(yxBatch);
         total += (n >= 0) ? n : 0;
+        LOG_DEBUG(fmt::format("批量更新YX: {}点, 成功{}点", yxBatch.size(), n >= 0 ? n : 0).c_str());
     }
 
     return total;
@@ -304,10 +320,16 @@ int DataDispatcher::batch_update_yt(const std::map<std::string, model::YtPoint>&
 
 bool DataDispatcher::publish_change(const std::string& pointType,
                                      const std::string& jsonData) {
-    if (!initialized_.load() || !rtdb_mgr_) return false;
+    if (!initialized_.load() || !rtdb_mgr_) {
+        LOG_ERROR("数据分发器未初始化, 无法发布变更");
+        return false;
+    }
 
     auto rtdb = rtdb_mgr_->getRtDb();
-    if (!rtdb) return false;
+    if (!rtdb) {
+        LOG_ERROR("无法获取RTDB连接, 发布变更失败");
+        return false;
+    }
 
     // 选择对应的发布通道
     std::string channel;
@@ -315,7 +337,10 @@ bool DataDispatcher::publish_change(const std::string& pointType,
     else if (pointType == "YX")  channel = config_.pubsubChannelYx_;
     else if (pointType == "YK")  channel = config_.pubsubChannelYk_;
     else if (pointType == "YT")  channel = config_.pubsubChannelYt_;
-    else                         return false;
+    else {
+        LOG_WARN(fmt::format("未知的测点类型: {}", pointType).c_str());
+        return false;
+    }
 
     bool ok = rtdb->publish(channel, jsonData);
 
@@ -323,6 +348,10 @@ bool DataDispatcher::publish_change(const std::string& pointType,
         std::lock_guard lock(stats_mutex_);
         stats_.totalPublishes++;
         if (!ok) stats_.failedPublishes++;
+    }
+
+    if (!ok) {
+        LOG_ERROR(fmt::format("发布变更失败: type={}, channel={}", pointType, channel).c_str());
     }
 
     return ok;

@@ -7,9 +7,11 @@
  */
 #include "modbus_handler.h"
 #include "net/protocol/common/protocol_plugin_api.h"
+#include "net/log.h"
 
 #include <cstring>
 #include <nlohmann/json.hpp>
+#include <spdlog/fmt/bundled/format.h>
 
 using Handler = ems::net::device::ModbusClientHandler;
 using ValueType = ems::net::device::ValueType;
@@ -60,20 +62,44 @@ void* ems_plugin_create() { return static_cast<void*>(new Handler()); }
 void ems_plugin_destroy(void* inst) { delete H(inst); }
 
 int ems_plugin_init(void* inst, const char* jc) {
-    try { H(inst)->initialize(json_to_config(json::parse(jc))); return 0; } catch (...) { return -1; }
+    try {
+        LOG_DEBUG(fmt::format("Modbus插件初始化: config={}", jc).c_str());
+        H(inst)->initialize(json_to_config(json::parse(jc)));
+        LOG_INFO("Modbus插件初始化成功");
+        return 0;
+    } catch (const std::exception& e) {
+        LOG_ERROR(fmt::format("Modbus插件初始化异常: {}", e.what()).c_str());
+        return -1;
+    } catch (...) {
+        LOG_ERROR("Modbus插件初始化未知异常");
+        return -1;
+    }
 }
 
-int ems_plugin_connect(void* inst) { return inst ? (H(inst)->connect() ? 0 : -1) : -1; }
+int ems_plugin_connect(void* inst) {
+    if (!inst) return -1;
+    bool ok = H(inst)->connect();
+    LOG_INFO(fmt::format("Modbus插件连接: {}", ok ? "成功" : "失败").c_str());
+    return ok ? 0 : -1;
+}
 
-int ems_plugin_disconnect(void* inst) { if (inst) H(inst)->disconnect(); return 0; }
+int ems_plugin_disconnect(void* inst) {
+    if (inst) {
+        LOG_INFO("Modbus插件断开连接");
+        H(inst)->disconnect();
+    }
+    return 0;
+}
 
 int ems_plugin_read_batch(void* inst, const char* codes[], int n, char* out, int sz) {
     if (!inst || !codes || n <= 0 || !out || sz <= 0) return -1;
     std::vector<std::string> c; c.reserve(n);
     for (int i = 0; i < n; ++i) if (codes[i]) c.emplace_back(codes[i]);
     if (c.empty()) return 0;
+    LOG_DEBUG(fmt::format("Modbus插件批量读取: {}个测点", c.size()).c_str());
     std::vector<Handler::PointValue> results;
     int ok = H(inst)->read_batch(c, results);
+    LOG_DEBUG(fmt::format("Modbus插件批量读取完成: 成功{}点", ok).c_str());
     try {
         json j = json::array();
         for (const auto& pv : results) {
@@ -82,21 +108,36 @@ int ems_plugin_read_batch(void* inst, const char* codes[], int n, char* out, int
                          {"timestamp", std::get<4>(pv)}});
         }
         auto s = j.dump();
-        if (s.size() + 1 > static_cast<size_t>(sz)) return -1;
+        if (s.size() + 1 > static_cast<size_t>(sz)) {
+            LOG_ERROR(fmt::format("Modbus插件结果缓冲区不足: need={}, have={}", s.size() + 1, sz).c_str());
+            return -1;
+        }
         std::strncpy(out, s.c_str(), sz - 1); out[sz - 1] = '\0';
         return ok;
-    } catch (...) { return -1; }
+    } catch (const std::exception& e) {
+        LOG_ERROR(fmt::format("Modbus插件序列化结果异常: {}", e.what()).c_str());
+        return -1;
+    } catch (...) {
+        LOG_ERROR("Modbus插件序列化结果未知异常");
+        return -1;
+    }
 }
 
 int ems_plugin_write(void* inst, const char* pc, double value) {
     if (!inst || !pc) return -1;
+    LOG_INFO(fmt::format("Modbus插件写入: pointCode={}, value={}", pc, value).c_str());
     auto pp = std::make_shared<ems::net::device::ProtocolPoint>();
     auto parsed = Handler::parse_point_code(pc);
     pp->rtu_addr = parsed.slaveId; pp->func_code = parsed.funcCode; pp->address = parsed.address;
-    return H(inst)->writeValue(pp, static_cast<int>(std::round(value))) ? 0 : -1;
+    bool ok = H(inst)->writeValue(pp, static_cast<int>(std::round(value)));
+    if (!ok) LOG_ERROR(fmt::format("Modbus插件写入失败: pointCode={}, value={}", pc, value).c_str());
+    return ok ? 0 : -1;
 }
 
-int ems_plugin_is_connected(void* inst) { return inst ? (H(inst)->isConnected() ? 1 : 0) : 0; }
+int ems_plugin_is_connected(void* inst) {
+    bool connected = inst && H(inst)->isConnected();
+    return connected ? 1 : 0;
+}
 
 const char* ems_plugin_last_error(void* inst) {
     if (!inst) return "No instance";

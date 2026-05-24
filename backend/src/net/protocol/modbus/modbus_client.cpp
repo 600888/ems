@@ -3,9 +3,11 @@
  * @brief Modbus 客户端实现
  */
 #include "modbus_client.h"
+#include "net/log.h"
 #include <modbus.h>
 #include <cerrno>
 #include <cstring>
+#include <spdlog/fmt/bundled/format.h>
 
 namespace ems {
 namespace net {
@@ -26,17 +28,23 @@ bool ModbusClient::connect() {
         disconnect();
     }
 
+    LOG_INFO(fmt::format("Modbus客户端连接: type={}, connection={}, settings={}",
+                         static_cast<int>(netType_), connection_, settings_).c_str());
     try {
         if (!master_.open()) {
             lastErrorMsg_ = "Failed to open Modbus connection";
+            LOG_ERROR(fmt::format("Modbus客户端打开连接失败: {}", lastErrorMsg_).c_str());
             return false;
         }
 
         connected_ = true;
+        LOG_INFO(fmt::format("Modbus客户端连接成功: type={}, connection={}",
+                             static_cast<int>(netType_), connection_).c_str());
         return true;
     }
     catch (const std::exception& e) {
         lastErrorMsg_ = e.what();
+        LOG_ERROR(fmt::format("Modbus客户端连接异常: {}", lastErrorMsg_).c_str());
         return false;
     }
 }

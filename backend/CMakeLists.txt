@@ -56,6 +56,9 @@ add_subdirectory(3rd)
 add_subdirectory(src)
 add_subdirectory(examples)
 
+# 复制 conf/ 目录到构建目录
+file(COPY ${CMAKE_CURRENT_SOURCE_DIR}/conf DESTINATION ${CMAKE_BINARY_DIR})
+
 message(STATUS "========================================")
 message(STATUS "EMS Backend Configuration")
 message(STATUS "========================================")

@@ -10,6 +10,7 @@
 #include <sstream>
 #include <future>
 #include <nlohmann/json.hpp>
+#include <spdlog/fmt/bundled/format.h>
 
 namespace ems {
 namespace net {
@@ -66,6 +67,10 @@ void ChannelThread::start(PluginManager& plugin_manager,
         state_.load() != ChannelState::Stopped) {
         return;
     }
+
+    LOG_INFO(fmt::format("通道[{}] 启动, 名称={}, 状态={}",
+                         channel_config_.id_, channel_config_.name_,
+                         static_cast<int>(state_.load())).c_str());
 
     plugin_instance_ = plugin_instance;
     plugin_fns_      = plugin_fns;
@@ -145,6 +150,10 @@ std::future<bool> ChannelThread::post_command(const std::string& pointCode,
 // ============================================================
 
 void ChannelThread::run(PluginManager& plugin_manager) {
+    LOG_INFO(fmt::format("通道[{}] 开始运行, 名称={}, 协议={}, 连接={}, 周期={}ms",
+                         channel_config_.id_, channel_config_.name_,
+                         ems::rtdb::protocolTypeToString(channel_config_.protocol_),
+                         channel_config_.connection_, poll_interval_ms_.load()).c_str());
     set_state(ChannelState::Running);
 
     // 1. 初始化插件（传入 JSON 配置）
@@ -166,12 +175,14 @@ void ChannelThread::run(PluginManager& plugin_manager) {
             last_err_ = "Plugin init failed for channel " +
                         std::to_string(channel_config_.id_) + ": " +
                         get_plugin_error(plugin_instance_, plugin_fns_.last_error_fn);
+            LOG_ERROR(fmt::format("通道[{}] 插件初始化失败: {}", channel_config_.id_, last_err_).c_str());
             set_state(ChannelState::Error);
             if (error_cb_) error_cb_(channel_config_.id_, last_err_);
             plugin_manager.unload(channel_config_.name_);
             return;
         }
     }
+    LOG_INFO(fmt::format("通道[{}] 插件初始化成功", channel_config_.id_).c_str());
 
     // 2. 连接设备
     if (!check_connection()) {
@@ -179,12 +190,14 @@ void ChannelThread::run(PluginManager& plugin_manager) {
         if (!reconnect()) {
             last_err_ = "Failed to connect channel " +
                         std::to_string(channel_config_.id_);
+            LOG_ERROR(fmt::format("通道[{}] 连接最终失败: {}", channel_config_.id_, last_err_).c_str());
             set_state(ChannelState::Error);
             if (error_cb_) error_cb_(channel_config_.id_, last_err_);
             plugin_manager.unload(channel_config_.name_);
             return;
         }
     }
+    LOG_INFO(fmt::format("通道[{}] 连接成功, 采集线程开始工作", channel_config_.id_).c_str());
 
     // 3. 主采集循环
     while (state_.load() == ChannelState::Running) {
@@ -192,6 +205,7 @@ void ChannelThread::run(PluginManager& plugin_manager) {
 
         // 3.1 检查连接状态
         if (!check_connection()) {
+            LOG_WARN(fmt::format("通道[{}] 连接断开, 尝试重连...", channel_config_.id_).c_str());
             reconnect();
             std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms_.load()));
             continue;
@@ -233,11 +247,13 @@ void ChannelThread::run(PluginManager& plugin_manager) {
     }
 
     // 4. 清理
+    LOG_INFO(fmt::format("通道[{}] 退出采集循环, 清理资源...", channel_config_.id_).c_str());
     if (plugin_fns_.disconnect_fn && plugin_instance_) {
         plugin_fns_.disconnect_fn(plugin_instance_);
     }
 
     set_state(ChannelState::Stopped);
+    LOG_INFO(fmt::format("通道[{}] 已停止", channel_config_.id_).c_str());
 }
 
 // ============================================================
@@ -253,25 +269,30 @@ bool ChannelThread::check_connection() {
 bool ChannelThread::reconnect() {
     if (!plugin_instance_ || !plugin_fns_.connect_fn) return false;
 
+    LOG_INFO(fmt::format("通道[{}] 开始重连, 最大重试次数={}", channel_config_.id_, max_retries_).c_str());
     int retries = 0;
     while (state_.load() == ChannelState::Running && retries < max_retries_) {
         int delay = backoff_delay();
 
+        LOG_DEBUG(fmt::format("通道[{}] 重连第{}次, 等待{}ms...", channel_config_.id_, retries + 1, delay).c_str());
         std::this_thread::sleep_for(std::chrono::milliseconds(delay));
 
         int ret = plugin_fns_.connect_fn(plugin_instance_);
         if (ret == 0) {
             reconnect_count_.fetch_add(1);
+            LOG_INFO(fmt::format("通道[{}] 重连成功, 已重连次数={}", channel_config_.id_, reconnect_count_.load()).c_str());
             return true;
         }
 
         last_err_ = "Reconnect attempt " + std::to_string(retries + 1) +
                     " failed: " +
                     get_plugin_error(plugin_instance_, plugin_fns_.last_error_fn);
+        LOG_ERROR(fmt::format("通道[{}] 重连失败: {}", channel_config_.id_, last_err_).c_str());
 
         retries++;
     }
 
+    LOG_ERROR(fmt::format("通道[{}] 重连达到最大次数({}), 放弃重连", channel_config_.id_, max_retries_).c_str());
     if (error_cb_) {
         error_cb_(channel_config_.id_,
                   "Max retries (" + std::to_string(max_retries_) +
@@ -295,6 +316,10 @@ void ChannelThread::process_command_queue() {
             cmd_queue_.pop_front();
         }
 
+        LOG_INFO(fmt::format("通道[{}] 执行命令: taskId={}, pointCode={}, value={}, timeout={}ms",
+                             channel_config_.id_, task.taskId_, task.pointCode_,
+                             task.value_, task.timeoutMs_).c_str());
+
         // 通过插件写入
         bool success = false;
         if (plugin_fns_.write_fn && plugin_instance_) {
@@ -303,6 +328,10 @@ void ChannelThread::process_command_queue() {
                                            task.value_);
             success = (ret == 0);
         }
+
+        LOG_INFO(fmt::format("通道[{}] 命令执行{}: taskId={}, pointCode={}",
+                             channel_config_.id_, success ? "成功" : "失败",
+                             task.taskId_, task.pointCode_).c_str());
 
         if (task.callback_) {
             task.callback_(success);
@@ -351,10 +380,15 @@ void ChannelThread::collect_points(const std::vector<std::string>& pointCodes) {
         // 读取失败
         last_err_ = "read_batch failed: " +
                     get_plugin_error(plugin_instance_, plugin_fns_.last_error_fn);
+        LOG_ERROR(fmt::format("通道[{}] 批量读取失败, 测点数={}, 错误={}",
+                              channel_config_.id_, pointCodes.size(), last_err_).c_str());
         return;
     }
 
-    if (readCount == 0) return;
+    if (readCount == 0) {
+        LOG_DEBUG(fmt::format("通道[{}] 批量读取返回空, 测点数={}", channel_config_.id_, pointCodes.size()).c_str());
+        return;
+    }
 
     // 解析 JSON 结果并分发
     try {
@@ -371,11 +405,16 @@ void ChannelThread::collect_points(const std::vector<std::string>& pointCodes) {
             pointValues.push_back(std::move(pv));
         }
 
+        LOG_DEBUG(fmt::format("通道[{}] 批量读取成功: 请求{}点, 返回{}点",
+                              channel_config_.id_, pointCodes.size(), pointValues.size()).c_str());
+
         if (dispatcher_ && !pointValues.empty()) {
-            dispatcher_->batch_update(pointValues);
+            int updated = dispatcher_->batch_update(pointValues);
+            LOG_DEBUG(fmt::format("通道[{}] 数据分发完成: 成功更新{}点", channel_config_.id_, updated).c_str());
         }
     } catch (const json::parse_error& e) {
         last_err_ = "Failed to parse read_batch result: " + std::string(e.what());
+        LOG_ERROR(fmt::format("通道[{}] 解析采集结果失败: {}", channel_config_.id_, last_err_).c_str());
     }
 }
 

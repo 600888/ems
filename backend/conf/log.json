@@ -1,0 +1,44 @@
+{
+    "modules": {
+        "net": {
+            "level": "debug",
+            "file_size": 10,
+            "count": 10
+        },
+        "stgy": {
+            "level": "debug",
+            "file_size": 10,
+            "count": 10
+        },
+        "scd": {
+            "level": "debug",
+            "file_size": 10,
+            "count": 10
+        },
+        "web": {
+            "level": "debug",
+            "file_size": 10,
+            "count": 10
+        },
+        "event": {
+            "level": "debug",
+            "file_size": 10,
+            "count": 10
+        },
+        "history": {
+            "level": "debug",
+            "file_size": 10,
+            "count": 10
+        },
+        "mqtt_cloud": {
+            "level": "debug",
+            "file_size": 10,
+            "count": 10
+        },
+        "provd": {
+            "level": "debug",
+            "file_size": 10,
+            "count": 10
+        }
+    }
+}
