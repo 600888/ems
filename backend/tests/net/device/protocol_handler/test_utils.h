@@ -8,7 +8,7 @@
 #include <unordered_map>
 #include <thread>
 #include <chrono>
-#include "../../../../src/net/device/protocol_handler/modbus_handler.h"
+#include "../../../../src/net/protocol/modbus/modbus_handler.h"
 
 namespace ems {
 namespace net {

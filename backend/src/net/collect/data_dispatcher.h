@@ -1,0 +1,216 @@
+/**
+ * @file data_dispatcher.h
+ * @brief 采集数据分发器
+ *
+ * 将采集线程读取到的数据批量写入 RTDB (Redis)，并通过 Pub/Sub 通知其他进程。
+ * 支持 YC/YX/YK/YT 四类测点的分别写入和批量优化。
+ */
+#ifndef EMS_NET_COLLECT_DATA_DISPATCHER_H
+#define EMS_NET_COLLECT_DATA_DISPATCHER_H
+
+#include <string>
+#include <vector>
+#include <map>
+#include <memory>
+#include <mutex>
+#include <atomic>
+#include <functional>
+#include "models/point_runtime.hpp"
+#include "net/protocol/common/protocol_handler.h"
+
+namespace ems {
+namespace rtdb {
+class RtDbManager;
+}
+
+namespace net {
+namespace collect {
+
+using protocol::PointValue;
+
+/**
+ * @brief 数据分发配置
+ */
+struct DataDispatcherConfig {
+    std::string redisHost_{"127.0.0.1"};
+    int         redisPort_{6379};
+    std::string redisPassword_;
+    int         redisDb_{0};
+    int         poolSize_{4};
+    int         timeoutMs_{3000};
+    std::string keyPrefix_{"ems:"};
+
+    // Pub/Sub 通知通道
+    std::string pubsubChannelYc_{"rtdb:yc:update"};
+    std::string pubsubChannelYx_{"rtdb:yx:update"};
+    std::string pubsubChannelYk_{"rtdb:yk:update"};
+    std::string pubsubChannelYt_{"rtdb:yt:update"};
+
+    // 批量写入配置
+    int batchMaxSize_{500};        // 单次批量最大点数
+    int batchIntervalMs_{100};     // 批量写入最大间隔(ms)
+};
+
+/**
+ * @brief 分发结果回调
+ */
+using DispatchCallback = std::function<void(
+    const std::string& pointType,   // "YC"|"YX"|"YK"|"YT"
+    const std::string& pointCode,
+    bool               success
+)>;
+
+/**
+ * @brief 数据分发器
+ *
+ * 线程安全，可在多个采集线程中并发调用。
+ */
+class DataDispatcher {
+public:
+    DataDispatcher();
+    ~DataDispatcher();
+
+    DataDispatcher(const DataDispatcher&) = delete;
+    DataDispatcher& operator=(const DataDispatcher&) = delete;
+    DataDispatcher(DataDispatcher&&) noexcept = delete;
+    DataDispatcher& operator=(DataDispatcher&&) noexcept = delete;
+
+    /**
+     * @brief 初始化 RTDB 连接
+     * @param config 配置参数
+     * @return true 成功
+     */
+    bool initialize(const DataDispatcherConfig& config);
+
+    /**
+     * @brief 关闭分发器
+     */
+    void shutdown();
+
+    /**
+     * @brief 是否已初始化
+     */
+    bool is_initialized() const { return initialized_.load(); }
+
+    /**
+     * @brief 更新单个测点值（YC 遥测）
+     * @param pointCode 测点编码
+     * @param value     工程值
+     * @param quality   品质
+     * @param timestamp 时间戳
+     * @return true 成功
+     */
+    bool update_yc(const std::string& pointCode, double value,
+                   int quality, uint64_t timestamp);
+
+    /**
+     * @brief 更新单个测点值（YX 遥信）
+     */
+    bool update_yx(const std::string& pointCode, int value,
+                   int quality, uint64_t timestamp);
+
+    /**
+     * @brief 更新单个测点值（YK 遥控状态）
+     */
+    bool update_yk(const std::string& pointCode, int value,
+                   int quality, int ykStatus, uint64_t timestamp);
+
+    /**
+     * @brief 更新单个测点值（YT 遥调）
+     */
+    bool update_yt(const std::string& pointCode, double value,
+                   int quality, uint64_t timestamp);
+
+    /**
+     * @brief 批量更新测点数据（自动区分 YC/YX）
+     *
+     * 根据 PointValue 中的 pointCode 前缀自动判定测点类型。
+     * 内部合并同类测点批量提交至 RTDB。
+     *
+     * @param results 测点值列表
+     * @return 成功更新的测点数
+     */
+    int batch_update(const std::vector<PointValue>& results);
+
+    /**
+     * @brief 批量更新 YC 测点
+     * @param points 测点编码 -> YcPoint 映射
+     * @return 成功更新的测点数
+     */
+    int batch_update_yc(const std::map<std::string, model::YcPoint>& points);
+
+    /**
+     * @brief 批量更新 YX 测点
+     */
+    int batch_update_yx(const std::map<std::string, model::YxPoint>& points);
+
+    /**
+     * @brief 批量更新 YK 测点
+     */
+    int batch_update_yk(const std::map<std::string, model::YkPoint>& points);
+
+    /**
+     * @brief 批量更新 YT 测点
+     */
+    int batch_update_yt(const std::map<std::string, model::YtPoint>& points);
+
+    /**
+     * @brief 发布变更通知
+     * @param pointType 测点类型
+     * @param jsonData  变更数据 JSON
+     * @return true 成功
+     */
+    bool publish_change(const std::string& pointType, const std::string& jsonData);
+
+    /**
+     * @brief 设置分发回调
+     */
+    void set_dispatch_callback(DispatchCallback cb) {
+        callback_ = std::move(cb);
+    }
+
+    /**
+     * @brief 获取 RTDB 管理器实例（非内联，定义在 cpp）
+     */
+    std::shared_ptr<ems::rtdb::RtDbManager> rtdb_manager() const;
+
+    /**
+     * @brief 获取连接状态（非内联，定义在 cpp）
+     */
+    bool is_connected() const;
+
+    /**
+     * @brief 获取统计信息
+     */
+    struct Stats {
+        uint64_t totalUpdates{0};
+        uint64_t totalPublishes{0};
+        uint64_t failedUpdates{0};
+        uint64_t failedPublishes{0};
+        uint64_t batchCount{0};
+    };
+    Stats stats() const;
+
+private:
+    model::YcPoint make_yc_point(const std::string& code, double value,
+                                 int quality, uint64_t timestamp);
+    model::YxPoint make_yx_point(const std::string& code, int value,
+                                 int quality, uint64_t timestamp);
+
+    void notify_callback(const std::string& type, const std::string& code, bool ok);
+
+    std::atomic<bool>               initialized_{false};
+    std::shared_ptr<ems::rtdb::RtDbManager> rtdb_mgr_;
+    DataDispatcherConfig            config_;
+    DispatchCallback                callback_;
+
+    // 统计信息
+    mutable std::mutex              stats_mutex_;
+    Stats                           stats_;
+};
+
+} // namespace collect
+} // namespace net
+} // namespace ems
+
+#endif // EMS_NET_COLLECT_DATA_DISPATCHER_H

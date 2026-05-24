@@ -174,6 +174,54 @@ enum class DecodeCode : int {
 };
 
 /**
+ * @brief 端序枚举
+ *
+ * 定义多寄存器数据类型（UINT32/INT32/FLOAT/DOUBLE）中
+ * 16 位寄存器的排列顺序。
+ *
+ * 以 4 字节 (2 寄存器) FLOAT [R0][R1] 为例:
+ *
+ *     BigEndian              (0): R0高字节 R0低字节 R1高字节 R1低字节  (AB CD — Modbus标准)
+ *     LittleEndian           (1): R1高字节 R1低字节 R0高字节 R0低字节  (CD AB — 字交换)
+ *     BigEndianByteSwap      (2): R0低字节 R0高字节 R1低字节 R1高字节  (BA DC — 字节交换)
+ *     LittleEndianByteSwap   (3): R1低字节 R1高字节 R0低字节 R0高字节(DC BA — 字+字节交换)
+ *
+ * @note 避免使用 UPPER_SNAKE_CASE 命名，防止与系统宏 (BIG_ENDIAN/LITTLE_ENDIAN) 冲突
+ */
+enum class EndianCode : int {
+    BigEndian            = 0,  // AB CD — Modbus 默认大端
+    LittleEndian         = 1,  // CD AB — 字交换
+    BigEndianByteSwap    = 2,  // BA DC — 字节交换
+    LittleEndianByteSwap = 3   // DC BA — 字交换 + 字节交换
+};
+
+/**
+ * @brief 获取单寄存器类型的对应字节数
+ */
+constexpr int decode_size(DecodeCode code) noexcept {
+    switch (code) {
+        case DecodeCode::UINT8:
+        case DecodeCode::INT8:
+        case DecodeCode::BOOL:
+        case DecodeCode::BIT:   return 1;
+        case DecodeCode::UINT16:
+        case DecodeCode::INT16: return 2;
+        case DecodeCode::UINT32:
+        case DecodeCode::INT32:
+        case DecodeCode::FLOAT: return 4;
+        case DecodeCode::DOUBLE:return 8;
+    }
+    return 2;
+}
+
+/**
+ * @brief 获取解码类型对应的寄存器数量
+ */
+constexpr int decode_reg_count(DecodeCode code) noexcept {
+    return decode_size(code) / 2;
+}
+
+/**
  * @brief 测点品质枚举
  */
 enum class PointQuality : int {

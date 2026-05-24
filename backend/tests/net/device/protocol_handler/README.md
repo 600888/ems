@@ -123,13 +123,13 @@ ctest -R test_modbus_handler -V
 ### 运行特定测试
 
 ```bash
-./tests/net/device/protocol_handler/test_modbus_handler --gtest_filter=ModbusServerHandler.Constructor
+./tests/net/protocol/modbus_handler/test_modbus_handler --gtest_filter=ModbusServerHandler.Constructor
 ```
 
 ### 运行特定测试套件
 
 ```bash
-./tests/net/device/protocol_handler/test_modbus_handler --gtest_filter=ModbusServerHandler.*
+./tests/net/protocol/modbus_handler/test_modbus_handler --gtest_filter=ModbusServerHandler.*
 ```
 
 ## 测试点类型说明

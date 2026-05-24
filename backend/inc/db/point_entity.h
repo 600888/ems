@@ -27,6 +27,7 @@ struct PointYcEntity {
     std::string object_ref;
 
     int         decode_code    = 0;
+    int         endian         = 0;       // 端序: 0=BIG_ENDIAN, 1=LITTLE_ENDIAN, ...
     double      mul_coe        = 1.0;
     double      add_coe        = 0.0;
     double      min_limit      = -9999999.0;
@@ -56,6 +57,7 @@ struct PointYxEntity {
     std::string object_ref;
 
     int         decode_code    = 0;
+    int         endian         = 0;
     int         bit            = 0;
     int         reverse_flag   = 0;
 
@@ -82,6 +84,7 @@ struct PointYkEntity {
     std::string object_ref;
 
     int         decode_code    = 0;
+    int         endian         = 0;
     int         bit            = 0;
     int         command_type   = 0;
     int64_t     related_yx_id  = 0;
@@ -109,6 +112,7 @@ struct PointYtEntity {
     std::string object_ref;
 
     int         decode_code    = 0;
+    int         endian         = 0;
     double      mul_coe        = 1.0;
     double      add_coe        = 0.0;
     double      min_limit      = -9999999.0;

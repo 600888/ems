@@ -1,2 +1,3 @@
 add_subdirectory(protocol)
+add_subdirectory(collect)
 add_subdirectory(para_loader)

@@ -8,9 +8,12 @@
  * 运行时测点数据结构已统一迁移至 inc/models/point_runtime.hpp。
  * 本文件仅作为兼容层，将共享模型类型引入 ems::rtdb 命名空间，
  * 同时保留 PointConfig 配置转换结构体。
+ *
+ * ChannelConfig 已在公共头文件 rtdb_config.h 中统一定义。
  */
 
 #include "models/point_runtime.hpp"
+#include "rtdb_config.h"
 
 #include <string>
 #include <cstdint>
@@ -64,22 +67,6 @@ struct PointConfig {
     int status_{1};
     std::string createdAt_;
     std::string updatedAt_;
-};
-
-/**
- * @brief 通道配置（运行时用，简化版）
- */
-struct ChannelConfig {
-    int64_t id_{0};
-    std::string name_;
-    std::string protocol_;
-    std::string connection_;
-    std::string settings_;
-    int baudRate_{9600};
-    int dataBits_{8};
-    int stopBits_{1};
-    std::string parity_{"none"};
-    int status_{1};
 };
 
 } // namespace rtdb

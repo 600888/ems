@@ -6,8 +6,8 @@ include(GoogleTest)
 
 add_executable(test_modbus_handler
     modbus_handler_test.cpp
-    ${CMAKE_SOURCE_DIR}/src/net/device/protocol_handler/base_handler.cpp
-    ${CMAKE_SOURCE_DIR}/src/net/device/protocol_handler/modbus_handler.cpp
+    ${CMAKE_SOURCE_DIR}/src/net/protocol/handler/base_handler.cpp
+    ${CMAKE_SOURCE_DIR}/src/net/protocol/modbus/modbus_handler.cpp
 )
 
 target_include_directories(test_modbus_handler PRIVATE
