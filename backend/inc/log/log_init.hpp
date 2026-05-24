@@ -144,7 +144,7 @@ private:
 
             // 设置为滚动模式 
             // 当程序重启时，如果希望将之前的日志文件立即归档为备份文件，并开始写入新的日志文件，而不是继续写入之前的文件直到达到最大大小才旋转，就可以将 rotate_on_open 设置为 true 。
-            auto rotating_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logFilePath, fileSize, count, true);
+            auto rotating_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logFilePath, fileSize, count, false);
             sinks.push_back(rotating_sink);
 
             // 设置为异步模式

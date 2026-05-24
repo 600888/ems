@@ -237,6 +237,8 @@ private:
     // ---- 重连退避 ----
     int  backoff_delay() const;
 
+
+
     const ChannelConfig             channel_config_;
     std::shared_ptr<DataDispatcher> dispatcher_;
     std::shared_ptr<std::thread>    thread_;

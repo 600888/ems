@@ -73,11 +73,88 @@ public:
             spdlog::drop_all();
         }
     }
+
+    template <typename... Args>
+    static inline void logChannelTrace(const std::string& channelCode, const char* format, const Args&... args) noexcept
+    {
+        try {
+            auto logger = getChannelMsgLogger(channelCode);
+            logger->trace(format, args...);
+        } catch (...) {
+            spdlog::drop_all();
+        }
+    }
+
+    template <typename... Args>
+    static inline void logChannelDebug(const std::string& channelCode, const char* format, const Args&... args) noexcept
+    {
+        try {
+            auto logger = getChannelMsgLogger(channelCode);
+            logger->debug(format, args...);
+        } catch (...) {
+            spdlog::drop_all();
+        }
+    }
+
+    template <typename... Args>
+    static inline void logChannelInfo(const std::string& channelCode, const char* format, const Args&... args) noexcept
+    {
+        try {
+            auto logger = getChannelMsgLogger(channelCode);
+            logger->info(format, args...);
+        } catch (...) {
+            spdlog::drop_all();
+        }
+    }
+
+    template <typename... Args>
+    static inline void logChannelWarn(const std::string& channelCode, const char* format, const Args&... args) noexcept
+    {
+        try {
+            auto logger = getChannelMsgLogger(channelCode);
+            logger->warn(format, args...);
+        } catch (...) {
+            spdlog::drop_all();
+        }
+    }
+
+    template <typename... Args>
+    static inline void logChannelError(const std::string& channelCode, const char* format, const Args&... args) noexcept
+    {
+        try {
+            auto logger = getChannelMsgLogger(channelCode);
+            logger->error(format, args...);
+        } catch (...) {
+            spdlog::drop_all();
+        }
+    }
+
+    template <typename... Args>
+    static inline void logChannelCritical(const std::string& channelCode, const char* format, const Args&... args) noexcept
+    {
+        try {
+            auto logger = getChannelMsgLogger(channelCode);
+            logger->critical(format, args...);
+        } catch (...) {
+            spdlog::drop_all();
+        }
+    }
 };
 
-#define LOG_MSG(ch, format, ...) (ChannelMsgLogger::logChannelMsg(ch->chanCode(), format, ##__VA_ARGS__))
+// 通道日志宏（通过通道对象指针，需有 chanCode() 方法）
+#define CHANNEL_LOG_TRACE(ch, format, ...)     (ChannelMsgLogger::logChannelTrace((ch)->chanCode(), FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_DEBUG(ch, format, ...)     (ChannelMsgLogger::logChannelDebug((ch)->chanCode(), FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_INFO(ch, format, ...)      (ChannelMsgLogger::logChannelInfo((ch)->chanCode(), FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_WARN(ch, format, ...)      (ChannelMsgLogger::logChannelWarn((ch)->chanCode(), FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_ERROR(ch, format, ...)     (ChannelMsgLogger::logChannelError((ch)->chanCode(), FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_CRITICAL(ch, format, ...)  (ChannelMsgLogger::logChannelCritical((ch)->chanCode(), FORMATTED(format), ##__VA_ARGS__))
 
-// 直接使用通道编码字符串的日志宏（无需通过通道对象指针）
-#define LOG_MSG_CODE(code, format, ...) (ChannelMsgLogger::logChannelMsg(code, format, ##__VA_ARGS__))
+// 通道日志宏（直接使用通道编码字符串）
+#define CHANNEL_LOG_TRACE_CODE(code, format, ...)    (ChannelMsgLogger::logChannelTrace(code, FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_DEBUG_CODE(code, format, ...)    (ChannelMsgLogger::logChannelDebug(code, FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_INFO_CODE(code, format, ...)     (ChannelMsgLogger::logChannelInfo(code, FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_WARN_CODE(code, format, ...)     (ChannelMsgLogger::logChannelWarn(code, FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_ERROR_CODE(code, format, ...)    (ChannelMsgLogger::logChannelError(code, FORMATTED(format), ##__VA_ARGS__))
+#define CHANNEL_LOG_CRITICAL_CODE(code, format, ...) (ChannelMsgLogger::logChannelCritical(code, FORMATTED(format), ##__VA_ARGS__))
 
 inline LogInitializer logInitializer(LOGGER_NAME, LV::debug, false, 4); // 改为 CPU 核心个数
