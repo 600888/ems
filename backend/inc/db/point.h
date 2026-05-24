@@ -1,5 +1,5 @@
 /**
- * @file point_entity.h
+ * @file point.h
  * @brief 四遥测点配置表 + 采集数据 ormpp 实体定义
  */
 #pragma once
@@ -10,7 +10,7 @@
 namespace ems {
 namespace db {
 
-struct PointYcEntity {
+struct point_yc {
     int64_t     id             = 0;
     std::string code;
     std::string name;
@@ -18,6 +18,7 @@ struct PointYcEntity {
     int64_t     device_id      = 0;
 
     int         protocol_type  = 1;
+    int         func_code      = 3;        // Modbus 功能码: 1=Coil,2=DiscreteInput,3=HoldingRegister,4=InputRegister
     int         slave_id       = 1;
     int         reg_addr       = 0;
     int         bit_position   = 0;
@@ -40,7 +41,7 @@ struct PointYcEntity {
     std::string updated_at;
 };
 
-struct PointYxEntity {
+struct point_yx {
     int64_t     id             = 0;
     std::string code;
     std::string name;
@@ -48,6 +49,7 @@ struct PointYxEntity {
     int64_t     device_id      = 0;
 
     int         protocol_type  = 1;
+    int         func_code      = 1;        // Modbus 功能码: 遥信默认用 1=Coil
     int         slave_id       = 1;
     int         reg_addr       = 0;
     int         bit_position   = 0;
@@ -67,7 +69,7 @@ struct PointYxEntity {
     std::string updated_at;
 };
 
-struct PointYkEntity {
+struct point_yk {
     int64_t     id             = 0;
     std::string code;
     std::string name;
@@ -75,6 +77,7 @@ struct PointYkEntity {
     int64_t     device_id      = 0;
 
     int         protocol_type  = 1;
+    int         func_code      = 5;        // Modbus 功能码: 遥控默认用 5=WriteSingleCoil
     int         slave_id       = 1;
     int         reg_addr       = 0;
     int         bit_position   = 0;
@@ -95,7 +98,7 @@ struct PointYkEntity {
     std::string updated_at;
 };
 
-struct PointYtEntity {
+struct point_yt {
     int64_t     id             = 0;
     std::string code;
     std::string name;
@@ -103,6 +106,7 @@ struct PointYtEntity {
     int64_t     device_id      = 0;
 
     int         protocol_type  = 1;
+    int         func_code      = 6;        // Modbus 功能码: 遥调默认用 6=WriteSingleRegister
     int         slave_id       = 1;
     int         reg_addr       = 0;
     int         bit_position   = 0;
@@ -125,7 +129,7 @@ struct PointYtEntity {
     std::string updated_at;
 };
 
-struct PointCollectEntity {
+struct point_collect {
     int64_t     id             = 0;
     std::string point_code;
     int         point_type     = 0;

@@ -24,7 +24,7 @@ target_include_directories(net_collect PUBLIC
 )
 
 target_link_libraries(net_collect PUBLIC
-    ems_rtdb
+    rtdb
     pthread
     dl
 )

@@ -36,7 +36,7 @@ bool ParaLoader::initialize(const ems::db::DbConfig& config) {
 // 设备加载
 // ============================================================
 
-std::vector<ems::db::DeviceEntity> ParaLoader::load_devices() {
+std::vector<ems::db::device> ParaLoader::load_devices() {
     if (!initialized_) return {};
 
     auto devices = dbm_->query_all_devices();
@@ -44,20 +44,20 @@ std::vector<ems::db::DeviceEntity> ParaLoader::load_devices() {
     // 仅返回启用设备
     devices.erase(
         std::remove_if(devices.begin(), devices.end(),
-            [](const ems::db::DeviceEntity& d) { return d.enable == 0; }),
+            [](const ems::db::device& d) { return d.enable == 0; }),
         devices.end());
 
     return devices;
 }
 
-ems::db::DeviceEntity ParaLoader::load_device_by_id(int64_t id) {
+ems::db::device ParaLoader::load_device_by_id(int64_t id) {
     if (!initialized_) return {};
     auto dev = dbm_->query_device_by_id(id);
     if (dev.id == 0 || dev.enable == 0) return {};
     return dev;
 }
 
-ems::db::DeviceEntity ParaLoader::load_device_by_code(const std::string& code) {
+ems::db::device ParaLoader::load_device_by_code(const std::string& code) {
     if (!initialized_) return {};
     auto dev = dbm_->query_device_by_code(code);
     if (dev.id == 0 || dev.enable == 0) return {};
@@ -68,10 +68,10 @@ ems::db::DeviceEntity ParaLoader::load_device_by_code(const std::string& code) {
 // 通道加载
 // ============================================================
 
-std::vector<ems::db::ChannelEntity> ParaLoader::load_channels(int64_t device_id) {
+std::vector<ems::db::channel> ParaLoader::load_channels(int64_t device_id) {
     if (!initialized_) return {};
 
-    std::vector<ems::db::ChannelEntity> channels;
+    std::vector<ems::db::channel> channels;
     if (device_id > 0) {
         channels = dbm_->query_channels_by_device(device_id);
     } else {
@@ -81,13 +81,13 @@ std::vector<ems::db::ChannelEntity> ParaLoader::load_channels(int64_t device_id)
     // 仅返回启用通道
     channels.erase(
         std::remove_if(channels.begin(), channels.end(),
-            [](const ems::db::ChannelEntity& c) { return c.enable == 0; }),
+            [](const ems::db::channel& c) { return c.enable == 0; }),
         channels.end());
 
     return channels;
 }
 
-ems::db::ChannelEntity ParaLoader::load_channel_by_id(int64_t id) {
+ems::db::channel ParaLoader::load_channel_by_id(int64_t id) {
     if (!initialized_) return {};
     auto ch = dbm_->query_channel_by_id(id);
     if (ch.id == 0 || ch.enable == 0) return {};
@@ -98,22 +98,22 @@ ems::db::ChannelEntity ParaLoader::load_channel_by_id(int64_t id) {
 // 测点配置加载
 // ============================================================
 
-std::vector<ems::db::PointYcEntity> ParaLoader::load_yc_points(int64_t channel_id) {
+std::vector<ems::db::point_yc> ParaLoader::load_yc_points(int64_t channel_id) {
     if (!initialized_) return {};
     return dbm_->query_yc_points(channel_id);
 }
 
-std::vector<ems::db::PointYxEntity> ParaLoader::load_yx_points(int64_t channel_id) {
+std::vector<ems::db::point_yx> ParaLoader::load_yx_points(int64_t channel_id) {
     if (!initialized_) return {};
     return dbm_->query_yx_points(channel_id);
 }
 
-std::vector<ems::db::PointYkEntity> ParaLoader::load_yk_points(int64_t channel_id) {
+std::vector<ems::db::point_yk> ParaLoader::load_yk_points(int64_t channel_id) {
     if (!initialized_) return {};
     return dbm_->query_yk_points(channel_id);
 }
 
-std::vector<ems::db::PointYtEntity> ParaLoader::load_yt_points(int64_t channel_id) {
+std::vector<ems::db::point_yt> ParaLoader::load_yt_points(int64_t channel_id) {
     if (!initialized_) return {};
     return dbm_->query_yt_points(channel_id);
 }
@@ -122,7 +122,7 @@ std::vector<ems::db::PointYtEntity> ParaLoader::load_yt_points(int64_t channel_i
 // 运行时配置转换
 // ============================================================
 
-ems::rtdb::ChannelConfig ParaLoader::to_channel_config(const ems::db::ChannelEntity& ch) {
+ems::rtdb::ChannelConfig ParaLoader::to_channel_config(const ems::db::channel& ch) {
     ems::rtdb::ChannelConfig cfg;
     cfg.id_        = ch.id;
     cfg.name_      = ch.name;
@@ -158,7 +158,7 @@ ems::rtdb::ChannelConfig ParaLoader::to_channel_config(const ems::db::ChannelEnt
 }
 
 std::vector<ems::rtdb::ChannelConfig> ParaLoader::to_channel_configs(
-    const std::vector<ems::db::ChannelEntity>& channels)
+    const std::vector<ems::db::channel>& channels)
 {
     std::vector<ems::rtdb::ChannelConfig> result;
     result.reserve(channels.size());
@@ -169,8 +169,8 @@ std::vector<ems::rtdb::ChannelConfig> ParaLoader::to_channel_configs(
 }
 
 std::vector<ems::rtdb::DeviceConfig> ParaLoader::to_device_configs(
-    const std::vector<ems::db::DeviceEntity>& devices,
-    const std::vector<ems::db::ChannelEntity>& channels)
+    const std::vector<ems::db::device>& devices,
+    const std::vector<ems::db::channel>& channels)
 {
     std::vector<ems::rtdb::DeviceConfig> result;
     result.reserve(devices.size());
@@ -206,10 +206,10 @@ std::vector<ems::rtdb::DeviceConfig> ParaLoader::to_device_configs(
 bool ParaLoader::load_all_as_config(
     std::vector<ems::rtdb::DeviceConfig>& devices,
     std::vector<ems::rtdb::ChannelConfig>& channels,
-    std::vector<ems::db::PointYcEntity>* yc_points,
-    std::vector<ems::db::PointYxEntity>* yx_points,
-    std::vector<ems::db::PointYkEntity>* yk_points,
-    std::vector<ems::db::PointYtEntity>* yt_points)
+    std::vector<ems::db::point_yc>* yc_points,
+    std::vector<ems::db::point_yx>* yx_points,
+    std::vector<ems::db::point_yk>* yk_points,
+    std::vector<ems::db::point_yt>* yt_points)
 {
     if (!initialized_) {
         last_err_ = "ParaLoader not initialized";

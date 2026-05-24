@@ -3,3 +3,4 @@
 # the usage of EMS backend libraries
 
 add_subdirectory(protocol)
+add_subdirectory(net)

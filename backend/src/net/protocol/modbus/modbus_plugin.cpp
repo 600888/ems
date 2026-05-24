@@ -36,6 +36,18 @@ static std::unordered_map<std::string, ValueType> json_to_config(const json& j) 
     if (j.contains("slave_id"))         cfg["slave_id"]         = j["slave_id"].get<int>();
     if (j.contains("timeout_ms"))       cfg["response_timeout"] = j["timeout_ms"].get<int>();
     if (j.contains("transport") && j["transport"] == "rtu")     cfg["protocol_type"] = 0;
+
+    // 兼容 ChannelThread 发的 connection="ip:port" 格式
+    if (!j.contains("ip") && j.contains("connection")) {
+        std::string conn = j["connection"].get<std::string>();
+        auto colon = conn.rfind(':');
+        if (colon != std::string::npos) {
+            cfg["ip"]   = conn.substr(0, colon);
+            cfg["port"] = std::stoi(conn.substr(colon + 1));
+        } else {
+            cfg["ip"] = conn;
+        }
+    }
     return cfg;
 }
 

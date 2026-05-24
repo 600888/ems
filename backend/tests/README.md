@@ -9,8 +9,8 @@
 测试覆盖以下数据模型：
 
 - `DeviceGroup` - 设备组模型测试
-- `Device` - 设备模型测试
-- `Channel` - 通道模型测试
+- `device` - 设备模型测试
+- `channel` - 通道模型测试
 - `PointYC` - 遥测点模型测试
 - `PointYX` - 遥信点模型测试
 - `PointYK` - 遥控点模型测试
@@ -84,14 +84,14 @@ DeviceGroup JSON: {
 }
 DeviceGroup test passed!
 
-Testing Device...
-Device JSON: {
+Testing device...
+device JSON: {
   "id": 1,
   "code": "device_001",
   "name": "测试设备",
   ...
 }
-Device test passed!
+device test passed!
 
 ...
 ========================================

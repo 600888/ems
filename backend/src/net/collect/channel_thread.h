@@ -210,7 +210,7 @@ public:
     // 错误处理回调
     // ============================================================
 
-    using ErrorCallback = std::function<void(int64_t channelId,
+    using ErrorCallback = std::function<void(int64_t channel_id,
                                              const std::string& error)>;
     void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
 

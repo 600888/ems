@@ -1,5 +1,5 @@
 /**
- * @file channel_entity.h
+ * @file channel.h
  * @brief 通道表 ormpp 实体定义
  */
 #pragma once
@@ -10,7 +10,7 @@
 namespace ems {
 namespace db {
 
-struct ChannelEntity {
+struct channel {
     int64_t     id            = 0;
     std::string code;                     // 通道编码
     std::string name;                     // 通道名称

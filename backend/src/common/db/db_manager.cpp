@@ -12,6 +12,7 @@
 #include <cstring>
 #include <fstream>
 #include <sstream>
+#include <unistd.h>
 #include <array>          // for YLT_REFL macro (std::array)
 #include <nlohmann/json.hpp>
 #include "util/conf.hpp"
@@ -26,54 +27,56 @@
 // 这些宏在 struct 所在的命名空间上下文中展开
 // ============================================================
 namespace ems::db {
-YLT_REFL(DeviceEntity,
+YLT_REFL(device,
     id, code, name, device_type, group_id, description, enable, created_at, updated_at);
 
-YLT_REFL(ChannelEntity,
+YLT_REFL(channel,
     id, code, name, device_id, protocol_type, conn_type,
     ip, port, com_port, baud_rate, data_bits, stop_bits, parity,
     rtu_addr, timeout, enable, created_at, updated_at);
 
-YLT_REFL(PointYcEntity,
+YLT_REFL(point_yc,
     id, code, name, channel_id, device_id,
-    protocol_type, slave_id, reg_addr, bit_position,
+    protocol_type, func_code, slave_id, reg_addr, bit_position,
     data_id, casdu, ioa, object_ref,
     decode_code, mul_coe, add_coe, min_limit, max_limit, unit,
     enable, description, created_at, updated_at);
 
-YLT_REFL(PointYxEntity,
+YLT_REFL(point_yx,
     id, code, name, channel_id, device_id,
-    protocol_type, slave_id, reg_addr, bit_position,
+    protocol_type, func_code, slave_id, reg_addr, bit_position,
     data_id, casdu, ioa, object_ref,
     decode_code, bit, reverse_flag,
     enable, description, created_at, updated_at);
 
-YLT_REFL(PointYkEntity,
+YLT_REFL(point_yk,
     id, code, name, channel_id, device_id,
-    protocol_type, slave_id, reg_addr, bit_position,
+    protocol_type, func_code, slave_id, reg_addr, bit_position,
     data_id, casdu, ioa, object_ref,
     decode_code, bit, command_type, related_yx_id,
     enable, description, created_at, updated_at);
 
-YLT_REFL(PointYtEntity,
+YLT_REFL(point_yt,
     id, code, name, channel_id, device_id,
-    protocol_type, slave_id, reg_addr, bit_position,
+    protocol_type, func_code, slave_id, reg_addr, bit_position,
     data_id, casdu, ioa, object_ref,
     decode_code, mul_coe, add_coe, min_limit, max_limit, unit,
     enable, description, created_at, updated_at);
 
-YLT_REFL(PointCollectEntity,
+YLT_REFL(point_collect,
     id, point_code, point_type, channel_id, device_id,
     raw_value, eng_value, quality, collect_time);
 } // namespace ems::db
 
 // ============================================================
 // 条件编译 MySQL/SQLite 后端
-// 仅当对应开发包可用时，才包含 ormpp 的对应实现头文件
+// MySQL 检测由 CMake 的 EMS_DB_HAS_MYSQL + ORMPP_ENABLE_MYSQL 控制
 // ============================================================
-#if __has_include(<mysql/mysql.h>)
+#ifdef EMS_DB_HAS_MYSQL
+#include <mysql/mysql.h>
 #include <ormpp/mysql.hpp>
-#define EMS_DB_HAS_MYSQL
+#include <ormpp/dbng.hpp>
+#include <ormpp/entity.hpp>
 #endif
 
 #if __has_include(<sqlite3.h>)
@@ -149,33 +152,33 @@ public:
 
     // ---- 设备 CRUD ----
 
-    std::vector<DeviceEntity> query_all_devices() {
+    std::vector<device> query_all_devices() {
 #ifdef EMS_DB_HAS_MYSQL
-        return exec_query<DeviceEntity>("");
+        return exec_query<device>("");
 #else
         return {};
 #endif
     }
 
-    DeviceEntity query_device_by_id(int64_t id) {
+    device query_device_by_id(int64_t id) {
 #ifdef EMS_DB_HAS_MYSQL
-        auto v = exec_query<DeviceEntity>("id=" + std::to_string(id));
-        return v.empty() ? DeviceEntity{} : v[0];
+        auto v = exec_query<device>("id=" + std::to_string(id));
+        return v.empty() ? device{} : v[0];
 #else
         return {};
 #endif
     }
 
-    DeviceEntity query_device_by_code(const std::string& code) {
+    device query_device_by_code(const std::string& code) {
 #ifdef EMS_DB_HAS_MYSQL
-        auto v = exec_query<DeviceEntity>("code='" + esc(code) + "'");
-        return v.empty() ? DeviceEntity{} : v[0];
+        auto v = exec_query<device>("code='" + esc(code) + "'");
+        return v.empty() ? device{} : v[0];
 #else
         return {};
 #endif
     }
 
-    bool insert_device(const DeviceEntity& device) {
+    bool insert_device(const device& device) {
 #ifdef EMS_DB_HAS_MYSQL
         return exec_write([this, &device]() { return mysql_.insert(device); });
 #else
@@ -183,7 +186,7 @@ public:
 #endif
     }
 
-    bool update_device(const DeviceEntity& device) {
+    bool update_device(const device& device) {
 #ifdef EMS_DB_HAS_MYSQL
         return exec_write([this, &device]() { return mysql_.update(device); });
 #else
@@ -194,7 +197,7 @@ public:
     bool delete_device(int64_t id) {
 #ifdef EMS_DB_HAS_MYSQL
         return exec_write([this, id]() {
-            return mysql_.delete_records_s<DeviceEntity>("id=" + std::to_string(id));
+            return mysql_.delete_records_s<device>("id=" + std::to_string(id));
         });
 #else
         return false;
@@ -203,41 +206,41 @@ public:
 
     // ---- 通道 CRUD ----
 
-    std::vector<ChannelEntity> query_all_channels() {
+    std::vector<channel> query_all_channels() {
 #ifdef EMS_DB_HAS_MYSQL
-        return exec_query<ChannelEntity>("");
+        return exec_query<channel>("");
 #else
         return {};
 #endif
     }
 
-    std::vector<ChannelEntity> query_channels_by_device(int64_t device_id) {
+    std::vector<channel> query_channels_by_device(int64_t device_id) {
 #ifdef EMS_DB_HAS_MYSQL
-        return exec_query<ChannelEntity>("device_id=" + std::to_string(device_id));
+        return exec_query<channel>("device_id=" + std::to_string(device_id));
 #else
         return {};
 #endif
     }
 
-    ChannelEntity query_channel_by_id(int64_t id) {
+    channel query_channel_by_id(int64_t id) {
 #ifdef EMS_DB_HAS_MYSQL
-        auto v = exec_query<ChannelEntity>("id=" + std::to_string(id));
-        return v.empty() ? ChannelEntity{} : v[0];
+        auto v = exec_query<channel>("id=" + std::to_string(id));
+        return v.empty() ? channel{} : v[0];
 #else
         return {};
 #endif
     }
 
-    ChannelEntity query_channel_by_code(const std::string& code) {
+    channel query_channel_by_code(const std::string& code) {
 #ifdef EMS_DB_HAS_MYSQL
-        auto v = exec_query<ChannelEntity>("code='" + esc(code) + "'");
-        return v.empty() ? ChannelEntity{} : v[0];
+        auto v = exec_query<channel>("code='" + esc(code) + "'");
+        return v.empty() ? channel{} : v[0];
 #else
         return {};
 #endif
     }
 
-    bool insert_channel(const ChannelEntity& ch) {
+    bool insert_channel(const channel& ch) {
 #ifdef EMS_DB_HAS_MYSQL
         return exec_write([this, &ch]() { return mysql_.insert(ch); });
 #else
@@ -245,7 +248,7 @@ public:
 #endif
     }
 
-    bool update_channel(const ChannelEntity& ch) {
+    bool update_channel(const channel& ch) {
 #ifdef EMS_DB_HAS_MYSQL
         return exec_write([this, &ch]() { return mysql_.update(ch); });
 #else
@@ -256,7 +259,7 @@ public:
     bool delete_channel(int64_t id) {
 #ifdef EMS_DB_HAS_MYSQL
         return exec_write([this, id]() {
-            return mysql_.delete_records_s<ChannelEntity>("id=" + std::to_string(id));
+            return mysql_.delete_records_s<channel>("id=" + std::to_string(id));
         });
 #else
         return false;
@@ -265,41 +268,41 @@ public:
 
     // ---- 测点配置查询 ----
 
-    std::vector<PointYcEntity> query_yc_points(int64_t channel_id) {
+    std::vector<point_yc> query_yc_points(int64_t channel_id) {
 #ifdef EMS_DB_HAS_MYSQL
         if (channel_id > 0)
-            return exec_query<PointYcEntity>("channel_id=" + std::to_string(channel_id));
-        return exec_query<PointYcEntity>("");
+            return exec_query<point_yc>("channel_id=" + std::to_string(channel_id));
+        return exec_query<point_yc>("");
 #else
         return {};
 #endif
     }
 
-    std::vector<PointYxEntity> query_yx_points(int64_t channel_id) {
+    std::vector<point_yx> query_yx_points(int64_t channel_id) {
 #ifdef EMS_DB_HAS_MYSQL
         if (channel_id > 0)
-            return exec_query<PointYxEntity>("channel_id=" + std::to_string(channel_id));
-        return exec_query<PointYxEntity>("");
+            return exec_query<point_yx>("channel_id=" + std::to_string(channel_id));
+        return exec_query<point_yx>("");
 #else
         return {};
 #endif
     }
 
-    std::vector<PointYkEntity> query_yk_points(int64_t channel_id) {
+    std::vector<point_yk> query_yk_points(int64_t channel_id) {
 #ifdef EMS_DB_HAS_MYSQL
         if (channel_id > 0)
-            return exec_query<PointYkEntity>("channel_id=" + std::to_string(channel_id));
-        return exec_query<PointYkEntity>("");
+            return exec_query<point_yk>("channel_id=" + std::to_string(channel_id));
+        return exec_query<point_yk>("");
 #else
         return {};
 #endif
     }
 
-    std::vector<PointYtEntity> query_yt_points(int64_t channel_id) {
+    std::vector<point_yt> query_yt_points(int64_t channel_id) {
 #ifdef EMS_DB_HAS_MYSQL
         if (channel_id > 0)
-            return exec_query<PointYtEntity>("channel_id=" + std::to_string(channel_id));
-        return exec_query<PointYtEntity>("");
+            return exec_query<point_yt>("channel_id=" + std::to_string(channel_id));
+        return exec_query<point_yt>("");
 #else
         return {};
 #endif
@@ -311,10 +314,10 @@ public:
 #ifdef EMS_DB_HAS_MYSQL
         if (data_list.empty()) return 0;
 
-        std::vector<PointCollectEntity> entities;
+        std::vector<point_collect> entities;
         entities.reserve(data_list.size());
         for (const auto& d : data_list) {
-            PointCollectEntity e;
+            point_collect e;
             e.point_code   = d.point_code;
             e.point_type   = d.point_type;
             e.channel_id   = d.channel_id;
@@ -413,23 +416,23 @@ std::string DbManager::last_error() const {
 
 // ---- 设备 ----
 
-std::vector<DeviceEntity> DbManager::query_all_devices() {
+std::vector<device> DbManager::query_all_devices() {
     return impl_->query_all_devices();
 }
 
-DeviceEntity DbManager::query_device_by_id(int64_t id) {
+device DbManager::query_device_by_id(int64_t id) {
     return impl_->query_device_by_id(id);
 }
 
-DeviceEntity DbManager::query_device_by_code(const std::string& code) {
+device DbManager::query_device_by_code(const std::string& code) {
     return impl_->query_device_by_code(code);
 }
 
-bool DbManager::insert_device(const DeviceEntity& device) {
+bool DbManager::insert_device(const device& device) {
     return impl_->insert_device(device);
 }
 
-bool DbManager::update_device(const DeviceEntity& device) {
+bool DbManager::update_device(const device& device) {
     return impl_->update_device(device);
 }
 
@@ -439,27 +442,27 @@ bool DbManager::delete_device(int64_t id) {
 
 // ---- 通道 ----
 
-std::vector<ChannelEntity> DbManager::query_all_channels() {
+std::vector<channel> DbManager::query_all_channels() {
     return impl_->query_all_channels();
 }
 
-std::vector<ChannelEntity> DbManager::query_channels_by_device(int64_t device_id) {
+std::vector<channel> DbManager::query_channels_by_device(int64_t device_id) {
     return impl_->query_channels_by_device(device_id);
 }
 
-ChannelEntity DbManager::query_channel_by_id(int64_t id) {
+channel DbManager::query_channel_by_id(int64_t id) {
     return impl_->query_channel_by_id(id);
 }
 
-ChannelEntity DbManager::query_channel_by_code(const std::string& code) {
+channel DbManager::query_channel_by_code(const std::string& code) {
     return impl_->query_channel_by_code(code);
 }
 
-bool DbManager::insert_channel(const ChannelEntity& channel) {
+bool DbManager::insert_channel(const channel& channel) {
     return impl_->insert_channel(channel);
 }
 
-bool DbManager::update_channel(const ChannelEntity& channel) {
+bool DbManager::update_channel(const channel& channel) {
     return impl_->update_channel(channel);
 }
 
@@ -469,19 +472,19 @@ bool DbManager::delete_channel(int64_t id) {
 
 // ---- 测点 ----
 
-std::vector<PointYcEntity> DbManager::query_yc_points(int64_t channel_id) {
+std::vector<point_yc> DbManager::query_yc_points(int64_t channel_id) {
     return impl_->query_yc_points(channel_id);
 }
 
-std::vector<PointYxEntity> DbManager::query_yx_points(int64_t channel_id) {
+std::vector<point_yx> DbManager::query_yx_points(int64_t channel_id) {
     return impl_->query_yx_points(channel_id);
 }
 
-std::vector<PointYkEntity> DbManager::query_yk_points(int64_t channel_id) {
+std::vector<point_yk> DbManager::query_yk_points(int64_t channel_id) {
     return impl_->query_yk_points(channel_id);
 }
 
-std::vector<PointYtEntity> DbManager::query_yt_points(int64_t channel_id) {
+std::vector<point_yt> DbManager::query_yt_points(int64_t channel_id) {
     return impl_->query_yt_points(channel_id);
 }
 
@@ -555,6 +558,254 @@ DbConfig get_default_db_config() {
     if (env_name) cfg.dbname   = env_name;
 
     return cfg;
+}
+
+// ============================================================
+// 数据库初始化（自动建库建表）
+// ============================================================
+
+static const char* DB_INIT_SQL = R"sql(
+CREATE DATABASE IF NOT EXISTS __DBNAME__
+    DEFAULT CHARACTER SET utf8mb4
+    DEFAULT COLLATE utf8mb4_unicode_ci;
+USE __DBNAME__;
+
+		CREATE TABLE IF NOT EXISTS device (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(64) NOT NULL DEFAULT '',
+    name VARCHAR(128) NOT NULL DEFAULT '',
+    device_type INT NOT NULL DEFAULT 0,
+    group_id BIGINT NOT NULL DEFAULT 0,
+    description VARCHAR(256) DEFAULT '',
+    enable INT NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+		CREATE TABLE IF NOT EXISTS channel (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(64) NOT NULL DEFAULT '',
+    name VARCHAR(128) NOT NULL DEFAULT '',
+    device_id BIGINT NOT NULL DEFAULT 0,
+    protocol_type INT NOT NULL DEFAULT 1,
+    conn_type INT NOT NULL DEFAULT 2,
+    ip VARCHAR(64) DEFAULT '127.0.0.1',
+    port INT DEFAULT 502,
+    com_port VARCHAR(64) DEFAULT '',
+    baud_rate INT DEFAULT 9600,
+    data_bits INT DEFAULT 8,
+    stop_bits INT DEFAULT 1,
+    parity VARCHAR(8) DEFAULT 'N',
+    rtu_addr VARCHAR(16) DEFAULT '1',
+    timeout INT DEFAULT 5,
+    enable INT NOT NULL DEFAULT 1,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+		CREATE TABLE IF NOT EXISTS point_yc (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(128) NOT NULL DEFAULT '',
+    name VARCHAR(128) NOT NULL DEFAULT '',
+    channel_id BIGINT NOT NULL DEFAULT 0,
+    device_id BIGINT NOT NULL DEFAULT 0,
+    protocol_type INT DEFAULT 1,
+    func_code INT DEFAULT 3,
+    slave_id INT DEFAULT 1,
+    reg_addr INT DEFAULT 0,
+    bit_position INT DEFAULT 0,
+    data_id BIGINT DEFAULT 0,
+    casdu INT DEFAULT 0,
+    ioa BIGINT DEFAULT 0,
+    object_ref VARCHAR(128) DEFAULT '',
+    decode_code INT DEFAULT 0,
+    endian INT DEFAULT 0,
+    mul_coe DOUBLE DEFAULT 1.0,
+    add_coe DOUBLE DEFAULT 0.0,
+    min_limit DOUBLE DEFAULT -9999999.0,
+    max_limit DOUBLE DEFAULT 9999999.0,
+    unit VARCHAR(32) DEFAULT '',
+    enable INT DEFAULT 1,
+    description VARCHAR(256) DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS point_yx (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(128) NOT NULL DEFAULT '',
+    name VARCHAR(128) NOT NULL DEFAULT '',
+    channel_id BIGINT NOT NULL DEFAULT 0,
+    device_id BIGINT NOT NULL DEFAULT 0,
+    protocol_type INT DEFAULT 1,
+    func_code INT DEFAULT 1,
+    slave_id INT DEFAULT 1,
+    reg_addr INT DEFAULT 0,
+    bit_position INT DEFAULT 0,
+    data_id BIGINT DEFAULT 0,
+    casdu INT DEFAULT 0,
+    ioa BIGINT DEFAULT 0,
+    object_ref VARCHAR(128) DEFAULT '',
+    decode_code INT DEFAULT 0,
+    endian INT DEFAULT 0,
+    bit INT DEFAULT 0,
+    reverse_flag INT DEFAULT 0,
+    enable INT DEFAULT 1,
+    description VARCHAR(256) DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS point_yk (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(128) NOT NULL DEFAULT '',
+    name VARCHAR(128) NOT NULL DEFAULT '',
+    channel_id BIGINT NOT NULL DEFAULT 0,
+    device_id BIGINT NOT NULL DEFAULT 0,
+    protocol_type INT DEFAULT 1,
+    func_code INT DEFAULT 5,
+    slave_id INT DEFAULT 1,
+    reg_addr INT DEFAULT 0,
+    bit_position INT DEFAULT 0,
+    data_id BIGINT DEFAULT 0,
+    casdu INT DEFAULT 0,
+    ioa BIGINT DEFAULT 0,
+    object_ref VARCHAR(128) DEFAULT '',
+    decode_code INT DEFAULT 0,
+    endian INT DEFAULT 0,
+    bit INT DEFAULT 0,
+    command_type INT DEFAULT 0,
+    related_yx_id BIGINT DEFAULT 0,
+    enable INT DEFAULT 1,
+    description VARCHAR(256) DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+CREATE TABLE IF NOT EXISTS point_yt (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    code VARCHAR(128) NOT NULL DEFAULT '',
+    name VARCHAR(128) NOT NULL DEFAULT '',
+    channel_id BIGINT NOT NULL DEFAULT 0,
+    device_id BIGINT NOT NULL DEFAULT 0,
+    protocol_type INT DEFAULT 1,
+    func_code INT DEFAULT 6,
+    slave_id INT DEFAULT 1,
+    reg_addr INT DEFAULT 0,
+    bit_position INT DEFAULT 0,
+    data_id BIGINT DEFAULT 0,
+    casdu INT DEFAULT 0,
+    ioa BIGINT DEFAULT 0,
+    object_ref VARCHAR(128) DEFAULT '',
+    decode_code INT DEFAULT 0,
+    endian INT DEFAULT 0,
+    mul_coe DOUBLE DEFAULT 1.0,
+    add_coe DOUBLE DEFAULT 0.0,
+    min_limit DOUBLE DEFAULT -9999999.0,
+    max_limit DOUBLE DEFAULT 9999999.0,
+    unit VARCHAR(32) DEFAULT '',
+    enable INT DEFAULT 1,
+    description VARCHAR(256) DEFAULT '',
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+		CREATE TABLE IF NOT EXISTS point_collect (
+    id BIGINT AUTO_INCREMENT PRIMARY KEY,
+    point_code VARCHAR(128) NOT NULL DEFAULT '',
+    point_type INT DEFAULT 0,
+    channel_id BIGINT DEFAULT 0,
+    device_id BIGINT DEFAULT 0,
+    raw_value BIGINT DEFAULT 0,
+    eng_value DOUBLE DEFAULT 0.0,
+    quality INT DEFAULT 0,
+    collect_time DATETIME DEFAULT CURRENT_TIMESTAMP
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+)sql";
+
+static bool exec_sql(const DbConfig& config, const std::string& db,
+                      const std::string& sql) {
+    // 写入临时文件执行，避免 shell 转义和命令行长度限制
+    std::string tmpfile = "/tmp/ems_db_init_" + std::to_string(getpid()) + ".sql";
+    {
+        std::ofstream ofs(tmpfile);
+        if (!ofs) return false;
+        ofs << sql;
+    }
+
+    std::string cmd = "mysql -h" + config.host + " -P" + std::to_string(config.port)
+                    + " -u" + config.user + " -p'" + config.password + "'"
+                    + " " + db + " < " + tmpfile + " 2>/dev/null";
+    int rc = system(cmd.c_str());
+    std::remove(tmpfile.c_str());
+    return rc == 0;
+}
+
+static std::string replace_dbname(const std::string& sql, const std::string& dbname) {
+    std::string r = sql;
+    auto pos = r.find("__DBNAME__");
+    while (pos != std::string::npos) {
+        r.replace(pos, 10, dbname);
+        pos = r.find("__DBNAME__", pos + dbname.size());
+    }
+    return r;
+}
+
+bool ensure_database(const DbConfig& config) {
+    auto sql = replace_dbname(DB_INIT_SQL, config.dbname);
+    // 先不指定库，建库后再建表
+    std::string createDb = "CREATE DATABASE IF NOT EXISTS " + config.dbname
+                         + " DEFAULT CHARACTER SET utf8mb4;";
+    if (!exec_sql(config, "", createDb)) return false;
+
+    // 拆成多个 CREATE TABLE 语句逐一执行
+    std::vector<std::string> stmts;
+    size_t pos = 0;
+    while ((pos = sql.find("CREATE TABLE", pos)) != std::string::npos) {
+        size_t end = sql.find(';', pos);
+        if (end != std::string::npos) {
+            stmts.push_back(sql.substr(pos, end - pos + 1));
+            pos = end + 1;
+        } else {
+            stmts.push_back(sql.substr(pos));
+            break;
+        }
+    }
+
+    for (const auto& stmt : stmts) {
+        if (!exec_sql(config, config.dbname, stmt)) return false;
+    }
+    return true;
+}
+
+bool ensure_database_with_seed(const DbConfig& config) {
+    if (!ensure_database(config)) return false;
+
+    const char* seed = R"sql(
+INSERT IGNORE INTO device (id, code, name, device_type, enable)
+VALUES (1, 'PCS_001', 'PCS-1 储能变流器', 11, 1);
+INSERT IGNORE INTO channel (id, code, name, device_id, protocol_type, conn_type,
+    ip, port, rtu_addr, timeout, enable)
+VALUES (1, 'CH_MODBUS_001', 'Modbus-TCP-1', 1, 1, 2, '127.0.0.1', 502, '1', 5, 1);
+INSERT IGNORE INTO point_yc (id, code, name, channel_id, device_id, slave_id,
+    func_code, reg_addr, decode_code, endian, unit, enable) VALUES
+(1,'totalActivePower','总有功功率',1,1,1,3,0,4,0,'kW',1),
+(2,'totalReactivePower','总无功功率',1,1,1,3,2,4,0,'kVar',1),
+(3,'phaseAVoltage','A相电压',1,1,1,3,4,4,0,'V',1),
+(4,'phaseBVoltage','B相电压',1,1,1,3,6,4,0,'V',1),
+(5,'phaseCVoltage','C相电压',1,1,1,3,8,4,0,'V',1),
+(6,'phaseACurrent','A相电流',1,1,1,3,10,4,0,'A',1),
+(7,'phaseBCurrent','B相电流',1,1,1,3,12,4,0,'A',1),
+(8,'phaseCCurrent','C相电流',1,1,1,3,14,4,0,'A',1),
+(9,'gridFrequency','电网频率',1,1,1,3,16,4,0,'Hz',1),
+(10,'soc','SOC',1,1,1,3,18,4,0,'%',1);
+INSERT IGNORE INTO point_yx (id, code, name, channel_id, device_id, slave_id,
+    func_code, reg_addr, decode_code, endian, enable) VALUES
+(1,'runningStatus','运行状态',1,1,1,1,0,8,0,1),
+(2,'faultAlarm','故障告警',1,1,1,1,0,8,0,1),
+(3,'commStatus','通信状态',1,1,1,1,0,8,0,1);
+)sql";
+    return exec_sql(config, config.dbname, seed);
 }
 
 } // namespace db

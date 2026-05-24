@@ -67,17 +67,17 @@ public:
      * @brief 从 DB 加载所有启用设备 (enable=1)
      * @return 设备实体列表
      */
-    std::vector<ems::db::DeviceEntity> load_devices();
+    std::vector<ems::db::device> load_devices();
 
     /**
      * @brief 按 ID 加载设备
      */
-    ems::db::DeviceEntity load_device_by_id(int64_t id);
+    ems::db::device load_device_by_id(int64_t id);
 
     /**
      * @brief 按编码加载设备
      */
-    ems::db::DeviceEntity load_device_by_code(const std::string& code);
+    ems::db::device load_device_by_code(const std::string& code);
 
     // ============================================================
     // 通道加载
@@ -88,12 +88,12 @@ public:
      * @param device_id 可选: 按设备过滤, 0=全部
      * @return 通道实体列表
      */
-    std::vector<ems::db::ChannelEntity> load_channels(int64_t device_id = 0);
+    std::vector<ems::db::channel> load_channels(int64_t device_id = 0);
 
     /**
      * @brief 按 ID 加载通道
      */
-    ems::db::ChannelEntity load_channel_by_id(int64_t id);
+    ems::db::channel load_channel_by_id(int64_t id);
 
     // ============================================================
     // 测点配置加载
@@ -103,46 +103,46 @@ public:
      * @brief 加载 YC (遥测) 测点配置
      * @param channel_id 可选: 按通道过滤, 0=全部
      */
-    std::vector<ems::db::PointYcEntity> load_yc_points(int64_t channel_id = 0);
+    std::vector<ems::db::point_yc> load_yc_points(int64_t channel_id = 0);
 
     /**
      * @brief 加载 YX (遥信) 测点配置
      */
-    std::vector<ems::db::PointYxEntity> load_yx_points(int64_t channel_id = 0);
+    std::vector<ems::db::point_yx> load_yx_points(int64_t channel_id = 0);
 
     /**
      * @brief 加载 YK (遥控) 测点配置
      */
-    std::vector<ems::db::PointYkEntity> load_yk_points(int64_t channel_id = 0);
+    std::vector<ems::db::point_yk> load_yk_points(int64_t channel_id = 0);
 
     /**
      * @brief 加载 YT (遥调) 测点配置
      */
-    std::vector<ems::db::PointYtEntity> load_yt_points(int64_t channel_id = 0);
+    std::vector<ems::db::point_yt> load_yt_points(int64_t channel_id = 0);
 
     // ============================================================
     // 运行时配置转换 (DB entity -> 运行时 config)
     // ============================================================
 
     /**
-     * @brief 将 DeviceEntity 列表转换为运行时 DeviceConfig 列表
+     * @brief 将 device 列表转换为运行时 DeviceConfig 列表
      *
      * 自动关联通道到设备、以及空测点列表 (需后续加载)。
      */
     std::vector<ems::rtdb::DeviceConfig> to_device_configs(
-        const std::vector<ems::db::DeviceEntity>& devices,
-        const std::vector<ems::db::ChannelEntity>& channels = {});
+        const std::vector<ems::db::device>& devices,
+        const std::vector<ems::db::channel>& channels = {});
 
     /**
-     * @brief 将 ChannelEntity 列表转换为运行时 ChannelConfig 列表
+     * @brief 将 channel 列表转换为运行时 ChannelConfig 列表
      */
     std::vector<ems::rtdb::ChannelConfig> to_channel_configs(
-        const std::vector<ems::db::ChannelEntity>& channels);
+        const std::vector<ems::db::channel>& channels);
 
     /**
      * @brief 单条转换
      */
-    ems::rtdb::ChannelConfig to_channel_config(const ems::db::ChannelEntity& ch);
+    ems::rtdb::ChannelConfig to_channel_config(const ems::db::channel& ch);
 
     /**
      * @brief 一次性加载全部配置并转为运行时配置
@@ -158,10 +158,10 @@ public:
     bool load_all_as_config(
         std::vector<ems::rtdb::DeviceConfig>& devices,
         std::vector<ems::rtdb::ChannelConfig>& channels,
-        std::vector<ems::db::PointYcEntity>* yc_points = nullptr,
-        std::vector<ems::db::PointYxEntity>* yx_points = nullptr,
-        std::vector<ems::db::PointYkEntity>* yk_points = nullptr,
-        std::vector<ems::db::PointYtEntity>* yt_points = nullptr);
+        std::vector<ems::db::point_yc>* yc_points = nullptr,
+        std::vector<ems::db::point_yx>* yx_points = nullptr,
+        std::vector<ems::db::point_yk>* yk_points = nullptr,
+        std::vector<ems::db::point_yt>* yt_points = nullptr);
 
     /**
      * @brief 是否已初始化

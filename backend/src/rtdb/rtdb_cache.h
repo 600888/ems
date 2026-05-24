@@ -23,7 +23,7 @@ public:
     struct YcConfig {
         std::string code;
         std::string name;
-        int64_t channelId{0};
+        int64_t channel_id{0};
         double mulCoe{1.0};
         double addCoe{0.0};
         double maxLimit{9999999.0};
@@ -35,7 +35,7 @@ public:
     struct YxConfig {
         std::string code;
         std::string name;
-        int64_t channelId{0};
+        int64_t channel_id{0};
         int bit{0};
         bool reverse{false};
         int status{0};
@@ -44,7 +44,7 @@ public:
     struct YkConfig {
         std::string code;
         std::string name;
-        int64_t channelId{0};
+        int64_t channel_id{0};
         int bit{0};
         int commandType{0};
         int64_t relatedYxId{0};
@@ -54,7 +54,7 @@ public:
     struct YtConfig {
         std::string code;
         std::string name;
-        int64_t channelId{0};
+        int64_t channel_id{0};
         double mulCoe{1.0};
         double addCoe{0.0};
         double maxLimit{9999999.0};

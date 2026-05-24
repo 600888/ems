@@ -497,7 +497,7 @@ bool RtDbManager::loadConfigFromJson(const std::string& filepath) {
         };
         cfg.code = find("code");
         cfg.name = find("name");
-        try { cfg.channelId = std::stoll(find("channel_id")); } catch (...) {}
+        try { cfg.channel_id = std::stoll(find("channel_id")); } catch (...) {}
         try { cfg.mulCoe = std::stod(find("mul_coe")); } catch (...) {}
         try { cfg.addCoe = std::stod(find("add_coe")); } catch (...) {}
         try { cfg.maxLimit = std::stod(find("max_limit")); } catch (...) {}

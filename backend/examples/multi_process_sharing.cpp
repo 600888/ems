@@ -371,7 +371,7 @@ void process_api_server() {
         std::cout << "\n[API] === YC Point Details ===" << std::endl;
         std::cout << "  Code: " << yc_full.model.code << std::endl;
         std::cout << "  Name: " << yc_full.model.name << std::endl;
-        std::cout << "  Device: " << yc_full.model.device_id << std::endl;
+        std::cout << "  device: " << yc_full.model.device_id << std::endl;
         std::cout << "  Value: " << yc_full.data.value << " " << yc_full.model.unit << std::endl;
         std::cout << "  Timestamp: " << yc_full.data.timestamp << std::endl;
         std::cout << "  Quality: " << (yc_full.data.quality == 0 ? "Good" : "Bad") << std::endl;
@@ -384,7 +384,7 @@ void process_api_server() {
         std::cout << "\n[API] === YX Point Details ===" << std::endl;
         std::cout << "  Code: " << yx_full.model.code << std::endl;
         std::cout << "  Name: " << yx_full.model.name << std::endl;
-        std::cout << "  Device: " << yx_full.model.device_id << std::endl;
+        std::cout << "  device: " << yx_full.model.device_id << std::endl;
         std::cout << "  Value: " << (yx_full.data.value == 1 ? "闭合" : "断开") << std::endl;
         std::cout << "  Timestamp: " << yx_full.data.timestamp << std::endl;
         std::cout << "  Quality: " << (yx_full.data.quality == 0 ? "Good" : "Bad") << std::endl;

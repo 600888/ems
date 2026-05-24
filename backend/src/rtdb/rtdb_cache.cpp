@@ -278,7 +278,7 @@ RtDbConfigCache::YcConfig RtDbConfigCache::toYcConfig(const PointConfig& pc) con
     YcConfig cfg;
     cfg.code = pc.code_;
     cfg.name = pc.name_;
-    cfg.channelId = pc.channelId_;
+    cfg.channel_id = pc.channelId_;
     cfg.mulCoe = pc.mulCoe_;
     cfg.addCoe = pc.addCoe_;
     cfg.maxLimit = pc.maxLimit_;
@@ -292,7 +292,7 @@ RtDbConfigCache::YxConfig RtDbConfigCache::toYxConfig(const PointConfig& pc) con
     YxConfig cfg;
     cfg.code = pc.code_;
     cfg.name = pc.name_;
-    cfg.channelId = pc.channelId_;
+    cfg.channel_id = pc.channelId_;
     cfg.bit = pc.bit_;
     cfg.reverse = pc.reverse_;
     cfg.status = pc.status_;
@@ -303,7 +303,7 @@ RtDbConfigCache::YkConfig RtDbConfigCache::toYkConfig(const PointConfig& pc) con
     YkConfig cfg;
     cfg.code = pc.code_;
     cfg.name = pc.name_;
-    cfg.channelId = pc.channelId_;
+    cfg.channel_id = pc.channelId_;
     cfg.bit = pc.bit_;
     cfg.commandType = pc.commandType_;
     cfg.status = pc.status_;
@@ -314,7 +314,7 @@ RtDbConfigCache::YtConfig RtDbConfigCache::toYtConfig(const PointConfig& pc) con
     YtConfig cfg;
     cfg.code = pc.code_;
     cfg.name = pc.name_;
-    cfg.channelId = pc.channelId_;
+    cfg.channel_id = pc.channelId_;
     cfg.mulCoe = pc.mulCoe_;
     cfg.addCoe = pc.addCoe_;
     cfg.maxLimit = pc.maxLimit_;
@@ -329,7 +329,7 @@ PointConfig RtDbConfigCache::toPointConfig(const YcConfig& yc) const {
     pc.code_ = yc.code;
     pc.name_ = yc.name;
     pc.pointType_ = PointType::YC;
-    pc.channelId_ = yc.channelId;
+    pc.channelId_ = yc.channel_id;
     pc.mulCoe_ = yc.mulCoe;
     pc.addCoe_ = yc.addCoe;
     pc.minLimit_ = yc.minLimit;
@@ -344,7 +344,7 @@ PointConfig RtDbConfigCache::toPointConfig(const YxConfig& yx) const {
     pc.code_ = yx.code;
     pc.name_ = yx.name;
     pc.pointType_ = PointType::YX;
-    pc.channelId_ = yx.channelId;
+    pc.channelId_ = yx.channel_id;
     pc.bit_ = yx.bit;
     pc.reverse_ = yx.reverse;
     pc.status_ = yx.status;
@@ -356,7 +356,7 @@ PointConfig RtDbConfigCache::toPointConfig(const YkConfig& yk) const {
     pc.code_ = yk.code;
     pc.name_ = yk.name;
     pc.pointType_ = PointType::YK;
-    pc.channelId_ = yk.channelId;
+    pc.channelId_ = yk.channel_id;
     pc.bit_ = yk.bit;
     pc.commandType_ = yk.commandType;
     pc.status_ = yk.status;
@@ -368,7 +368,7 @@ PointConfig RtDbConfigCache::toPointConfig(const YtConfig& yt) const {
     pc.code_ = yt.code;
     pc.name_ = yt.name;
     pc.pointType_ = PointType::YT;
-    pc.channelId_ = yt.channelId;
+    pc.channelId_ = yt.channel_id;
     pc.mulCoe_ = yt.mulCoe;
     pc.addCoe_ = yt.addCoe;
     pc.minLimit_ = yt.minLimit;

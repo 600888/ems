@@ -1,5 +1,5 @@
 /**
- * @file device_entity.h
+ * @file device.h
  * @brief 设备表 ormpp 实体定义
  */
 #pragma once
@@ -10,7 +10,7 @@
 namespace ems {
 namespace db {
 
-struct DeviceEntity {
+struct device {
     int64_t     id          = 0;
     std::string code;                 // 设备编码
     std::string name;                 // 设备名称

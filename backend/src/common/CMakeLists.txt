@@ -19,10 +19,19 @@ PRIVATE
     Threads::Threads
 )
 
+# 检测 MySQL 开发库
+find_package(PkgConfig QUIET)
+if(PkgConfig_FOUND)
+    pkg_check_modules(MYSQL mysqlclient)
+endif()
+if(NOT MYSQL_FOUND)
+    find_package(MySQL COMPONENTS MySQL QUIET)
+endif()
+
 if(MYSQL_FOUND)
     target_link_libraries(ems_db PRIVATE ${MYSQL_LIBRARIES})
     target_include_directories(ems_db PRIVATE ${MYSQL_INCLUDE_DIRS})
-    target_compile_definitions(ems_db PRIVATE EMS_DB_HAS_MYSQL)
+    target_compile_definitions(ems_db PRIVATE EMS_DB_HAS_MYSQL ORMPP_ENABLE_MYSQL)
     message(STATUS "ems_db: MySQL support enabled")
 else()
     message(STATUS "ems_db: MySQL support disabled (libmysqlclient not found)")

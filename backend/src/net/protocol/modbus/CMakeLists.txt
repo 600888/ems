@@ -33,6 +33,7 @@ add_library(proto_modbus MODULE
     modbus_plugin.cpp
     modbus_client.cpp
     modbus_server.cpp
+    ${CMAKE_SOURCE_DIR}/src/net/protocol/handler/base_handler.cpp
 )
 
 target_include_directories(proto_modbus PRIVATE

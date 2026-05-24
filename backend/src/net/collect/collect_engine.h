@@ -29,9 +29,9 @@
 #include <functional>
 
 #include "rtdb/rtdb_device.h"
-#include "db/device_entity.h"
-#include "db/channel_entity.h"
-#include "db/point_entity.h"
+#include "db/device.h"
+#include "db/channel.h"
+#include "db/point.h"
 #include "plugin_manager.h"
 #include "channel_thread.h"
 #include "data_dispatcher.h"
@@ -113,8 +113,8 @@ public:
      * @return 成功启动的通道数
      */
     int start_all(device::ParaLoader& para_loader,
-                  const std::vector<ems::db::PointYcEntity>* yc_points = nullptr,
-                  const std::vector<ems::db::PointYxEntity>* yx_points = nullptr);
+                  const std::vector<ems::db::point_yc>* yc_points = nullptr,
+                  const std::vector<ems::db::point_yx>* yx_points = nullptr);
 
     /**
      * @brief 启动单个通道
@@ -130,10 +130,10 @@ public:
 
     /**
      * @brief 停止单个通道
-     * @param channelId 通道 ID
+     * @param channel_id 通道 ID
      * @return true 成功
      */
-    bool stop_channel(int64_t channelId);
+    bool stop_channel(int64_t channel_id);
 
     /**
      * @brief 关闭引擎并释放资源
@@ -167,7 +167,7 @@ public:
     /**
      * @brief 按 ID 查找通道
      */
-    std::shared_ptr<ChannelThread> find_channel(int64_t channelId) const;
+    std::shared_ptr<ChannelThread> find_channel(int64_t channel_id) const;
 
     /**
      * @brief 是否正在运行
@@ -194,12 +194,12 @@ public:
 
     /** @brief 通道状态变更回调 */
     using ChannelStateCallback = std::function<void(
-        int64_t channelId, const std::string& channelName,
+        int64_t channel_id, const std::string& channelName,
         ChannelState oldState, ChannelState newState)>;
 
     /** @brief 采集错误回调 */
     using ErrorCallback = std::function<void(
-        int64_t channelId, const std::string& error)>;
+        int64_t channel_id, const std::string& error)>;
 
     void set_channel_state_callback(ChannelStateCallback cb) {
         state_cb_ = std::move(cb);
@@ -215,10 +215,10 @@ private:
      */
     std::vector<DeviceContext> build_device_contexts(
         const ems::rtdb::ChannelConfig& channelConfig,
-        const std::vector<ems::db::PointYcEntity>* yc_points,
-        const std::vector<ems::db::PointYxEntity>* yx_points);
+        const std::vector<ems::db::point_yc>* yc_points,
+        const std::vector<ems::db::point_yx>* yx_points);
 
-    void on_channel_error(int64_t channelId, const std::string& error);
+    void on_channel_error(int64_t channel_id, const std::string& error);
 
     EngineConfig                      config_;
     std::atomic<EngineState>          state_{EngineState::Idle};

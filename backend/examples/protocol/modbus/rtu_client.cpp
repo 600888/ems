@@ -11,7 +11,7 @@
  *       -L../build/3rd/libmodbuspp -lmodbuspp \
  *       -lpthread
  *
- * 运行: ./rtu_client [Device] [Baud] [SlaveID]
+ * 运行: ./rtu_client [device] [Baud] [SlaveID]
  *       默认: ./rtu_client /dev/ttyUSB0 9600 1
  */
 

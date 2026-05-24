@@ -64,8 +64,8 @@ bool CollectEngine::initialize(const EngineConfig& config) {
 // ============================================================
 
 int CollectEngine::start_all(ParaLoader& para_loader,
-                              const std::vector<ems::db::PointYcEntity>* yc_points,
-                              const std::vector<ems::db::PointYxEntity>* yx_points) {
+                              const std::vector<ems::db::point_yc>* yc_points,
+                              const std::vector<ems::db::point_yx>* yx_points) {
     if (state_.load() == EngineState::Running) {
         return 0;
     }
@@ -85,8 +85,8 @@ int CollectEngine::start_all(ParaLoader& para_loader,
     }
 
     // 2. 加载测点配置（如果未提供）
-    std::vector<ems::db::PointYcEntity> localYcPoints;
-    std::vector<ems::db::PointYxEntity> localYxPoints;
+    std::vector<ems::db::point_yc> localYcPoints;
+    std::vector<ems::db::point_yx> localYxPoints;
     if (!yc_points) {
         localYcPoints = para_loader.load_yc_points();
         yc_points = &localYcPoints;
@@ -177,11 +177,11 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
     return true;
 }
 
-bool CollectEngine::stop_channel(int64_t channelId) {
+bool CollectEngine::stop_channel(int64_t channel_id) {
     std::shared_ptr<ChannelThread> channel;
     {
         std::lock_guard lock(channels_mutex_);
-        auto it = channels_.find(channelId);
+        auto it = channels_.find(channel_id);
         if (it == channels_.end()) return false;
         channel = it->second;
     }
@@ -196,7 +196,7 @@ bool CollectEngine::stop_channel(int64_t channelId) {
 
     {
         std::lock_guard lock(channels_mutex_);
-        channels_.erase(channelId);
+        channels_.erase(channel_id);
     }
 
     return true;
@@ -274,9 +274,9 @@ std::vector<std::shared_ptr<ChannelThread>> CollectEngine::channels() const {
     return result;
 }
 
-std::shared_ptr<ChannelThread> CollectEngine::find_channel(int64_t channelId) const {
+std::shared_ptr<ChannelThread> CollectEngine::find_channel(int64_t channel_id) const {
     std::lock_guard lock(channels_mutex_);
-    auto it = channels_.find(channelId);
+    auto it = channels_.find(channel_id);
     return it != channels_.end() ? it->second : nullptr;
 }
 
@@ -284,9 +284,9 @@ std::shared_ptr<ChannelThread> CollectEngine::find_channel(int64_t channelId) co
 // 错误回调
 // ============================================================
 
-void CollectEngine::on_channel_error(int64_t channelId, const std::string& error) {
+void CollectEngine::on_channel_error(int64_t channel_id, const std::string& error) {
     if (error_cb_) {
-        error_cb_(channelId, error);
+        error_cb_(channel_id, error);
     }
 }
 
@@ -296,8 +296,8 @@ void CollectEngine::on_channel_error(int64_t channelId, const std::string& error
 
 std::vector<DeviceContext> CollectEngine::build_device_contexts(
     const ems::rtdb::ChannelConfig& channelConfig,
-    const std::vector<ems::db::PointYcEntity>* yc_points,
-    const std::vector<ems::db::PointYxEntity>* yx_points)
+    const std::vector<ems::db::point_yc>* yc_points,
+    const std::vector<ems::db::point_yx>* yx_points)
 {
     std::unordered_map<int64_t, DeviceContext> deviceMap;
 

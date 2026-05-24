@@ -14,10 +14,10 @@
 namespace ems {
 namespace model {
 
-class Channel : public BaseModelWithId, public TimestampMixin, public StatusMixin {
+class channel : public BaseModelWithId, public TimestampMixin, public StatusMixin {
 public:
-    Channel() = default;
-    explicit Channel(int64_t id) : BaseModelWithId(id) {}
+    channel() = default;
+    explicit channel(int64_t id) : BaseModelWithId(id) {}
     
     std::string code;
     std::string name;
@@ -38,10 +38,10 @@ public:
     std::string rtu_addr{"1"};
     int timeout{5};
     
-    std::vector<std::shared_ptr<class PointYc>> yc_points;
-    std::vector<std::shared_ptr<class PointYx>> yx_points;
-    std::vector<std::shared_ptr<class PointYk>> yk_points;
-    std::vector<std::shared_ptr<class PointYt>> yt_points;
+    std::vector<std::shared_ptr<class point_yc>> yc_points;
+    std::vector<std::shared_ptr<class point_yx>> yx_points;
+    std::vector<std::shared_ptr<class point_yk>> yk_points;
+    std::vector<std::shared_ptr<class point_yt>> yt_points;
     std::vector<std::shared_ptr<class Slave>> slaves;
     
     json to_json() const override {
@@ -135,7 +135,7 @@ public:
     }
 };
 
-using ChannelList = std::vector<std::shared_ptr<Channel>>;
+using ChannelList = std::vector<std::shared_ptr<channel>>;
 
 } // namespace model
 } // namespace ems

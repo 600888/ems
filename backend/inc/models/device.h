@@ -14,10 +14,10 @@
 namespace ems {
 namespace model {
 
-class Device : public BaseModelWithId, public TimestampMixin, public StatusMixin {
+class device : public BaseModelWithId, public TimestampMixin, public StatusMixin {
 public:
-    Device() = default;
-    explicit Device(int64_t id) : BaseModelWithId(id) {}
+    device() = default;
+    explicit device(int64_t id) : BaseModelWithId(id) {}
     
     std::string code;
     std::string name;
@@ -25,7 +25,7 @@ public:
     std::optional<int64_t> group_id;
     std::optional<std::string> description;
     
-    std::vector<std::shared_ptr<class Channel>> channels;
+    std::vector<std::shared_ptr<class channel>> channels;
     
     json to_json() const override {
         json j = BaseModelWithId::to_json();
@@ -79,7 +79,7 @@ public:
     }
 };
 
-using DeviceList = std::vector<std::shared_ptr<Device>>;
+using DeviceList = std::vector<std::shared_ptr<device>>;
 
 } // namespace model
 } // namespace ems

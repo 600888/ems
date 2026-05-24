@@ -11,7 +11,7 @@
  *       -L../build/3rd/libmodbuspp -lmodbuspp \
  *       -lpthread
  *
- * 运行: ./rtu_server [Device] [Baud]
+ * 运行: ./rtu_server [device] [Baud]
  *       默认: ./rtu_server /dev/ttyUSB1 9600
  */
 

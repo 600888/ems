@@ -1285,5 +1285,48 @@ std::string RtDb::pointHashFields(const T& point) {
     return "";
 }
 
+// ============================================================
+// 协议类型转换（声明在 rtdb_channel.h，实现在此处）
+// ============================================================
+
+const char* protocolTypeToString(model::ProtocolType t) {
+    switch (t) {
+        case model::ProtocolType::ModbusRTU:   return "ModbusRTU";
+        case model::ProtocolType::ModbusTCP:   return "ModbusTCP";
+        case model::ProtocolType::IEC104:      return "IEC104";
+        case model::ProtocolType::DLT645:      return "DLT645";
+        case model::ProtocolType::IEC61850:    return "IEC61850";
+        case model::ProtocolType::OPCUA:       return "OPCUA";
+        case model::ProtocolType::MQTT:        return "MQTT";
+        case model::ProtocolType::CAN:         return "CAN";
+        case model::ProtocolType::Other:       return "Other";
+    }
+    return "Unknown";
+}
+
+std::optional<model::ProtocolType> stringToProtocolType(const std::string& s) {
+    if (s == "ModbusRTU")   return model::ProtocolType::ModbusRTU;
+    if (s == "ModbusTCP")   return model::ProtocolType::ModbusTCP;
+    if (s == "IEC104")      return model::ProtocolType::IEC104;
+    if (s == "DLT645")      return model::ProtocolType::DLT645;
+    if (s == "IEC61850")    return model::ProtocolType::IEC61850;
+    if (s == "OPCUA")       return model::ProtocolType::OPCUA;
+    if (s == "MQTT")        return model::ProtocolType::MQTT;
+    if (s == "CAN")         return model::ProtocolType::CAN;
+    return std::nullopt;
+}
+
+// ============================================================
+// createRtDb 工厂函数（声明在 rtdb.h）
+// ============================================================
+
+std::unique_ptr<RtDb> createRtDb(const RtDbConfig& config) {
+    auto db = std::make_unique<RtDb>();
+    if (db->initialize(config)) {
+        return db;
+    }
+    return nullptr;
+}
+
 }
 }

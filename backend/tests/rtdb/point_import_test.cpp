@@ -64,7 +64,7 @@ TEST_F(PointImportTest, LoadYcConfigs) {
     RtDbConfigCache::YcConfig cfg1;
     cfg1.code = "YC_001";
     cfg1.name = "母线电压";
-    cfg1.channelId = 1;
+    cfg1.channel_id = 1;
     cfg1.mulCoe = 1.0;
     cfg1.addCoe = 0.0;
     cfg1.maxLimit = 1000.0;
@@ -76,7 +76,7 @@ TEST_F(PointImportTest, LoadYcConfigs) {
     RtDbConfigCache::YcConfig cfg2;
     cfg2.code = "YC_002";
     cfg2.name = "有功功率";
-    cfg2.channelId = 1;
+    cfg2.channel_id = 1;
     cfg2.mulCoe = 0.1;
     cfg2.addCoe = 0.0;
     cfg2.maxLimit = 1000.0;
@@ -110,7 +110,7 @@ TEST_F(PointImportTest, LoadYxConfigs) {
     RtDbConfigCache::YxConfig cfg1;
     cfg1.code = "YX_001";
     cfg1.name = "断路器状态";
-    cfg1.channelId = 1;
+    cfg1.channel_id = 1;
     cfg1.bit = 0;
     cfg1.reverse = false;
     cfg1.status = 1;
@@ -119,7 +119,7 @@ TEST_F(PointImportTest, LoadYxConfigs) {
     RtDbConfigCache::YxConfig cfg2;
     cfg2.code = "YX_002";
     cfg2.name = "隔离开关状态";
-    cfg2.channelId = 1;
+    cfg2.channel_id = 1;
     cfg2.bit = 1;
     cfg2.reverse = true;
     cfg2.status = 1;
@@ -150,7 +150,7 @@ TEST_F(PointImportTest, LoadYkConfigs) {
     RtDbConfigCache::YkConfig cfg1;
     cfg1.code = "YK_001";
     cfg1.name = "断路器遥控";
-    cfg1.channelId = 1;
+    cfg1.channel_id = 1;
     cfg1.bit = 0;
     cfg1.commandType = 0;
     cfg1.status = 1;
@@ -171,7 +171,7 @@ TEST_F(PointImportTest, LoadYtConfigs) {
     RtDbConfigCache::YtConfig cfg1;
     cfg1.code = "YT_001";
     cfg1.name = "分接头调节";
-    cfg1.channelId = 1;
+    cfg1.channel_id = 1;
     cfg1.mulCoe = 0.01;
     cfg1.addCoe = 0.0;
     cfg1.maxLimit = 100.0;
@@ -325,7 +325,7 @@ TEST_F(PointImportTest, JsonImportYcPoints) {
         RtDbConfigCache::YcConfig cfg;
         cfg.code = j.value("code", "");
         cfg.name = j.value("name", "");
-        cfg.channelId = j.value("channel_id", 0LL);
+        cfg.channel_id = j.value("channel_id", 0LL);
         cfg.mulCoe = j.value("mul_coe", 0.0);
         cfg.addCoe = j.value("add_coe", 0.0);
         cfg.maxLimit = j.value("max_limit", 0.0);
@@ -397,7 +397,7 @@ TEST_F(PointImportTest, JsonImportWithFile) {
         RtDbConfigCache::YcConfig cfg;
         cfg.code = j.value("code", "");
         cfg.name = j.value("name", "");
-        cfg.channelId = j.value("channel_id", 0LL);
+        cfg.channel_id = j.value("channel_id", 0LL);
         cfg.mulCoe = j.value("mul_coe", 0.0);
         cfg.addCoe = j.value("add_coe", 0.0);
         cfg.maxLimit = j.value("max_limit", 0.0);
@@ -664,7 +664,7 @@ TEST_F(PointImportTest, ConfigConversionFromYc) {
     RtDbConfigCache::YcConfig ycConfig;
     EXPECT_TRUE(cache->getYcConfig("CONV_YC_001", ycConfig));
     EXPECT_EQ(ycConfig.name, "转换测试");
-    EXPECT_EQ(ycConfig.channelId, 2);
+    EXPECT_EQ(ycConfig.channel_id, 2);
     EXPECT_EQ(ycConfig.mulCoe, 2.0);
     EXPECT_EQ(ycConfig.addCoe, 1.0);
     EXPECT_EQ(ycConfig.unit, "Hz");
@@ -778,7 +778,7 @@ TEST_F(PointImportTest, FullImportWorkflow) {
         RtDbConfigCache::YcConfig cfg;
         cfg.code = j.value("code", "");
         cfg.name = j.value("name", "");
-        cfg.channelId = j.value("channel_id", 0LL);
+        cfg.channel_id = j.value("channel_id", 0LL);
         cfg.mulCoe = j.value("mul_coe", 0.0);
         cfg.addCoe = j.value("add_coe", 0.0);
         cfg.maxLimit = j.value("max_limit", 0.0);
@@ -792,7 +792,7 @@ TEST_F(PointImportTest, FullImportWorkflow) {
         RtDbConfigCache::YxConfig cfg;
         cfg.code = j.value("code", "");
         cfg.name = j.value("name", "");
-        cfg.channelId = j.value("channel_id", 0LL);
+        cfg.channel_id = j.value("channel_id", 0LL);
         cfg.bit = j.value("bit", 0);
         cfg.reverse = j.value("reverse", false);
         cfg.status = j.value("status", 0);

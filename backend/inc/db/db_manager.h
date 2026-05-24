@@ -11,9 +11,9 @@
 #include <vector>
 #include <memory>
 #include <cstdint>
-#include "device_entity.h"
-#include "channel_entity.h"
-#include "point_entity.h"
+#include "device.h"
+#include "channel.h"
+#include "point.h"
 
 namespace ems {
 namespace db {
@@ -96,33 +96,33 @@ public:
     // 设备操作
     // ============================================================
 
-    std::vector<DeviceEntity> query_all_devices();
-    DeviceEntity              query_device_by_id(int64_t id);
-    DeviceEntity              query_device_by_code(const std::string& code);
-    bool                      insert_device(const DeviceEntity& device);
-    bool                      update_device(const DeviceEntity& device);
+    std::vector<device> query_all_devices();
+    device              query_device_by_id(int64_t id);
+    device              query_device_by_code(const std::string& code);
+    bool                      insert_device(const device& device);
+    bool                      update_device(const device& device);
     bool                      delete_device(int64_t id);
 
     // ============================================================
     // 通道操作
     // ============================================================
 
-    std::vector<ChannelEntity> query_all_channels();
-    std::vector<ChannelEntity> query_channels_by_device(int64_t device_id);
-    ChannelEntity              query_channel_by_id(int64_t id);
-    ChannelEntity              query_channel_by_code(const std::string& code);
-    bool                       insert_channel(const ChannelEntity& channel);
-    bool                       update_channel(const ChannelEntity& channel);
+    std::vector<channel> query_all_channels();
+    std::vector<channel> query_channels_by_device(int64_t device_id);
+    channel              query_channel_by_id(int64_t id);
+    channel              query_channel_by_code(const std::string& code);
+    bool                       insert_channel(const channel& channel);
+    bool                       update_channel(const channel& channel);
     bool                       delete_channel(int64_t id);
 
     // ============================================================
     // 测点配置操作
     // ============================================================
 
-    std::vector<PointYcEntity> query_yc_points(int64_t channel_id = 0);
-    std::vector<PointYxEntity> query_yx_points(int64_t channel_id = 0);
-    std::vector<PointYkEntity> query_yk_points(int64_t channel_id = 0);
-    std::vector<PointYtEntity> query_yt_points(int64_t channel_id = 0);
+    std::vector<point_yc> query_yc_points(int64_t channel_id = 0);
+    std::vector<point_yx> query_yx_points(int64_t channel_id = 0);
+    std::vector<point_yk> query_yk_points(int64_t channel_id = 0);
+    std::vector<point_yt> query_yt_points(int64_t channel_id = 0);
 
     // ============================================================
     // 采集数据导入
@@ -166,6 +166,29 @@ private:
  * @endcode
  */
 DbConfig get_default_db_config();
+
+/**
+ * @brief 初始化数据库（自动建库建表）
+ *
+ * 如果数据库不存在则创建，如果表不存在则创建。
+ * 需要 MySQL 服务器运行中，且提供有 CREATE 权限的账号。
+ * 内部使用 MYSQL C API 连接 MySQL（不依赖 ormpp），
+ * 仅当 libmysqlclient-dev 可用时生效。
+ *
+ * @param config 数据库连接参数（使用其中的 host/port/user/password，dbname 为目标库名）
+ * @return true 成功（数据库和表已就绪）
+ */
+bool ensure_database(const DbConfig& config);
+
+/**
+ * @brief 初始化数据库并写入示例测点
+ *
+ * 在 ensure_database 基础上，如果设备表和通道表为空，
+ * 写入一组默认的 Modbus 测点配置用于测试。
+ *
+ * @return true 成功
+ */
+bool ensure_database_with_seed(const DbConfig& config);
 
 } // namespace db
 } // namespace ems

@@ -72,32 +72,32 @@ void RTDBEMS::shutdown() {
     initialized_ = false;
 }
 
-std::string RTDBEMS::buildDeviceSnapshotKey(const std::string& deviceId) const {
-    return "device:" + deviceId + ":rtdata";
+std::string RTDBEMS::buildDeviceSnapshotKey(const std::string& device_id) const {
+    return "device:" + device_id + ":rtdata";
 }
 
-std::string RTDBEMS::buildDevicePointKey(const std::string& deviceId, const std::string& pointCode) const {
-    return "device:" + deviceId + ":points:" + pointCode;
+std::string RTDBEMS::buildDevicePointKey(const std::string& device_id, const std::string& pointCode) const {
+    return "device:" + device_id + ":points:" + pointCode;
 }
 
-std::string RTDBEMS::buildTimeSeriesKey(const std::string& deviceId, const std::string& pointCode) const {
-    return "device:" + deviceId + ":history:" + pointCode;
+std::string RTDBEMS::buildTimeSeriesKey(const std::string& device_id, const std::string& pointCode) const {
+    return "device:" + device_id + ":history:" + pointCode;
 }
 
-std::string RTDBEMS::buildCommandQueueKey(const std::string& deviceId) const {
-    return "cmd:" + deviceId + ":queue";
+std::string RTDBEMS::buildCommandQueueKey(const std::string& device_id) const {
+    return "cmd:" + device_id + ":queue";
 }
 
 std::string RTDBEMS::buildCommandResultKey(const std::string& commandId) const {
     return "cmd:result:" + commandId;
 }
 
-std::string RTDBEMS::buildDeviceLockKey(const std::string& deviceId) const {
-    return "lock:device:" + deviceId;
+std::string RTDBEMS::buildDeviceLockKey(const std::string& device_id) const {
+    return "lock:device:" + device_id;
 }
 
-std::string RTDBEMS::buildControlLockKey(const std::string& deviceId) const {
-    return "lock:ctrl:" + deviceId;
+std::string RTDBEMS::buildControlLockKey(const std::string& device_id) const {
+    return "lock:ctrl:" + device_id;
 }
 
 std::string RTDBEMS::buildTopologyKey(const std::string& topologyId) const {
@@ -108,15 +108,15 @@ std::string RTDBEMS::buildTopologyIndexKey() const {
     return "config:topology:index";
 }
 
-bool RTDBEMS::setDeviceSnapshot(const std::string& deviceId, const DeviceSnapshot& snapshot) {
+bool RTDBEMS::setDeviceSnapshot(const std::string& device_id, const DeviceSnapshot& snapshot) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildDeviceSnapshotKey(deviceId);
+        std::string key = buildDeviceSnapshotKey(device_id);
         
         std::map<std::string, std::string> fields;
-        fields["device_id"] = deviceId;
-        fields["device_type"] = snapshot.deviceType;
+        fields["device_id"] = device_id;
+        fields["device_type"] = snapshot.DeviceType;
         fields["timestamp"] = std::to_string(snapshot.timestamp > 0 ? snapshot.timestamp : currentTimestamp());
         fields["quality"] = std::to_string(snapshot.quality);
         
@@ -142,27 +142,27 @@ bool RTDBEMS::setDeviceSnapshot(const std::string& deviceId, const DeviceSnapsho
     }
 }
 
-bool RTDBEMS::getDeviceSnapshot(const std::string& deviceId, DeviceSnapshot& snapshot) {
+bool RTDBEMS::getDeviceSnapshot(const std::string& device_id, DeviceSnapshot& snapshot) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildDeviceSnapshotKey(deviceId);
+        std::string key = buildDeviceSnapshotKey(device_id);
         std::map<std::string, std::string> fields;
         
         if (!rtdb_->getHash(key, fields)) {
             return false;
         }
         
-        snapshot.deviceId = deviceId;
+        snapshot.device_id = device_id;
         snapshot.ycValues.clear();
         snapshot.yxValues.clear();
         snapshot.metadata.clear();
         
         for (const auto& field : fields) {
             if (field.first == "device_id") {
-                snapshot.deviceId = field.second;
+                snapshot.device_id = field.second;
             } else if (field.first == "device_type") {
-                snapshot.deviceType = field.second;
+                snapshot.DeviceType = field.second;
             } else if (field.first == "timestamp") {
                 snapshot.timestamp = std::stoull(field.second);
             } else if (field.first == "quality") {
@@ -182,16 +182,16 @@ bool RTDBEMS::getDeviceSnapshot(const std::string& deviceId, DeviceSnapshot& sna
     }
 }
 
-bool RTDBEMS::deleteDeviceSnapshot(const std::string& deviceId) {
+bool RTDBEMS::deleteDeviceSnapshot(const std::string& device_id) {
     if (!rtdb_) return false;
-    return rtdb_->deleteKey(buildDeviceSnapshotKey(deviceId));
+    return rtdb_->deleteKey(buildDeviceSnapshotKey(device_id));
 }
 
-bool RTDBEMS::updateDevicePoint(const std::string& deviceId, const std::string& pointCode, double value) {
+bool RTDBEMS::updateDevicePoint(const std::string& device_id, const std::string& pointCode, double value) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildDeviceSnapshotKey(deviceId);
+        std::string key = buildDeviceSnapshotKey(device_id);
         std::string field = "yc:" + pointCode;
         std::string valueStr = std::to_string(value);
         
@@ -207,11 +207,11 @@ bool RTDBEMS::updateDevicePoint(const std::string& deviceId, const std::string& 
     }
 }
 
-bool RTDBEMS::updateDevicePoint(const std::string& deviceId, const std::string& pointCode, int value) {
+bool RTDBEMS::updateDevicePoint(const std::string& device_id, const std::string& pointCode, int value) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildDeviceSnapshotKey(deviceId);
+        std::string key = buildDeviceSnapshotKey(device_id);
         std::string field = "yx:" + pointCode;
         std::string valueStr = std::to_string(value);
         
@@ -227,11 +227,11 @@ bool RTDBEMS::updateDevicePoint(const std::string& deviceId, const std::string& 
     }
 }
 
-bool RTDBEMS::getDevicePoint(const std::string& deviceId, const std::string& pointCode, double& value) {
+bool RTDBEMS::getDevicePoint(const std::string& device_id, const std::string& pointCode, double& value) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildDeviceSnapshotKey(deviceId);
+        std::string key = buildDeviceSnapshotKey(device_id);
         std::string field = "yc:" + pointCode;
         std::string valueStr;
         std::map<std::string, std::string> fields = {{field, valueStr}};
@@ -246,11 +246,11 @@ bool RTDBEMS::getDevicePoint(const std::string& deviceId, const std::string& poi
     }
 }
 
-bool RTDBEMS::getDevicePoint(const std::string& deviceId, const std::string& pointCode, int& value) {
+bool RTDBEMS::getDevicePoint(const std::string& device_id, const std::string& pointCode, int& value) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildDeviceSnapshotKey(deviceId);
+        std::string key = buildDeviceSnapshotKey(device_id);
         std::string field = "yx:" + pointCode;
         std::string valueStr;
         std::map<std::string, std::string> fields = {{field, valueStr}};
@@ -265,12 +265,12 @@ bool RTDBEMS::getDevicePoint(const std::string& deviceId, const std::string& poi
     }
 }
 
-bool RTDBEMS::appendTimeSeriesData(const std::string& deviceId, const std::string& pointCode,
+bool RTDBEMS::appendTimeSeriesData(const std::string& device_id, const std::string& pointCode,
                                    double value, uint64_t timestamp) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildTimeSeriesKey(deviceId, pointCode);
+        std::string key = buildTimeSeriesKey(device_id, pointCode);
         uint64_t ts = timestamp > 0 ? timestamp : currentTimestamp();
         
         std::map<std::string, std::string> members;
@@ -283,7 +283,7 @@ bool RTDBEMS::appendTimeSeriesData(const std::string& deviceId, const std::strin
 }
 
 std::vector<std::pair<uint64_t, double>> RTDBEMS::getTimeSeriesData(
-    const std::string& deviceId,
+    const std::string& device_id,
     const std::string& pointCode,
     uint64_t startTime,
     uint64_t endTime,
@@ -293,7 +293,7 @@ std::vector<std::pair<uint64_t, double>> RTDBEMS::getTimeSeriesData(
     if (!rtdb_) return result;
     
     try {
-        std::string key = buildTimeSeriesKey(deviceId, pointCode);
+        std::string key = buildTimeSeriesKey(device_id, pointCode);
         std::map<std::string, std::string> fields;
         
         if (!rtdb_->getHash(key, fields)) {
@@ -322,12 +322,12 @@ std::vector<std::pair<uint64_t, double>> RTDBEMS::getTimeSeriesData(
     }
 }
 
-bool RTDBEMS::cleanTimeSeriesData(const std::string& deviceId, const std::string& pointCode,
+bool RTDBEMS::cleanTimeSeriesData(const std::string& device_id, const std::string& pointCode,
                                   uint64_t beforeTime) {
     if (!rtdb_) return false;
     
     if (beforeTime == 0) {
-        return rtdb_->deleteKey(buildTimeSeriesKey(deviceId, pointCode));
+        return rtdb_->deleteKey(buildTimeSeriesKey(device_id, pointCode));
     }
     
     return true;
@@ -337,11 +337,11 @@ bool RTDBEMS::pushCommand(const DeviceCommand& command) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildCommandQueueKey(command.deviceId);
+        std::string key = buildCommandQueueKey(command.device_id);
         
         std::map<std::string, std::string> cmdData;
         cmdData["command_id"] = command.commandId.empty() ? generateUUID() : command.commandId;
-        cmdData["device_id"] = command.deviceId;
+        cmdData["device_id"] = command.device_id;
         cmdData["command_type"] = command.commandType;
         cmdData["point_code"] = command.pointCode;
         cmdData["value"] = std::to_string(command.value);
@@ -361,11 +361,11 @@ bool RTDBEMS::pushCommand(const DeviceCommand& command) {
     }
 }
 
-bool RTDBEMS::popCommand(const std::string& deviceId, DeviceCommand& command, int timeoutMs) {
+bool RTDBEMS::popCommand(const std::string& device_id, DeviceCommand& command, int timeoutMs) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildCommandQueueKey(deviceId);
+        std::string key = buildCommandQueueKey(device_id);
         std::string cmdJson;
         
         if (!rtdb_->get(key, cmdJson)) {
@@ -424,11 +424,11 @@ bool RTDBEMS::getCommandResult(const std::string& commandId, CommandResult& resu
     }
 }
 
-bool RTDBEMS::acquireLock(const std::string& deviceId, const std::string& ownerId, int expireSeconds) {
+bool RTDBEMS::acquireLock(const std::string& device_id, const std::string& ownerId, int expireSeconds) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildDeviceLockKey(deviceId);
+        std::string key = buildDeviceLockKey(device_id);
         std::string value = ownerId + ":" + std::to_string(currentTimestamp());
         
         return rtdb_->setWithExpire(key, value, expireSeconds);
@@ -437,11 +437,11 @@ bool RTDBEMS::acquireLock(const std::string& deviceId, const std::string& ownerI
     }
 }
 
-bool RTDBEMS::releaseLock(const std::string& deviceId, const std::string& ownerId) {
+bool RTDBEMS::releaseLock(const std::string& device_id, const std::string& ownerId) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildDeviceLockKey(deviceId);
+        std::string key = buildDeviceLockKey(device_id);
         std::string currentOwner;
         
         if (!rtdb_->get(key, currentOwner)) {
@@ -458,16 +458,16 @@ bool RTDBEMS::releaseLock(const std::string& deviceId, const std::string& ownerI
     }
 }
 
-bool RTDBEMS::isLocked(const std::string& deviceId) {
+bool RTDBEMS::isLocked(const std::string& device_id) {
     if (!rtdb_) return false;
-    return rtdb_->exists(buildDeviceLockKey(deviceId));
+    return rtdb_->exists(buildDeviceLockKey(device_id));
 }
 
-std::string RTDBEMS::getLockOwner(const std::string& deviceId) {
+std::string RTDBEMS::getLockOwner(const std::string& device_id) {
     if (!rtdb_) return "";
     
     try {
-        std::string key = buildDeviceLockKey(deviceId);
+        std::string key = buildDeviceLockKey(device_id);
         std::string value;
         
         if (!rtdb_->get(key, value)) {
@@ -541,10 +541,10 @@ bool RTDBEMS::getTopology(const std::string& topologyId, SystemTopology& topolog
         std::string devicesStr = data.count("device_ids") ? data["device_ids"] : "";
         if (!devicesStr.empty()) {
             std::istringstream stream(devicesStr);
-            std::string deviceId;
-            while (std::getline(stream, deviceId, ',')) {
-                if (!deviceId.empty()) {
-                    topology.deviceIds.push_back(deviceId);
+            std::string device_id;
+            while (std::getline(stream, device_id, ',')) {
+                if (!device_id.empty()) {
+                    topology.deviceIds.push_back(device_id);
                 }
             }
         }
@@ -601,11 +601,11 @@ bool RTDBEMS::getAllTopologies(std::vector<SystemTopology>& topologies) {
     }
 }
 
-bool RTDBEMS::acquireControlLock(const std::string& deviceId, const std::string& ownerId, int expireSeconds) {
+bool RTDBEMS::acquireControlLock(const std::string& device_id, const std::string& ownerId, int expireSeconds) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildControlLockKey(deviceId);
+        std::string key = buildControlLockKey(device_id);
         std::string value = ownerId + ":" + std::to_string(currentTimestamp());
         
         return rtdb_->setWithExpire(key, value, expireSeconds);
@@ -614,11 +614,11 @@ bool RTDBEMS::acquireControlLock(const std::string& deviceId, const std::string&
     }
 }
 
-bool RTDBEMS::releaseControlLock(const std::string& deviceId, const std::string& ownerId) {
+bool RTDBEMS::releaseControlLock(const std::string& device_id, const std::string& ownerId) {
     if (!rtdb_) return false;
     
     try {
-        std::string key = buildControlLockKey(deviceId);
+        std::string key = buildControlLockKey(device_id);
         std::string currentOwner;
         
         if (!rtdb_->get(key, currentOwner)) {
@@ -635,18 +635,18 @@ bool RTDBEMS::releaseControlLock(const std::string& deviceId, const std::string&
     }
 }
 
-bool RTDBEMS::executeWithLock(const std::string& deviceId, const std::string& ownerId,
+bool RTDBEMS::executeWithLock(const std::string& device_id, const std::string& ownerId,
                               std::function<bool()> operation, int timeoutMs) {
-    if (!acquireControlLock(deviceId, ownerId, timeoutMs / 1000)) {
+    if (!acquireControlLock(device_id, ownerId, timeoutMs / 1000)) {
         return false;
     }
     
     try {
         bool result = operation();
-        releaseControlLock(deviceId, ownerId);
+        releaseControlLock(device_id, ownerId);
         return result;
     } catch (const std::exception& e) {
-        releaseControlLock(deviceId, ownerId);
+        releaseControlLock(device_id, ownerId);
         return false;
     }
 }
