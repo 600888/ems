@@ -1,0 +1,49 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "文档首页"
+  },
+  {
+    "type": "dir",
+    "name": "architecture",
+    "label": "架构与业务模型",
+    "collapsible": true,
+    "collapsed": false
+  },
+  {
+    "type": "dir",
+    "name": "processes",
+    "label": "进程设计",
+    "collapsible": true,
+    "collapsed": false
+  },
+  {
+    "type": "dir",
+    "name": "common",
+    "label": "公共模块",
+    "collapsible": true,
+    "collapsed": false
+  },
+  {
+    "type": "dir",
+    "name": "decisions",
+    "label": "技术决策",
+    "collapsible": true,
+    "collapsed": false
+  },
+  {
+    "type": "dir",
+    "name": "reference",
+    "label": "开发参考",
+    "collapsible": true,
+    "collapsed": false
+  },
+  {
+    "type": "dir",
+    "name": "guide",
+    "label": "文档维护",
+    "collapsible": true,
+    "collapsed": false
+  }
+]

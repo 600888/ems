@@ -1,0 +1,36 @@
+[
+  {
+    "text": "首页",
+    "link": "/"
+  },
+  {
+    "text": "架构",
+    "link": "/architecture/",
+    "activeMatch": "^/architecture/"
+  },
+  {
+    "text": "进程",
+    "link": "/processes/",
+    "activeMatch": "^/processes/"
+  },
+  {
+    "text": "公共模块",
+    "link": "/common/",
+    "activeMatch": "^/common/"
+  },
+  {
+    "text": "技术决策",
+    "link": "/decisions/",
+    "activeMatch": "^/decisions/"
+  },
+  {
+    "text": "开发参考",
+    "link": "/reference/",
+    "activeMatch": "^/reference/"
+  },
+  {
+    "text": "文档维护",
+    "link": "/guide/",
+    "activeMatch": "^/guide/"
+  }
+]

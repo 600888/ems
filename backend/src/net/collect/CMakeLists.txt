@@ -19,7 +19,7 @@ add_library(net_collect STATIC
 target_include_directories(net_collect PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/inc
+    ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/3rd
     ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )

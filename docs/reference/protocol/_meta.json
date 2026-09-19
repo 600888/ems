@@ -1,0 +1,12 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "协议库目录"
+  },
+  {
+    "type": "file",
+    "name": "libmodbuspp-guide",
+    "label": "libmodbuspp 使用指南"
+  }
+]

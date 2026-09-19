@@ -1,0 +1,22 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "架构概览"
+  },
+  {
+    "type": "file",
+    "name": "system-design",
+    "label": "系统架构"
+  },
+  {
+    "type": "file",
+    "name": "device-model",
+    "label": "设备模型与点表绑定"
+  },
+  {
+    "type": "file",
+    "name": "channel-protocol",
+    "label": "设备、通道与协议"
+  }
+]

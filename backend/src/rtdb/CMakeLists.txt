@@ -10,7 +10,7 @@ add_library(rtdb STATIC ${RTDB_SOURCES})
 
 target_include_directories(rtdb PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/inc
+    ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )
 
@@ -19,7 +19,7 @@ pkg_check_modules(HIREDIS REQUIRED hiredis)
 
 target_include_directories(rtdb PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/inc
+    ${CMAKE_SOURCE_DIR}/include
     ${HIREDIS_INCLUDE_DIRS}
 )
 

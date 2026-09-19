@@ -15,7 +15,7 @@ add_executable(data_collect_example
 
 target_include_directories(data_collect_example PRIVATE
     ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/inc
+    ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/include
     ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )

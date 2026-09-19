@@ -11,7 +11,7 @@ add_executable(test_modbus_handler
 )
 
 target_include_directories(test_modbus_handler PRIVATE
-    ${CMAKE_SOURCE_DIR}/inc
+    ${CMAKE_SOURCE_DIR}/include
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/lib/include
     ${CMAKE_SOURCE_DIR}/3rd/googletest/googletest/include

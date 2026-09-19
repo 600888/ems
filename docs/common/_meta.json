@@ -1,0 +1,19 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "公共模块概览"
+  },
+  {
+    "type": "file",
+    "name": "design",
+    "label": "公共模块设计与实施"
+  },
+  {
+    "type": "dir",
+    "name": "realtime",
+    "label": "实时数据访问",
+    "collapsible": true,
+    "collapsed": false
+  }
+]

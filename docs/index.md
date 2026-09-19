@@ -1,0 +1,51 @@
+# EMS 设计文档
+
+本目录面向 EMS 重新设计，按系统架构、业务进程、公共模块、技术决策和开发参考组织。自研 C++ 使用 C++17；文中未完成实现与验收的部分均为目标设计。
+
+## 架构与公共契约
+
+- [公共模块设计与实施规范](common/design.md)：设备共享模型、目录与库依赖、配置/数据库/实时/消息接口与采样恢复边界、旧代码迁移及分阶段验收；后续公共模块编码从此文档开始。
+- [EMS 系统架构设计](architecture/system-design.md)：C++17/Go/Vue 3 四进程目标架构，Redis/Streams/gRPC/MQ 评估，储能单元与设备模型，Go GORM/C++ 公共 ormpp API 与进程独立连接，MySQL/TDengine 存储、控制闭环与分阶段迁移。
+- [数据采集架构](processes/collector/design.md)：C++17 采集进程、设备与通道绑定、独立采控/共用通道、事务边界插队、协议插件及可靠分发。
+- [EMS 设备模型与点表绑定设计](architecture/device-model.md)：PCS、BMS、电表、消防、空调、环控、保护与其他设备的固有点位、厂家点表、实例绑定、启用/禁用、导入页面与控制反馈。
+- [Redis 键设计](common/realtime/redis-key-design.md)：全局唯一储能单元 code、递归设备 code 路径、station 公共资源、键目录、消费组、生命周期与迁移。
+- [公共实时数据访问接口设计（C++17）](common/realtime/access-design.md)：抽象基类、共享内存/Redis/其他内存数据库派生类，统一读写与 CAS、错误语义、工厂注入、跨进程恢复和验收。
+- [设备、通道与协议](architecture/channel-protocol.md)：设备多通道绑定、采集/上送用途、客户端/服务端角色、协议 profile、资源、会话与点映射。
+
+## 按进程阅读
+
+| 进程 | 设计入口 | 负责内容 |
+| --- | --- | --- |
+| 采集与上送 / C++17 | [通信进程](processes/collector/index.md) | 南向采样与执行、北向状态出口与外部意图受理 |
+| 存储 / C++17 | [存储进程](processes/storage/index.md) | 历史与审计归档、配置发布、outbox 与查询服务 |
+| 策略 / C++17 | [策略进程](processes/strategy/index.md) | 聚合、告警、优化调度与控制仲裁 |
+| Web / Go | [Web 后端与前端](processes/web/index.md) | 权限、配置页面、API 与实时展示编排 |
+
+## 技术选型评估
+
+- [ZeroMQ 引入评估](decisions/zeromq-assessment.md)：结合四进程架构比较 Redis Streams、gRPC 与 ZeroMQ，说明首期不引入的理由、候选场景和后续验证条件。
+
+## 模块参考
+
+- [实时数据与配置](common/realtime/index.md)：Redis 最新值、Streams 可靠事件、跨语言契约与存储服务配置发布。
+- [libmodbuspp 指南](reference/protocol/libmodbuspp-guide.md)：协议库使用参考。
+
+## 目录组织
+
+```text
+docs/
+  index.md                         文档首页
+  architecture/                    系统架构、设备模型、通道与协议
+  processes/
+    collector/                     采集与上送，C++17
+    storage/                       归档、发布与查询，C++17
+    strategy/                      聚合、告警与仲裁，C++17
+    web/                           Go 后端与 Vue 前端协作
+  common/                          公共模块设计与实施规范
+    realtime/                      公共实时接口、数据边界与 Redis 键
+  decisions/                       技术选型评估
+  reference/protocol/              第三方协议库参考
+  guide/                           文档维护与 Rspress 接入
+```
+
+每个目录有 index.md 和 `_meta.json`，根 `_nav.json` 指定 Rspress 导航；使用稳定英文路径与中文标题。公共契约只保存一份，由进程文档引用，库示例不覆盖业务设计。维护规则和旧路径对照见 [文档维护与 Rspress](guide/documentation.md)。

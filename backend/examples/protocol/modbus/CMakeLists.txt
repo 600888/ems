@@ -14,7 +14,7 @@ foreach(src ${EXAMPLE_SOURCES})
     target_include_directories(${target} PRIVATE
         ${CMAKE_SOURCE_DIR}/src/net/protocol/modbus
         ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/include
-        ${CMAKE_SOURCE_DIR}/inc
+        ${CMAKE_SOURCE_DIR}/include
     )
     target_link_libraries(${target} PRIVATE
         modbuspp-shared

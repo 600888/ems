@@ -1,0 +1,12 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "进程职责与模块"
+  },
+  {
+    "type": "file",
+    "name": "design",
+    "label": "采集执行与协议插件"
+  }
+]

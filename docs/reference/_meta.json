@@ -1,0 +1,14 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "开发参考概览"
+  },
+  {
+    "type": "dir",
+    "name": "protocol",
+    "label": "协议库参考",
+    "collapsible": true,
+    "collapsed": false
+  }
+]
