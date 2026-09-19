@@ -7,11 +7,11 @@
  */
 #pragma once
 
-#include <string>
-#include <vector>
-
 #include <common/core/identity.h>
 #include <common/model/point.h>
+
+#include <string>
+#include <vector>
 
 namespace ems::model {
 
@@ -27,11 +27,11 @@ struct CapabilityParameter {
 
 /// 能力定义（版本化配置）
 struct CapabilityDefinition {
-    std::string capability_code;                  ///< 能力编码，如 charge / discharge
+    std::string capability_code;  ///< 能力编码，如 charge / discharge
     std::string name;
-    std::vector<core::PointId> required_points;    ///< 所需标准点
-    std::vector<core::PointId> required_feedbacks; ///< 所需命令反馈点
-    std::vector<CapabilityParameter> parameters;   ///< 参数及单位约束
+    std::vector<core::PointId> required_points;     ///< 所需标准点
+    std::vector<core::PointId> required_feedbacks;  ///< 所需命令反馈点
+    std::vector<CapabilityParameter> parameters;    ///< 参数及单位约束
     bool enabled{true};
 };
 

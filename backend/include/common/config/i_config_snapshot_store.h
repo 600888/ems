@@ -9,38 +9,34 @@
  */
 #pragma once
 
-#include <string>
-
 #include <common/core/call_context.h>
 #include <common/core/result.h>
+
+#include <string>
 
 namespace ems::config {
 
 /// 原始不可变快照字节与校验和
 struct SnapshotBytes {
-    std::string bytes;      ///< 发布方保存并发送的同一份 payload UTF-8 字节
-    std::string checksum;   ///< SHA-256 hex（对 bytes 计算）
+    std::string bytes;     ///< 发布方保存并发送的同一份 payload UTF-8 字节
+    std::string checksum;  ///< SHA-256 hex（对 bytes 计算）
 };
 
 class IConfigSnapshotStore {
-public:
+   public:
     virtual ~IConfigSnapshotStore() = default;
 
     /// 读取原始不可变快照与 checksum
-    virtual core::Result<SnapshotBytes> get(const std::string& scope,
-                                            const std::string& version,
+    virtual core::Result<SnapshotBytes> get(const std::string& scope, const std::string& version,
                                             const core::CallContext& ctx) = 0;
 
     /// 同版本同内容幂等写入；同版本不同内容返回 Conflict
-    virtual core::Status put_if_absent(const std::string& scope,
-                                       const std::string& version,
-                                       const std::string& bytes,
-                                       const std::string& checksum,
+    virtual core::Status put_if_absent(const std::string& scope, const std::string& version,
+                                       const std::string& bytes, const std::string& checksum,
                                        const core::CallContext& ctx) = 0;
 
     /// 条件切换 active；expected_activation_revision 不符返回 Conflict，不后写覆盖
-    virtual core::Status activate(const std::string& scope,
-                                  const std::string& version,
+    virtual core::Status activate(const std::string& scope, const std::string& version,
                                   const std::string& expected_activation_revision,
                                   const core::CallContext& ctx) = 0;
 };

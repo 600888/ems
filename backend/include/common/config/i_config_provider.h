@@ -8,12 +8,12 @@
  */
 #pragma once
 
-#include <memory>
-#include <string>
-
 #include <common/config/config_snapshot.h>
 #include <common/core/call_context.h>
 #include <common/core/result.h>
+
+#include <memory>
+#include <string>
 
 namespace ems::config {
 
@@ -25,7 +25,7 @@ struct ActiveManifest {
 };
 
 class IConfigProvider {
-public:
+   public:
     virtual ~IConfigProvider() = default;
 
     /// 按精确版本加载完整只读快照；缺失时仅回源该版本，NotFound 不得回退"最新"

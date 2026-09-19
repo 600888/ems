@@ -5,23 +5,24 @@
 #ifndef EMS_MODEL_SLAVE_H
 #define EMS_MODEL_SLAVE_H
 
-#include <string>
 #include <memory>
+#include <string>
+
 #include "base.h"
 
 namespace ems {
 namespace model {
 
 class Slave : public BaseModelWithId, public TimestampMixin, public StatusMixin {
-public:
+   public:
     Slave() = default;
     explicit Slave(int id) : BaseModelWithId(id) {}
-    
+
     int channel_id{0};
     int slave_id{1};
     std::string name;
     std::string description;
-    
+
     json to_json() const override {
         json j = BaseModelWithId::to_json();
         j["channel_id"] = channel_id;
@@ -32,10 +33,10 @@ public:
         j["status"] = StatusMixin::to_json();
         return j;
     }
-    
+
     void from_json(const json& j) override {
         BaseModelWithId::from_json(j);
-        
+
         if (j.contains("channel_id") && !j["channel_id"].is_null()) {
             channel_id = j["channel_id"].get<int64_t>();
         }
@@ -51,7 +52,7 @@ public:
 
 using SlaveList = std::vector<std::shared_ptr<Slave>>;
 
-} // namespace model
-} // namespace ems
+}  // namespace model
+}  // namespace ems
 
-#endif // EMS_MODEL_SLAVE_H
+#endif  // EMS_MODEL_SLAVE_H

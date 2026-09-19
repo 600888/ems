@@ -3,31 +3,27 @@
 #include "time.hpp"
 
 class DateTime {
-private:
+   private:
     Date _date;
     Time _time;
 
-public:
-    DateTime()
-    {
+   public:
+    DateTime() {
         _date = Date();
         _time = Time();
     }
 
-    DateTime(Date d, Time t)
-    {
+    DateTime(Date d, Time t) {
         _date = d;
         _time = t;
     }
 
-    DateTime(int d, int m, int y, int h, int min, int s)
-    {
+    DateTime(int d, int m, int y, int h, int min, int s) {
         _date = Date(d, m, y);
         _time = Time(h, min, s);
     }
 
-    DateTime(time_t t)
-    {
+    DateTime(time_t t) {
         if (t > 10000000000) {
             t /= 1000;
         }
@@ -36,40 +32,34 @@ public:
         _time = Time(t);
     }
 
-    DateTime(const DateTime& dt)
-    {
+    DateTime(const DateTime& dt) {
         _date = dt._date;
         _time = dt._time;
     }
 
-    DateTime(const DateTime&& dt)
-    {
+    DateTime(const DateTime&& dt) {
         _date = dt._date;
         _time = dt._time;
     }
 
-    DateTime(const std::tm& tm)
-    {
+    DateTime(const std::tm& tm) {
         _date = Date(tm);
         _time = Time(tm);
     }
 
-    DateTime operator=(const DateTime& dt)
-    {
+    DateTime operator=(const DateTime& dt) {
         _date = dt._date;
         _time = dt._time;
         return *this;
     }
 
-    DateTime operator=(const DateTime&& dt)
-    {
+    DateTime operator=(const DateTime&& dt) {
         _date = dt._date;
         _time = dt._time;
         return *this;
     }
 
-    bool operator<=(const DateTime& dt) const
-    {
+    bool operator<=(const DateTime& dt) const {
         if (_date < dt._date) {
             return true;
         } else if (_date == dt._date) {
@@ -78,8 +68,7 @@ public:
         return false;
     }
 
-    bool operator>=(const DateTime& dt) const
-    {
+    bool operator>=(const DateTime& dt) const {
         if (_date > dt._date) {
             return true;
         } else if (_date == dt._date) {
@@ -92,8 +81,7 @@ public:
 
     bool operator!=(const DateTime& dt) const { return _date != dt._date || _time != dt._time; }
 
-    bool operator<(const DateTime& dt) const
-    {
+    bool operator<(const DateTime& dt) const {
         if (_date < dt._date) {
             return true;
         } else if (_date == dt._date) {
@@ -102,8 +90,7 @@ public:
         return false;
     }
 
-    bool operator>(const DateTime& dt) const
-    {
+    bool operator>(const DateTime& dt) const {
         if (_date > dt._date) {
             return true;
         } else if (_date == dt._date) {
@@ -112,8 +99,7 @@ public:
         return false;
     }
 
-    int operator-(const DateTime& dt) const
-    {
+    int operator-(const DateTime& dt) const {
         int seconds = (_date - dt._date) * 24 * 3600 + (_time - dt._time);
         return seconds;
     }
@@ -121,8 +107,7 @@ public:
     Date getDate() { return _date; }
     Time getTime() { return _time; }
 
-    std::string toString()
-    {
+    std::string toString() {
         std::string res = _date.toString();
         res += " ";
         res += _time.toString();
@@ -130,8 +115,7 @@ public:
     }
 
     // 格式化输出 格式为"yyyy-mm-dd HH:MM:SS"，支持的格式有yyyy,mm,dd,HH,MM,SS
-    std::string toString(const std::string& format)
-    {
+    std::string toString(const std::string& format) {
         // 用“ ”分割年月日和时分秒
         int pos = format.find(' ');
         std::string dateFmt = format.substr(0, pos);
@@ -148,8 +132,7 @@ public:
     // 获取初始时间，用于判空
     static DateTime origin() { return DateTime(1, 1, 1970, 0, 0, 0); }
 
-    static DateTime fromString(const std::string& str)
-    {
+    static DateTime fromString(const std::string& str) {
         std::regex pattern(R"(^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$)");
         bool isMatch = std::regex_match(str, pattern);
         if (!isMatch) {
@@ -162,8 +145,7 @@ public:
     }
 
     // 获取时间戳
-    time_t getTimestamp()
-    {
+    time_t getTimestamp() {
         struct tm tm;
         tm.tm_year = _date.year() - 1900;
         tm.tm_mon = _date.month() - 1;
@@ -175,51 +157,44 @@ public:
         return mktime(&tm);
     }
 
-    std::tm getTm()
-    {
+    std::tm getTm() {
         time_t t = getTimestamp();
         struct tm tm;
         localtime_r(&t, &tm);
         return tm;
     }
 
-    int64_t getTimestampMs()
-    {
+    int64_t getTimestampMs() {
         time_t t = getTimestamp();
         return t * 1000;
     }
 
     // 增加秒数, n为负数时为减少秒数
-    DateTime addSeconds(int n)
-    {
+    DateTime addSeconds(int n) {
         time_t t = getTimestamp();
         return DateTime(t + n);
     }
 
     // 增加分钟, n为负数时为减少分钟
-    DateTime addMinutes(int n)
-    {
+    DateTime addMinutes(int n) {
         time_t t = getTimestamp();
         return DateTime(t + n * 60);
     }
 
     // 增加小时, n为负数时为减少小时
-    DateTime addHours(int n)
-    {
+    DateTime addHours(int n) {
         time_t t = getTimestamp();
         return DateTime(t + n * 60 * 60);
     }
 
     // 增加天数, n为负数时为减少天数
-    DateTime addDays(int n)
-    {
+    DateTime addDays(int n) {
         time_t t = getTimestamp();
         return DateTime(t + n * 24 * 60 * 60);
     }
 
     // 增加月数, n为负数时为减少月数
-    DateTime addMonths(int n)
-    {
+    DateTime addMonths(int n) {
         time_t t = getTimestamp();
         struct tm tm;
         localtime_r(&t, &tm);
@@ -229,8 +204,7 @@ public:
     }
 
     // 增加年数, n为负数时为减少年数
-    DateTime addYears(int n)
-    {
+    DateTime addYears(int n) {
         time_t t = getTimestamp();
         struct tm tm;
         localtime_r(&t, &tm);
@@ -240,8 +214,7 @@ public:
     }
 
     // 增加秒数替换原有时间
-    DateTime& addSecondsInPlace(int n)
-    {
+    DateTime& addSecondsInPlace(int n) {
         time_t t = getTimestamp();
         t += n;
         *this = DateTime(t);
@@ -249,8 +222,7 @@ public:
     }
 
     // 增加小时替换原有时间
-    DateTime& addHoursInPlace(int n)
-    {
+    DateTime& addHoursInPlace(int n) {
         time_t t = getTimestamp();
         t += n * 60 * 60;
         *this = DateTime(t);
@@ -258,8 +230,7 @@ public:
     }
 
     // 增加天数替换原有时间
-    DateTime& addDaysInPlace(int n)
-    {
+    DateTime& addDaysInPlace(int n) {
         time_t t = getTimestamp();
         t += n * 24 * 60 * 60;
         *this = DateTime(t);
@@ -267,8 +238,7 @@ public:
     }
 
     // 增加月数替换原有时间
-    DateTime& addMonthsInPlace(int n)
-    {
+    DateTime& addMonthsInPlace(int n) {
         time_t t = getTimestamp();
         struct tm tm;
         localtime_r(&t, &tm);
@@ -279,8 +249,7 @@ public:
     }
 
     // 增加年数替换原有时间
-    DateTime& addYearsInPlace(int n)
-    {
+    DateTime& addYearsInPlace(int n) {
         time_t t = getTimestamp();
         struct tm tm;
         localtime_r(&t, &tm);
@@ -291,8 +260,7 @@ public:
     }
 
     // 更新日期及时间为现在时间
-    void update()
-    {
+    void update() {
         _date.update();
         _time.update();
     }

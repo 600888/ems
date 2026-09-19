@@ -2,13 +2,12 @@
  * @file test_model.cpp
  * @brief 模型/校验/ModelView 测试（验收 C02/C03 对应项）
  */
+#include <common/model/catalog.h>
+#include <common/model/model_view.h>
 #include <gtest/gtest.h>
 
 #include <cmath>
 #include <memory>
-
-#include <common/model/catalog.h>
-#include <common/model/model_view.h>
 
 namespace ems::model {
 namespace {
@@ -189,7 +188,7 @@ TEST(ModelCatalog, SameCodeDifferentDevicesNotMerged) {
     const Device* d2 = c.find_device(did("dev-2"));
     ASSERT_NE(d1, nullptr);
     ASSERT_NE(d2, nullptr);
-    EXPECT_EQ(d1->code, d2->code);  // code 相同
+    EXPECT_EQ(d1->code, d2->code);            // code 相同
     EXPECT_NE(d1->device_id, d2->device_id);  // 身份独立
 }
 

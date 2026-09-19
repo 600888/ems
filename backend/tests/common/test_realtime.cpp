@@ -3,13 +3,12 @@
  * @brief realtime API 测试：工厂注册/冻结、RecordKey 校验、批量默认实现语义
  */
 #include <gtest/gtest.h>
+#include <realtime/backend_factory.h>
+#include <realtime/realtime_store.h>
 
 #include <map>
 #include <memory>
 #include <string>
-
-#include <realtime/backend_factory.h>
-#include <realtime/realtime_store.h>
 
 namespace ems::realtime {
 namespace {
@@ -18,7 +17,7 @@ core::CallContext ctx_short() { return core::make_call_context(std::chrono::mill
 
 /// 内存 Fake 后端：验证 CAS 语义（批量默认实现语义由基类保证）
 class FakeStore final : public RealtimeStoreBase {
-public:
+   public:
     BackendInfo info() const override {
         BackendInfo i;
         i.implementation = "fake";
@@ -77,7 +76,7 @@ public:
 
     bool closed{false};
 
-private:
+   private:
     static std::string key_of(const RecordKey& k) {
         std::string s = (k.scope.kind == ScopeKind::Station ? "S:" : "U:") + k.scope.code;
         for (const auto& p : k.device_path) s += "/" + p;
@@ -153,8 +152,7 @@ TEST(RealtimeBatch, ReadManyResultsMatchInput) {
     create.replacement["value"] = "100";
     ASSERT_TRUE(core::is_ok(store.compareExchange(create, ctx_short())));
 
-    auto results = store.readMany({point_key("p1"), point_key("p2"), point_key("p1")},
-                                  ctx_short());
+    auto results = store.readMany({point_key("p1"), point_key("p2"), point_key("p1")}, ctx_short());
     ASSERT_EQ(results.size(), 3u);
     EXPECT_TRUE(core::is_ok(results[0]));
     EXPECT_FALSE(core::is_ok(results[1]));  // NotFound，不伪装 0
@@ -254,19 +252,22 @@ TEST(RealtimeCas, ConditionalReplaceAndErase) {
 TEST(RealtimeFactory, RegisterFreezeCreate) {
     BackendFactory factory;
     auto reg = factory.register_backend(
-        "fake", [](const BackendSpec&, const CallContext&) -> Result<std::unique_ptr<IRealtimeStore>> {
+        "fake",
+        [](const BackendSpec&, const CallContext&) -> Result<std::unique_ptr<IRealtimeStore>> {
             return std::unique_ptr<IRealtimeStore>(std::make_unique<FakeStore>());
         });
     ASSERT_TRUE(core::is_ok(reg));
     // 重复注册冲突
     auto dup = factory.register_backend(
-        "fake", [](const BackendSpec&, const CallContext&) -> Result<std::unique_ptr<IRealtimeStore>> {
+        "fake",
+        [](const BackendSpec&, const CallContext&) -> Result<std::unique_ptr<IRealtimeStore>> {
             return std::unique_ptr<IRealtimeStore>(std::make_unique<FakeStore>());
         });
     EXPECT_EQ(core::error_of(dup).code, ErrorCode::Conflict);
     factory.freeze();
     auto after = factory.register_backend(
-        "late", [](const BackendSpec&, const CallContext&) -> Result<std::unique_ptr<IRealtimeStore>> {
+        "late",
+        [](const BackendSpec&, const CallContext&) -> Result<std::unique_ptr<IRealtimeStore>> {
             return std::unique_ptr<IRealtimeStore>(std::make_unique<FakeStore>());
         });
     EXPECT_EQ(core::error_of(after).code, ErrorCode::Conflict);

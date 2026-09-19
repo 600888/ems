@@ -3,13 +3,16 @@
  * @brief 协议插件管理器实现
  */
 #include "plugin_manager.h"
-#include "net/log.h"
+
 #include <dlfcn.h>
-#include <cstring>
-#include <algorithm>
-#include <type_traits>
-#include <filesystem>
 #include <spdlog/fmt/bundled/format.h>
+
+#include <algorithm>
+#include <cstring>
+#include <filesystem>
+#include <type_traits>
+
+#include "net/log.h"
 
 namespace fs = std::filesystem;
 
@@ -23,11 +26,9 @@ namespace collect {
 
 const std::unordered_map<std::string, std::string>& PluginManager::default_lib_map() {
     static const std::unordered_map<std::string, std::string> map = {
-        {"ModbusTCP",      "libproto_modbus.so"},
-        {"ModbusRTU",      "libproto_modbus.so"},
-        {"DLT645",         "libproto_dlt645.so"},
-        {"IEC104",         "libproto_iec104.so"},
-        {"IEC61850",       "libproto_iec61850.so"},
+        {"ModbusTCP", "libproto_modbus.so"},  {"ModbusRTU", "libproto_modbus.so"},
+        {"DLT645", "libproto_dlt645.so"},     {"IEC104", "libproto_iec104.so"},
+        {"IEC61850", "libproto_iec61850.so"},
     };
     return map;
 }
@@ -57,7 +58,8 @@ void PluginManager::set_plugin_dir(const std::string& dir) {
     plugin_dir_ = dir;
 }
 
-void PluginManager::register_mapping(const std::string& protocol_name, const std::string& lib_name) {
+void PluginManager::register_mapping(const std::string& protocol_name,
+                                     const std::string& lib_name) {
     std::lock_guard lock(mutex_);
     custom_mappings_[protocol_name] = lib_name;
 }
@@ -73,7 +75,8 @@ void* PluginManager::load(const std::string& protocol_name) {
     auto it = loaded_plugins_.find(protocol_name);
     if (it != loaded_plugins_.end()) {
         it->second.ref_count++;
-        LOG_DEBUG(fmt::format("插件[{}] 引用计数++, count={}", protocol_name, it->second.ref_count).c_str());
+        LOG_DEBUG(fmt::format("插件[{}] 引用计数++, count={}", protocol_name, it->second.ref_count)
+                      .c_str());
         return it->second.fns.create_fn();
     }
 
@@ -90,7 +93,8 @@ void* PluginManager::load(const std::string& protocol_name) {
     // 3. dlopen 加载
     auto* handle = dlopen(lib_path.c_str(), RTLD_NOW | RTLD_LOCAL);
     if (!handle) {
-        last_err_ = "dlopen failed for " + lib_path + ": " + (dlerror() ? dlerror() : "unknown error");
+        last_err_ =
+            "dlopen failed for " + lib_path + ": " + (dlerror() ? dlerror() : "unknown error");
         LOG_ERROR(fmt::format("插件[{}] dlopen失败: {}", protocol_name, last_err_).c_str());
         return nullptr;
     }
@@ -108,8 +112,9 @@ void* PluginManager::load(const std::string& protocol_name) {
     auto* info = entry.fns.info_fn();
     if (!info || info->api_version != EMS_PLUGIN_API_VERSION) {
         last_err_ = "Plugin API version mismatch for " + protocol_name;
-        LOG_ERROR(fmt::format("插件[{}] API版本不匹配: {}, 期望={}",
-                              protocol_name, info ? info->api_version : -1, EMS_PLUGIN_API_VERSION).c_str());
+        LOG_ERROR(fmt::format("插件[{}] API版本不匹配: {}, 期望={}", protocol_name,
+                              info ? info->api_version : -1, EMS_PLUGIN_API_VERSION)
+                      .c_str());
         dlclose(handle);
         return nullptr;
     }
@@ -118,8 +123,9 @@ void* PluginManager::load(const std::string& protocol_name) {
     entry.ref_count = 1;
     loaded_plugins_[protocol_name] = std::move(entry);
 
-    LOG_INFO(fmt::format("插件[{}] 加载成功, 版本={}, 描述={}",
-                         protocol_name, info->version, info->description).c_str());
+    LOG_INFO(fmt::format("插件[{}] 加载成功, 版本={}, 描述={}", protocol_name, info->version,
+                         info->description)
+                 .c_str());
 
     // 7. 创建实例返回
     return loaded_plugins_[protocol_name].fns.create_fn();
@@ -135,7 +141,8 @@ void PluginManager::unload(const std::string& protocol_name) {
     }
 
     it->second.ref_count--;
-    LOG_DEBUG(fmt::format("插件[{}] 引用计数--, count={}", protocol_name, it->second.ref_count).c_str());
+    LOG_DEBUG(
+        fmt::format("插件[{}] 引用计数--, count={}", protocol_name, it->second.ref_count).c_str());
 
     if (it->second.ref_count <= 0) {
         LOG_INFO(fmt::format("卸载插件[{}]", protocol_name).c_str());
@@ -171,7 +178,8 @@ const EmPluginInfo* PluginManager::get_plugin_info(void* /*instance*/) const {
     return nullptr;
 }
 
-PluginManager::PluginFunctions PluginManager::get_functions(const std::string& protocol_name) const {
+PluginManager::PluginFunctions PluginManager::get_functions(
+    const std::string& protocol_name) const {
     std::lock_guard lock(mutex_);
     auto it = loaded_plugins_.find(protocol_name);
     if (it != loaded_plugins_.end()) {
@@ -214,18 +222,18 @@ bool PluginManager::load_symbols(void* handle, PluginFunctions& fns) {
         return true;
     };
 
-    return resolve_fn(fns.info_fn,          EMS_PLUGIN_INFO_SYMBOL)
-        && resolve_fn(fns.create_fn,        EMS_PLUGIN_CREATE_SYMBOL)
-        && resolve_fn(fns.destroy_fn,       EMS_PLUGIN_DESTROY_SYMBOL)
-        && resolve_fn(fns.init_fn,          EMS_PLUGIN_INIT_SYMBOL)
-        && resolve_fn(fns.connect_fn,       EMS_PLUGIN_CONNECT_SYMBOL)
-        && resolve_fn(fns.disconnect_fn,    EMS_PLUGIN_DISCONNECT_SYMBOL)
-        && resolve_fn(fns.read_batch_fn,    EMS_PLUGIN_READ_BATCH_SYMBOL)
-        && resolve_fn(fns.write_fn,         EMS_PLUGIN_WRITE_SYMBOL)
-        && resolve_fn(fns.is_connected_fn,  EMS_PLUGIN_IS_CONNECTED_SYMBOL)
-        && resolve_fn(fns.last_error_fn,    EMS_PLUGIN_LAST_ERROR_SYMBOL);
+    return resolve_fn(fns.info_fn, EMS_PLUGIN_INFO_SYMBOL) &&
+           resolve_fn(fns.create_fn, EMS_PLUGIN_CREATE_SYMBOL) &&
+           resolve_fn(fns.destroy_fn, EMS_PLUGIN_DESTROY_SYMBOL) &&
+           resolve_fn(fns.init_fn, EMS_PLUGIN_INIT_SYMBOL) &&
+           resolve_fn(fns.connect_fn, EMS_PLUGIN_CONNECT_SYMBOL) &&
+           resolve_fn(fns.disconnect_fn, EMS_PLUGIN_DISCONNECT_SYMBOL) &&
+           resolve_fn(fns.read_batch_fn, EMS_PLUGIN_READ_BATCH_SYMBOL) &&
+           resolve_fn(fns.write_fn, EMS_PLUGIN_WRITE_SYMBOL) &&
+           resolve_fn(fns.is_connected_fn, EMS_PLUGIN_IS_CONNECTED_SYMBOL) &&
+           resolve_fn(fns.last_error_fn, EMS_PLUGIN_LAST_ERROR_SYMBOL);
 }
 
-} // namespace collect
-} // namespace net
-} // namespace ems
+}  // namespace collect
+}  // namespace net
+}  // namespace ems

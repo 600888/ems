@@ -5,6 +5,11 @@
     "label": "开发参考概览"
   },
   {
+    "type": "file",
+    "name": "code-format",
+    "label": "代码格式化规范"
+  },
+  {
     "type": "dir",
     "name": "protocol",
     "label": "协议库参考",

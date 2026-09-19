@@ -10,27 +10,27 @@
  */
 #pragma once
 
-#include <memory>
-#include <string>
-
 #include <common/core/identity.h>
 #include <common/core/time.h>
 #include <common/model/catalog.h>
+
+#include <memory>
+#include <string>
 
 namespace ems::config {
 
 /// 快照封套元数据
 struct SnapshotEnvelope {
-    std::string schema_version;   ///< 快照 schema 版本
-    std::string scope;            ///< 逻辑 scope（unit/station code）
-    std::string config_version;   ///< 不可变配置版本（只比较相等）
+    std::string schema_version;  ///< 快照 schema 版本
+    std::string scope;           ///< 逻辑 scope（unit/station code）
+    std::string config_version;  ///< 不可变配置版本（只比较相等）
     core::UtcMicros generated_at{core::kInvalidUtcMicros};
-    std::string checksum;         ///< SHA-256 hex，对象为封套外 payload UTF-8 字节
+    std::string checksum;  ///< SHA-256 hex，对象为封套外 payload UTF-8 字节
 };
 
 /// 不可变配置快照（模型聚合 + 封套）
 class ConfigSnapshot {
-public:
+   public:
     ConfigSnapshot(SnapshotEnvelope envelope, model::ModelCatalog catalog)
         : envelope_(std::move(envelope)), catalog_(std::move(catalog)) {}
 
@@ -39,7 +39,7 @@ public:
     /// 目录必须已调用 build_indexes()（发布/加载方负责校验）
     const model::ModelCatalog& catalog() const noexcept { return catalog_; }
 
-private:
+   private:
     SnapshotEnvelope envelope_;
     model::ModelCatalog catalog_;
 };

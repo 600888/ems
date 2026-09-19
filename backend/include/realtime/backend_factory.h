@@ -8,15 +8,15 @@
  */
 #pragma once
 
+#include <common/core/call_context.h>
+#include <common/core/result.h>
+#include <realtime/realtime_store.h>
+
 #include <functional>
 #include <map>
 #include <memory>
 #include <string>
 #include <utility>
-
-#include <common/core/call_context.h>
-#include <common/core/result.h>
-#include <realtime/realtime_store.h>
 
 namespace ems::realtime {
 
@@ -26,11 +26,11 @@ struct BackendSpec {
     std::map<std::string, std::string> options;
 };
 
-using Creator = std::function<Result<std::unique_ptr<IRealtimeStore>>(const BackendSpec&,
-                                                                      const CallContext&)>;
+using Creator =
+    std::function<Result<std::unique_ptr<IRealtimeStore>>(const BackendSpec&, const CallContext&)>;
 
 class BackendFactory {
-public:
+   public:
     /// 注册后端；重复类型或注册阶段结束后冻结时返回 Conflict/NotApplied
     Result<bool> register_backend(std::string type, Creator creator) {
         if (frozen_) {
@@ -64,7 +64,7 @@ public:
         return it->second(spec, ctx);
     }
 
-private:
+   private:
     std::map<std::string, Creator> creators_;
     bool frozen_{false};
 };

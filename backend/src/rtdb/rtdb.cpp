@@ -1,21 +1,18 @@
 #include "rtdb.h"
-#include <sstream>
-#include <chrono>
-#include <iterator>
-#include <future>
+
 #include <sw/redis++/redis++.h>
+
+#include <chrono>
+#include <future>
+#include <iterator>
+#include <sstream>
 
 namespace ems {
 namespace rtdb {
 
-RtDb::RtDb()
-    : connected_(false)
-    , cmdCount_(0) {
-}
+RtDb::RtDb() : connected_(false), cmdCount_(0) {}
 
-RtDb::~RtDb() {
-    shutdown();
-}
+RtDb::~RtDb() { shutdown(); }
 
 bool RtDb::initialize(const RtDbConfig& config) {
     config_ = config;
@@ -41,9 +38,7 @@ bool RtDb::initialize(const RtDbConfig& config) {
     return connect();
 }
 
-void RtDb::shutdown() {
-    disconnect();
-}
+void RtDb::shutdown() { disconnect(); }
 
 bool RtDb::connect() {
     std::lock_guard<std::mutex> lock(mutex_);
@@ -92,10 +87,8 @@ bool RtDb::connectSentinel() {
         for (const auto& node : config_.sentinelNodes) {
             auto pos = node.find(':');
             if (pos != std::string::npos) {
-                sentinelOpts.nodes.emplace_back(
-                    node.substr(0, pos),
-                    std::stoi(node.substr(pos + 1))
-                );
+                sentinelOpts.nodes.emplace_back(node.substr(0, pos),
+                                                std::stoi(node.substr(pos + 1)));
             }
         }
 
@@ -123,13 +116,9 @@ bool RtDb::connectSentinel() {
         poolOpts.wait_timeout = std::chrono::milliseconds(config_.timeoutMs);
 
         auto sentinel = std::make_shared<sw::redis::Sentinel>(sentinelOpts);
-        redis_ = std::make_unique<sw::redis::Redis>(
-            sentinel,
-            config_.sentinelMasterName,
-            sw::redis::Role::MASTER,
-            connectionOpts,
-            poolOpts
-        );
+        redis_ =
+            std::make_unique<sw::redis::Redis>(sentinel, config_.sentinelMasterName,
+                                               sw::redis::Role::MASTER, connectionOpts, poolOpts);
 
         redis_->ping();
         connected_ = true;
@@ -287,7 +276,8 @@ bool RtDb::getHash(const std::string& key, std::map<std::string, std::string>& f
     }
 }
 
-bool RtDb::setHashField(const std::string& key, const std::string& field, const std::string& value) {
+bool RtDb::setHashField(const std::string& key, const std::string& field,
+                        const std::string& value) {
     if (!connected_ || !redis_) {
         if (!reconnect()) {
             return false;
@@ -502,7 +492,8 @@ bool RtDb::publish(const std::string& channel, const std::string& message) {
     }
 }
 
-bool RtDb::subscribe(const std::string& channel, std::function<void(const std::string&, const std::string&)> callback) {
+bool RtDb::subscribe(const std::string& channel,
+                     std::function<void(const std::string&, const std::string&)> callback) {
     return false;
 }
 
@@ -1265,9 +1256,7 @@ bool RtDb::batchGetYt(const std::vector<std::string>& codes, std::vector<YtPoint
 }
 
 std::future<bool> RtDb::asyncSet(const std::string& key, const std::string& value) {
-    return std::async(std::launch::async, [this, key, value]() {
-        return set(key, value);
-    });
+    return std::async(std::launch::async, [this, key, value]() { return set(key, value); });
 }
 
 std::future<std::string> RtDb::asyncGet(const std::string& key) {
@@ -1280,7 +1269,7 @@ std::future<std::string> RtDb::asyncGet(const std::string& key) {
     });
 }
 
-template<typename T>
+template <typename T>
 std::string RtDb::pointHashFields(const T& point) {
     return "";
 }
@@ -1291,28 +1280,37 @@ std::string RtDb::pointHashFields(const T& point) {
 
 const char* protocolTypeToString(model::ProtocolType t) {
     switch (t) {
-        case model::ProtocolType::ModbusRTU:   return "ModbusRTU";
-        case model::ProtocolType::ModbusTCP:   return "ModbusTCP";
-        case model::ProtocolType::IEC104:      return "IEC104";
-        case model::ProtocolType::DLT645:      return "DLT645";
-        case model::ProtocolType::IEC61850:    return "IEC61850";
-        case model::ProtocolType::OPCUA:       return "OPCUA";
-        case model::ProtocolType::MQTT:        return "MQTT";
-        case model::ProtocolType::CAN:         return "CAN";
-        case model::ProtocolType::Other:       return "Other";
+        case model::ProtocolType::ModbusRTU:
+            return "ModbusRTU";
+        case model::ProtocolType::ModbusTCP:
+            return "ModbusTCP";
+        case model::ProtocolType::IEC104:
+            return "IEC104";
+        case model::ProtocolType::DLT645:
+            return "DLT645";
+        case model::ProtocolType::IEC61850:
+            return "IEC61850";
+        case model::ProtocolType::OPCUA:
+            return "OPCUA";
+        case model::ProtocolType::MQTT:
+            return "MQTT";
+        case model::ProtocolType::CAN:
+            return "CAN";
+        case model::ProtocolType::Other:
+            return "Other";
     }
     return "Unknown";
 }
 
 std::optional<model::ProtocolType> stringToProtocolType(const std::string& s) {
-    if (s == "ModbusRTU")   return model::ProtocolType::ModbusRTU;
-    if (s == "ModbusTCP")   return model::ProtocolType::ModbusTCP;
-    if (s == "IEC104")      return model::ProtocolType::IEC104;
-    if (s == "DLT645")      return model::ProtocolType::DLT645;
-    if (s == "IEC61850")    return model::ProtocolType::IEC61850;
-    if (s == "OPCUA")       return model::ProtocolType::OPCUA;
-    if (s == "MQTT")        return model::ProtocolType::MQTT;
-    if (s == "CAN")         return model::ProtocolType::CAN;
+    if (s == "ModbusRTU") return model::ProtocolType::ModbusRTU;
+    if (s == "ModbusTCP") return model::ProtocolType::ModbusTCP;
+    if (s == "IEC104") return model::ProtocolType::IEC104;
+    if (s == "DLT645") return model::ProtocolType::DLT645;
+    if (s == "IEC61850") return model::ProtocolType::IEC61850;
+    if (s == "OPCUA") return model::ProtocolType::OPCUA;
+    if (s == "MQTT") return model::ProtocolType::MQTT;
+    if (s == "CAN") return model::ProtocolType::CAN;
     return std::nullopt;
 }
 
@@ -1328,5 +1326,5 @@ std::unique_ptr<RtDb> createRtDb(const RtDbConfig& config) {
     return nullptr;
 }
 
-}
-}
+}  // namespace rtdb
+}  // namespace ems

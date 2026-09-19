@@ -1,22 +1,23 @@
 #ifndef EMS_RTDB_CACHE_H
 #define EMS_RTDB_CACHE_H
 
-#include <string>
-#include <vector>
+#include <chrono>
+#include <functional>
 #include <map>
-#include <unordered_map>
+#include <memory>
 #include <mutex>
 #include <shared_mutex>
-#include <functional>
-#include <chrono>
-#include <memory>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "rtdb_point.h"
 
 namespace ems {
 namespace rtdb {
 
 class RtDbConfigCache {
-public:
+   public:
     RtDbConfigCache() = default;
     ~RtDbConfigCache() = default;
 
@@ -102,7 +103,7 @@ public:
     using UpdateCallback = std::function<void(const std::string& code)>;
     void setUpdateCallback(UpdateCallback callback);
 
-private:
+   private:
     YcConfig toYcConfig(const PointConfig& pc) const;
     YxConfig toYxConfig(const PointConfig& pc) const;
     YkConfig toYkConfig(const PointConfig& pc) const;
@@ -124,7 +125,7 @@ private:
 };
 
 class RtDbPointManager {
-public:
+   public:
     RtDbPointManager() = default;
     ~RtDbPointManager() = default;
 
@@ -150,18 +151,10 @@ public:
 
     void setConfigCache(std::shared_ptr<RtDbConfigCache> cache);
 
-    bool getYcFullPoint(const std::string& code,
-                       const YcPoint& data,
-                       YcFullPoint& fullPoint) const;
-    bool getYxFullPoint(const std::string& code,
-                       const YxPoint& data,
-                       YxFullPoint& fullPoint) const;
-    bool getYkFullPoint(const std::string& code,
-                       const YkPoint& data,
-                       YkFullPoint& fullPoint) const;
-    bool getYtFullPoint(const std::string& code,
-                       const YtPoint& data,
-                       YtFullPoint& fullPoint) const;
+    bool getYcFullPoint(const std::string& code, const YcPoint& data, YcFullPoint& fullPoint) const;
+    bool getYxFullPoint(const std::string& code, const YxPoint& data, YxFullPoint& fullPoint) const;
+    bool getYkFullPoint(const std::string& code, const YkPoint& data, YkFullPoint& fullPoint) const;
+    bool getYtFullPoint(const std::string& code, const YtPoint& data, YtFullPoint& fullPoint) const;
 
     std::vector<YcFullPoint> getYcFullPoints(const std::vector<YcPoint>& dataPoints);
     std::vector<YxFullPoint> getYxFullPoints(const std::vector<YxPoint>& dataPoints);
@@ -174,11 +167,11 @@ public:
     bool validateYcValue(double value, const RtDbConfigCache::YcConfig& config) const;
     bool validateYtValue(double value, const RtDbConfigCache::YtConfig& config) const;
 
-private:
+   private:
     std::shared_ptr<RtDbConfigCache> configCache_;
 };
 
-}
-}
+}  // namespace rtdb
+}  // namespace ems
 
 #endif

@@ -87,20 +87,7 @@ target_compile_features(ems_realtime_api INTERFACE cxx_std_17)
 # ---------------------------------------------------------------------------
 # ems_realtime_core：RecordKey 公共验证器
 # ---------------------------------------------------------------------------
-add_library(ems_realtime_core STATIC
-    realtime/realtime_store.cpp
-)
-target_include_directories(ems_realtime_core PUBLIC
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/src
-)
-target_link_libraries(ems_realtime_core PUBLIC ems_realtime_api)
-set_target_properties(ems_realtime_core PROPERTIES
-    CXX_STANDARD 17
-    CXX_STANDARD_REQUIRED YES
-    CXX_EXTENSIONS NO
-    POSITION_INDEPENDENT_CODE ON
-)
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../realtime ${CMAKE_CURRENT_BINARY_DIR}/realtime)
 
 # ---------------------------------------------------------------------------
 # ems_config_core：配置校验默认实现（依赖 model 纯校验）

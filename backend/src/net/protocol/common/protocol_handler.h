@@ -9,12 +9,12 @@
 #ifndef EMS_NET_PROTOCOL_HANDLER_H
 #define EMS_NET_PROTOCOL_HANDLER_H
 
+#include <cstdint>
+#include <memory>
+#include <nlohmann/json.hpp>
+#include <optional>
 #include <string>
 #include <vector>
-#include <memory>
-#include <cstdint>
-#include <optional>
-#include <nlohmann/json.hpp>
 
 namespace ems {
 namespace net {
@@ -26,11 +26,11 @@ using json = nlohmann::json;
  * @brief 测点读取结果
  */
 struct PointValue {
-    std::string code;            // 测点编码
-    double      value{0.0};      // 工程值
-    int64_t     rawValue{0};     // 原始值
-    int         quality{0};      // 品质 0=Good, 1=Invalid
-    uint64_t    timestamp{0};    // 采集时间戳 (ms)
+    std::string code;       // 测点编码
+    double value{0.0};      // 工程值
+    int64_t rawValue{0};    // 原始值
+    int quality{0};         // 品质 0=Good, 1=Invalid
+    uint64_t timestamp{0};  // 采集时间戳 (ms)
 };
 
 /**
@@ -38,8 +38,8 @@ struct PointValue {
  */
 struct WriteTask {
     std::string pointCode;
-    double      value{0.0};
-    int         timeoutMs{5000};
+    double value{0.0};
+    int timeoutMs{5000};
 };
 
 /**
@@ -49,7 +49,7 @@ struct WriteTask {
  * 生命周期: create -> init -> connect -> [read/write]* -> disconnect -> destroy
  */
 class ProtocolHandler {
-public:
+   public:
     virtual ~ProtocolHandler() = default;
 
     // ---- 拷贝/赋值 禁用 ----
@@ -91,10 +91,8 @@ public:
      * @param results     [out] 读取结果（与 point_codes 等长）
      * @return 成功读取的测点数, -1 表示失败
      */
-    virtual int read_batch(
-        const std::vector<std::string>& point_codes,
-        std::vector<PointValue>&         results
-    ) = 0;
+    virtual int read_batch(const std::vector<std::string>& point_codes,
+                           std::vector<PointValue>& results) = 0;
 
     /**
      * @brief 写入单个测点值
@@ -114,7 +112,7 @@ public:
      */
     virtual std::string protocol_name() const = 0;
 
-protected:
+   protected:
     ProtocolHandler() = default;
 };
 
@@ -124,7 +122,7 @@ protected:
  * 每个 .so 应定义一个全局工厂实例，
  * 在 C 导出函数 ems_plugin_create 中调用。
  */
-template<typename T, typename = std::enable_if_t<std::is_base_of_v<ProtocolHandler, T>>>
+template <typename T, typename = std::enable_if_t<std::is_base_of_v<ProtocolHandler, T>>>
 ProtocolHandler* create_handler() {
     return new T();
 }
@@ -132,12 +130,10 @@ ProtocolHandler* create_handler() {
 /**
  * @brief 销毁处理器
  */
-inline void destroy_handler(ProtocolHandler* handler) {
-    delete handler;
-}
+inline void destroy_handler(ProtocolHandler* handler) { delete handler; }
 
-} // namespace protocol
-} // namespace net
-} // namespace ems
+}  // namespace protocol
+}  // namespace net
+}  // namespace ems
 
-#endif // EMS_NET_PROTOCOL_HANDLER_H
+#endif  // EMS_NET_PROTOCOL_HANDLER_H

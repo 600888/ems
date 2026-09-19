@@ -1,18 +1,17 @@
 #pragma once
 #include <ctime>
-#include <string>
 #include <regex>
+#include <string>
 
 class Time {
-private:
+   private:
     int _hour;
     int _minute;
     int _second;
 
-public:
+   public:
     // 构造函数
-    Time(int h, int m, int s)
-    {
+    Time(int h, int m, int s) {
         // 是否符合时间特性
         if (h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59) {
             throw std::runtime_error("Invalid time");
@@ -22,16 +21,14 @@ public:
         _second = s;
     }
 
-    Time(time_t t)
-    {
+    Time(time_t t) {
         struct tm* now = localtime(&t);
         _hour = now->tm_hour;
         _minute = now->tm_min;
         _second = now->tm_sec;
     }
 
-    Time()
-    {
+    Time() {
         time_t t = time(nullptr);
         struct tm* now = localtime(&t);
         _hour = now->tm_hour;
@@ -39,25 +36,26 @@ public:
         _second = now->tm_sec;
     }
 
-    Time(const std::tm& tm)
-    {
+    Time(const std::tm& tm) {
         _hour = tm.tm_hour;
         _minute = tm.tm_min;
         _second = tm.tm_sec;
     }
 
-    int operator-(const Time& t) const
-    {
+    int operator-(const Time& t) const {
         int seconds = (_hour - t._hour) * 3600 + (_minute - t._minute) * 60 + (_second - t._second);
         return seconds;
     }
 
-    bool operator==(const Time& t) const { return _hour == t._hour && _minute == t._minute && _second == t._second; }
+    bool operator==(const Time& t) const {
+        return _hour == t._hour && _minute == t._minute && _second == t._second;
+    }
 
-    bool operator!=(const Time& t) const { return _hour != t._hour || _minute != t._minute || _second != t._second; }
+    bool operator!=(const Time& t) const {
+        return _hour != t._hour || _minute != t._minute || _second != t._second;
+    }
 
-    bool operator<(const Time& t) const
-    {
+    bool operator<(const Time& t) const {
         if (_hour < t._hour) {
             return true;
         } else if (_hour == t._hour) {
@@ -70,8 +68,7 @@ public:
         return false;
     }
 
-    bool operator>(const Time& t) const
-    {
+    bool operator>(const Time& t) const {
         if (_hour > t._hour) {
             return true;
         } else if (_hour == t._hour) {
@@ -84,8 +81,7 @@ public:
         return false;
     }
 
-    bool operator<=(const Time& t) const
-    {
+    bool operator<=(const Time& t) const {
         if (_hour < t._hour) {
             return true;
         } else if (_hour == t._hour) {
@@ -98,8 +94,7 @@ public:
         return false;
     }
 
-    bool operator>=(const Time& t) const
-    {
+    bool operator>=(const Time& t) const {
         if (_hour > t._hour) {
             return true;
         } else if (_hour == t._hour) {
@@ -112,16 +107,14 @@ public:
         return false;
     }
 
-    std::string toString()
-    {
+    std::string toString() {
         char buf[100];
         sprintf(buf, "%02d:%02d:%02d", _hour, _minute, _second);
         return buf;
     }
 
     // 格式化输出 格式化字符串支持 hh:mm:ss
-    std::string toString(const std::string& format)
-    {
+    std::string toString(const std::string& format) {
         std::string res = format;
         // 兼容大小写
         std::transform(res.begin(), res.end(), res.begin(), ::tolower);
@@ -150,8 +143,7 @@ public:
         return res;
     }
 
-    static Time fromString(const std::string& str)
-    {
+    static Time fromString(const std::string& str) {
         int h, m, s;
         try {
             sscanf(str.c_str(), "%d:%d:%d", &h, &m, &s);
@@ -162,8 +154,7 @@ public:
     }
 
     // 更新为现在时间
-    void update()
-    {
+    void update() {
         time_t t = time(nullptr);
         struct tm* now = localtime(&t);
         _hour = now->tm_hour;
@@ -190,8 +181,7 @@ public:
     void setSecond(int s) { _second = s; }
 
     // 获取时间戳
-    time_t getTimestamp()
-    {
+    time_t getTimestamp() {
         time_t t = time(nullptr);
         struct tm* now = localtime(&t);
         now->tm_hour = _hour;

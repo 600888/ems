@@ -1,4 +1,4 @@
-#pragma once 
+#pragma once
 #include "util/log_base.h"
 
 #ifndef LOG_INIT

@@ -12,24 +12,23 @@
  */
 #pragma once
 
+#include <common/core/call_context.h>
+#include <common/core/result.h>
+#include <common/messaging/delivery.h>
+
 #include <chrono>
 #include <cstdint>
 #include <memory>
 #include <vector>
 
-#include <common/core/call_context.h>
-#include <common/core/result.h>
-#include <common/messaging/delivery.h>
-
 namespace ems::messaging {
 
 class IEventBus {
-public:
+   public:
     virtual ~IEventBus() = default;
 
     /// 发布事件；成功返回传输游标，仅表示后端接受
-    virtual core::Result<PublishReceipt> publish(const std::string& topic,
-                                                 const std::string& scope,
+    virtual core::Result<PublishReceipt> publish(const std::string& topic, const std::string& scope,
                                                  const EventEnvelope& event,
                                                  const core::CallContext& ctx) = 0;
 
@@ -40,8 +39,7 @@ public:
                                                      const core::CallContext& ctx) = 0;
 
     /// 确认投递；重复确认幂等；调用者 ACK 前必须完成其职责要求的持久提交
-    virtual core::Status ack(const Subscription& subscription,
-                             const std::string& delivery_token,
+    virtual core::Status ack(const Subscription& subscription, const std::string& delivery_token,
                              const core::CallContext& ctx) = 0;
 
     /// 接管待处理消息（最小空闲时间、数量上限）；可能与旧消费者重复处理

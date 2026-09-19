@@ -12,11 +12,11 @@
  * ChannelConfig 已在公共头文件 rtdb_config.h 中统一定义。
  */
 
+#include <cstdint>
+#include <string>
+
 #include "models/point_runtime.hpp"
 #include "rtdb_config.h"
-
-#include <string>
-#include <cstdint>
 
 namespace ems {
 namespace rtdb {
@@ -25,17 +25,17 @@ namespace rtdb {
 // 运行时测点类型别名（引用共享模型）
 // ============================================================
 
-using BasePoint     = model::IRuntimePoint;
-using YcPoint       = model::YcPoint;
-using YxPoint       = model::YxPoint;
-using YkPoint       = model::YkPoint;
-using YtPoint       = model::YtPoint;
+using BasePoint = model::IRuntimePoint;
+using YcPoint = model::YcPoint;
+using YxPoint = model::YxPoint;
+using YkPoint = model::YkPoint;
+using YtPoint = model::YtPoint;
 
 // 枚举类型别名（保持 rtdb 层兼容）
-using DecodeCode    = model::DecodeCode;
-using PointType     = model::PointType;
-using PointQuality  = model::PointQuality;
-using YKStatus      = model::YKStatus;
+using DecodeCode = model::DecodeCode;
+using PointType = model::PointType;
+using PointQuality = model::PointQuality;
+using YKStatus = model::YKStatus;
 using YKCommandType = model::YKCommandType;
 
 // ============================================================
@@ -69,7 +69,7 @@ struct PointConfig {
     std::string updatedAt_;
 };
 
-} // namespace rtdb
-} // namespace ems
+}  // namespace rtdb
+}  // namespace ems
 
-#endif // EMS_RTDB_POINT_H
+#endif  // EMS_RTDB_POINT_H

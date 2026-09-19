@@ -8,10 +8,11 @@
  * ChannelConfig 已迁移至公共头文件 rtdb_config.h。
  */
 
-#include <string>
 #include <optional>
-#include "rtdb_config.h"
+#include <string>
+
 #include "models/base.h"
+#include "rtdb_config.h"
 
 namespace ems {
 namespace rtdb {

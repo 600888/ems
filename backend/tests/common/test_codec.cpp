@@ -2,15 +2,14 @@
  * @file test_codec.cpp
  * @brief 编解码测试：64 位整数往返、无效值拒绝、事件信封（验收 C04 对应项）
  */
+#include <common/codec/event_codec.h>
+#include <common/codec/model_codec.h>
 #include <gtest/gtest.h>
 
 #include <cmath>
 #include <cstdint>
 #include <limits>
 #include <string>
-
-#include <common/codec/event_codec.h>
-#include <common/codec/model_codec.h>
 
 namespace {
 namespace codec = ems::codec;
@@ -31,13 +30,12 @@ T expect_ok(const core::Result<T>& r) {
 // ---------------------------------------------------------------------------
 
 TEST(PointValueCodec, Int64BoundariesRoundtrip) {
-    for (std::int64_t v : {std::numeric_limits<std::int64_t>::min(),
-                           std::numeric_limits<std::int64_t>::min() + 1,
-                           std::int64_t{-1}, std::int64_t{0}, std::int64_t{1},
-                           std::numeric_limits<std::int64_t>::max() - 1,
-                           std::numeric_limits<std::int64_t>::max()}) {
-        auto text = expect_ok(codec::encode_point_value(model::ValueType::Int64,
-                                                        model::PointValue{v}));
+    for (std::int64_t v :
+         {std::numeric_limits<std::int64_t>::min(), std::numeric_limits<std::int64_t>::min() + 1,
+          std::int64_t{-1}, std::int64_t{0}, std::int64_t{1},
+          std::numeric_limits<std::int64_t>::max() - 1, std::numeric_limits<std::int64_t>::max()}) {
+        auto text =
+            expect_ok(codec::encode_point_value(model::ValueType::Int64, model::PointValue{v}));
         // 64 位整数在 JSON 中必须是十进制字符串（防 JS 精度丢失）
         EXPECT_EQ(text.front(), '"') << text;
         EXPECT_EQ(text, "\"" + std::to_string(v) + "\"");
@@ -47,12 +45,11 @@ TEST(PointValueCodec, Int64BoundariesRoundtrip) {
 }
 
 TEST(PointValueCodec, UInt64BoundariesRoundtrip) {
-    for (std::uint64_t v : {std::numeric_limits<std::uint64_t>::max(),
-                            std::numeric_limits<std::uint64_t>::max() - 1,
-                            std::uint64_t{0}, std::uint64_t{1},
-                            std::uint64_t{1} << 63}) {
-        auto text = expect_ok(codec::encode_point_value(model::ValueType::UInt64,
-                                                        model::PointValue{v}));
+    for (std::uint64_t v :
+         {std::numeric_limits<std::uint64_t>::max(), std::numeric_limits<std::uint64_t>::max() - 1,
+          std::uint64_t{0}, std::uint64_t{1}, std::uint64_t{1} << 63}) {
+        auto text =
+            expect_ok(codec::encode_point_value(model::ValueType::UInt64, model::PointValue{v}));
         EXPECT_EQ(text, "\"" + std::to_string(v) + "\"");
         auto back = expect_ok(codec::decode_point_value(model::ValueType::UInt64, text));
         EXPECT_EQ(std::get<std::uint64_t>(back), v);
@@ -60,8 +57,7 @@ TEST(PointValueCodec, UInt64BoundariesRoundtrip) {
 }
 
 TEST(PointValueCodec, BoolAndStringRoundtrip) {
-    auto t = expect_ok(codec::encode_point_value(model::ValueType::Bool,
-                                                 model::PointValue{true}));
+    auto t = expect_ok(codec::encode_point_value(model::ValueType::Bool, model::PointValue{true}));
     EXPECT_EQ(t, "true");
     auto s = expect_ok(codec::encode_point_value(model::ValueType::String,
                                                  model::PointValue{std::string("中文值")}));
@@ -71,18 +67,16 @@ TEST(PointValueCodec, BoolAndStringRoundtrip) {
 
 TEST(PointValueCodec, DoubleRoundtripWithoutPrecisionLoss) {
     const double v = 1234567.8901234;
-    auto text = expect_ok(
-        codec::encode_point_value(model::ValueType::Double, model::PointValue{v}));
+    auto text =
+        expect_ok(codec::encode_point_value(model::ValueType::Double, model::PointValue{v}));
     auto back = expect_ok(codec::decode_point_value(model::ValueType::Double, text));
     EXPECT_DOUBLE_EQ(std::get<double>(back), v);
 }
 
 TEST(PointValueCodec, RejectsNaNAndInf) {
-    auto r1 = codec::encode_point_value(model::ValueType::Double,
-                                        model::PointValue{std::nan("")});
+    auto r1 = codec::encode_point_value(model::ValueType::Double, model::PointValue{std::nan("")});
     EXPECT_FALSE(core::is_ok(r1));
-    auto r2 = codec::encode_point_value(model::ValueType::Double,
-                                        model::PointValue{HUGE_VAL});
+    auto r2 = codec::encode_point_value(model::ValueType::Double, model::PointValue{HUGE_VAL});
     EXPECT_FALSE(core::is_ok(r2));
 }
 
@@ -253,8 +247,7 @@ TEST(EventCodec, RejectsUnknownEventType) {
 }
 
 TEST(EventCodec, RejectsEmptyEventId) {
-    const std::string bad =
-        R"({"schema_version":"1","event_type":"Telemetry","event_id":""})";
+    const std::string bad = R"({"schema_version":"1","event_type":"Telemetry","event_id":""})";
     auto r = codec::decode_event(bad);
     ASSERT_FALSE(core::is_ok(r));
     EXPECT_EQ(core::error_of(r).code, core::ErrorCode::SchemaMismatch);

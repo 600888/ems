@@ -6,19 +6,19 @@
  * 测点配置加载为运行时配置，供采集线程初始化使用。
  */
 #include "para_loader.h"
-#include "net/log.h"
+
+#include <spdlog/fmt/bundled/format.h>
+
 #include <algorithm>
 #include <unordered_map>
-#include <spdlog/fmt/bundled/format.h>
+
+#include "net/log.h"
 
 namespace ems {
 namespace net {
 namespace device {
 
-ParaLoader::ParaLoader()
-    : dbm_(std::make_shared<ems::db::DbManager>())
-{
-}
+ParaLoader::ParaLoader() : dbm_(std::make_shared<ems::db::DbManager>()) {}
 
 ParaLoader::~ParaLoader() = default;
 
@@ -28,8 +28,9 @@ bool ParaLoader::initialize(const ems::db::DbConfig& config) {
         return true;
     }
 
-    LOG_INFO(fmt::format("初始化参数加载器: host={}, port={}, db={}, user={}",
-                         config.host, config.port, config.dbname, config.user).c_str());
+    LOG_INFO(fmt::format("初始化参数加载器: host={}, port={}, db={}, user={}", config.host,
+                         config.port, config.dbname, config.user)
+                 .c_str());
     bool ok = dbm_->connect(config);
     if (ok) {
         initialized_ = true;
@@ -54,10 +55,9 @@ std::vector<ems::db::device> ParaLoader::load_devices() {
     auto devices = dbm_->query_all_devices();
 
     // 仅返回启用设备
-    devices.erase(
-        std::remove_if(devices.begin(), devices.end(),
-            [](const ems::db::device& d) { return d.enable == 0; }),
-        devices.end());
+    devices.erase(std::remove_if(devices.begin(), devices.end(),
+                                 [](const ems::db::device& d) { return d.enable == 0; }),
+                  devices.end());
 
     LOG_DEBUG(fmt::format("加载设备: 共{}个启用设备", devices.size()).c_str());
     return devices;
@@ -95,12 +95,12 @@ std::vector<ems::db::channel> ParaLoader::load_channels(int64_t device_id) {
     }
 
     // 仅返回启用通道
-    channels.erase(
-        std::remove_if(channels.begin(), channels.end(),
-            [](const ems::db::channel& c) { return c.enable == 0; }),
-        channels.end());
+    channels.erase(std::remove_if(channels.begin(), channels.end(),
+                                  [](const ems::db::channel& c) { return c.enable == 0; }),
+                   channels.end());
 
-    LOG_DEBUG(fmt::format("加载通道: device_id={}, 共{}个启用通道", device_id, channels.size()).c_str());
+    LOG_DEBUG(
+        fmt::format("加载通道: device_id={}, 共{}个启用通道", device_id, channels.size()).c_str());
     return channels;
 }
 
@@ -141,12 +141,12 @@ std::vector<ems::db::point_yt> ParaLoader::load_yt_points(int64_t channel_id) {
 
 ems::rtdb::ChannelConfig ParaLoader::to_channel_config(const ems::db::channel& ch) {
     ems::rtdb::ChannelConfig cfg;
-    cfg.id_        = ch.id;
-    cfg.name_      = ch.name;
-    cfg.status_    = ch.enable;
+    cfg.id_ = ch.id;
+    cfg.name_ = ch.name;
+    cfg.status_ = ch.enable;
 
     // protocol_type: 1=MODBUS_RTU, 2=MODBUS_TCP, 0=DLT645, 3=IEC104, 4=IEC61850
-    cfg.protocol_  = static_cast<ems::model::ProtocolType>(ch.protocol_type);
+    cfg.protocol_ = static_cast<ems::model::ProtocolType>(ch.protocol_type);
 
     // 根据连接类型生成连接串
     if (ch.conn_type == 2) {
@@ -155,28 +155,30 @@ ems::rtdb::ChannelConfig ParaLoader::to_channel_config(const ems::db::channel& c
         cfg.baudRate_ = 0;
         cfg.dataBits_ = 0;
         cfg.stopBits_ = 0;
-        cfg.parity_   = "none";
+        cfg.parity_ = "none";
     } else {
         // RTU (串口)
         cfg.connection_ = ch.com_port;
         cfg.baudRate_ = ch.baud_rate;
         cfg.dataBits_ = ch.data_bits;
         cfg.stopBits_ = ch.stop_bits;
-        cfg.parity_   = ch.parity;
+        cfg.parity_ = ch.parity;
     }
 
     // settings_ 可包含 rtu_addr, timeout 等扩展参数
-    cfg.settings_ = "{"
-        "\"rtu_addr\":\"" + ch.rtu_addr + "\","
-        "\"timeout\":" + std::to_string(ch.timeout) +
-    "}";
+    cfg.settings_ =
+        "{"
+        "\"rtu_addr\":\"" +
+        ch.rtu_addr +
+        "\","
+        "\"timeout\":" +
+        std::to_string(ch.timeout) + "}";
 
     return cfg;
 }
 
 std::vector<ems::rtdb::ChannelConfig> ParaLoader::to_channel_configs(
-    const std::vector<ems::db::channel>& channels)
-{
+    const std::vector<ems::db::channel>& channels) {
     std::vector<ems::rtdb::ChannelConfig> result;
     result.reserve(channels.size());
     for (const auto& ch : channels) {
@@ -186,9 +188,7 @@ std::vector<ems::rtdb::ChannelConfig> ParaLoader::to_channel_configs(
 }
 
 std::vector<ems::rtdb::DeviceConfig> ParaLoader::to_device_configs(
-    const std::vector<ems::db::device>& devices,
-    const std::vector<ems::db::channel>& channels)
-{
+    const std::vector<ems::db::device>& devices, const std::vector<ems::db::channel>& channels) {
     std::vector<ems::rtdb::DeviceConfig> result;
     result.reserve(devices.size());
 
@@ -200,13 +200,13 @@ std::vector<ems::rtdb::DeviceConfig> ParaLoader::to_device_configs(
 
     for (const auto& dev : devices) {
         ems::rtdb::DeviceConfig cfg;
-        cfg.id_          = dev.id;
-        cfg.name_        = dev.name;
-        cfg.deviceType_  = static_cast<ems::model::DeviceType>(dev.device_type);
+        cfg.id_ = dev.id;
+        cfg.name_ = dev.name;
+        cfg.deviceType_ = static_cast<ems::model::DeviceType>(dev.device_type);
         cfg.description_ = dev.description;
-        cfg.status_      = dev.enable;
-        cfg.createdAt_   = dev.created_at;
-        cfg.updatedAt_   = dev.updated_at;
+        cfg.status_ = dev.enable;
+        cfg.createdAt_ = dev.created_at;
+        cfg.updatedAt_ = dev.updated_at;
 
         // 关联通道
         auto it = ch_by_dev.find(dev.id);
@@ -220,14 +220,12 @@ std::vector<ems::rtdb::DeviceConfig> ParaLoader::to_device_configs(
     return result;
 }
 
-bool ParaLoader::load_all_as_config(
-    std::vector<ems::rtdb::DeviceConfig>& devices,
-    std::vector<ems::rtdb::ChannelConfig>& channels,
-    std::vector<ems::db::point_yc>* yc_points,
-    std::vector<ems::db::point_yx>* yx_points,
-    std::vector<ems::db::point_yk>* yk_points,
-    std::vector<ems::db::point_yt>* yt_points)
-{
+bool ParaLoader::load_all_as_config(std::vector<ems::rtdb::DeviceConfig>& devices,
+                                    std::vector<ems::rtdb::ChannelConfig>& channels,
+                                    std::vector<ems::db::point_yc>* yc_points,
+                                    std::vector<ems::db::point_yx>* yx_points,
+                                    std::vector<ems::db::point_yk>* yk_points,
+                                    std::vector<ems::db::point_yt>* yt_points) {
     if (!initialized_) {
         last_err_ = "ParaLoader not initialized";
         LOG_ERROR("参数加载器未初始化");
@@ -236,24 +234,38 @@ bool ParaLoader::load_all_as_config(
 
     // 1. 加载启用的设备和通道
     auto dev_entities = load_devices();
-    auto ch_entities  = load_channels();
+    auto ch_entities = load_channels();
 
-    LOG_INFO(fmt::format("加载全量配置: {}个设备, {}个通道", dev_entities.size(), ch_entities.size()).c_str());
+    LOG_INFO(
+        fmt::format("加载全量配置: {}个设备, {}个通道", dev_entities.size(), ch_entities.size())
+            .c_str());
 
     // 2. 转换为运行时配置
     channels = to_channel_configs(ch_entities);
-    devices  = to_device_configs(dev_entities, ch_entities);
+    devices = to_device_configs(dev_entities, ch_entities);
 
     // 3. 加载测点配置 (全量)
-    if (yc_points) { *yc_points = load_yc_points(); LOG_DEBUG(fmt::format("加载YC测点: {}个", yc_points->size()).c_str()); }
-    if (yx_points) { *yx_points = load_yx_points(); LOG_DEBUG(fmt::format("加载YX测点: {}个", yx_points->size()).c_str()); }
-    if (yk_points) { *yk_points = load_yk_points(); LOG_DEBUG(fmt::format("加载YK测点: {}个", yk_points->size()).c_str()); }
-    if (yt_points) { *yt_points = load_yt_points(); LOG_DEBUG(fmt::format("加载YT测点: {}个", yt_points->size()).c_str()); }
+    if (yc_points) {
+        *yc_points = load_yc_points();
+        LOG_DEBUG(fmt::format("加载YC测点: {}个", yc_points->size()).c_str());
+    }
+    if (yx_points) {
+        *yx_points = load_yx_points();
+        LOG_DEBUG(fmt::format("加载YX测点: {}个", yx_points->size()).c_str());
+    }
+    if (yk_points) {
+        *yk_points = load_yk_points();
+        LOG_DEBUG(fmt::format("加载YK测点: {}个", yk_points->size()).c_str());
+    }
+    if (yt_points) {
+        *yt_points = load_yt_points();
+        LOG_DEBUG(fmt::format("加载YT测点: {}个", yt_points->size()).c_str());
+    }
 
     LOG_INFO("全量配置加载完成");
     return true;
 }
 
-} // namespace device
-} // namespace net
-} // namespace ems
+}  // namespace device
+}  // namespace net
+}  // namespace ems

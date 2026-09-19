@@ -9,9 +9,10 @@
 #ifndef EMS_MODEL_POINT_RUNTIME_HPP
 #define EMS_MODEL_POINT_RUNTIME_HPP
 
-#include <string>
 #include <cstdint>
 #include <memory>
+#include <string>
+
 #include "base.h"
 
 namespace ems {
@@ -29,7 +30,7 @@ namespace model {
  * 使用 nlohmann::json 进行序列化/反序列化。
  */
 class IRuntimePoint {
-public:
+   public:
     virtual ~IRuntimePoint() = default;
 
     virtual std::string code() const = 0;
@@ -42,13 +43,9 @@ public:
     virtual json to_json() const = 0;
     virtual void from_json(const json& j) = 0;
 
-    std::string to_string() const {
-        return to_json().dump();
-    }
+    std::string to_string() const { return to_json().dump(); }
 
-    void from_string(const std::string& s) {
-        from_json(json::parse(s));
-    }
+    void from_string(const std::string& s) { from_json(json::parse(s)); }
 };
 
 // ============================================================
@@ -56,19 +53,19 @@ public:
 // ============================================================
 
 struct YcPoint : public IRuntimePoint {
-    std::string  code_;
-    std::string  name_;
-    DecodeCode   decodeCode_{DecodeCode::UINT16};
-    double       value_{0.0};
-    double       rawValue_{0.0};
-    double       mulCoe_{1.0};
-    double       addCoe_{0.0};
-    double       minLimit_{-9999999.0};
-    double       maxLimit_{9999999.0};
-    std::string  unit_;
-    uint64_t     timestamp_{0};
+    std::string code_;
+    std::string name_;
+    DecodeCode decodeCode_{DecodeCode::UINT16};
+    double value_{0.0};
+    double rawValue_{0.0};
+    double mulCoe_{1.0};
+    double addCoe_{0.0};
+    double minLimit_{-9999999.0};
+    double maxLimit_{9999999.0};
+    std::string unit_;
+    uint64_t timestamp_{0};
     PointQuality quality_{PointQuality::Good};
-    int          status_{0};
+    int status_{0};
 
     std::string code() const override { return code_; }
     std::string name() const override { return name_; }
@@ -76,9 +73,7 @@ struct YcPoint : public IRuntimePoint {
     uint64_t timestamp() const override { return timestamp_; }
     PointQuality quality() const override { return quality_; }
 
-    double transformedValue() const {
-        return rawValue_ * mulCoe_ + addCoe_;
-    }
+    double transformedValue() const { return rawValue_ * mulCoe_ + addCoe_; }
 
     void update(const IRuntimePoint& other) override {
         if (other.type() == PointType::YC) {
@@ -113,7 +108,8 @@ struct YcPoint : public IRuntimePoint {
     void from_json(const json& j) override {
         if (j.contains("code")) code_ = j["code"].get<std::string>();
         if (j.contains("name")) name_ = j["name"].get<std::string>();
-        if (j.contains("decode_code")) decodeCode_ = static_cast<DecodeCode>(j["decode_code"].get<int>());
+        if (j.contains("decode_code"))
+            decodeCode_ = static_cast<DecodeCode>(j["decode_code"].get<int>());
         if (j.contains("value")) value_ = j["value"].get<double>();
         if (j.contains("raw_value")) rawValue_ = j["raw_value"].get<double>();
         if (j.contains("mul_coe")) mulCoe_ = j["mul_coe"].get<double>();
@@ -132,15 +128,15 @@ struct YcPoint : public IRuntimePoint {
 // ============================================================
 
 struct YxPoint : public IRuntimePoint {
-    std::string  code_;
-    std::string  name_;
-    DecodeCode   decodeCode_{DecodeCode::BOOL};
-    int          value_{0};
-    int          bit_{0};
-    bool         reverse_{false};
-    uint64_t     timestamp_{0};
+    std::string code_;
+    std::string name_;
+    DecodeCode decodeCode_{DecodeCode::BOOL};
+    int value_{0};
+    int bit_{0};
+    bool reverse_{false};
+    uint64_t timestamp_{0};
     PointQuality quality_{PointQuality::Good};
-    int          status_{0};
+    int status_{0};
 
     std::string code() const override { return code_; }
     std::string name() const override { return name_; }
@@ -176,7 +172,8 @@ struct YxPoint : public IRuntimePoint {
     void from_json(const json& j) override {
         if (j.contains("code")) code_ = j["code"].get<std::string>();
         if (j.contains("name")) name_ = j["name"].get<std::string>();
-        if (j.contains("decode_code")) decodeCode_ = static_cast<DecodeCode>(j["decode_code"].get<int>());
+        if (j.contains("decode_code"))
+            decodeCode_ = static_cast<DecodeCode>(j["decode_code"].get<int>());
         if (j.contains("value")) value_ = j["value"].get<int>();
         if (j.contains("bit")) bit_ = j["bit"].get<int>();
         if (j.contains("reverse")) reverse_ = j["reverse"].get<bool>();
@@ -191,15 +188,15 @@ struct YxPoint : public IRuntimePoint {
 // ============================================================
 
 struct YkPoint : public IRuntimePoint {
-    std::string  code_;
-    std::string  name_;
-    DecodeCode   decodeCode_{DecodeCode::BOOL};
-    int          value_{0};
-    int          commandType_{0};
-    YKStatus     status_{YKStatus::Idle};
-    uint64_t     timestamp_{0};
-    uint64_t     executeTime_{0};
-    std::string  result_;
+    std::string code_;
+    std::string name_;
+    DecodeCode decodeCode_{DecodeCode::BOOL};
+    int value_{0};
+    int commandType_{0};
+    YKStatus status_{YKStatus::Idle};
+    uint64_t timestamp_{0};
+    uint64_t executeTime_{0};
+    std::string result_;
 
     std::string code() const override { return code_; }
     std::string name() const override { return name_; }
@@ -239,7 +236,8 @@ struct YkPoint : public IRuntimePoint {
     void from_json(const json& j) override {
         if (j.contains("code")) code_ = j["code"].get<std::string>();
         if (j.contains("name")) name_ = j["name"].get<std::string>();
-        if (j.contains("decode_code")) decodeCode_ = static_cast<DecodeCode>(j["decode_code"].get<int>());
+        if (j.contains("decode_code"))
+            decodeCode_ = static_cast<DecodeCode>(j["decode_code"].get<int>());
         if (j.contains("value")) value_ = j["value"].get<int>();
         if (j.contains("command_type")) commandType_ = j["command_type"].get<int>();
         if (j.contains("yk_status")) status_ = static_cast<YKStatus>(j["yk_status"].get<int>());
@@ -254,18 +252,18 @@ struct YkPoint : public IRuntimePoint {
 // ============================================================
 
 struct YtPoint : public IRuntimePoint {
-    std::string  code_;
-    std::string  name_;
-    DecodeCode   decodeCode_{DecodeCode::UINT16};
-    double       value_{0.0};
-    double       mulCoe_{1.0};
-    double       addCoe_{0.0};
-    double       minLimit_{-9999999.0};
-    double       maxLimit_{9999999.0};
-    std::string  unit_;
-    uint64_t     timestamp_{0};
+    std::string code_;
+    std::string name_;
+    DecodeCode decodeCode_{DecodeCode::UINT16};
+    double value_{0.0};
+    double mulCoe_{1.0};
+    double addCoe_{0.0};
+    double minLimit_{-9999999.0};
+    double maxLimit_{9999999.0};
+    std::string unit_;
+    uint64_t timestamp_{0};
     PointQuality quality_{PointQuality::Good};
-    int          status_{0};
+    int status_{0};
 
     std::string code() const override { return code_; }
     std::string name() const override { return name_; }
@@ -304,7 +302,8 @@ struct YtPoint : public IRuntimePoint {
     void from_json(const json& j) override {
         if (j.contains("code")) code_ = j["code"].get<std::string>();
         if (j.contains("name")) name_ = j["name"].get<std::string>();
-        if (j.contains("decode_code")) decodeCode_ = static_cast<DecodeCode>(j["decode_code"].get<int>());
+        if (j.contains("decode_code"))
+            decodeCode_ = static_cast<DecodeCode>(j["decode_code"].get<int>());
         if (j.contains("value")) value_ = j["value"].get<double>();
         if (j.contains("mul_coe")) mulCoe_ = j["mul_coe"].get<double>();
         if (j.contains("add_coe")) addCoe_ = j["add_coe"].get<double>();
@@ -317,7 +316,7 @@ struct YtPoint : public IRuntimePoint {
     }
 };
 
-} // namespace model
-} // namespace ems
+}  // namespace model
+}  // namespace ems
 
-#endif // EMS_MODEL_POINT_RUNTIME_HPP
+#endif  // EMS_MODEL_POINT_RUNTIME_HPP

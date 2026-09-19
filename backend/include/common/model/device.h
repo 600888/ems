@@ -8,18 +8,18 @@
  */
 #pragma once
 
+#include <common/model/point.h>
+
 #include <string>
 #include <vector>
-
-#include <common/model/point.h>
 
 namespace ems::model {
 
 /// 设备（身份 + 版本化定义；运行状态见 realtime 专题）
 struct Device {
     core::DeviceId device_id;
-    core::AssetId asset_id;        ///< 资产归属
-    std::string code;              ///< 从资产节点解析
+    core::AssetId asset_id;  ///< 资产归属
+    std::string code;        ///< 从资产节点解析
     std::string name;
     std::string type_version_id;   ///< DeviceTypeDefinition 版本引用
     std::string model_version_id;  ///< 厂家型号版本
@@ -30,8 +30,8 @@ struct Device {
 
 /// 设备类型定义（版本化；PCS/BMS/电表等目录引用设备模型专题）
 struct DeviceTypeDefinition {
-    std::string type_version_id;    ///< 版本化类型标识
-    std::string type_code;          ///< 类型编码，如 pcs / bms / meter
+    std::string type_version_id;  ///< 版本化类型标识
+    std::string type_code;        ///< 类型编码，如 pcs / bms / meter
     std::string name;
     std::vector<StandardPointDefinition> standard_points;  ///< 标准点目录
     std::vector<std::string> capability_codes;             ///< 声明支持的能力（依赖）

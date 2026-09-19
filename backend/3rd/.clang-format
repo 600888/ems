@@ -1,0 +1,8 @@
+---
+# 第三方代码目录：禁止格式化。
+# 本文件覆盖仓库根目录的 .clang-format，clang-format 会向上查找最近的配置，
+# 因此 backend/3rd/ 及其所有子目录内的代码都不会被改动。
+Language: Cpp
+DisableFormat: true
+SortIncludes: Never
+...

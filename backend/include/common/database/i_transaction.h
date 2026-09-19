@@ -23,7 +23,7 @@ struct CommitReceipt {
 };
 
 class ITransaction {
-public:
+   public:
     ITransaction() = default;
     virtual ~ITransaction() = default;
 

@@ -14,8 +14,7 @@ using nlohmann::json;
 constexpr const char* kCurrentSchemaVersion = "1";
 
 core::Error schema_error(const std::string& msg) {
-    return core::make_error(core::ErrorCode::SchemaMismatch,
-                            core::WriteEffect::NotApplicable, msg);
+    return core::make_error(core::ErrorCode::SchemaMismatch, core::WriteEffect::NotApplicable, msg);
 }
 
 core::Result<messaging::EventType> parse_event_type(const std::string& s) {
@@ -33,13 +32,12 @@ core::Result<messaging::EventType> parse_event_type(const std::string& s) {
 
 core::Result<std::string> encode_event(const messaging::EventEnvelope& e) {
     if (e.event_id.empty()) {
-        return core::make_error(core::ErrorCode::InvalidArgument,
-                                core::WriteEffect::NotApplicable,
+        return core::make_error(core::ErrorCode::InvalidArgument, core::WriteEffect::NotApplicable,
                                 "event_id 不能为空（持久受理前生成）");
     }
     json j;
-    j["schema_version"] = e.schema_version.empty() ? std::string(kCurrentSchemaVersion)
-                                                   : e.schema_version;
+    j["schema_version"] =
+        e.schema_version.empty() ? std::string(kCurrentSchemaVersion) : e.schema_version;
     j["event_type"] = messaging::to_string(e.event_type);
     j["event_id"] = e.event_id.value();
     j["trace_id"] = e.trace_id;
@@ -56,8 +54,7 @@ core::Result<std::string> encode_event(const messaging::EventEnvelope& e) {
     j["ingest_time"] = std::to_string(e.ingest_time);
     j["payload"] = json::parse(e.payload_json.empty() ? "{}" : e.payload_json, nullptr, false);
     if (j["payload"].is_discarded()) {
-        return core::make_error(core::ErrorCode::InvalidArgument,
-                                core::WriteEffect::NotApplicable,
+        return core::make_error(core::ErrorCode::InvalidArgument, core::WriteEffect::NotApplicable,
                                 "payload 不是合法 JSON");
     }
     return j.dump();

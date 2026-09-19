@@ -12,30 +12,30 @@
  *   ./data_collect_example --db-pass mypass --db-name ems
  *   ./data_collect_example --db-host 192.168.1.100 --poll-ms 2000 --cycles 10
  */
-#include <iostream>
-#include <iomanip>
-#include <thread>
+#include <atomic>
 #include <chrono>
 #include <csignal>
-#include <cstdlib>
 #include <cstdio>
-#include <string>
-#include <memory>
-#include <atomic>
-#include <vector>
-#include <map>
+#include <cstdlib>
 #include <filesystem>
+#include <iomanip>
+#include <iostream>
+#include <map>
+#include <memory>
+#include <string>
+#include <thread>
+#include <vector>
 
-#include "net/collect/collect_engine.h"
+#include "db/channel.h"
+#include "db/db_manager.h"
+#include "db/device.h"
+#include "db/point.h"
 #include "net/collect/channel_thread.h"
+#include "net/collect/collect_engine.h"
 #include "net/collect/data_dispatcher.h"
 #include "net/collect/plugin_manager.h"
 #include "net/para_loader/para_loader.h"
 #include "rtdb/rtdb_channel.h"
-#include "db/db_manager.h"
-#include "db/device.h"
-#include "db/channel.h"
-#include "db/point.h"
 
 namespace fs = std::filesystem;
 using ems::net::device::ParaLoader;
@@ -44,15 +44,15 @@ using ems::rtdb::ChannelConfig;
 // ============================================================
 // 默认配置
 // ============================================================
-static constexpr const char* DEFAULT_DB_HOST  = "127.0.0.1";
-static constexpr int         DEFAULT_DB_PORT  = 3306;
-static constexpr const char* DEFAULT_DB_USER  = "cdy";
-static constexpr const char* DEFAULT_DB_PASS  = "123456";
-static constexpr const char* DEFAULT_DB_NAME  = "ems";
+static constexpr const char* DEFAULT_DB_HOST = "127.0.0.1";
+static constexpr int DEFAULT_DB_PORT = 3306;
+static constexpr const char* DEFAULT_DB_USER = "cdy";
+static constexpr const char* DEFAULT_DB_PASS = "123456";
+static constexpr const char* DEFAULT_DB_NAME = "ems";
 static constexpr const char* DEFAULT_REDIS_HOST = "127.0.0.1";
-static constexpr int         DEFAULT_REDIS_PORT = 6379;
-static constexpr int         DEFAULT_POLL_MS  = 1000;
-static constexpr int         DEFAULT_CYCLES   = 5;
+static constexpr int DEFAULT_REDIS_PORT = 6379;
+static constexpr int DEFAULT_POLL_MS = 1000;
+static constexpr int DEFAULT_CYCLES = 5;
 
 static std::atomic<bool> g_running{true};
 static std::shared_ptr<ems::net::collect::CollectEngine> g_engine;
@@ -90,38 +90,53 @@ static void print_usage(const char* prog) {
 
 struct AppConfig {
     std::string dbHost{DEFAULT_DB_HOST};
-    int         dbPort{DEFAULT_DB_PORT};
+    int dbPort{DEFAULT_DB_PORT};
     std::string dbUser{DEFAULT_DB_USER};
     std::string dbPass{DEFAULT_DB_PASS};
     std::string dbName{DEFAULT_DB_NAME};
     std::string redisHost{DEFAULT_REDIS_HOST};
-    int         redisPort{DEFAULT_REDIS_PORT};
-    std::string modbusIp;   // 空=从数据库读取
-    int         modbusPort{0};
-    int         pollIntervalMs{DEFAULT_POLL_MS};
-    int         collectCycles{DEFAULT_CYCLES};
+    int redisPort{DEFAULT_REDIS_PORT};
+    std::string modbusIp;  // 空=从数据库读取
+    int modbusPort{0};
+    int pollIntervalMs{DEFAULT_POLL_MS};
+    int collectCycles{DEFAULT_CYCLES};
     std::string pluginDir;  // 自动解析
 };
 
 static AppConfig parse_args(int argc, char* argv[]) {
     AppConfig cfg;
     // 插件目录: 相对于可执行文件路径的绝对路径
-    cfg.pluginDir = fs::absolute(fs::path(argv[0]).parent_path() / "../../lib").lexically_normal().string();
+    cfg.pluginDir =
+        fs::absolute(fs::path(argv[0]).parent_path() / "../../lib").lexically_normal().string();
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
-        if (arg == "--db-host" && i + 1 < argc)       cfg.dbHost = argv[++i];
-        else if (arg == "--db-port" && i + 1 < argc)  cfg.dbPort = std::stoi(argv[++i]);
-        else if (arg == "--db-user" && i + 1 < argc)  cfg.dbUser = argv[++i];
-        else if (arg == "--db-pass" && i + 1 < argc)  cfg.dbPass = argv[++i];
-        else if (arg == "--db-name" && i + 1 < argc)  cfg.dbName = argv[++i];
-        else if (arg == "--redis-host" && i + 1 < argc) cfg.redisHost = argv[++i];
-        else if (arg == "--redis-port" && i + 1 < argc) cfg.redisPort = std::stoi(argv[++i]);
-        else if (arg == "--modbus-ip" && i + 1 < argc)  cfg.modbusIp = argv[++i];
-        else if (arg == "--modbus-port" && i + 1 < argc) cfg.modbusPort = std::stoi(argv[++i]);
-        else if (arg == "--poll-ms" && i + 1 < argc)  cfg.pollIntervalMs = std::stoi(argv[++i]);
-        else if (arg == "--cycles" && i + 1 < argc)   cfg.collectCycles = std::stoi(argv[++i]);
-        else if (arg == "--help" || arg == "-h") { print_usage(argv[0]); std::exit(0); }
+        if (arg == "--db-host" && i + 1 < argc)
+            cfg.dbHost = argv[++i];
+        else if (arg == "--db-port" && i + 1 < argc)
+            cfg.dbPort = std::stoi(argv[++i]);
+        else if (arg == "--db-user" && i + 1 < argc)
+            cfg.dbUser = argv[++i];
+        else if (arg == "--db-pass" && i + 1 < argc)
+            cfg.dbPass = argv[++i];
+        else if (arg == "--db-name" && i + 1 < argc)
+            cfg.dbName = argv[++i];
+        else if (arg == "--redis-host" && i + 1 < argc)
+            cfg.redisHost = argv[++i];
+        else if (arg == "--redis-port" && i + 1 < argc)
+            cfg.redisPort = std::stoi(argv[++i]);
+        else if (arg == "--modbus-ip" && i + 1 < argc)
+            cfg.modbusIp = argv[++i];
+        else if (arg == "--modbus-port" && i + 1 < argc)
+            cfg.modbusPort = std::stoi(argv[++i]);
+        else if (arg == "--poll-ms" && i + 1 < argc)
+            cfg.pollIntervalMs = std::stoi(argv[++i]);
+        else if (arg == "--cycles" && i + 1 < argc)
+            cfg.collectCycles = std::stoi(argv[++i]);
+        else if (arg == "--help" || arg == "-h") {
+            print_usage(argv[0]);
+            std::exit(0);
+        }
     }
     return cfg;
 }
@@ -133,7 +148,7 @@ static AppConfig parse_args(int argc, char* argv[]) {
 int main(int argc, char* argv[]) {
     auto cfg = parse_args(argc, argv);
 
-    signal(SIGINT,  signalHandler);
+    signal(SIGINT, signalHandler);
     signal(SIGTERM, signalHandler);
 
     std::cout << "\n  ╔════════════════════════════════════════════╗\n"
@@ -150,11 +165,11 @@ int main(int argc, char* argv[]) {
     std::cout << "  数据库: " << cfg.dbHost << ":" << cfg.dbPort << "/" << cfg.dbName << std::endl;
 
     ems::db::DbConfig dbConfig;
-    dbConfig.host     = cfg.dbHost;
-    dbConfig.port     = cfg.dbPort;
-    dbConfig.user     = cfg.dbUser;
+    dbConfig.host = cfg.dbHost;
+    dbConfig.port = cfg.dbPort;
+    dbConfig.user = cfg.dbUser;
     dbConfig.password = cfg.dbPass;
-    dbConfig.dbname   = cfg.dbName;
+    dbConfig.dbname = cfg.dbName;
 
     // 建库建表 + 写入示例数据
     std::cout << "  检查并初始化数据库和表..." << std::endl;
@@ -178,15 +193,13 @@ int main(int argc, char* argv[]) {
     std::cout << "  ✅ 数据库连接成功" << std::endl;
 
     auto devEntities = loader.load_devices();
-    auto chEntities  = loader.load_channels();
-    auto yc_points   = loader.load_yc_points();
-    auto yx_points   = loader.load_yx_points();
+    auto chEntities = loader.load_channels();
+    auto yc_points = loader.load_yc_points();
+    auto yx_points = loader.load_yx_points();
     auto channelConfigs = loader.to_channel_configs(chEntities);
 
-    std::cout << "  设备: " << devEntities.size()
-              << "  通道: " << chEntities.size()
-              << "  YC点: " << yc_points.size()
-              << "  YX点: " << yx_points.size() << std::endl;
+    std::cout << "  设备: " << devEntities.size() << "  通道: " << chEntities.size()
+              << "  YC点: " << yc_points.size() << "  YX点: " << yx_points.size() << std::endl;
 
     if (channelConfigs.empty()) {
         std::cerr << "  ❌ 没有启用的通道，请先通过 seed 数据初始化" << std::endl;
@@ -200,9 +213,9 @@ int main(int argc, char* argv[]) {
     std::cout << "[3/4] 初始化采集引擎并启动通道..." << std::endl;
 
     ems::net::collect::EngineConfig engineCfg;
-    engineCfg.pluginDir_             = cfg.pluginDir;
-    engineCfg.redisHost_             = cfg.redisHost;
-    engineCfg.redisPort_             = cfg.redisPort;
+    engineCfg.pluginDir_ = cfg.pluginDir;
+    engineCfg.redisHost_ = cfg.redisHost;
+    engineCfg.redisPort_ = cfg.redisPort;
     engineCfg.defaultPollIntervalMs_ = cfg.pollIntervalMs;
 
     g_engine = std::make_shared<ems::net::collect::CollectEngine>();
@@ -216,17 +229,18 @@ int main(int argc, char* argv[]) {
         std::cerr << "  ⚠ 通道 [" << chId << "] " << err << std::endl;
     });
 
-    auto& pluginMgr  = g_engine->plugin_manager();
-    auto  dispatcher = g_engine->data_dispatcher();
-    int   startedCount = 0;
+    auto& pluginMgr = g_engine->plugin_manager();
+    auto dispatcher = g_engine->data_dispatcher();
+    int startedCount = 0;
 
     // 命令行 Modbus 参数覆盖数据库配置
     for (auto& chCfg : channelConfigs) {
         if (cfg.modbusIp.size() > 0) {
             std::string oldConn = chCfg.connection_;
-            chCfg.connection_ = cfg.modbusIp + ":" + std::to_string(cfg.modbusPort ? cfg.modbusPort : 502);
-            std::cout << "  📌 覆盖通道 [" << chCfg.id_ << "] 连接: "
-                      << oldConn << " → " << chCfg.connection_ << std::endl;
+            chCfg.connection_ =
+                cfg.modbusIp + ":" + std::to_string(cfg.modbusPort ? cfg.modbusPort : 502);
+            std::cout << "  📌 覆盖通道 [" << chCfg.id_ << "] 连接: " << oldConn << " → "
+                      << chCfg.connection_ << std::endl;
         }
     }
 
@@ -251,26 +265,22 @@ int main(int argc, char* argv[]) {
         for (const auto& pt : yc_points) {
             if (pt.channel_id != chCfg.id_) continue;
             auto& ctx = devMap[pt.device_id];
-            ctx.deviceId_   = pt.device_id;
+            ctx.deviceId_ = pt.device_id;
             ctx.deviceName_ = pt.name;
-            std::string code = std::to_string(pt.slave_id) + ":"
-                             + std::to_string(pt.func_code) + ":"
-                             + std::to_string(pt.reg_addr) + ":"
-                             + std::to_string(pt.decode_code) + ":"
-                             + std::to_string(pt.endian);
+            std::string code = std::to_string(pt.slave_id) + ":" + std::to_string(pt.func_code) +
+                               ":" + std::to_string(pt.reg_addr) + ":" +
+                               std::to_string(pt.decode_code) + ":" + std::to_string(pt.endian);
             ctx.ycPointCodes_.push_back(code);
         }
 
         for (const auto& pt : yx_points) {
             if (pt.channel_id != chCfg.id_) continue;
             auto& ctx = devMap[pt.device_id];
-            ctx.deviceId_   = pt.device_id;
+            ctx.deviceId_ = pt.device_id;
             ctx.deviceName_ = pt.name;
-            std::string code = std::to_string(pt.slave_id) + ":"
-                             + std::to_string(pt.func_code) + ":"
-                             + std::to_string(pt.reg_addr) + ":"
-                             + std::to_string(pt.decode_code) + ":"
-                             + std::to_string(pt.endian);
+            std::string code = std::to_string(pt.slave_id) + ":" + std::to_string(pt.func_code) +
+                               ":" + std::to_string(pt.reg_addr) + ":" +
+                               std::to_string(pt.decode_code) + ":" + std::to_string(pt.endian);
             ctx.yxPointCodes_.push_back(code);
         }
 
@@ -280,7 +290,8 @@ int main(int argc, char* argv[]) {
         auto chThread = std::make_shared<ems::net::collect::ChannelThread>(chCfg, dispatcher);
         chThread->set_devices(std::move(devices));
         chThread->set_poll_interval(cfg.pollIntervalMs);
-        chThread->set_error_callback([chId = chCfg.id_, connection = chCfg.connection_](int64_t, const std::string& err) {
+        chThread->set_error_callback([chId = chCfg.id_, connection = chCfg.connection_](
+                                         int64_t, const std::string& err) {
             std::cerr << "  ⚠ 通道 [" << chId << "] " << connection << " - " << err << std::endl;
         });
 
@@ -289,8 +300,7 @@ int main(int argc, char* argv[]) {
         startedCount++;
 
         std::cout << "  ✅ 通道 [" << chCfg.id_ << "] " << chCfg.name_
-                  << " 已启动 (协议=" << protoName
-                  << ", 周期=" << cfg.pollIntervalMs << "ms)"
+                  << " 已启动 (协议=" << protoName << ", 周期=" << cfg.pollIntervalMs << "ms)"
                   << std::endl;
     }
 
@@ -315,10 +325,8 @@ int main(int argc, char* argv[]) {
                                                  : ems::net::collect::DataDispatcher::Stats{};
 
         std::cout << "\n  ── 采集轮次 #" << cycle << " ──\n"
-                  << "  启动通道: " << startedChannels
-                  << "  更新: " << stats.totalUpdates
-                  << "  失败: " << stats.failedUpdates
-                  << "  批量: " << stats.batchCount
+                  << "  启动通道: " << startedChannels << "  更新: " << stats.totalUpdates
+                  << "  失败: " << stats.failedUpdates << "  批量: " << stats.batchCount
                   << std::endl;
     }
 
@@ -330,8 +338,8 @@ int main(int argc, char* argv[]) {
 
     // 先收集统计信息
     auto statsFinal = g_engine && g_engine->data_dispatcher()
-        ? g_engine->data_dispatcher()->stats()
-        : ems::net::collect::DataDispatcher::Stats{};
+                          ? g_engine->data_dispatcher()->stats()
+                          : ems::net::collect::DataDispatcher::Stats{};
 
     if (g_engine) {
         g_engine->stop_all();

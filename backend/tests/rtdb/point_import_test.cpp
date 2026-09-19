@@ -3,14 +3,16 @@
  * @brief 点表导入单元测试（不依赖Redis/Mock，直接测试导入相关核心逻辑）
  */
 #include <gtest/gtest.h>
-#include <fstream>
-#include <sstream>
-#include <cstdio>
-#include <vector>
-#include <algorithm>
 #include <unistd.h>
+
+#include <algorithm>
 #include <chrono>
+#include <cstdio>
+#include <fstream>
 #include <nlohmann/json.hpp>
+#include <sstream>
+#include <vector>
+
 #include "rtdb.h"
 #include "rtdb_cache.h"
 
@@ -20,7 +22,7 @@ using namespace ems::rtdb;
 // 测试 Fixture：为测试提供 RtDbConfigCache 和 RtDbPointManager
 // ============================================================
 class PointImportTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         cache = std::make_shared<RtDbConfigCache>();
         pointManager = std::make_shared<RtDbPointManager>();
@@ -840,7 +842,7 @@ TEST_F(PointImportTest, FullImportWorkflow) {
 // ============================================================
 
 class PointImportRedisTest : public ::testing::Test {
-protected:
+   protected:
     void SetUp() override {
         RtDbConfig config;
         config.host = "localhost";
@@ -884,7 +886,8 @@ TEST_F(PointImportRedisTest, WriteAndReadYcPoint) {
     point.maxLimit_ = 1000.0;
     point.unit_ = "V";
     point.timestamp_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
     point.quality_ = PointQuality::Good;
     point.status_ = 1;
 
@@ -907,7 +910,8 @@ TEST_F(PointImportRedisTest, WriteAndReadYxPoint) {
     point.bit_ = 2;
     point.reverse_ = true;
     point.timestamp_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
     point.quality_ = PointQuality::Good;
     point.status_ = 1;
 
@@ -928,7 +932,8 @@ TEST_F(PointImportRedisTest, WriteAndReadYkPoint) {
     point.commandType_ = 0;
     point.ykStatus_ = YKStatus::Pending;
     point.timestamp_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
     point.executeTime_ = point.timestamp_ + 1000;
     point.result_ = "";
 
@@ -952,7 +957,8 @@ TEST_F(PointImportRedisTest, WriteAndReadYtPoint) {
     point.maxLimit_ = 100.0;
     point.unit_ = "%";
     point.timestamp_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
     point.quality_ = PointQuality::Good;
     point.status_ = 1;
 
@@ -974,7 +980,8 @@ TEST_F(PointImportRedisTest, BatchWriteAndReadYcPoints) {
     p1.value_ = 100.0;
     p1.rawValue_ = 1000;
     p1.timestamp_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                        std::chrono::system_clock::now().time_since_epoch())
+                        .count();
     p1.quality_ = PointQuality::Good;
     p1.status_ = 1;
     batchData["REDIS_YC_BATCH_001"] = p1;
@@ -1010,7 +1017,8 @@ TEST_F(PointImportRedisTest, DeleteYcPoint) {
     point.code_ = "REDIS_YC_001";
     point.value_ = 100.0;
     point.timestamp_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
     point.quality_ = PointQuality::Good;
 
     EXPECT_TRUE(rtdb->setYc("REDIS_YC_001", point));
@@ -1027,7 +1035,8 @@ TEST_F(PointImportRedisTest, GetYcCodes) {
     point.code_ = "REDIS_YC_001";
     point.value_ = 100.0;
     point.timestamp_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                           std::chrono::system_clock::now().time_since_epoch())
+                           .count();
     point.quality_ = PointQuality::Good;
     rtdb->setYc("REDIS_YC_001", point);
 

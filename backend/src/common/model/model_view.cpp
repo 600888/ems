@@ -8,8 +8,7 @@
 
 namespace ems::model {
 
-ModelView::ModelView(std::shared_ptr<const ModelCatalog> catalog)
-    : catalog_(std::move(catalog)) {}
+ModelView::ModelView(std::shared_ptr<const ModelCatalog> catalog) : catalog_(std::move(catalog)) {}
 
 const Device* ModelView::find_device(const core::DeviceId& device_id) const {
     return catalog_->find_device(device_id);
@@ -41,8 +40,8 @@ CapabilityResolution ModelView::resolve_capability(const core::DeviceId& device_
     }
 
     // 设备类型必须声明该能力
-    if (std::find(type->capability_codes.begin(), type->capability_codes.end(),
-                  capability_code) == type->capability_codes.end()) {
+    if (std::find(type->capability_codes.begin(), type->capability_codes.end(), capability_code) ==
+        type->capability_codes.end()) {
         res.reason = "设备类型未声明能力: " + capability_code;
         return res;
     }

@@ -15,7 +15,7 @@
 namespace ems::observability {
 
 class IMetrics {
-public:
+   public:
     virtual ~IMetrics() = default;
 
     /// 累加计数（如错误数、Unknown 数、拒绝数）

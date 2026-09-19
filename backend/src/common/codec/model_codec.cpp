@@ -5,7 +5,6 @@
 #include <common/codec/model_codec.h>
 
 #include <cmath>
-
 #include <nlohmann/json.hpp>
 
 namespace ems::codec {
@@ -28,9 +27,9 @@ json i64_to_json(std::int64_t v) { return json(std::to_string(v)); }
 json u64_to_json(std::uint64_t v) { return json(std::to_string(v)); }
 
 core::Result<std::int64_t> json_to_i64(const json& j, const char* field) {
-    if (!j.contains(field) || j[field].is_null()) return core::make_error(
-        core::ErrorCode::SchemaMismatch, core::WriteEffect::NotApplicable,
-        std::string("缺少字段: ") + field);
+    if (!j.contains(field) || j[field].is_null())
+        return core::make_error(core::ErrorCode::SchemaMismatch, core::WriteEffect::NotApplicable,
+                                std::string("缺少字段: ") + field);
     if (j[field].is_string()) {
         const std::string s = j[field].get<std::string>();
         try {
@@ -45,13 +44,15 @@ core::Result<std::int64_t> json_to_i64(const json& j, const char* field) {
         }
     }
     if (j[field].is_number_integer()) return j[field].get<std::int64_t>();
-    return core::make_error(core::ErrorCode::SchemaMismatch,
-                            core::WriteEffect::NotApplicable,
+    return core::make_error(core::ErrorCode::SchemaMismatch, core::WriteEffect::NotApplicable,
                             std::string(field) + " 必须是十进制字符串");
 }
 
 std::string require_str(const json& j, const char* field, bool& ok) {
-    if (!j.contains(field) || !j[field].is_string()) { ok = false; return {}; }
+    if (!j.contains(field) || !j[field].is_string()) {
+        ok = false;
+        return {};
+    }
     return j[field].get<std::string>();
 }
 
@@ -66,13 +67,12 @@ double get_double(const json& j, const char* field, double default_value) {
 }
 
 core::Error schema_error(const std::string& msg) {
-    return core::make_error(core::ErrorCode::SchemaMismatch,
-                            core::WriteEffect::NotApplicable, msg);
+    return core::make_error(core::ErrorCode::SchemaMismatch, core::WriteEffect::NotApplicable, msg);
 }
 
 core::Error argument_error(const std::string& msg) {
-    return core::make_error(core::ErrorCode::InvalidArgument,
-                            core::WriteEffect::NotApplicable, msg);
+    return core::make_error(core::ErrorCode::InvalidArgument, core::WriteEffect::NotApplicable,
+                            msg);
 }
 
 // ---- ValueType / PointKind 枚举映射（契约码表）----
@@ -147,9 +147,9 @@ core::Result<model::PointValue> decode_point_value(model::ValueType type,
             if (j.is_number_integer()) return model::PointValue{j.get<std::int64_t>()};
             if (!j.is_string()) return schema_error("期望 Int64 十进制字符串");
             auto v = json_to_i64(json{{"v", j}}, "v");
-            if (!core::is_ok(v)) return core::error_of(v).message.empty()
-                                          ? schema_error("期望 Int64 十进制字符串")
-                                          : core::error_of(v);
+            if (!core::is_ok(v))
+                return core::error_of(v).message.empty() ? schema_error("期望 Int64 十进制字符串")
+                                                         : core::error_of(v);
             return model::PointValue{core::value_of(v)};
         }
         case model::ValueType::UInt64: {
@@ -318,10 +318,14 @@ core::Result<model::DeviceChannelBinding> decode_binding(const std::string& json
         for (const auto& op : j["operations"]) {
             if (!op.is_string()) return schema_error("operations 元素必须是字符串");
             const std::string s = op.get<std::string>();
-            if (s == "Collect") b.operations.push_back(model::BindingOp::Collect);
-            else if (s == "Control") b.operations.push_back(model::BindingOp::Control);
-            else if (s == "Forward") b.operations.push_back(model::BindingOp::Forward);
-            else return schema_error("未知 BindingOp: " + s);
+            if (s == "Collect")
+                b.operations.push_back(model::BindingOp::Collect);
+            else if (s == "Control")
+                b.operations.push_back(model::BindingOp::Control);
+            else if (s == "Forward")
+                b.operations.push_back(model::BindingOp::Forward);
+            else
+                return schema_error("未知 BindingOp: " + s);
         }
     }
     b.protocol_address = j.value("protocol_address", std::string{});
@@ -370,8 +374,10 @@ core::Result<std::string> encode_forwarding_map(const model::ForwardingPointMap&
     j["point_id"] = id_to_json(m.point_id.value());
     j["north_address"] = m.north_address;
     const char* dir = "Upstream";
-    if (m.direction == model::ForwardDirection::Downstream) dir = "Downstream";
-    else if (m.direction == model::ForwardDirection::Bidirectional) dir = "Bidirectional";
+    if (m.direction == model::ForwardDirection::Downstream)
+        dir = "Downstream";
+    else if (m.direction == model::ForwardDirection::Bidirectional)
+        dir = "Bidirectional";
     j["direction"] = dir;
     j["enabled"] = m.enabled;
     return j.dump();
@@ -388,10 +394,14 @@ core::Result<model::ForwardingPointMap> decode_forwarding_map(const std::string&
     m.north_address = j.value("north_address", std::string{});
     if (j.contains("direction") && j["direction"].is_string()) {
         const std::string s = j["direction"].get<std::string>();
-        if (s == "Upstream") m.direction = model::ForwardDirection::Upstream;
-        else if (s == "Downstream") m.direction = model::ForwardDirection::Downstream;
-        else if (s == "Bidirectional") m.direction = model::ForwardDirection::Bidirectional;
-        else return schema_error("未知 ForwardDirection: " + s);
+        if (s == "Upstream")
+            m.direction = model::ForwardDirection::Upstream;
+        else if (s == "Downstream")
+            m.direction = model::ForwardDirection::Downstream;
+        else if (s == "Bidirectional")
+            m.direction = model::ForwardDirection::Bidirectional;
+        else
+            return schema_error("未知 ForwardDirection: " + s);
     }
     m.enabled = get_bool(j, "enabled", true);
     return m;

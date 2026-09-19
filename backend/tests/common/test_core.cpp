@@ -2,16 +2,15 @@
  * @file test_core.cpp
  * @brief core 基础类型测试：Result/CallContext/Identity/Time
  */
+#include <common/core/call_context.h>
+#include <common/core/identity.h>
+#include <common/core/result.h>
+#include <common/core/time.h>
 #include <gtest/gtest.h>
 
 #include <chrono>
 #include <thread>
 #include <unordered_set>
-
-#include <common/core/call_context.h>
-#include <common/core/identity.h>
-#include <common/core/result.h>
-#include <common/core/time.h>
 
 namespace core = ems::core;
 

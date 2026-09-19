@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
-#include <memory>
-#include <unordered_map>
-#include <future>
+
 #include <chrono>
+#include <future>
+#include <memory>
 #include <thread>
+#include <unordered_map>
+
 #include "test_utils.h"
 
 namespace ems {
@@ -22,7 +24,7 @@ TEST(ModbusServerHandler, ConstructorWithLogger) {
         logger_called = true;
         EXPECT_TRUE(msg.find("Modbus") != std::string::npos);
     };
-    
+
     ModbusServerHandler handler(logger);
     EXPECT_NE(handler.server(), nullptr);
 }
@@ -32,7 +34,7 @@ TEST(ModbusServerHandler, InitializeWithTCPConfig) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5020;
     config["protocol_type"] = 1;
-    
+
     handler.initialize(config);
     EXPECT_NE(handler.server(), nullptr);
 }
@@ -45,7 +47,7 @@ TEST(ModbusServerHandler, InitializeWithRTUConfig) {
     config["baudrate"] = 9600;
     config["parity"] = std::string("N");
     config["stopbits"] = 1;
-    
+
     handler.initialize(config);
     EXPECT_NE(handler.server(), nullptr);
 }
@@ -55,13 +57,13 @@ TEST(ModbusServerHandler, StartAndStop) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5021;
     handler.initialize(config);
-    
+
     auto start_future = handler.start();
     bool started = start_future.get();
     EXPECT_TRUE(started);
-    
+
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     auto stop_future = handler.stop();
     bool stopped = stop_future.get();
     EXPECT_TRUE(stopped);
@@ -72,17 +74,17 @@ TEST(ModbusServerHandler, GetSetValueByAddressHoldingRegister) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5022;
     handler.initialize(config);
-    
+
     auto start_future = handler.start();
     start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     handler.setValueByAddress(3, 1, 0, 12345);
     auto value = handler.getValueByAddress(3, 1, 0);
-    
+
     int int_value = std::get<int>(value);
     EXPECT_EQ(int_value, 12345);
-    
+
     handler.stop();
 }
 
@@ -91,20 +93,20 @@ TEST(ModbusServerHandler, GetSetValueByAddressInputRegister) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5023;
     handler.initialize(config);
-    
+
     auto start_future = handler.start();
     start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     auto server = handler.getServer();
     ASSERT_NE(server, nullptr);
-    
+
     server->writeInputRegister(1, 10, 54321);
     auto value = handler.getValueByAddress(4, 1, 10);
-    
+
     int int_value = std::get<int>(value);
     EXPECT_EQ(int_value, 54321);
-    
+
     handler.stop();
 }
 
@@ -113,17 +115,17 @@ TEST(ModbusServerHandler, GetSetValueByAddressCoil) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5024;
     handler.initialize(config);
-    
+
     auto start_future = handler.start();
     start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     handler.setValueByAddress(5, 1, 0, true);
     auto value = handler.getValueByAddress(1, 1, 0);
-    
+
     int int_value = std::get<int>(value);
     EXPECT_EQ(int_value, 1);
-    
+
     handler.stop();
 }
 
@@ -132,17 +134,17 @@ TEST(ModbusServerHandler, GetSetValueWithDecodeInt16) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5025;
     handler.initialize(config);
-    
+
     auto start_future = handler.start();
     start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     handler.setValueByAddressWithDecode(3, 1, 0, 100, "int16");
     auto value = handler.getValueByAddressWithDecode(3, 1, 0, "int16");
-    
+
     int int_value = std::get<int>(value);
     EXPECT_EQ(int_value, 100);
-    
+
     handler.stop();
 }
 
@@ -151,18 +153,18 @@ TEST(ModbusServerHandler, GetSetValueWithDecodeUInt32) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5026;
     handler.initialize(config);
-    
+
     auto start_future = handler.start();
     start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     int test_value = 1234567890;
     handler.setValueByAddressWithDecode(3, 1, 0, test_value, "uint32");
     auto value = handler.getValueByAddressWithDecode(3, 1, 0, "uint32");
-    
+
     int int_value = std::get<int>(value);
     EXPECT_EQ(int_value, test_value);
-    
+
     handler.stop();
 }
 
@@ -171,33 +173,33 @@ TEST(ModbusServerHandler, AddPoints) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5027;
     handler.initialize(config);
-    
+
     auto point1 = std::make_shared<ProtocolPoint>();
     point1->rtu_addr = 1;
     point1->address = 0;
     point1->func_code = 3;
-    
+
     auto point2 = std::make_shared<ProtocolPoint>();
     point2->rtu_addr = 1;
     point2->address = 1;
     point2->func_code = 3;
-    
+
     std::vector<std::shared_ptr<ProtocolPoint>> points = {point1, point2};
     handler.addPoints(points);
-    
+
     auto start_future = handler.start();
     start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     handler.setValueByAddress(3, 1, 0, 100);
     handler.setValueByAddress(3, 1, 1, 200);
-    
+
     auto value1 = handler.readValue(point1);
     auto value2 = handler.readValue(point2);
-    
+
     EXPECT_EQ(std::get<int>(value1), 100);
     EXPECT_EQ(std::get<int>(value2), 200);
-    
+
     handler.stop();
 }
 
@@ -206,24 +208,24 @@ TEST(ModbusServerHandler, WriteValueToPoint) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5028;
     handler.initialize(config);
-    
+
     auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 3;
-    
+
     handler.addPoints({point});
-    
+
     auto start_future = handler.start();
     start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     bool result = handler.writeValue(point, 999);
     EXPECT_TRUE(result);
-    
+
     auto value = handler.readValue(point);
     EXPECT_EQ(std::get<int>(value), 999);
-    
+
     handler.stop();
 }
 
@@ -232,21 +234,21 @@ TEST(ModbusServerHandler, CapturedMessages) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5029;
     handler.initialize(config);
-    
+
     auto start_future = handler.start();
     start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     handler.setValueByAddress(3, 1, 0, 123);
     handler.setValueByAddress(3, 1, 1, 456);
-    
+
     auto messages = handler.getCapturedMessages(10);
     EXPECT_GE(messages.size(), static_cast<size_t>(0));
-    
+
     handler.clearCapturedMessages();
     messages = handler.getCapturedMessages(10);
     EXPECT_EQ(messages.size(), static_cast<size_t>(0));
-    
+
     handler.stop();
 }
 
@@ -255,15 +257,15 @@ TEST(ModbusServerHandler, AvgTimeStats) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5030;
     handler.initialize(config);
-    
+
     auto start_future = handler.start();
     start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     auto stats = handler.getAvgTime();
     EXPECT_GE(stats.tx_count, 0);
     EXPECT_GE(stats.rx_count, 0);
-    
+
     handler.stop();
 }
 
@@ -272,47 +274,44 @@ TEST(ModbusServerHandler, WriteCallback) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5031;
     handler.initialize(config);
-    
+
     bool callbackCalled = false;
     int receivedSlaveId = 0;
     int receivedFuncCode = 0;
     int receivedAddress = 0;
-    
+
     struct MockCallback : public ModbusWriteCallback {
         bool& called;
         int& slaveId;
         int& funcCode;
         int& address;
-        
+
         MockCallback(bool& c, int& s, int& f, int& a)
             : called(c), slaveId(s), funcCode(f), address(a) {}
-        
-        void onModbusClientWrite(int s, int f, int a,
-                                     const std::vector<int>& values) override {
+
+        void onModbusClientWrite(int s, int f, int a, const std::vector<int>& values) override {
             called = true;
             slaveId = s;
             funcCode = f;
             address = a;
         }
     };
-    
+
     auto callback = std::make_shared<MockCallback>(callbackCalled, receivedSlaveId,
-                                                     receivedFuncCode, receivedAddress);
+                                                   receivedFuncCode, receivedAddress);
     handler.setWriteCallback(callback);
-    
+
     auto startFuture = handler.start();
     startFuture.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     handler.stop();
 }
 
 TEST(ModbusClientHandler, ConstructorWithLogger) {
     bool logger_called = false;
-    auto logger = [&logger_called](const std::string& msg) {
-        logger_called = true;
-    };
-    
+    auto logger = [&logger_called](const std::string& msg) { logger_called = true; };
+
     ModbusClientHandler handler(logger);
     EXPECT_NE(handler.client(), nullptr);
 }
@@ -324,7 +323,7 @@ TEST(ModbusClientHandler, InitializeWithTCPConfig) {
     config["port"] = 5020;
     config["protocol_type"] = 1;
     config["timeout"] = 5000;
-    
+
     handler.initialize(config);
     EXPECT_NE(handler.client(), nullptr);
 }
@@ -337,7 +336,7 @@ TEST(ModbusClientHandler, InitializeWithRTUConfig) {
     config["baudrate"] = 9600;
     config["parity"] = std::string("N");
     config["stopbits"] = 1;
-    
+
     handler.initialize(config);
     EXPECT_NE(handler.client(), nullptr);
 }
@@ -345,61 +344,61 @@ TEST(ModbusClientHandler, InitializeWithRTUConfig) {
 TEST(ModbusClientHandler, ConnectAndDisconnect) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5032;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5032;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     EXPECT_TRUE(connected);
-    
+
     bool is_connected = client_handler.isConnected();
     EXPECT_TRUE(is_connected);
-    
+
     client_handler.disconnect();
     bool is_disconnected = !client_handler.isConnected();
     EXPECT_TRUE(is_disconnected);
-    
+
     server_handler.stop();
 }
 
 TEST(ModbusClientHandler, ReadHoldingRegisters) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5033;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     server_handler.setValueByAddress(3, 1, 0, 12345);
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5033;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     auto registers = client_handler.readHoldingRegisters(1, 0, 1);
     ASSERT_EQ(registers.size(), 1);
     EXPECT_EQ(registers[0], 12345);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -407,31 +406,31 @@ TEST(ModbusClientHandler, ReadHoldingRegisters) {
 TEST(ModbusClientHandler, ReadInputRegisters) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5034;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     auto server = server_handler.getServer();
     server->writeInputRegister(1, 0, 54321);
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5034;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     auto registers = client_handler.readInputRegisters(1, 0, 1);
     ASSERT_EQ(registers.size(), 1);
     EXPECT_EQ(registers[0], 54321);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -439,32 +438,32 @@ TEST(ModbusClientHandler, ReadInputRegisters) {
 TEST(ModbusClientHandler, ReadCoils) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5035;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     server_handler.setValueByAddress(5, 1, 0, true);
     server_handler.setValueByAddress(5, 1, 1, false);
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5035;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     auto coils = client_handler.readCoils(1, 0, 2);
     ASSERT_EQ(coils.size(), 2);
     EXPECT_TRUE(coils[0]);
     EXPECT_FALSE(coils[1]);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -472,30 +471,30 @@ TEST(ModbusClientHandler, ReadCoils) {
 TEST(ModbusClientHandler, WriteSingleRegister) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5036;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5036;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     bool write_result = client_handler.writeSingleRegister(1, 0, 99999);
     EXPECT_TRUE(write_result);
-    
+
     auto value = server_handler.getValueByAddress(3, 1, 0);
     EXPECT_EQ(std::get<int>(value), 99999);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -503,33 +502,33 @@ TEST(ModbusClientHandler, WriteSingleRegister) {
 TEST(ModbusClientHandler, WriteMultipleRegisters) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5037;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5037;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     std::vector<int> values = {100, 200, 300};
     bool write_result = client_handler.writeMultipleRegisters(1, 0, values);
     EXPECT_TRUE(write_result);
-    
+
     for (int i = 0; i < 3; ++i) {
         auto value = server_handler.getValueByAddress(3, 1, i);
         EXPECT_EQ(std::get<int>(value), values[i]);
     }
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -537,30 +536,30 @@ TEST(ModbusClientHandler, WriteMultipleRegisters) {
 TEST(ModbusClientHandler, WriteSingleCoil) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5038;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5038;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     bool write_result = client_handler.writeSingleCoil(1, 0, true);
     EXPECT_TRUE(write_result);
-    
+
     auto value = server_handler.getValueByAddress(1, 1, 0);
     EXPECT_EQ(std::get<int>(value), 1);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -568,24 +567,24 @@ TEST(ModbusClientHandler, WriteSingleCoil) {
 TEST(ModbusClientHandler, WriteMultipleCoils) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5039;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5039;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     CoilBits coils(4);
     coils.set(0, true);
     coils.set(1, false);
@@ -593,12 +592,12 @@ TEST(ModbusClientHandler, WriteMultipleCoils) {
     coils.set(3, true);
     bool write_result = client_handler.writeMultipleCoils(1, 0, coils);
     EXPECT_TRUE(write_result);
-    
+
     for (int i = 0; i < 4; ++i) {
         auto value = server_handler.getValueByAddress(1, 1, i);
         EXPECT_EQ(std::get<int>(value), coils[i] ? 1 : 0);
     }
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -606,35 +605,35 @@ TEST(ModbusClientHandler, WriteMultipleCoils) {
 TEST(ModbusClientHandler, ReadValueFromPoint) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5040;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     server_handler.setValueByAddress(3, 1, 0, 77777);
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5040;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 3;
-    
+
     auto value = client_handler.readValue(point);
     int int_value = std::get<int>(value);
     EXPECT_EQ(int_value, 77777);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -642,35 +641,35 @@ TEST(ModbusClientHandler, ReadValueFromPoint) {
 TEST(ModbusClientHandler, WriteValueToPoint) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5041;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5041;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 6;
-    
+
     bool write_result = client_handler.writeValue(point, 88888);
     EXPECT_TRUE(write_result);
-    
+
     auto value = server_handler.getValueByAddress(3, 1, 0);
     EXPECT_EQ(std::get<int>(value), 88888);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -678,36 +677,36 @@ TEST(ModbusClientHandler, WriteValueToPoint) {
 TEST(ModbusClientHandler, ReadValueAsync) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5042;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     server_handler.setValueByAddress(3, 1, 0, 55555);
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5042;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 3;
-    
+
     auto future = client_handler.readValueAsync(point);
     auto value = future.get();
     int int_value = std::get<int>(value);
     EXPECT_EQ(int_value, 55555);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -715,36 +714,36 @@ TEST(ModbusClientHandler, ReadValueAsync) {
 TEST(ModbusClientHandler, WriteValueAsync) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5043;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5043;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     auto point = std::make_shared<ProtocolPoint>();
     point->rtu_addr = 1;
     point->address = 0;
     point->func_code = 6;
-    
+
     auto future = client_handler.writeValueAsync(point, 66666);
     bool write_result = future.get();
     EXPECT_TRUE(write_result);
-    
+
     auto value = server_handler.getValueByAddress(3, 1, 0);
     EXPECT_EQ(std::get<int>(value), 66666);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -752,34 +751,34 @@ TEST(ModbusClientHandler, WriteValueAsync) {
 TEST(ModbusClientHandler, ReadRegistersBatch) {
     ModbusClientHandler client_handler;
     ModbusServerHandler server_handler;
-    
+
     std::unordered_map<std::string, ValueType> server_config;
     server_config["port"] = 5044;
     server_handler.initialize(server_config);
-    
+
     auto server_start_future = server_handler.start();
     server_start_future.get();
     std::this_thread::sleep_for(std::chrono::milliseconds(100));
-    
+
     server_handler.setValueByAddress(3, 1, 0, 111);
     server_handler.setValueByAddress(3, 1, 1, 222);
     server_handler.setValueByAddress(3, 1, 2, 333);
-    
+
     std::unordered_map<std::string, ValueType> client_config;
     client_config["ip"] = std::string("127.0.0.1");
     client_config["port"] = 5044;
     client_config["protocol_type"] = 1;
     client_handler.initialize(client_config);
-    
+
     bool connected = client_handler.connect();
     ASSERT_TRUE(connected);
-    
+
     auto registers = client_handler.readRegistersBatchAsync(3, 1, 0, 3);
     ASSERT_EQ(registers.size(), 3);
     EXPECT_EQ(registers[0], 111);
     EXPECT_EQ(registers[1], 222);
     EXPECT_EQ(registers[2], 333);
-    
+
     client_handler.disconnect();
     server_handler.stop();
 }
@@ -789,12 +788,12 @@ TEST(ValueTypeConversion, IntConversion) {
     ValueType double_val = 3.14;
     ValueType bool_val = true;
     ValueType string_val = std::string("test");
-    
+
     EXPECT_TRUE(std::holds_alternative<int>(int_val));
     EXPECT_TRUE(std::holds_alternative<double>(double_val));
     EXPECT_TRUE(std::holds_alternative<bool>(bool_val));
     EXPECT_TRUE(std::holds_alternative<std::string>(string_val));
-    
+
     EXPECT_EQ(std::get<int>(int_val), 42);
     EXPECT_EQ(std::get<bool>(bool_val), true);
 }
@@ -804,21 +803,21 @@ TEST(ProtocolHandler, MessageCapture) {
     std::unordered_map<std::string, ValueType> config;
     config["port"] = 5045;
     handler.initialize(config);
-    
+
     auto capture = handler.getMessageCapture();
     EXPECT_NE(capture, nullptr);
-    
+
     std::vector<uint8_t> test_data = {0x01, 0x03, 0x00, 0x00, 0x00, 0x01};
     handler.addTxMessage(test_data, "Test TX");
     handler.addRxMessage(test_data, "Test RX");
-    
+
     auto messages = handler.getCapturedMessages(10);
     EXPECT_GE(messages.size(), 2);
-    
+
     handler.clearCapturedMessages();
     messages = handler.getCapturedMessages(10);
     EXPECT_EQ(messages.size(), 0);
-    
+
     handler.stop();
 }
 
@@ -1019,10 +1018,10 @@ TEST(ModbusClientHandler, ReadMultipleRegisters) {
     server_handler.stop();
 }
 
-}
-}
-}
-}
+}  // namespace test
+}  // namespace device
+}  // namespace net
+}  // namespace ems
 
 int main(int argc, char** argv) {
     ::testing::InitGoogleTest(&argc, argv);

@@ -11,10 +11,11 @@
  */
 #pragma once
 
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
-#include <cstdint>
+
 #include "db/db_manager.h"
 #include "rtdb/rtdb_channel.h"
 #include "rtdb/rtdb_device.h"
@@ -42,7 +43,7 @@ namespace device {
  * @endcode
  */
 class ParaLoader {
-public:
+   public:
     ParaLoader();
     ~ParaLoader();
 
@@ -155,13 +156,12 @@ public:
      * @param[out] yt_points YT 测点实体 (可选)
      * @return true 加载成功
      */
-    bool load_all_as_config(
-        std::vector<ems::rtdb::DeviceConfig>& devices,
-        std::vector<ems::rtdb::ChannelConfig>& channels,
-        std::vector<ems::db::point_yc>* yc_points = nullptr,
-        std::vector<ems::db::point_yx>* yx_points = nullptr,
-        std::vector<ems::db::point_yk>* yk_points = nullptr,
-        std::vector<ems::db::point_yt>* yt_points = nullptr);
+    bool load_all_as_config(std::vector<ems::rtdb::DeviceConfig>& devices,
+                            std::vector<ems::rtdb::ChannelConfig>& channels,
+                            std::vector<ems::db::point_yc>* yc_points = nullptr,
+                            std::vector<ems::db::point_yx>* yx_points = nullptr,
+                            std::vector<ems::db::point_yk>* yk_points = nullptr,
+                            std::vector<ems::db::point_yt>* yt_points = nullptr);
 
     /**
      * @brief 是否已初始化
@@ -173,12 +173,12 @@ public:
      */
     std::string last_error() const { return last_err_; }
 
-private:
+   private:
     bool initialized_ = false;
     std::shared_ptr<ems::db::DbManager> dbm_;
     std::string last_err_;
 };
 
-} // namespace device
-} // namespace net
-} // namespace ems
+}  // namespace device
+}  // namespace net
+}  // namespace ems

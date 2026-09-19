@@ -14,15 +14,16 @@
 #ifndef EMS_NET_PROTOCOL_HANDLER_BASE_H
 #define EMS_NET_PROTOCOL_HANDLER_BASE_H
 
-#include <string>
-#include <vector>
+#include <atomic>
+#include <cstdint>
+#include <future>
 #include <memory>
+#include <optional>
+#include <string>
 #include <unordered_map>
 #include <variant>
-#include <future>
-#include <atomic>
-#include <optional>
-#include <cstdint>
+#include <vector>
+
 #include "models/base.h"
 
 namespace ems {
@@ -35,12 +36,12 @@ using ValueType = std::variant<int, int64_t, double, bool, std::string>;
  * @brief 规约处理器可见的测点数据
  */
 struct ProtocolPoint {
-    int         rtu_addr      = 1;
-    int         address       = 0;
-    int         func_code     = 3;
-    std::string decode        = "0x41";
-    int         bit           = -1;
-    int         register_cnt  = 1;
+    int rtu_addr = 1;
+    int address = 0;
+    int func_code = 3;
+    std::string decode = "0x41";
+    int bit = -1;
+    int register_cnt = 1;
     virtual ~ProtocolPoint() = default;
 };
 
@@ -60,7 +61,7 @@ struct AvgTimeStats {
 };
 
 class MessageCapture {
-public:
+   public:
     virtual ~MessageCapture() = default;
     virtual void addTx(const std::vector<uint8_t>& data, const std::string& description = "") = 0;
     virtual void addRx(const std::vector<uint8_t>& data, const std::string& description = "") = 0;
@@ -73,7 +74,7 @@ public:
  * @brief 协议处理器基类（设备级 + 采集级统一接口）
  */
 class ProtocolHandler {
-public:
+   public:
     virtual ~ProtocolHandler() = default;
 
     bool isRunning() const { return running_.load(); }
@@ -93,17 +94,16 @@ public:
     virtual ValueType readValue(const std::shared_ptr<ProtocolPoint>& point) = 0;
 
     std::future<ValueType> readValueAsync(const std::shared_ptr<ProtocolPoint>& point) {
-        return std::async(std::launch::async, [this, point]() {
-            return readValue(point);
-        });
+        return std::async(std::launch::async, [this, point]() { return readValue(point); });
     }
 
-    virtual bool writeValue(const std::shared_ptr<ProtocolPoint>& point, const ValueType& value) = 0;
+    virtual bool writeValue(const std::shared_ptr<ProtocolPoint>& point,
+                            const ValueType& value) = 0;
 
-    std::future<bool> writeValueAsync(const std::shared_ptr<ProtocolPoint>& point, const ValueType& value) {
-        return std::async(std::launch::async, [this, point, value]() {
-            return writeValue(point, value);
-        });
+    std::future<bool> writeValueAsync(const std::shared_ptr<ProtocolPoint>& point,
+                                      const ValueType& value) {
+        return std::async(std::launch::async,
+                          [this, point, value]() { return writeValue(point, value); });
     }
 
     virtual void addPoints(const std::vector<std::shared_ptr<ProtocolPoint>>& points) = 0;
@@ -116,13 +116,14 @@ public:
     virtual AvgTimeStats getAvgTime() const;
 
     // ---- Plugin 级采集接口 ----
-    using PointValue = std::tuple<std::string, double, int64_t, int, uint64_t>;  // code, value, raw, quality, ts
-    virtual int  read_batch(const std::vector<std::string>& point_codes,
-                            std::vector<PointValue>& results);
+    using PointValue =
+        std::tuple<std::string, double, int64_t, int, uint64_t>;  // code, value, raw, quality, ts
+    virtual int read_batch(const std::vector<std::string>& point_codes,
+                           std::vector<PointValue>& results);
     virtual bool is_connected() const { return false; }
     virtual std::string last_error() const { return {}; }
 
-protected:
+   protected:
     ProtocolHandler() = default;
 
     std::unordered_map<std::string, ValueType> config_;
@@ -131,20 +132,22 @@ protected:
 };
 
 class ServerHandler : public ProtocolHandler {
-public:
+   public:
     virtual ~ServerHandler() = default;
     virtual ValueType getValueByAddress(int funcCode, int slaveId, int address) = 0;
-    virtual void setValueByAddress(int funcCode, int slaveId, int address, const ValueType& value) = 0;
+    virtual void setValueByAddress(int funcCode, int slaveId, int address,
+                                   const ValueType& value) = 0;
     virtual std::future<bool> start() = 0;
     virtual std::future<bool> stop() = 0;
     virtual ValueType readValue(const std::shared_ptr<ProtocolPoint>& point) = 0;
-    virtual bool writeValue(const std::shared_ptr<ProtocolPoint>& point, const ValueType& value) = 0;
+    virtual bool writeValue(const std::shared_ptr<ProtocolPoint>& point,
+                            const ValueType& value) = 0;
     virtual void addPoints(const std::vector<std::shared_ptr<ProtocolPoint>>& points) = 0;
     virtual void initialize(const std::unordered_map<std::string, ValueType>& config) = 0;
 };
 
 class ClientHandler : public ProtocolHandler {
-public:
+   public:
     virtual ~ClientHandler() = default;
     virtual bool connect() = 0;
     virtual void disconnect() = 0;
@@ -152,13 +155,14 @@ public:
     virtual std::future<bool> start() = 0;
     virtual std::future<bool> stop() = 0;
     virtual ValueType readValue(const std::shared_ptr<ProtocolPoint>& point) = 0;
-    virtual bool writeValue(const std::shared_ptr<ProtocolPoint>& point, const ValueType& value) = 0;
+    virtual bool writeValue(const std::shared_ptr<ProtocolPoint>& point,
+                            const ValueType& value) = 0;
     virtual void addPoints(const std::vector<std::shared_ptr<ProtocolPoint>>& points) = 0;
     virtual void initialize(const std::unordered_map<std::string, ValueType>& config) = 0;
 };
 
-} // namespace device
-} // namespace net
-} // namespace ems
+}  // namespace device
+}  // namespace net
+}  // namespace ems
 
-#endif // EMS_NET_PROTOCOL_HANDLER_BASE_H
+#endif  // EMS_NET_PROTOCOL_HANDLER_BASE_H

@@ -4,9 +4,27 @@
  */
 #include <realtime/realtime_store.h>
 
+#include "store_detail.h"
+
 namespace ems::realtime {
 
 std::string validate_record_key(const RecordKey& key) {
+    if (key.scope.kind != ScopeKind::Station && key.scope.kind != ScopeKind::Unit)
+        return "invalid scope kind";
+    if (!detail::valid_code(key.scope.code)) return "invalid scope code";
+    if (key.device_path.size() > 8) return "device path depth exceeded";
+    for (const auto& part : key.device_path)
+        if (!detail::valid_code(part, true)) return "invalid/reserved device path code";
+    if (key.kind != RecordKind::AssetState && key.kind != RecordKind::CommandState &&
+        !detail::valid_code(key.name))
+        return "invalid point/channel code";
+    if (key.kind == RecordKind::CommandState) {
+        if (key.name.empty() || key.name.size() > 128) return "invalid command ID";
+        for (auto c : key.name)
+            if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
+                  c == '_' || c == '-'))
+                return "invalid command ID";
+    }
     switch (key.kind) {
         case RecordKind::ChannelState:
             // ChannelState 只允许 station 作用域且设备路径为空
@@ -44,6 +62,8 @@ std::string validate_record_key(const RecordKey& key) {
                 return "AssetState 不允许 name 字段";
             }
             break;
+        default:
+            return "invalid record kind";
     }
     if (key.scope.code.empty()) {
         return "scope code 为空";

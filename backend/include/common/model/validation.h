@@ -31,17 +31,17 @@ struct ValidationReport {
 
 /// 常用稳定错误码（契约，只增不改义）
 namespace validation_code {
-inline constexpr const char* kDuplicateIdentity    = "DuplicateIdentity";     ///< 身份不唯一
-inline constexpr const char* kAssetCycle           = "AssetCycle";            ///< 资产成环
-inline constexpr const char* kCrossStationParent   = "CrossStationParent";    ///< 跨站挂接
-inline constexpr const char* kMissingReference     = "MissingReference";      ///< 引用不存在
-inline constexpr const char* kInvalidValue         = "InvalidValue";          ///< 类型/单位/范围非法
-inline constexpr const char* kDuplicateBinding     = "DuplicateBinding";      ///< 设备/通道重复绑定
-inline constexpr const char* kMissingFeedback      = "MissingFeedback";       ///< 命令缺反馈点
-inline constexpr const char* kInvalidFeedbackRef   = "InvalidFeedbackRef";    ///< 反馈引用非法
-inline constexpr const char* kDisabledCapability   = "DisabledCapability";    ///< 能力禁用/缺失
-inline constexpr const char* kDuplicateRoute       = "DuplicateRoute";        ///< 主来源不唯一/路由重复
-inline constexpr const char* kVersionMismatch      = "VersionMismatch";       ///< 版本不闭合
+inline constexpr const char* kDuplicateIdentity = "DuplicateIdentity";    ///< 身份不唯一
+inline constexpr const char* kAssetCycle = "AssetCycle";                  ///< 资产成环
+inline constexpr const char* kCrossStationParent = "CrossStationParent";  ///< 跨站挂接
+inline constexpr const char* kMissingReference = "MissingReference";      ///< 引用不存在
+inline constexpr const char* kInvalidValue = "InvalidValue";              ///< 类型/单位/范围非法
+inline constexpr const char* kDuplicateBinding = "DuplicateBinding";      ///< 设备/通道重复绑定
+inline constexpr const char* kMissingFeedback = "MissingFeedback";        ///< 命令缺反馈点
+inline constexpr const char* kInvalidFeedbackRef = "InvalidFeedbackRef";  ///< 反馈引用非法
+inline constexpr const char* kDisabledCapability = "DisabledCapability";  ///< 能力禁用/缺失
+inline constexpr const char* kDuplicateRoute = "DuplicateRoute";          ///< 主来源不唯一/路由重复
+inline constexpr const char* kVersionMismatch = "VersionMismatch";        ///< 版本不闭合
 }  // namespace validation_code
 
 }  // namespace ems::model

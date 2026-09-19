@@ -1,16 +1,17 @@
 #pragma once
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <string>
 #include <unordered_map>
-#include <filesystem>
+
 #include "spdlog/async.h"
 #include "spdlog/spdlog.h"
 // #include "spdlog/sinks/basic_file_sink.h"
-#include "spdlog/sinks/rotating_file_sink.h"
-#include "spdlog/sinks/stdout_color_sinks.h"
 #include <nlohmann/json.hpp>
 
+#include "spdlog/sinks/rotating_file_sink.h"
+#include "spdlog/sinks/stdout_color_sinks.h"
 #include "util/conf.hpp"
 
 // 编译release、链接时优化选项增加速度：-Wall -pthread -O3 -flto -DNDEBUG
@@ -41,28 +42,25 @@ struct LogInfo {
 };
 
 class LogInitializer {
-public:
-    LogInitializer(const std::string& defaultLoggerName,
-                   LV defalutLogLevel = LV::debug,
-                   bool enableTerminalLog = false,
-                   const int threadNum = 1) noexcept
-    {
+   public:
+    LogInitializer(const std::string& defaultLoggerName, LV defalutLogLevel = LV::debug,
+                   bool enableTerminalLog = false, const int threadNum = 1) noexcept {
         static std::once_flag flag = std::once_flag();
-        std::call_once(flag, init, defaultLoggerName, defalutLogLevel, enableTerminalLog, threadNum);
+        std::call_once(flag, init, defaultLoggerName, defalutLogLevel, enableTerminalLog,
+                       threadNum);
     }
 
-private:
+   private:
     LogInitializer(const LogInitializer&) = delete;
     LogInitializer& operator=(const LogInitializer&) = delete;
 
     // 读取日志配置文件
-    static inline std::unordered_map<std::string, LogInfo> _readLogConf()
-    {
+    static inline std::unordered_map<std::string, LogInfo> _readLogConf() {
         std::unordered_map<std::string, LogInfo> logConfMap;
-        std::unordered_map<std::string, LV> logLevelMap {
-            { "debug", LV::debug },       { "info", LV::info }, { "trace", LV::critical }, { "error", LV::err },
-            { "critical", LV::critical }, { "warn", LV::warn }, { "off", LV::off }
-        };
+        std::unordered_map<std::string, LV> logLevelMap{
+            {"debug", LV::debug}, {"info", LV::info},         {"trace", LV::critical},
+            {"error", LV::err},   {"critical", LV::critical}, {"warn", LV::warn},
+            {"off", LV::off}};
 
         try {
             std::ifstream in(logConfPath(), std::ios::in);
@@ -70,7 +68,8 @@ private:
                 std::cerr << "无法打开日志配置文件: " << logConfPath() << std::endl;
                 return logConfMap;
             }
-            std::string jsonContent((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+            std::string jsonContent((std::istreambuf_iterator<char>(in)),
+                                    std::istreambuf_iterator<char>());
             in.close();
 
             nlohmann::json jsonDoc = nlohmann::json::parse(jsonContent);
@@ -103,9 +102,8 @@ private:
         return logConfMap;
     }
 
-    static inline void
-    init(const std::string& defaultLoggerName, LV defalutLogLevel, bool enableTerminalLog, const int threadNum) noexcept
-    {
+    static inline void init(const std::string& defaultLoggerName, LV defalutLogLevel,
+                            bool enableTerminalLog, const int threadNum) noexcept {
         try {
             if (defaultLoggerName.empty() || spdlog::get(defaultLoggerName) != nullptr) {
                 return;
@@ -142,15 +140,18 @@ private:
                 logFilePath += ".log";
             }
 
-            // 设置为滚动模式 
+            // 设置为滚动模式
             // 当程序重启时，如果希望将之前的日志文件立即归档为备份文件，并开始写入新的日志文件，而不是继续写入之前的文件直到达到最大大小才旋转，就可以将 rotate_on_open 设置为 true 。
-            auto rotating_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(logFilePath, fileSize, count, false);
+            auto rotating_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
+                logFilePath, fileSize, count, false);
             sinks.push_back(rotating_sink);
 
             // 设置为异步模式
-            spdlog::init_thread_pool(8192, threadNum); // 不要在其他地方再次调用init_thread_pool，否则会导致线程池析构
+            spdlog::init_thread_pool(
+                8192, threadNum);  // 不要在其他地方再次调用init_thread_pool，否则会导致线程池析构
             std::shared_ptr<spdlog::logger> defaultLogger = std::make_shared<spdlog::async_logger>(
-                defaultLoggerName, begin(sinks), end(sinks), spdlog::thread_pool(), spdlog::async_overflow_policy::block);
+                defaultLoggerName, begin(sinks), end(sinks), spdlog::thread_pool(),
+                spdlog::async_overflow_policy::block);
 
             // register日志
             spdlog::register_logger(defaultLogger);

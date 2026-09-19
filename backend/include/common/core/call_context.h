@@ -8,11 +8,11 @@
  */
 #pragma once
 
+#include <common/core/result.h>
+
 #include <chrono>
 #include <string>
 #include <utility>
-
-#include <common/core/result.h>
 
 namespace ems::core {
 
@@ -50,8 +50,6 @@ inline bool has_expired(const CallContext& ctx) {
 }
 
 /// 无预算上下文仅用于纯内存操作；任何 I/O 都必须显式给出期限
-inline CallContext immediate_context() {
-    return make_call_context(std::chrono::milliseconds(0));
-}
+inline CallContext immediate_context() { return make_call_context(std::chrono::milliseconds(0)); }
 
 }  // namespace ems::core

@@ -13,23 +13,23 @@
 #ifndef EMS_NET_COLLECT_CHANNEL_THREAD_H
 #define EMS_NET_COLLECT_CHANNEL_THREAD_H
 
-#include <string>
-#include <vector>
-#include <memory>
-#include <thread>
 #include <atomic>
-#include <mutex>
 #include <condition_variable>
+#include <cstdint>
 #include <deque>
 #include <functional>
 #include <future>
-#include <cstdint>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <thread>
+#include <vector>
 
-#include "net/protocol/common/protocol_plugin_api.h"
-#include "net/log.h"
-#include "rtdb/rtdb_channel.h"
 #include "data_dispatcher.h"
+#include "net/log.h"
+#include "net/protocol/common/protocol_plugin_api.h"
 #include "plugin_manager.h"
+#include "rtdb/rtdb_channel.h"
 
 namespace ems {
 namespace net {
@@ -41,22 +41,22 @@ using rtdb::ChannelConfig;
  * @brief 设备上下文（通道路径下的设备及其测点列表）
  */
 struct DeviceContext {
-    int64_t     deviceId_{0};
+    int64_t deviceId_{0};
     std::string deviceName_;
-    std::vector<std::string> ycPointCodes_;   // 遥测测点编码列表
-    std::vector<std::string> yxPointCodes_;   // 遥信测点编码列表
-    std::vector<std::string> ykPointCodes_;   // 遥控测点编码列表
-    std::vector<std::string> ytPointCodes_;   // 遥调测点编码列表
+    std::vector<std::string> ycPointCodes_;  // 遥测测点编码列表
+    std::vector<std::string> yxPointCodes_;  // 遥信测点编码列表
+    std::vector<std::string> ykPointCodes_;  // 遥控测点编码列表
+    std::vector<std::string> ytPointCodes_;  // 遥调测点编码列表
 };
 
 /**
  * @brief 命令任务（遥控/遥调下发）
  */
 struct CommandTask {
-    int64_t     taskId_{0};
+    int64_t taskId_{0};
     std::string pointCode_;
-    double      value_{0.0};
-    int         timeoutMs_{5000};
+    double value_{0.0};
+    int timeoutMs_{5000};
     std::function<void(bool)> callback_;
 };
 
@@ -64,12 +64,12 @@ struct CommandTask {
  * @brief 通道状态
  */
 enum class ChannelState : int {
-    Created  = 0,
+    Created = 0,
     Starting = 1,
-    Running  = 2,
+    Running = 2,
     Stopping = 3,
-    Stopped  = 4,
-    Error    = 5
+    Stopped = 4,
+    Error = 5
 };
 
 /**
@@ -79,13 +79,13 @@ enum class ChannelState : int {
  * 通过 start() 启动线程，stop() 停止线程。
  */
 class ChannelThread {
-public:
+   public:
     /**
      * @param channelConfig 通道配置
      * @param dispatcher    数据分发器（共享引用）
      */
     explicit ChannelThread(const ChannelConfig& channelConfig,
-                            std::shared_ptr<DataDispatcher> dispatcher);
+                           std::shared_ptr<DataDispatcher> dispatcher);
     ~ChannelThread();
 
     ChannelThread(const ChannelThread&) = delete;
@@ -165,8 +165,8 @@ public:
      * @param timeoutMs 超时时间
      * @return 异步结果
      */
-    std::future<bool> post_command(const std::string& pointCode,
-                                    double value, int timeoutMs = 5000);
+    std::future<bool> post_command(const std::string& pointCode, double value,
+                                   int timeoutMs = 5000);
 
     // ============================================================
     // 查询
@@ -216,11 +216,10 @@ public:
     // 错误处理回调
     // ============================================================
 
-    using ErrorCallback = std::function<void(int64_t channel_id,
-                                             const std::string& error)>;
+    using ErrorCallback = std::function<void(int64_t channel_id, const std::string& error)>;
     void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
 
-private:
+   private:
     // ---- 线程主循环 ----
     void run(PluginManager& plugin_manager);
 
@@ -235,40 +234,38 @@ private:
     void set_state(ChannelState new_state);
 
     // ---- 重连退避 ----
-    int  backoff_delay() const;
+    int backoff_delay() const;
 
-
-
-    const ChannelConfig             channel_config_;
+    const ChannelConfig channel_config_;
     std::shared_ptr<DataDispatcher> dispatcher_;
-    std::shared_ptr<std::thread>    thread_;
+    std::shared_ptr<std::thread> thread_;
 
     // 插件接口（通过 C 接口操作）
-    void*                               plugin_instance_{nullptr};
-    PluginManager::PluginFunctions      plugin_fns_;
+    void* plugin_instance_{nullptr};
+    PluginManager::PluginFunctions plugin_fns_;
 
     // 设备列表
-    std::vector<DeviceContext>           devices_;
-    mutable std::mutex                   device_mutex_;
+    std::vector<DeviceContext> devices_;
+    mutable std::mutex device_mutex_;
 
     // 命令队列
-    std::deque<CommandTask>              cmd_queue_;
-    mutable std::mutex                   cmd_mutex_;
-    std::condition_variable              cmd_cv_;
+    std::deque<CommandTask> cmd_queue_;
+    mutable std::mutex cmd_mutex_;
+    std::condition_variable cmd_cv_;
 
     // 状态控制
-    std::atomic<ChannelState>            state_{ChannelState::Created};
-    std::atomic<int>                     poll_interval_ms_{1000};
-    std::atomic<int>                     reconnect_count_{0};
-    int                                  max_retries_{5};
+    std::atomic<ChannelState> state_{ChannelState::Created};
+    std::atomic<int> poll_interval_ms_{1000};
+    std::atomic<int> reconnect_count_{0};
+    int max_retries_{5};
 
     // 错误处理
-    mutable std::string                  last_err_;
-    ErrorCallback                        error_cb_;
+    mutable std::string last_err_;
+    ErrorCallback error_cb_;
 };
 
-} // namespace collect
-} // namespace net
-} // namespace ems
+}  // namespace collect
+}  // namespace net
+}  // namespace ems
 
-#endif // EMS_NET_COLLECT_CHANNEL_THREAD_H
+#endif  // EMS_NET_COLLECT_CHANNEL_THREAD_H

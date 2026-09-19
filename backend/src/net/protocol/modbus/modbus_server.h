@@ -7,26 +7,24 @@
 #ifndef EMS_NET_MODBUS_SERVER_H
 #define EMS_NET_MODBUS_SERVER_H
 
-#include <string>
+#include <modbuspp/bufferedslave.h>
+#include <modbuspp/server.h>
+
+#include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
-#include <functional>
-#include <thread>
-#include <atomic>
 #include <mutex>
-#include <modbuspp/server.h>
-#include <modbuspp/bufferedslave.h>
+#include <string>
+#include <thread>
 
 namespace ems {
 namespace net {
 namespace modbus {
 
 class ModbusServer {
-public:
-    enum class NetType {
-        RTU = 0,
-        TCP = 1
-    };
+   public:
+    enum class NetType { RTU = 0, TCP = 1 };
 
     enum class ErrorCode {
         Success = 0,
@@ -36,7 +34,8 @@ public:
         Unknown = -99
     };
 
-    using DataChangeCallback = std::function<void(int slaveId, Modbus::Table table, int addr, int nb)>;
+    using DataChangeCallback =
+        std::function<void(int slaveId, Modbus::Table table, int addr, int nb)>;
 
     ModbusServer(NetType type, const std::string& connection, const std::string& settings);
     ~ModbusServer();
@@ -71,13 +70,13 @@ public:
     ErrorCode readDiscreteInput(int slaveId, int addr, bool& value);
     ErrorCode readDiscreteInputs(int slaveId, int addr, bool* dest, int nb);
 
-    template<typename T, Modbus::Endian E = Modbus::EndianBig>
+    template <typename T, Modbus::Endian E = Modbus::EndianBig>
     ErrorCode writeHoldingData(int slaveId, int addr, const Modbus::Data<T, E>& data) {
         int regCount = sizeof(T) / 2;
         return writeHoldingRegisters(slaveId, addr, data.registers().data(), regCount);
     }
 
-    template<typename T, Modbus::Endian E = Modbus::EndianBig>
+    template <typename T, Modbus::Endian E = Modbus::EndianBig>
     ErrorCode readHoldingData(int slaveId, int addr, Modbus::Data<T, E>& data) {
         int regCount = sizeof(T) / 2;
         auto ret = readHoldingRegisters(slaveId, addr, data.registers().data(), regCount);
@@ -89,7 +88,7 @@ public:
 
     void setDataChangeCallback(DataChangeCallback cb) { dataChangeCallback_ = cb; }
 
-private:
+   private:
     void runLoop();
     static int messageHandler(Modbus::Message* req, Modbus::Device* dev);
 
@@ -104,16 +103,14 @@ private:
     DataChangeCallback dataChangeCallback_;
 };
 
-template<Modbus::Endian E = Modbus::EndianBig>
+template <Modbus::Endian E = Modbus::EndianBig>
 class ModbusServerWithData {
-public:
+   public:
     ModbusServerWithData(typename ModbusServer::NetType type, const std::string& connection,
-                          const std::string& settings)
+                         const std::string& settings)
         : server_(type, connection, settings) {}
 
-    bool start() {
-        return server_.start();
-    }
+    bool start() { return server_.start(); }
 
     void stop() { server_.stop(); }
     bool isRunning() const { return server_.isRunning(); }
@@ -205,12 +202,12 @@ public:
 
     ModbusServer& server() { return server_; }
 
-private:
+   private:
     ModbusServer server_;
 };
 
-} // namespace modbus
-} // namespace net
-} // namespace ems
+}  // namespace modbus
+}  // namespace net
+}  // namespace ems
 
-#endif // EMS_NET_MODBUS_SERVER_H
+#endif  // EMS_NET_MODBUS_SERVER_H

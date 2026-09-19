@@ -22,14 +22,12 @@ namespace ems::core {
 /// 强类型稳定 ID 包装（文本）
 template <typename Tag>
 class StrongId {
-public:
+   public:
     StrongId() = default;
     explicit StrongId(std::string value) : value_(std::move(value)) {}
 
     /// 旧数字 ID → 十进制文本
-    static StrongId from_number(std::uint64_t numeric) {
-        return StrongId(std::to_string(numeric));
-    }
+    static StrongId from_number(std::uint64_t numeric) { return StrongId(std::to_string(numeric)); }
 
     const std::string& value() const noexcept { return value_; }
     bool empty() const noexcept { return value_.empty(); }
@@ -40,7 +38,7 @@ public:
     /// 仅用于容器排序；ID 文本不承载业务顺序语义
     bool operator<(const StrongId& other) const noexcept { return value_ < other.value_; }
 
-private:
+   private:
     std::string value_;
 };
 
@@ -55,16 +53,16 @@ struct IntentIdTag {};
 struct CommandIdTag {};
 struct ConfigVersionTag {};
 
-using StationId      = StrongId<StationIdTag>;      ///< 站
-using EssUnitId      = StrongId<EssUnitIdTag>;      ///< 储能单元（调度资源）
-using AssetId        = StrongId<AssetIdTag>;        ///< 资产节点
-using DeviceId       = StrongId<DeviceIdTag>;       ///< 设备
-using PointId        = StrongId<PointIdTag>;        ///< 标准点实例
-using ChannelId      = StrongId<ChannelIdTag>;      ///< 通道
-using EventId        = StrongId<EventIdTag>;        ///< 事件（持久受理前生成，重试不变）
-using IntentId       = StrongId<IntentIdTag>;       ///< 控制意图
-using CommandId      = StrongId<CommandIdTag>;      ///< 控制命令
-using ConfigVersion  = StrongId<ConfigVersionTag>;  ///< 不可变配置版本，只比较相等
+using StationId = StrongId<StationIdTag>;          ///< 站
+using EssUnitId = StrongId<EssUnitIdTag>;          ///< 储能单元（调度资源）
+using AssetId = StrongId<AssetIdTag>;              ///< 资产节点
+using DeviceId = StrongId<DeviceIdTag>;            ///< 设备
+using PointId = StrongId<PointIdTag>;              ///< 标准点实例
+using ChannelId = StrongId<ChannelIdTag>;          ///< 通道
+using EventId = StrongId<EventIdTag>;              ///< 事件（持久受理前生成，重试不变）
+using IntentId = StrongId<IntentIdTag>;            ///< 控制意图
+using CommandId = StrongId<CommandIdTag>;          ///< 控制命令
+using ConfigVersion = StrongId<ConfigVersionTag>;  ///< 不可变配置版本，只比较相等
 
 /// 实时记录 CAS 不透明令牌；禁止当序号排序使用
 struct Revision {
@@ -85,7 +83,7 @@ struct Epoch {
 };
 
 using SourceEpoch = Epoch;  ///< 样本来源授权代次
-using OwnerEpoch  = Epoch;  ///< 控制所有权代次
+using OwnerEpoch = Epoch;   ///< 控制所有权代次
 
 /// 同一已授权来源代次内递增序号；换来源不能直接比较
 using Sequence = std::uint64_t;

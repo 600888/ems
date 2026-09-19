@@ -1,6 +1,6 @@
 #pragma once
-#include <string>
 #include <stdexcept>
+#include <string>
 
 #ifndef EXCEPTION_FMT
 

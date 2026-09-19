@@ -17,15 +17,15 @@
  */
 #pragma once
 
+#include <common/core/call_context.h>
+#include <common/core/result.h>
+
 #include <cstddef>
 #include <cstdint>
 #include <map>
 #include <optional>
 #include <string>
 #include <vector>
-
-#include <common/core/call_context.h>
-#include <common/core/result.h>
 
 namespace ems::realtime {
 
@@ -113,7 +113,7 @@ struct BackendInfo {
  * 的访问返回 NotReady。实例的业务方法可并发调用。
  */
 class IRealtimeStore {
-public:
+   public:
     virtual ~IRealtimeStore() = default;
 
     virtual BackendInfo info() const = 0;
@@ -149,7 +149,7 @@ public:
  * 方法（如 pipeline），但不得改变批量语义。
  */
 class RealtimeStoreBase : public IRealtimeStore {
-public:
+   public:
     std::vector<Result<Record>> readMany(const std::vector<RecordKey>& keys,
                                          const CallContext& ctx) override {
         if (keys.size() > info().max_batch_items) {
@@ -169,8 +169,8 @@ public:
                                                 const CallContext& ctx) override {
         if (requests.size() > info().max_batch_items) {
             return std::vector<Result<WriteReceipt>>(
-                requests.size(), Error{ErrorCode::InvalidArgument, WriteEffect::NotApplied,
-                                       "batch limit exceeded"});
+                requests.size(),
+                Error{ErrorCode::InvalidArgument, WriteEffect::NotApplied, "batch limit exceeded"});
         }
         std::vector<Result<WriteReceipt>> out;
         out.reserve(requests.size());

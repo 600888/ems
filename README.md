@@ -87,6 +87,23 @@ cmake --preset linux-arm-native
 cmake --build --preset linux-arm-native
 ```
 
+## 代码格式化
+
+`backend/` 下的 C/C++ 代码统一使用 clang-format（基于 Google 风格，缩进 4 空格、列宽 100）。规则见根目录 `.clang-format`，详细说明见 [代码格式化规范](docs/reference/code-format.md)。
+
+```bash
+# 安装固定版本（Windows / macOS / Linux 通用）
+python -m pip install clang-format==22.1.8
+
+# 格式化 / 检查
+./scripts/format.sh            # 就地格式化
+./scripts/format.sh --check    # 仅检查，CI 用
+```
+
+也可以在 `backend/build` 下使用 CMake 目标：`make format`、`make format-check`。
+
+`backend/3rd/` 下的第三方代码以及 `backend/include/util/rapidcsv.h` 不参与格式化。
+
 ## C++ 标准
 
 项目使用 C++20 标准。

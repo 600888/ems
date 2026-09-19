@@ -15,25 +15,24 @@
  *       默认: ./tcp_server 1502
  */
 
-#include <iostream>
-#include <iomanip>
-#include <thread>
-#include <chrono>
+#include <algorithm>
 #include <atomic>
+#include <chrono>
+#include <cmath>
 #include <csignal>
 #include <cstdlib>
+#include <iomanip>
+#include <iostream>
 #include <random>
-#include <cmath>
-#include <algorithm>
+#include <thread>
+
 #include "modbus_server.h"
 
 using namespace ems::net::modbus;
 
 static std::atomic<bool> g_running{true};
 
-void signalHandler(int sig) {
-    g_running = false;
-}
+void signalHandler(int sig) { g_running = false; }
 
 void printBanner() {
     std::cout << "\n";
@@ -49,7 +48,7 @@ void printBanner() {
 }
 
 class DataSimulator {
-public:
+   public:
     static float generateTemperature(float base = 25.0f, float variation = 2.0f) {
         static std::mt19937 gen{std::random_device{}()};
         static std::normal_distribution<> d{0, 1};
@@ -92,8 +91,8 @@ void updateTemperatureSensor(ModbusServer& server, int slave_id) {
     server.writeHoldingRegisters(slave_id, 1, temp_data.registers().data(), 2);
     server.writeHoldingRegisters(slave_id, 3, hum_data.registers().data(), 2);
 
-    std::cout << "\r[从机" << slave_id << "] 温度: " << std::fixed << std::setprecision(2)
-              << temp << " °C, 湿度: " << humidity << " %     " << std::flush;
+    std::cout << "\r[从机" << slave_id << "] 温度: " << std::fixed << std::setprecision(2) << temp
+              << " °C, 湿度: " << humidity << " %     " << std::flush;
 }
 
 void updatePowerMeter(ModbusServer& server, int slave_id) {
@@ -164,9 +163,9 @@ void setupServer(ModbusServer& server) {
     std::cout << "  从机3 (ID=3): 开关控制器 - 线圈 [0-15], 寄存器 [0-9]\n";
 
     server.setDataChangeCallback([](int sid, Modbus::Table table, int addr, int nb) {
-        std::cout << "\n[数据变更回调] 从机" << sid
-                  << " " << (table == Modbus::Table::HoldingRegister ? "HR" : "CO")
-                  << " [" << addr << "-" << addr + nb - 1 << "]\n";
+        std::cout << "\n[数据变更回调] 从机" << sid << " "
+                  << (table == Modbus::Table::HoldingRegister ? "HR" : "CO") << " [" << addr << "-"
+                  << addr + nb - 1 << "]\n";
     });
 
     std::cout << "从机配置完成!\n\n";
@@ -262,7 +261,8 @@ int main(int argc, char* argv[]) {
         updateSwitchController(server, 3);
 
         auto now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_manual_demo).count() >= 30) {
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_manual_demo).count() >=
+            30) {
             last_manual_demo = now;
             demoManualOperations(server);
         }

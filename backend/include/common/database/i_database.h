@@ -8,16 +8,16 @@
  */
 #pragma once
 
-#include <memory>
-
 #include <common/core/call_context.h>
 #include <common/core/result.h>
 #include <common/database/i_transaction.h>
 
+#include <memory>
+
 namespace ems::database {
 
 class IDatabase {
-public:
+   public:
     virtual ~IDatabase() = default;
 
     /// 在 deadline 内独占取得连接并开启事务；池耗尽/超时返回明确错误

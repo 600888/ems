@@ -8,13 +8,14 @@
 #ifndef EMS_NET_COLLECT_DATA_DISPATCHER_H
 #define EMS_NET_COLLECT_DATA_DISPATCHER_H
 
-#include <string>
-#include <vector>
+#include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <atomic>
-#include <functional>
+#include <string>
+#include <vector>
+
 #include "models/point_runtime.hpp"
 #include "net/protocol/common/protocol_handler.h"
 
@@ -33,11 +34,11 @@ using protocol::PointValue;
  */
 struct DataDispatcherConfig {
     std::string redisHost_{"127.0.0.1"};
-    int         redisPort_{6379};
+    int redisPort_{6379};
     std::string redisPassword_;
-    int         redisDb_{0};
-    int         poolSize_{4};
-    int         timeoutMs_{3000};
+    int redisDb_{0};
+    int poolSize_{4};
+    int timeoutMs_{3000};
     std::string keyPrefix_{"ems:"};
 
     // Pub/Sub 通知通道
@@ -47,18 +48,15 @@ struct DataDispatcherConfig {
     std::string pubsubChannelYt_{"rtdb:yt:update"};
 
     // 批量写入配置
-    int batchMaxSize_{500};        // 单次批量最大点数
-    int batchIntervalMs_{100};     // 批量写入最大间隔(ms)
+    int batchMaxSize_{500};     // 单次批量最大点数
+    int batchIntervalMs_{100};  // 批量写入最大间隔(ms)
 };
 
 /**
  * @brief 分发结果回调
  */
-using DispatchCallback = std::function<void(
-    const std::string& pointType,   // "YC"|"YX"|"YK"|"YT"
-    const std::string& pointCode,
-    bool               success
-)>;
+using DispatchCallback = std::function<void(const std::string& pointType,  // "YC"|"YX"|"YK"|"YT"
+                                            const std::string& pointCode, bool success)>;
 
 /**
  * @brief 数据分发器
@@ -66,7 +64,7 @@ using DispatchCallback = std::function<void(
  * 线程安全，可在多个采集线程中并发调用。
  */
 class DataDispatcher {
-public:
+   public:
     DataDispatcher();
     ~DataDispatcher();
 
@@ -100,26 +98,23 @@ public:
      * @param timestamp 时间戳
      * @return true 成功
      */
-    bool update_yc(const std::string& pointCode, double value,
-                   int quality, uint64_t timestamp);
+    bool update_yc(const std::string& pointCode, double value, int quality, uint64_t timestamp);
 
     /**
      * @brief 更新单个测点值（YX 遥信）
      */
-    bool update_yx(const std::string& pointCode, int value,
-                   int quality, uint64_t timestamp);
+    bool update_yx(const std::string& pointCode, int value, int quality, uint64_t timestamp);
 
     /**
      * @brief 更新单个测点值（YK 遥控状态）
      */
-    bool update_yk(const std::string& pointCode, int value,
-                   int quality, int ykStatus, uint64_t timestamp);
+    bool update_yk(const std::string& pointCode, int value, int quality, int ykStatus,
+                   uint64_t timestamp);
 
     /**
      * @brief 更新单个测点值（YT 遥调）
      */
-    bool update_yt(const std::string& pointCode, double value,
-                   int quality, uint64_t timestamp);
+    bool update_yt(const std::string& pointCode, double value, int quality, uint64_t timestamp);
 
     /**
      * @brief 批量更新测点数据（自动区分 YC/YX）
@@ -165,9 +160,7 @@ public:
     /**
      * @brief 设置分发回调
      */
-    void set_dispatch_callback(DispatchCallback cb) {
-        callback_ = std::move(cb);
-    }
+    void set_dispatch_callback(DispatchCallback cb) { callback_ = std::move(cb); }
 
     /**
      * @brief 获取 RTDB 管理器实例（非内联，定义在 cpp）
@@ -191,26 +184,26 @@ public:
     };
     Stats stats() const;
 
-private:
-    model::YcPoint make_yc_point(const std::string& code, double value,
-                                 int quality, uint64_t timestamp);
-    model::YxPoint make_yx_point(const std::string& code, int value,
-                                 int quality, uint64_t timestamp);
+   private:
+    model::YcPoint make_yc_point(const std::string& code, double value, int quality,
+                                 uint64_t timestamp);
+    model::YxPoint make_yx_point(const std::string& code, int value, int quality,
+                                 uint64_t timestamp);
 
     void notify_callback(const std::string& type, const std::string& code, bool ok);
 
-    std::atomic<bool>               initialized_{false};
+    std::atomic<bool> initialized_{false};
     std::shared_ptr<ems::rtdb::RtDbManager> rtdb_mgr_;
-    DataDispatcherConfig            config_;
-    DispatchCallback                callback_;
+    DataDispatcherConfig config_;
+    DispatchCallback callback_;
 
     // 统计信息
-    mutable std::mutex              stats_mutex_;
-    Stats                           stats_;
+    mutable std::mutex stats_mutex_;
+    Stats stats_;
 };
 
-} // namespace collect
-} // namespace net
-} // namespace ems
+}  // namespace collect
+}  // namespace net
+}  // namespace ems
 
-#endif // EMS_NET_COLLECT_DATA_DISPATCHER_H
+#endif  // EMS_NET_COLLECT_DATA_DISPATCHER_H

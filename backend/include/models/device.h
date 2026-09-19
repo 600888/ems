@@ -5,28 +5,29 @@
 #ifndef EMS_MODEL_DEVICE_H
 #define EMS_MODEL_DEVICE_H
 
-#include <string>
-#include <vector>
 #include <memory>
 #include <optional>
+#include <string>
+#include <vector>
+
 #include "base.h"
 
 namespace ems {
 namespace model {
 
 class device : public BaseModelWithId, public TimestampMixin, public StatusMixin {
-public:
+   public:
     device() = default;
     explicit device(int64_t id) : BaseModelWithId(id) {}
-    
+
     std::string code;
     std::string name;
     DeviceType device_type{DeviceType::RTU};
     std::optional<int64_t> group_id;
     std::optional<std::string> description;
-    
+
     std::vector<std::shared_ptr<class channel>> channels;
-    
+
     json to_json() const override {
         json j = BaseModelWithId::to_json();
         j["code"] = code;
@@ -38,13 +39,13 @@ public:
         j["timestamp"] = TimestampMixin::to_json();
         j["status"] = StatusMixin::to_json();
         j["channel_count"] = channels.size();
-        
+
         return j;
     }
-    
+
     void from_json(const json& j) override {
         BaseModelWithId::from_json(j);
-        
+
         if (j.contains("code")) code = j["code"].get<std::string>();
         if (j.contains("name")) name = j["name"].get<std::string>();
         if (j.contains("device_type")) {
@@ -59,29 +60,36 @@ public:
         if (j.contains("timestamp")) TimestampMixin::from_json(j["timestamp"]);
         if (j.contains("status")) StatusMixin::from_json(j["status"]);
     }
-    
+
     std::string get_device_type_name() const {
         switch (device_type) {
-            case DeviceType::RTU: return "RTU";
-            case DeviceType::Protection: return "Protection";
-            case DeviceType::Meter: return "Meter";
-            case DeviceType::IED: return "IED";
-            case DeviceType::PLC: return "PLC";
-            case DeviceType::Virtual: return "Virtual";
-            case DeviceType::Gateway: return "Gateway";
-            case DeviceType::Other: return "Other";
-            default: return "Unknown";
+            case DeviceType::RTU:
+                return "RTU";
+            case DeviceType::Protection:
+                return "Protection";
+            case DeviceType::Meter:
+                return "Meter";
+            case DeviceType::IED:
+                return "IED";
+            case DeviceType::PLC:
+                return "PLC";
+            case DeviceType::Virtual:
+                return "Virtual";
+            case DeviceType::Gateway:
+                return "Gateway";
+            case DeviceType::Other:
+                return "Other";
+            default:
+                return "Unknown";
         }
     }
-    
-    int get_channel_count() const {
-        return static_cast<int>(channels.size());
-    }
+
+    int get_channel_count() const { return static_cast<int>(channels.size()); }
 };
 
 using DeviceList = std::vector<std::shared_ptr<device>>;
 
-} // namespace model
-} // namespace ems
+}  // namespace model
+}  // namespace ems
 
-#endif // EMS_MODEL_DEVICE_H
+#endif  // EMS_MODEL_DEVICE_H

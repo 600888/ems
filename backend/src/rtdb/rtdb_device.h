@@ -8,10 +8,11 @@
  * DeviceConfig 保持本层定义，但集成共享模型的增量。
  */
 
-#include <string>
-#include <vector>
 #include <cstdint>
 #include <optional>
+#include <string>
+#include <vector>
+
 #include "models/base.h"
 
 namespace ems {
@@ -40,9 +41,9 @@ std::optional<model::DeviceType> stringToDeviceType(const std::string& s);
  * 一个设备也可以绑定多个测点（YC/YX/YK/YT）。
  */
 struct DeviceConfig {
-    int64_t      id_{0};                           // 设备 ID
-    std::string  name_;                            // 设备名称
-    model::DeviceType deviceType_{model::DeviceType::UNKNOWN}; // 设备类型
+    int64_t id_{0};                                             // 设备 ID
+    std::string name_;                                          // 设备名称
+    model::DeviceType deviceType_{model::DeviceType::UNKNOWN};  // 设备类型
 
     // ---- 通道关联 ----
     std::vector<int64_t> channelIds_;
@@ -51,11 +52,11 @@ struct DeviceConfig {
     std::vector<std::string> pointCodes_;
 
     // ---- 元数据 ----
-    std::string  description_;                     // 设备描述
-    std::string  location_;                        // 安装位置
-    int          status_{1};                       // 使能状态
-    std::string  createdAt_;                       // 创建时间
-    std::string  updatedAt_;                       // 更新时间
+    std::string description_;  // 设备描述
+    std::string location_;     // 安装位置
+    int status_{1};            // 使能状态
+    std::string createdAt_;    // 创建时间
+    std::string updatedAt_;    // 更新时间
 };
 
 }  // namespace rtdb

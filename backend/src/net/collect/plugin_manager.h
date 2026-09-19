@@ -11,12 +11,13 @@
 #ifndef EMS_NET_COLLECT_PLUGIN_MANAGER_H
 #define EMS_NET_COLLECT_PLUGIN_MANAGER_H
 
-#include <string>
-#include <vector>
-#include <unordered_map>
+#include <cstdint>
 #include <memory>
 #include <mutex>
-#include <cstdint>
+#include <string>
+#include <unordered_map>
+#include <vector>
+
 #include "net/protocol/common/protocol_plugin_api.h"
 
 namespace ems {
@@ -29,7 +30,7 @@ namespace collect {
  * 线程安全：所有公开方法均持有内部互斥锁。
  */
 class PluginManager {
-public:
+   public:
     /**
      * @brief 协议 -> 动态库文件名 映射条目
      */
@@ -42,20 +43,18 @@ public:
      * @brief 所有函数指针的便捷结构
      */
     struct PluginFunctions {
-        ems_plugin_info_fn         info_fn{nullptr};
-        ems_plugin_create_fn       create_fn{nullptr};
-        ems_plugin_destroy_fn      destroy_fn{nullptr};
-        ems_plugin_init_fn         init_fn{nullptr};
-        ems_plugin_connect_fn      connect_fn{nullptr};
-        ems_plugin_disconnect_fn   disconnect_fn{nullptr};
-        ems_plugin_read_batch_fn   read_batch_fn{nullptr};
-        ems_plugin_write_fn        write_fn{nullptr};
+        ems_plugin_info_fn info_fn{nullptr};
+        ems_plugin_create_fn create_fn{nullptr};
+        ems_plugin_destroy_fn destroy_fn{nullptr};
+        ems_plugin_init_fn init_fn{nullptr};
+        ems_plugin_connect_fn connect_fn{nullptr};
+        ems_plugin_disconnect_fn disconnect_fn{nullptr};
+        ems_plugin_read_batch_fn read_batch_fn{nullptr};
+        ems_plugin_write_fn write_fn{nullptr};
         ems_plugin_is_connected_fn is_connected_fn{nullptr};
-        ems_plugin_last_error_fn   last_error_fn{nullptr};
+        ems_plugin_last_error_fn last_error_fn{nullptr};
 
-        explicit operator bool() const {
-            return create_fn != nullptr && destroy_fn != nullptr;
-        }
+        explicit operator bool() const { return create_fn != nullptr && destroy_fn != nullptr; }
     };
 
     PluginManager();
@@ -136,28 +135,28 @@ public:
      */
     void register_mapping(const std::string& protocol_name, const std::string& lib_name);
 
-private:
+   private:
     /**
      * @brief 已加载的插件条目
      */
     struct PluginEntry {
-        void*           dl_handle{nullptr};
+        void* dl_handle{nullptr};
         PluginFunctions fns;
-        int             ref_count{0};
+        int ref_count{0};
     };
 
     std::string resolve_lib_path(const std::string& protocol_name) const;
-    bool        load_symbols(void* handle, PluginFunctions& fns);
+    bool load_symbols(void* handle, PluginFunctions& fns);
 
-    mutable std::mutex                          mutex_;
-    std::string                                 plugin_dir_{"./lib"};
+    mutable std::mutex mutex_;
+    std::string plugin_dir_{"./lib"};
     std::unordered_map<std::string, std::string> custom_mappings_;
     std::unordered_map<std::string, PluginEntry> loaded_plugins_;
-    mutable std::string                         last_err_;
+    mutable std::string last_err_;
 };
 
-} // namespace collect
-} // namespace net
-} // namespace ems
+}  // namespace collect
+}  // namespace net
+}  // namespace ems
 
-#endif // EMS_NET_COLLECT_PLUGIN_MANAGER_H
+#endif  // EMS_NET_COLLECT_PLUGIN_MANAGER_H

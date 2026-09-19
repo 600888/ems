@@ -6,9 +6,10 @@
  */
 #pragma once
 
+#include <cstdint>
 #include <string>
 #include <vector>
-#include <cstdint>
+
 #include "db/db_manager.h"
 
 namespace ems {
@@ -21,7 +22,7 @@ namespace db {
  * 提供更细粒度的导入策略 (全量替换 / 增量追加)。
  */
 class PointImporter {
-public:
+   public:
     explicit PointImporter(DbManager& dbm) : dbm_(dbm) {}
 
     /**
@@ -36,77 +37,56 @@ public:
     /**
      * @brief 构建一条 YC 采集数据
      */
-    static CollectImportData make_yc_data(
-        const std::string& point_code,
-        int64_t channel_id,
-        int64_t device_id,
-        int64_t raw_value,
-        double  eng_value,
-        int     quality,
-        const std::string& collect_time)
-    {
-        return {
-            point_code, 0, channel_id, device_id,
-            raw_value, eng_value, quality, collect_time
-        };
+    static CollectImportData make_yc_data(const std::string& point_code, int64_t channel_id,
+                                          int64_t device_id, int64_t raw_value, double eng_value,
+                                          int quality, const std::string& collect_time) {
+        return {point_code, 0, channel_id, device_id, raw_value, eng_value, quality, collect_time};
     }
 
     /**
      * @brief 构建一条 YX 采集数据
      */
-    static CollectImportData make_yx_data(
-        const std::string& point_code,
-        int64_t channel_id,
-        int64_t device_id,
-        int     value,
-        const std::string& collect_time)
-    {
-        return {
-            point_code, 1, channel_id, device_id,
-            static_cast<int64_t>(value),
-            static_cast<double>(value),
-            0, collect_time
-        };
+    static CollectImportData make_yx_data(const std::string& point_code, int64_t channel_id,
+                                          int64_t device_id, int value,
+                                          const std::string& collect_time) {
+        return {point_code,
+                1,
+                channel_id,
+                device_id,
+                static_cast<int64_t>(value),
+                static_cast<double>(value),
+                0,
+                collect_time};
     }
 
     /**
      * @brief 构建一条 YK 采集数据
      */
-    static CollectImportData make_yk_data(
-        const std::string& point_code,
-        int64_t channel_id,
-        int64_t device_id,
-        int     value,
-        const std::string& collect_time)
-    {
-        return {
-            point_code, 2, channel_id, device_id,
-            static_cast<int64_t>(value),
-            static_cast<double>(value),
-            0, collect_time
-        };
+    static CollectImportData make_yk_data(const std::string& point_code, int64_t channel_id,
+                                          int64_t device_id, int value,
+                                          const std::string& collect_time) {
+        return {point_code,
+                2,
+                channel_id,
+                device_id,
+                static_cast<int64_t>(value),
+                static_cast<double>(value),
+                0,
+                collect_time};
     }
 
     /**
      * @brief 构建一条 YT 采集数据
      */
-    static CollectImportData make_yt_data(
-        const std::string& point_code,
-        int64_t channel_id,
-        int64_t device_id,
-        int64_t raw_value,
-        double  eng_value,
-        const std::string& collect_time)
-    {
-        return {
-            point_code, 3, channel_id, device_id,
-            raw_value, eng_value, 0, collect_time
-        };
+    static CollectImportData make_yt_data(const std::string& point_code, int64_t channel_id,
+                                          int64_t device_id, int64_t raw_value, double eng_value,
+                                          const std::string& collect_time) {
+        return {point_code, 3, channel_id, device_id, raw_value, eng_value, 0, collect_time};
     }
 
-private:
+   private:
     DbManager& dbm_;
 };
 
-} // namespace db
-} // namespace ems
+}  // namespace db
+}  // namespace ems

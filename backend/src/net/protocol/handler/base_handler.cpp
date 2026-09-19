@@ -8,11 +8,13 @@ namespace ems {
 namespace net {
 namespace device {
 
-void ProtocolHandler::addTxMessage(const std::vector<uint8_t>& data, const std::string& description) {
+void ProtocolHandler::addTxMessage(const std::vector<uint8_t>& data,
+                                   const std::string& description) {
     if (messageCapture_) messageCapture_->addTx(data, description);
 }
 
-void ProtocolHandler::addRxMessage(const std::vector<uint8_t>& data, const std::string& description) {
+void ProtocolHandler::addRxMessage(const std::vector<uint8_t>& data,
+                                   const std::string& description) {
     if (messageCapture_) messageCapture_->addRx(data, description);
 }
 
@@ -48,6 +50,6 @@ int ProtocolHandler::read_batch(const std::vector<std::string>&, std::vector<Poi
     return -1;  // 子类实现
 }
 
-} // namespace device
-} // namespace net
-} // namespace ems
+}  // namespace device
+}  // namespace net
+}  // namespace ems

@@ -8,11 +8,6 @@
  */
 #pragma once
 
-#include <memory>
-#include <optional>
-#include <string>
-#include <vector>
-
 #include <common/core/identity.h>
 #include <common/model/binding.h>
 #include <common/model/capability.h>
@@ -20,12 +15,17 @@
 #include <common/model/device.h>
 #include <common/model/point.h>
 
+#include <memory>
+#include <optional>
+#include <string>
+#include <vector>
+
 namespace ems::model {
 
 /// 能力解析结果：缺失/禁用依赖给出明确原因
 struct CapabilityResolution {
     bool ok{false};
-    std::string reason;                       ///< 失败原因（ok 时为空）
+    std::string reason;  ///< 失败原因（ok 时为空）
     const CapabilityDefinition* capability{nullptr};
     std::vector<const Point*> required_points;     ///< 启用点
     std::vector<const Point*> required_feedbacks;  ///< 反馈定义
@@ -33,7 +33,7 @@ struct CapabilityResolution {
 
 /// 只读模型视图：持有一份固定版本快照
 class ModelView {
-public:
+   public:
     explicit ModelView(std::shared_ptr<const ModelCatalog> catalog);
 
     /// device_id → Device 或 nullptr（NotFound；不回源数据库补齐）
@@ -53,7 +53,7 @@ public:
     /// 底层目录（只读）
     const ModelCatalog& catalog() const noexcept { return *catalog_; }
 
-private:
+   private:
     std::shared_ptr<const ModelCatalog> catalog_;
 };
 

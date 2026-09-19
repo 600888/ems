@@ -14,27 +14,31 @@ namespace ems::observability {
 
 /// 组件健康状态
 enum class HealthState : std::uint8_t {
-    Ready    = 0,  ///< 就绪
+    Ready = 0,     ///< 就绪
     Degraded = 1,  ///< 降级可用
     NotReady = 2,  ///< 未就绪（不能承接新业务）
-    Failed   = 3   ///< 故障
+    Failed = 3     ///< 故障
 };
 
 inline const char* to_string(HealthState s) noexcept {
     switch (s) {
-        case HealthState::Ready:    return "Ready";
-        case HealthState::Degraded: return "Degraded";
-        case HealthState::NotReady: return "NotReady";
-        case HealthState::Failed:   return "Failed";
+        case HealthState::Ready:
+            return "Ready";
+        case HealthState::Degraded:
+            return "Degraded";
+        case HealthState::NotReady:
+            return "NotReady";
+        case HealthState::Failed:
+            return "Failed";
     }
     return "Unknown";
 }
 
 /// 组件健康报告
 struct ComponentHealth {
-    std::string component;   ///< 组件名（如 realtime.redis / config.apply / messaging）
+    std::string component;  ///< 组件名（如 realtime.redis / config.apply / messaging）
     HealthState state{HealthState::NotReady};
-    std::string detail;      ///< 区分原因：设备离线/配置未应用/后端不可用/积压等
+    std::string detail;  ///< 区分原因：设备离线/配置未应用/后端不可用/积压等
 };
 
 }  // namespace ems::observability

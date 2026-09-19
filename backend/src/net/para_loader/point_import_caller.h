@@ -6,9 +6,10 @@
  */
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
+
 #include "db/db_manager.h"
 #include "db/point_import.h"
 
@@ -23,7 +24,7 @@ namespace device {
  * 测点值批量导入关系数据库持久化。
  */
 class PointImportCaller {
-public:
+   public:
     PointImportCaller();
     ~PointImportCaller();
 
@@ -48,32 +49,28 @@ public:
      * @param values      测点值列表 {point_code, raw_value, eng_value}
      * @param collect_time 采集时间
      */
-    int import_yc_batch(
-        int64_t channel_id,
-        int64_t device_id,
-        const std::vector<std::tuple<std::string, int64_t, double>>& values,
-        const std::string& collect_time);
+    int import_yc_batch(int64_t channel_id, int64_t device_id,
+                        const std::vector<std::tuple<std::string, int64_t, double>>& values,
+                        const std::string& collect_time);
 
     /**
      * @brief 批量导入 YX 采集数据 (便捷接口)
      */
-    int import_yx_batch(
-        int64_t channel_id,
-        int64_t device_id,
-        const std::vector<std::pair<std::string, int>>& values,
-        const std::string& collect_time);
+    int import_yx_batch(int64_t channel_id, int64_t device_id,
+                        const std::vector<std::pair<std::string, int>>& values,
+                        const std::string& collect_time);
 
     /**
      * @brief 是否已初始化
      */
     bool is_initialized() const { return initialized_; }
 
-private:
+   private:
     bool initialized_ = false;
-    std::unique_ptr<ems::db::DbManager>  dbm_;
+    std::unique_ptr<ems::db::DbManager> dbm_;
     std::unique_ptr<ems::db::PointImporter> importer_;
 };
 
-} // namespace device
-} // namespace net
-} // namespace ems
+}  // namespace device
+}  // namespace net
+}  // namespace ems

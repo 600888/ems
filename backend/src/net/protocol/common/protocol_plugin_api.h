@@ -39,10 +39,11 @@ extern "C" {
  * 通过 ems_plugin_info() 获取，供 PluginManager 识别协议类型。
  */
 typedef struct EmPluginInfo {
-    int         api_version;       // 必须等于 EMS_PLUGIN_API_VERSION
-    const char* protocol_name;     // 协议名称: "ModbusTCP", "ModbusRTU", "IEC104", "DLT645", "IEC61850"
-    const char* description;       // 简要描述
-    const char* version;           // 插件版本号, 如 "1.0.0"
+    int api_version;  // 必须等于 EMS_PLUGIN_API_VERSION
+    const char*
+        protocol_name;        // 协议名称: "ModbusTCP", "ModbusRTU", "IEC104", "DLT645", "IEC61850"
+    const char* description;  // 简要描述
+    const char* version;      // 插件版本号, 如 "1.0.0"
 } EmPluginInfo;
 
 /* ============================================================
@@ -113,13 +114,8 @@ typedef int (*ems_plugin_disconnect_fn)(void* instance);
  * @param result_buf_size 输出缓冲区大小
  * @return >=0 成功读取的测点数, -1 失败
  */
-typedef int (*ems_plugin_read_batch_fn)(
-    void*       instance,
-    const char* point_codes[],
-    int         point_count,
-    char*       result_json,
-    int         result_buf_size
-);
+typedef int (*ems_plugin_read_batch_fn)(void* instance, const char* point_codes[], int point_count,
+                                        char* result_json, int result_buf_size);
 
 /**
  * @brief 写入单个测点值
@@ -128,11 +124,7 @@ typedef int (*ems_plugin_read_batch_fn)(
  * @param value     写入值
  * @return 0 成功, -1 失败
  */
-typedef int (*ems_plugin_write_fn)(
-    void*       instance,
-    const char* point_code,
-    double      value
-);
+typedef int (*ems_plugin_write_fn)(void* instance, const char* point_code, double value);
 
 /**
  * @brief 获取连接状态
@@ -152,19 +144,19 @@ typedef const char* (*ems_plugin_last_error_fn)(void* instance);
  * 插件导出符号名定义（供 dlsym 使用）
  * ============================================================ */
 
-#define EMS_PLUGIN_INFO_SYMBOL          "ems_plugin_info"
-#define EMS_PLUGIN_CREATE_SYMBOL        "ems_plugin_create"
-#define EMS_PLUGIN_DESTROY_SYMBOL       "ems_plugin_destroy"
-#define EMS_PLUGIN_INIT_SYMBOL          "ems_plugin_init"
-#define EMS_PLUGIN_CONNECT_SYMBOL       "ems_plugin_connect"
-#define EMS_PLUGIN_DISCONNECT_SYMBOL    "ems_plugin_disconnect"
-#define EMS_PLUGIN_READ_BATCH_SYMBOL    "ems_plugin_read_batch"
-#define EMS_PLUGIN_WRITE_SYMBOL         "ems_plugin_write"
-#define EMS_PLUGIN_IS_CONNECTED_SYMBOL  "ems_plugin_is_connected"
-#define EMS_PLUGIN_LAST_ERROR_SYMBOL    "ems_plugin_last_error"
+#define EMS_PLUGIN_INFO_SYMBOL "ems_plugin_info"
+#define EMS_PLUGIN_CREATE_SYMBOL "ems_plugin_create"
+#define EMS_PLUGIN_DESTROY_SYMBOL "ems_plugin_destroy"
+#define EMS_PLUGIN_INIT_SYMBOL "ems_plugin_init"
+#define EMS_PLUGIN_CONNECT_SYMBOL "ems_plugin_connect"
+#define EMS_PLUGIN_DISCONNECT_SYMBOL "ems_plugin_disconnect"
+#define EMS_PLUGIN_READ_BATCH_SYMBOL "ems_plugin_read_batch"
+#define EMS_PLUGIN_WRITE_SYMBOL "ems_plugin_write"
+#define EMS_PLUGIN_IS_CONNECTED_SYMBOL "ems_plugin_is_connected"
+#define EMS_PLUGIN_LAST_ERROR_SYMBOL "ems_plugin_last_error"
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif // EMS_NET_PROTOCOL_PLUGIN_API_H
+#endif  // EMS_NET_PROTOCOL_PLUGIN_API_H

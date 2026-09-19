@@ -16,13 +16,7 @@
 
 namespace ems::observability {
 
-enum class LogLevel : std::uint8_t {
-    Trace = 0,
-    Debug = 1,
-    Info  = 2,
-    Warn  = 3,
-    Error = 4
-};
+enum class LogLevel : std::uint8_t { Trace = 0, Debug = 1, Info = 2, Warn = 3, Error = 4 };
 
 /// 结构化日志字段（值已脱敏）
 struct LogField {
@@ -31,7 +25,7 @@ struct LogField {
 };
 
 class ILogger {
-public:
+   public:
     virtual ~ILogger() = default;
 
     /// 输出一条结构化日志；fields 数量有上限（防滥用）

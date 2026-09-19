@@ -1,20 +1,15 @@
 #include "rtdb/rtdb_manager.h"
-#include <iostream>
+
 #include <fstream>
+#include <iostream>
 #include <sstream>
 
 namespace ems {
 namespace rtdb {
 
-RtDbManager::RtDbManager()
-    : rtdb_(nullptr)
-    , configCache_(nullptr)
-    , pointManager_(nullptr) {
-}
+RtDbManager::RtDbManager() : rtdb_(nullptr), configCache_(nullptr), pointManager_(nullptr) {}
 
-RtDbManager::~RtDbManager() {
-    shutdown();
-}
+RtDbManager::~RtDbManager() { shutdown(); }
 
 bool RtDbManager::initialize(const RtDbConfig& config) {
     rtdb_ = createRtDb(config);
@@ -37,21 +32,13 @@ void RtDbManager::shutdown() {
     pointManager_.reset();
 }
 
-bool RtDbManager::loadYcConfigsFromDb() {
-    return true;
-}
+bool RtDbManager::loadYcConfigsFromDb() { return true; }
 
-bool RtDbManager::loadYxConfigsFromDb() {
-    return true;
-}
+bool RtDbManager::loadYxConfigsFromDb() { return true; }
 
-bool RtDbManager::loadYkConfigsFromDb() {
-    return true;
-}
+bool RtDbManager::loadYkConfigsFromDb() { return true; }
 
-bool RtDbManager::loadYtConfigsFromDb() {
-    return true;
-}
+bool RtDbManager::loadYtConfigsFromDb() { return true; }
 
 bool RtDbManager::loadAllConfigs() {
     if (!configCache_) {
@@ -199,27 +186,19 @@ bool RtDbManager::batchUpdateYt(const std::map<std::string, YtPoint>& dataMap) {
 }
 
 std::future<bool> RtDbManager::asyncUpdateYc(const std::string& code, const YcPoint& data) {
-    return std::async(std::launch::async, [this, code, data]() {
-        return updateYc(code, data);
-    });
+    return std::async(std::launch::async, [this, code, data]() { return updateYc(code, data); });
 }
 
 std::future<bool> RtDbManager::asyncUpdateYx(const std::string& code, const YxPoint& data) {
-    return std::async(std::launch::async, [this, code, data]() {
-        return updateYx(code, data);
-    });
+    return std::async(std::launch::async, [this, code, data]() { return updateYx(code, data); });
 }
 
 std::future<bool> RtDbManager::asyncUpdateYk(const std::string& code, const YkPoint& data) {
-    return std::async(std::launch::async, [this, code, data]() {
-        return updateYk(code, data);
-    });
+    return std::async(std::launch::async, [this, code, data]() { return updateYk(code, data); });
 }
 
 std::future<bool> RtDbManager::asyncUpdateYt(const std::string& code, const YtPoint& data) {
-    return std::async(std::launch::async, [this, code, data]() {
-        return updateYt(code, data);
-    });
+    return std::async(std::launch::async, [this, code, data]() { return updateYt(code, data); });
 }
 
 bool RtDbManager::getYc(const std::string& code, YcPoint& data) {
@@ -250,8 +229,7 @@ bool RtDbManager::getYt(const std::string& code, YtPoint& data) {
     return rtdb_->getYt(code, data);
 }
 
-bool RtDbManager::getYcFull(const std::string& code,
-                            RtDbPointManager::YcFullPoint& fullPoint) {
+bool RtDbManager::getYcFull(const std::string& code, RtDbPointManager::YcFullPoint& fullPoint) {
     YcPoint data;
     if (getYc(code, data)) {
         return pointManager_->getYcFullPoint(code, data, fullPoint);
@@ -259,8 +237,7 @@ bool RtDbManager::getYcFull(const std::string& code,
     return false;
 }
 
-bool RtDbManager::getYxFull(const std::string& code,
-                            RtDbPointManager::YxFullPoint& fullPoint) {
+bool RtDbManager::getYxFull(const std::string& code, RtDbPointManager::YxFullPoint& fullPoint) {
     YxPoint data;
     if (getYx(code, data)) {
         return pointManager_->getYxFullPoint(code, data, fullPoint);
@@ -268,8 +245,7 @@ bool RtDbManager::getYxFull(const std::string& code,
     return false;
 }
 
-bool RtDbManager::getYkFull(const std::string& code,
-                            RtDbPointManager::YkFullPoint& fullPoint) {
+bool RtDbManager::getYkFull(const std::string& code, RtDbPointManager::YkFullPoint& fullPoint) {
     YkPoint data;
     if (getYk(code, data)) {
         return pointManager_->getYkFullPoint(code, data, fullPoint);
@@ -277,8 +253,7 @@ bool RtDbManager::getYkFull(const std::string& code,
     return false;
 }
 
-bool RtDbManager::getYtFull(const std::string& code,
-                            RtDbPointManager::YtFullPoint& fullPoint) {
+bool RtDbManager::getYtFull(const std::string& code, RtDbPointManager::YtFullPoint& fullPoint) {
     YtPoint data;
     if (getYt(code, data)) {
         return pointManager_->getYtFullPoint(code, data, fullPoint);
@@ -485,8 +460,12 @@ bool RtDbManager::loadConfigFromJson(const std::string& filepath) {
                 p++;
                 std::string v;
                 while (p < item.size() && item[p] != '"') {
-                    if (item[p] == '\\' && p + 1 < item.size()) { p++; v += item[p]; }
-                    else { v += item[p]; }
+                    if (item[p] == '\\' && p + 1 < item.size()) {
+                        p++;
+                        v += item[p];
+                    } else {
+                        v += item[p];
+                    }
                     p++;
                 }
                 return v;
@@ -497,13 +476,31 @@ bool RtDbManager::loadConfigFromJson(const std::string& filepath) {
         };
         cfg.code = find("code");
         cfg.name = find("name");
-        try { cfg.channel_id = std::stoll(find("channel_id")); } catch (...) {}
-        try { cfg.mulCoe = std::stod(find("mul_coe")); } catch (...) {}
-        try { cfg.addCoe = std::stod(find("add_coe")); } catch (...) {}
-        try { cfg.maxLimit = std::stod(find("max_limit")); } catch (...) {}
-        try { cfg.minLimit = std::stod(find("min_limit")); } catch (...) {}
+        try {
+            cfg.channel_id = std::stoll(find("channel_id"));
+        } catch (...) {
+        }
+        try {
+            cfg.mulCoe = std::stod(find("mul_coe"));
+        } catch (...) {
+        }
+        try {
+            cfg.addCoe = std::stod(find("add_coe"));
+        } catch (...) {
+        }
+        try {
+            cfg.maxLimit = std::stod(find("max_limit"));
+        } catch (...) {
+        }
+        try {
+            cfg.minLimit = std::stod(find("min_limit"));
+        } catch (...) {
+        }
         cfg.unit = find("unit");
-        try { cfg.status = std::stoi(find("status")); } catch (...) {}
+        try {
+            cfg.status = std::stoi(find("status"));
+        } catch (...) {
+        }
         return cfg;
     };
 
@@ -525,9 +522,7 @@ bool RtDbManager::loadConfigFromJson(const std::string& filepath) {
     return true;
 }
 
-bool RtDbManager::loadConfigFromCsv(const std::string& filepath) {
-    return false;
-}
+bool RtDbManager::loadConfigFromCsv(const std::string& filepath) { return false; }
 
 std::unique_ptr<RtDbManager> createRtdbManager(const RtDbConfig& config) {
     auto manager = std::make_unique<RtDbManager>();
@@ -537,5 +532,5 @@ std::unique_ptr<RtDbManager> createRtdbManager(const RtDbConfig& config) {
     return nullptr;
 }
 
-}
-}
+}  // namespace rtdb
+}  // namespace ems

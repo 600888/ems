@@ -15,24 +15,23 @@
  *       默认: ./rtu_server /dev/ttyUSB1 9600
  */
 
-#include <iostream>
-#include <iomanip>
-#include <thread>
-#include <chrono>
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <csignal>
 #include <cstdlib>
+#include <iomanip>
+#include <iostream>
 #include <random>
-#include <algorithm>
+#include <thread>
+
 #include "modbus_server.h"
 
 using namespace ems::net::modbus;
 
 static std::atomic<bool> g_running{true};
 
-void signalHandler(int sig) {
-    g_running = false;
-}
+void signalHandler(int sig) { g_running = false; }
 
 void printBanner() {
     std::cout << "\n";
@@ -51,7 +50,7 @@ std::string buildRtuSettings(int baud, char parity = 'N', int data_bits = 8, int
 }
 
 class RTUSimulator {
-public:
+   public:
     static float generateValue(float min, float max, float base = 0) {
         static std::mt19937 gen{std::random_device{}()};
         static std::normal_distribution<float> d{0, 1};
@@ -109,7 +108,7 @@ void updateIOStatus(ModbusServer& server, int slave_id) {
     for (int i = 0; i < 16; i++) {
         di[i] = (std::rand() % 2) == 1;
     }
-    server.writeInputRegisters(slave_id, 0, reinterpret_cast<uint16_t*>(di), 16);   
+    server.writeInputRegisters(slave_id, 0, reinterpret_cast<uint16_t*>(di), 16);
 
     std::cout << "\r[RTU从机" << slave_id << "] DI[0-15]: ";
     for (int i = 0; i < 8; i++) {
@@ -142,11 +141,12 @@ void setupRTUServer(ModbusServer& server, int slave_id) {
 
     server.setDataChangeCallback([slave_id](int id, Modbus::Table table, int addr, int nb) {
         if (id == slave_id) {
-            const char* table_name =
-                (table == Modbus::Table::HoldingRegister) ? "HR" :
-                (table == Modbus::Table::InputRegister) ? "IR" :
-                (table == Modbus::Table::Coil) ? "CO" : "DI";
-            std::cout << "\n[变更通知] " << table_name << " [" << addr << "-" << addr+nb-1 << "]\n";
+            const char* table_name = (table == Modbus::Table::HoldingRegister) ? "HR"
+                                     : (table == Modbus::Table::InputRegister) ? "IR"
+                                     : (table == Modbus::Table::Coil)          ? "CO"
+                                                                               : "DI";
+            std::cout << "\n[变更通知] " << table_name << " [" << addr << "-" << addr + nb - 1
+                      << "]\n";
         }
     });
 
@@ -301,7 +301,8 @@ int main(int argc, char* argv[]) {
         updateIOStatus(server, slave_id);
 
         auto now = std::chrono::steady_clock::now();
-        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_manual_demo).count() >= 30) {
+        if (std::chrono::duration_cast<std::chrono::seconds>(now - last_manual_demo).count() >=
+            30) {
             last_manual_demo = now;
             demoWriteOperations(server, slave_id);
             demoReadOperations(server, slave_id);

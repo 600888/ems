@@ -15,13 +15,14 @@
  *       默认: ./tcp_client 127.0.0.1 502 1
  */
 
-#include <iostream>
-#include <iomanip>
-#include <thread>
 #include <chrono>
 #include <csignal>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
+#include <iomanip>
+#include <iostream>
+#include <thread>
+
 #include "modbus_client.h"
 
 using namespace ems::net::modbus;
@@ -29,9 +30,7 @@ using namespace ems::net::modbus;
 static std::atomic<bool> g_running{true};
 static int g_slave_id = 1;
 
-void signalHandler(int sig) {
-    g_running = false;
-}
+void signalHandler(int sig) { g_running = false; }
 
 static float registersToFloat(const uint16_t* reg) {
     uint32_t bits = (static_cast<uint32_t>(reg[0]) << 16) | reg[1];
@@ -41,10 +40,8 @@ static float registersToFloat(const uint16_t* reg) {
 }
 
 static double registersToDouble(const uint16_t* reg) {
-    uint64_t bits = (static_cast<uint64_t>(reg[0]) << 48) |
-                    (static_cast<uint64_t>(reg[1]) << 32) |
-                    (static_cast<uint64_t>(reg[2]) << 16) |
-                    reg[3];
+    uint64_t bits = (static_cast<uint64_t>(reg[0]) << 48) | (static_cast<uint64_t>(reg[1]) << 32) |
+                    (static_cast<uint64_t>(reg[2]) << 16) | reg[3];
     double value;
     std::memcpy(&value, &bits, sizeof(double));
     return value;
@@ -59,10 +56,8 @@ static uint32_t registersToUInt32(const uint16_t* reg) {
 }
 
 static int64_t registersToInt64(const uint16_t* reg) {
-    return (static_cast<int64_t>(reg[0]) << 48) |
-           (static_cast<int64_t>(reg[1]) << 32) |
-           (static_cast<int64_t>(reg[2]) << 16) |
-           reg[3];
+    return (static_cast<int64_t>(reg[0]) << 48) | (static_cast<int64_t>(reg[1]) << 32) |
+           (static_cast<int64_t>(reg[2]) << 16) | reg[3];
 }
 
 void printBanner() {
@@ -83,28 +78,28 @@ bool demoBasicRegisters(ModbusClient& client, int slave_id) {
     uint16_t write_data[] = {0x1234, 0x5678, 0x9ABC, 0xDEF0};
     uint16_t read_data[4];
 
-    if (client.writeMultipleRegisters(slave_id, 0, write_data, 4) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 0, write_data, 4) ==
+        ModbusClient::ErrorCode::Success) {
         std::cout << "写入保持寄存器 [0-3]: ";
         for (int i = 0; i < 4; i++) {
-            std::cout << "0x" << std::hex << std::setw(4) << std::setfill('0')
-                      << write_data[i] << " ";
+            std::cout << "0x" << std::hex << std::setw(4) << std::setfill('0') << write_data[i]
+                      << " ";
         }
         std::cout << std::dec << "\n";
-    }
-    else {
+    } else {
         std::cerr << "写入失败: " << client.getLastErrorMsg() << "\n";
         return false;
     }
 
-    if (client.readHoldingRegisters(slave_id, 0, read_data, 4) == ModbusClient::ErrorCode::Success) {
+    if (client.readHoldingRegisters(slave_id, 0, read_data, 4) ==
+        ModbusClient::ErrorCode::Success) {
         std::cout << "读取保持寄存器 [0-3]: ";
         for (int i = 0; i < 4; i++) {
-            std::cout << "0x" << std::hex << std::setw(4) << std::setfill('0')
-                      << read_data[i] << " ";
+            std::cout << "0x" << std::hex << std::setw(4) << std::setfill('0') << read_data[i]
+                      << " ";
         }
         std::cout << std::dec << "\n";
-    }
-    else {
+    } else {
         std::cerr << "读取失败: " << client.getLastErrorMsg() << "\n";
         return false;
     }
@@ -125,7 +120,8 @@ bool demoCoils(ModbusClient& client, int slave_id) {
     bool write_coils[] = {true, false, true, true, false, false, true, false};
     bool read_coils[8];
 
-    if (client.writeMultipleCoils(slave_id, 0, write_coils, 8) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleCoils(slave_id, 0, write_coils, 8) ==
+        ModbusClient::ErrorCode::Success) {
         std::cout << "写入线圈 [0-7]: ";
         for (int i = 0; i < 8; i++) {
             std::cout << (write_coils[i] ? "[1]" : "[0]");
@@ -164,7 +160,8 @@ bool demoInt32(ModbusClient& client, int slave_id) {
     }
     std::cout << std::dec << "\n";
 
-    if (client.writeMultipleRegisters(slave_id, 200, power_data.registers().data(), 2) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 200, power_data.registers().data(), 2) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t reg[2];
         client.readHoldingRegisters(slave_id, 200, reg, 2);
         int32_t read_power = registersToInt32(reg);
@@ -173,7 +170,8 @@ bool demoInt32(ModbusClient& client, int slave_id) {
 
     uint32_t timestamp = 1700000000;
     Modbus::Data<uint32_t, Modbus::EndianBig> ts_data(timestamp);
-    if (client.writeMultipleRegisters(slave_id, 202, ts_data.registers().data(), 2) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 202, ts_data.registers().data(), 2) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t reg[2];
         client.readHoldingRegisters(slave_id, 202, reg, 2);
         uint32_t read_ts = registersToUInt32(reg);
@@ -196,7 +194,8 @@ bool demoFloat(ModbusClient& client, int slave_id) {
     }
     std::cout << std::dec << "\n";
 
-    if (client.writeMultipleRegisters(slave_id, 300, temp_data.registers().data(), 2) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 300, temp_data.registers().data(), 2) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t reg[2];
         client.readHoldingRegisters(slave_id, 300, reg, 2);
         float read_temp = registersToFloat(reg);
@@ -205,7 +204,8 @@ bool demoFloat(ModbusClient& client, int slave_id) {
     }
 
     Modbus::Data<float, Modbus::EndianBig> voltage(220.75f);
-    if (client.writeMultipleRegisters(slave_id, 302, voltage.registers().data(), 2) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 302, voltage.registers().data(), 2) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t reg[2];
         client.readHoldingRegisters(slave_id, 302, reg, 2);
         float read_v = registersToFloat(reg);
@@ -223,12 +223,13 @@ bool demoDouble(ModbusClient& client, int slave_id) {
     std::cout << "double [400-403] (EndianBig, 占用4个寄存器):\n";
     std::cout << "  寄存器值: ";
     for (size_t i = 0; i < pi_data.registers().size(); i++) {
-        std::cout << "0x" << std::hex << std::setw(4) << std::setfill('0')
-                  << pi_data.registers()[i] << " ";
+        std::cout << "0x" << std::hex << std::setw(4) << std::setfill('0') << pi_data.registers()[i]
+                  << " ";
     }
     std::cout << std::dec << "\n";
 
-    if (client.writeMultipleRegisters(slave_id, 400, pi_data.registers().data(), 4) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 400, pi_data.registers().data(), 4) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t reg[4];
         client.readHoldingRegisters(slave_id, 400, reg, 4);
         double read_pi = registersToDouble(reg);
@@ -254,7 +255,8 @@ bool demoInt64(ModbusClient& client, int slave_id) {
     }
     std::cout << std::dec << "\n";
 
-    if (client.writeMultipleRegisters(slave_id, 500, big_data.registers().data(), 4) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 500, big_data.registers().data(), 4) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t reg[4];
         client.readHoldingRegisters(slave_id, 500, reg, 4);
         int64_t read_big = registersToInt64(reg);

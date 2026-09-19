@@ -7,16 +7,17 @@
 #ifndef EMS_NET_MODBUS_DATA_H
 #define EMS_NET_MODBUS_DATA_H
 
-#include <cstdint>
-#include <array>
 #include <modbuspp/data.h>
+
+#include <array>
+#include <cstdint>
 
 namespace ems {
 namespace net {
 namespace modbus {
 
 class ModbusDataInt16 {
-public:
+   public:
     ModbusDataInt16() : value_(0) {}
     explicit ModbusDataInt16(int16_t v) : value_(v) {}
 
@@ -29,12 +30,12 @@ public:
     void updateValue() {}
     void updateRegisters() {}
 
-private:
+   private:
     int16_t value_;
 };
 
 class ModbusDataUInt16 {
-public:
+   public:
     ModbusDataUInt16() : value_(0) {}
     explicit ModbusDataUInt16(uint16_t v) : value_(v) {}
 
@@ -47,13 +48,13 @@ public:
     void updateValue() {}
     void updateRegisters() {}
 
-private:
+   private:
     uint16_t value_;
 };
 
-template<typename T, Modbus::Endian E = Modbus::EndianBig>
+template <typename T, Modbus::Endian E = Modbus::EndianBig>
 class ModbusDataWrapper {
-public:
+   public:
     ModbusDataWrapper() : data_() {}
     explicit ModbusDataWrapper(T v) : data_(v) {}
 
@@ -66,40 +67,36 @@ public:
     void updateValue() { data_.updateValue(); }
     void updateRegisters() { data_.updateRegisters(); }
 
-    uint16_t toRegister() const {
-        return registers()[0];
-    }
-    void fromRegister(uint16_t reg) {
-        registers()[0] = reg;
-    }
+    uint16_t toRegister() const { return registers()[0]; }
+    void fromRegister(uint16_t reg) { registers()[0] = reg; }
 
     Modbus::Data<T, E>& data() { return data_; }
     const Modbus::Data<T, E>& data() const { return data_; }
 
-private:
+   private:
     Modbus::Data<T, E> data_;
 };
 
-template<Modbus::Endian E = Modbus::EndianBig>
+template <Modbus::Endian E = Modbus::EndianBig>
 using ModbusInt32 = ModbusDataWrapper<int32_t, E>;
 
-template<Modbus::Endian E = Modbus::EndianBig>
+template <Modbus::Endian E = Modbus::EndianBig>
 using ModbusUInt32 = ModbusDataWrapper<uint32_t, E>;
 
-template<Modbus::Endian E = Modbus::EndianBig>
+template <Modbus::Endian E = Modbus::EndianBig>
 using ModbusFloat = ModbusDataWrapper<float, E>;
 
-template<Modbus::Endian E = Modbus::EndianBig>
+template <Modbus::Endian E = Modbus::EndianBig>
 using ModbusDouble = ModbusDataWrapper<double, E>;
 
-template<Modbus::Endian E = Modbus::EndianBig>
+template <Modbus::Endian E = Modbus::EndianBig>
 using ModbusInt64 = ModbusDataWrapper<int64_t, E>;
 
-template<Modbus::Endian E = Modbus::EndianBig>
+template <Modbus::Endian E = Modbus::EndianBig>
 using ModbusUInt64 = ModbusDataWrapper<uint64_t, E>;
 
 class ModbusRegister {
-public:
+   public:
     ModbusRegister() : value_(0) {}
     explicit ModbusRegister(uint16_t v) : value_(v) {}
 
@@ -116,12 +113,12 @@ public:
     const uint16_t* registers() const { return &value_; }
     static constexpr size_t registerCount() { return 1; }
 
-private:
+   private:
     uint16_t value_;
 };
 
 class ModbusRegister32 {
-public:
+   public:
     ModbusRegister32() { value_[0] = value_[1] = 0; }
 
     uint32_t valueU32(Modbus::Endian e = Modbus::EndianBig) const;
@@ -136,12 +133,12 @@ public:
     const uint16_t* registers() const { return value_; }
     static constexpr size_t registerCount() { return 2; }
 
-private:
+   private:
     uint16_t value_[2];
 };
 
 class ModbusRegister64 {
-public:
+   public:
     ModbusRegister64() { value_[0] = value_[1] = value_[2] = value_[3] = 0; }
 
     uint64_t valueU64(Modbus::Endian e = Modbus::EndianBig) const;
@@ -156,12 +153,12 @@ public:
     const uint16_t* registers() const { return value_; }
     static constexpr size_t registerCount() { return 4; }
 
-private:
+   private:
     uint16_t value_[4];
 };
 
-} // namespace modbus
-} // namespace net
-} // namespace ems
+}  // namespace modbus
+}  // namespace net
+}  // namespace ems
 
-#endif // EMS_NET_MODBUS_DATA_H
+#endif  // EMS_NET_MODBUS_DATA_H

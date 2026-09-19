@@ -8,10 +8,10 @@
  */
 #pragma once
 
+#include <common/core/identity.h>
+
 #include <optional>
 #include <string>
-
-#include <common/core/identity.h>
 
 namespace ems::model {
 
@@ -19,9 +19,9 @@ namespace ems::model {
 enum class AssetType : std::uint8_t {
     Station = 0,  ///< 站
     EssUnit = 1,  ///< 储能单元（调度资源，不固定等同一柜一 PCS）
-    Device  = 2,  ///< 设备
-    Part    = 3,  ///< 部件（如电池簇，可有测点无独立通信设备）
-    Other   = 99
+    Device = 2,   ///< 设备
+    Part = 3,     ///< 部件（如电池簇，可有测点无独立通信设备）
+    Other = 99
 };
 
 /// 资产节点（树）
@@ -36,11 +36,11 @@ struct AssetNode {
 
 /// 储能单元扩展属性（asset_type == EssUnit 时有效）
 struct EssUnitInfo {
-    core::AssetId asset_id;      ///< 对应资产节点
-    std::string timezone;        ///< 站时区（IANA 名称）
-    std::string grid_access_point;  ///< 接入点
-    double rated_power_kw{0.0};     ///< 额定功率
-    double rated_capacity_kwh{0.0}; ///< 额定容量
+    core::AssetId asset_id;          ///< 对应资产节点
+    std::string timezone;            ///< 站时区（IANA 名称）
+    std::string grid_access_point;   ///< 接入点
+    double rated_power_kw{0.0};      ///< 额定功率
+    double rated_capacity_kwh{0.0};  ///< 额定容量
 };
 
 }  // namespace ems::model

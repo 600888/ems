@@ -7,12 +7,13 @@
  */
 #pragma once
 
+#include <cstdint>
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
-#include <cstdint>
-#include "device.h"
+
 #include "channel.h"
+#include "device.h"
 #include "point.h"
 
 namespace ems {
@@ -22,13 +23,13 @@ namespace db {
  * @brief 数据库连接配置
  */
 struct DbConfig {
-    std::string host     = "127.0.0.1";
-    int         port     = 3306;
-    std::string user     = "root";
+    std::string host = "127.0.0.1";
+    int port = 3306;
+    std::string user = "root";
     std::string password = "";
-    std::string dbname   = "ems";
-    int         timeout  = 5;
-    int         conn_num = 4;
+    std::string dbname = "ems";
+    int timeout = 5;
+    int conn_num = 4;
 };
 
 /**
@@ -36,13 +37,13 @@ struct DbConfig {
  */
 struct CollectImportData {
     std::string point_code;
-    int         point_type;      // 0=YC,1=YX,2=YK,3=YT
-    int64_t     channel_id;
-    int64_t     device_id;
-    int64_t     raw_value;       // 原始报文值
-    double      eng_value;       // 工程变换值
-    int         quality;         // 数据品质
-    std::string collect_time;    // 采集时间 "2006-01-02 15:04:05"
+    int point_type;  // 0=YC,1=YX,2=YK,3=YT
+    int64_t channel_id;
+    int64_t device_id;
+    int64_t raw_value;         // 原始报文值
+    double eng_value;          // 工程变换值
+    int quality;               // 数据品质
+    std::string collect_time;  // 采集时间 "2006-01-02 15:04:05"
 };
 
 /**
@@ -52,7 +53,7 @@ struct CollectImportData {
  * 线程安全：每个线程应持有独立实例或外部同步。
  */
 class DbManager {
-public:
+   public:
     DbManager();
     ~DbManager();
 
@@ -97,11 +98,11 @@ public:
     // ============================================================
 
     std::vector<device> query_all_devices();
-    device              query_device_by_id(int64_t id);
-    device              query_device_by_code(const std::string& code);
-    bool                      insert_device(const device& device);
-    bool                      update_device(const device& device);
-    bool                      delete_device(int64_t id);
+    device query_device_by_id(int64_t id);
+    device query_device_by_code(const std::string& code);
+    bool insert_device(const device& device);
+    bool update_device(const device& device);
+    bool delete_device(int64_t id);
 
     // ============================================================
     // 通道操作
@@ -109,11 +110,11 @@ public:
 
     std::vector<channel> query_all_channels();
     std::vector<channel> query_channels_by_device(int64_t device_id);
-    channel              query_channel_by_id(int64_t id);
-    channel              query_channel_by_code(const std::string& code);
-    bool                       insert_channel(const channel& channel);
-    bool                       update_channel(const channel& channel);
-    bool                       delete_channel(int64_t id);
+    channel query_channel_by_id(int64_t id);
+    channel query_channel_by_code(const std::string& code);
+    bool insert_channel(const channel& channel);
+    bool update_channel(const channel& channel);
+    bool delete_channel(int64_t id);
 
     // ============================================================
     // 测点配置操作
@@ -135,7 +136,7 @@ public:
      */
     int batch_import_collect_data(const std::vector<CollectImportData>& data_list);
 
-private:
+   private:
     class Impl;
     std::unique_ptr<Impl> impl_;
 };
@@ -190,5 +191,5 @@ bool ensure_database(const DbConfig& config);
  */
 bool ensure_database_with_seed(const DbConfig& config);
 
-} // namespace db
-} // namespace ems
+}  // namespace db
+}  // namespace ems

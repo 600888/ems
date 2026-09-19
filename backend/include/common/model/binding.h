@@ -8,33 +8,36 @@
  */
 #pragma once
 
-#include <string>
-#include <vector>
-
 #include <common/core/identity.h>
 #include <common/model/channel.h>
+
+#include <string>
+#include <vector>
 
 namespace ems::model {
 
 /// 绑定支持的操作集合
 enum class BindingOp : std::uint8_t {
-    Collect  = 0,  ///< 采集（南向遥测/状态）
-    Control  = 1,  ///< 控制（南向命令）
-    Forward  = 2   ///< 转发（北向）
+    Collect = 0,  ///< 采集（南向遥测/状态）
+    Control = 1,  ///< 控制（南向命令）
+    Forward = 2   ///< 转发（北向）
 };
 
 inline const char* to_string(BindingOp op) noexcept {
     switch (op) {
-        case BindingOp::Collect: return "Collect";
-        case BindingOp::Control: return "Control";
-        case BindingOp::Forward: return "Forward";
+        case BindingOp::Collect:
+            return "Collect";
+        case BindingOp::Control:
+            return "Control";
+        case BindingOp::Forward:
+            return "Forward";
     }
     return "Unknown";
 }
 
 /// 设备-通道绑定（多对多；协议地址是绑定的属性）
 struct DeviceChannelBinding {
-    std::string binding_id;          ///< 稳定绑定 ID
+    std::string binding_id;  ///< 稳定绑定 ID
     core::DeviceId device_id;
     core::ChannelId channel_id;
     std::vector<BindingOp> operations;  ///< 操作集合
@@ -45,20 +48,20 @@ struct DeviceChannelBinding {
 
 /// 厂家点路由：厂家点身份 → 标准点（南向）
 struct VendorPointRoute {
-    std::string route_id;         ///< 稳定路由 ID
-    core::PointId point_id;       ///< 标准点身份（独立于通信路径）
-    std::string binding_id;       ///< 引用设备-通道绑定
-    std::string vendor_address;   ///< 厂家点身份/寄存器地址等
-    double scale{1.0};            ///< 逻辑转换：标准值 = 原始值 * scale + offset
+    std::string route_id;        ///< 稳定路由 ID
+    core::PointId point_id;      ///< 标准点身份（独立于通信路径）
+    std::string binding_id;      ///< 引用设备-通道绑定
+    std::string vendor_address;  ///< 厂家点身份/寄存器地址等
+    double scale{1.0};           ///< 逻辑转换：标准值 = 原始值 * scale + offset
     double offset{0.0};
-    bool writable{false};         ///< 是否可作为控制下发路径
+    bool writable{false};  ///< 是否可作为控制下发路径
     bool enabled{true};
 };
 
 /// 转发方向
 enum class ForwardDirection : std::uint8_t {
-    Upstream      = 0,  ///< 上送北向
-    Downstream    = 1,  ///< 北向下写
+    Upstream = 0,    ///< 上送北向
+    Downstream = 1,  ///< 北向下写
     Bidirectional = 2
 };
 

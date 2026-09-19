@@ -1,4 +1,5 @@
 #include "rtdb/rtdb_cache.h"
+
 #include <algorithm>
 
 namespace ems {
@@ -247,9 +248,7 @@ bool RtDbConfigCache::setPointConfig(const PointConfig& config) {
 
 bool RtDbConfigCache::deletePointConfig(const std::string& code) {
     std::unique_lock<std::shared_mutex> lock(mutex_);
-    return ycConfigs_.erase(code) > 0 ||
-           yxConfigs_.erase(code) > 0 ||
-           ykConfigs_.erase(code) > 0 ||
+    return ycConfigs_.erase(code) > 0 || yxConfigs_.erase(code) > 0 || ykConfigs_.erase(code) > 0 ||
            ytConfigs_.erase(code) > 0;
 }
 
@@ -382,8 +381,7 @@ void RtDbPointManager::setConfigCache(std::shared_ptr<RtDbConfigCache> cache) {
     configCache_ = cache;
 }
 
-bool RtDbPointManager::getYcFullPoint(const std::string& code,
-                                      const YcPoint& data,
+bool RtDbPointManager::getYcFullPoint(const std::string& code, const YcPoint& data,
                                       YcFullPoint& fullPoint) const {
     if (!configCache_) {
         return false;
@@ -396,8 +394,7 @@ bool RtDbPointManager::getYcFullPoint(const std::string& code,
     return false;
 }
 
-bool RtDbPointManager::getYxFullPoint(const std::string& code,
-                                      const YxPoint& data,
+bool RtDbPointManager::getYxFullPoint(const std::string& code, const YxPoint& data,
                                       YxFullPoint& fullPoint) const {
     if (!configCache_) {
         return false;
@@ -410,8 +407,7 @@ bool RtDbPointManager::getYxFullPoint(const std::string& code,
     return false;
 }
 
-bool RtDbPointManager::getYkFullPoint(const std::string& code,
-                                      const YkPoint& data,
+bool RtDbPointManager::getYkFullPoint(const std::string& code, const YkPoint& data,
                                       YkFullPoint& fullPoint) const {
     if (!configCache_) {
         return false;
@@ -424,8 +420,7 @@ bool RtDbPointManager::getYkFullPoint(const std::string& code,
     return false;
 }
 
-bool RtDbPointManager::getYtFullPoint(const std::string& code,
-                                      const YtPoint& data,
+bool RtDbPointManager::getYtFullPoint(const std::string& code, const YtPoint& data,
                                       YtFullPoint& fullPoint) const {
     if (!configCache_) {
         return false;
@@ -438,8 +433,8 @@ bool RtDbPointManager::getYtFullPoint(const std::string& code,
     return false;
 }
 
-std::vector<RtDbPointManager::YcFullPoint>
-RtDbPointManager::getYcFullPoints(const std::vector<YcPoint>& dataPoints) {
+std::vector<RtDbPointManager::YcFullPoint> RtDbPointManager::getYcFullPoints(
+    const std::vector<YcPoint>& dataPoints) {
     std::vector<YcFullPoint> result;
 
     if (!configCache_) {
@@ -457,8 +452,8 @@ RtDbPointManager::getYcFullPoints(const std::vector<YcPoint>& dataPoints) {
     return result;
 }
 
-std::vector<RtDbPointManager::YxFullPoint>
-RtDbPointManager::getYxFullPoints(const std::vector<YxPoint>& dataPoints) {
+std::vector<RtDbPointManager::YxFullPoint> RtDbPointManager::getYxFullPoints(
+    const std::vector<YxPoint>& dataPoints) {
     std::vector<YxFullPoint> result;
 
     if (!configCache_) {
@@ -476,8 +471,8 @@ RtDbPointManager::getYxFullPoints(const std::vector<YxPoint>& dataPoints) {
     return result;
 }
 
-std::vector<RtDbPointManager::YkFullPoint>
-RtDbPointManager::getYkFullPoints(const std::vector<YkPoint>& dataPoints) {
+std::vector<RtDbPointManager::YkFullPoint> RtDbPointManager::getYkFullPoints(
+    const std::vector<YkPoint>& dataPoints) {
     std::vector<YkFullPoint> result;
 
     if (!configCache_) {
@@ -495,8 +490,8 @@ RtDbPointManager::getYkFullPoints(const std::vector<YkPoint>& dataPoints) {
     return result;
 }
 
-std::vector<RtDbPointManager::YtFullPoint>
-RtDbPointManager::getYtFullPoints(const std::vector<YtPoint>& dataPoints) {
+std::vector<RtDbPointManager::YtFullPoint> RtDbPointManager::getYtFullPoints(
+    const std::vector<YtPoint>& dataPoints) {
     std::vector<YtFullPoint> result;
 
     if (!configCache_) {
@@ -515,12 +510,12 @@ RtDbPointManager::getYtFullPoints(const std::vector<YtPoint>& dataPoints) {
 }
 
 double RtDbPointManager::transformYcValue(double rawValue,
-                                         const RtDbConfigCache::YcConfig& config) const {
+                                          const RtDbConfigCache::YcConfig& config) const {
     return rawValue * config.mulCoe + config.addCoe;
 }
 
 double RtDbPointManager::transformYtValue(double rawValue,
-                                         const RtDbConfigCache::YtConfig& config) const {
+                                          const RtDbConfigCache::YtConfig& config) const {
     return rawValue * config.mulCoe + config.addCoe;
 }
 
@@ -534,5 +529,5 @@ bool RtDbPointManager::validateYtValue(double value,
     return value >= config.minLimit && value <= config.maxLimit;
 }
 
-}
-}
+}  // namespace rtdb
+}  // namespace ems

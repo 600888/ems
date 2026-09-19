@@ -1,0 +1,46 @@
+# ============================================================================
+# 行尾统一为 LF
+#
+# 背景：本仓库开发环境为 Windows（git 通常配置 core.autocrlf=true），而 C++
+#       目标平台是 EM-1000 / Linux aarch64。core.autocrlf=true 会让 checkout
+#       后的工作区文件变成 CRLF，从而：
+#         1) 与 .clang-format 中的 LineEnding: LF 冲突，每次格式化都把 CRLF
+#            改回 LF，产生无意义的行尾 diff；
+#         2) make format-check 在每次 checkout 之后误报失败。
+#       因此显式声明 text=auto + eol=lf，让工作区与仓库内容保持一致。
+#
+# 影响：索引中原本就已是 LF（git ls-files --eol 显示 i/lf），本文件不改变
+#       已提交内容，只规范工作区。
+# ============================================================================
+
+* text=auto eol=lf
+
+# ---------------------------------------------------------------------------
+# 二进制文件：禁止任何行尾转换
+# ---------------------------------------------------------------------------
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.bmp   binary
+*.svg   binary
+*.pdf   binary
+*.zip   binary
+*.gz    binary
+*.tar   binary
+*.7z    binary
+*.so    binary
+*.a     binary
+*.dll   binary
+*.dylib binary
+*.exe   binary
+*.bin   binary
+*.dat   binary
+
+# ---------------------------------------------------------------------------
+# Windows 脚本保留 CRLF
+# ---------------------------------------------------------------------------
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+*.ps1   text eol=crlf

@@ -12,15 +12,15 @@
  */
 #pragma once
 
-#include <cstdint>
-#include <optional>
-#include <string>
-#include <vector>
-
 #include <common/core/call_context.h>
 #include <common/core/identity.h>
 #include <common/core/result.h>
 #include <common/database/i_transaction.h>
+
+#include <cstdint>
+#include <optional>
+#include <string>
+#include <vector>
 
 namespace ems::database {
 
@@ -31,9 +31,9 @@ namespace ems::database {
 struct ConfigVersionRow {
     std::string scope;
     std::string config_version;
-    std::string base_version;      ///< 编辑基版本（乐观并发检查）
-    std::string payload_json;      ///< 版本化确定性编码的发布载荷
-    std::string checksum;          ///< SHA-256 hex
+    std::string base_version;  ///< 编辑基版本（乐观并发检查）
+    std::string payload_json;  ///< 版本化确定性编码的发布载荷
+    std::string checksum;      ///< SHA-256 hex
     std::string created_by;
     std::int64_t created_at_us{0};
 };
@@ -46,7 +46,7 @@ struct ActiveConfigRow {
 };
 
 class IConfigRepository {
-public:
+   public:
     virtual ~IConfigRepository() = default;
 
     /// 保存不可变配置版本；同版本重复返回幂等成功，同版本不同内容返回 Conflict
@@ -54,9 +54,10 @@ public:
                                              const core::CallContext& ctx) = 0;
 
     /// 读取指定版本配置载荷
-    virtual core::Result<ConfigVersionRow> get_config_version(
-        ITransaction& tx, const std::string& scope, const std::string& config_version,
-        const core::CallContext& ctx) = 0;
+    virtual core::Result<ConfigVersionRow> get_config_version(ITransaction& tx,
+                                                              const std::string& scope,
+                                                              const std::string& config_version,
+                                                              const core::CallContext& ctx) = 0;
 
     /// 条件切换 active；expected_activation_revision 不符返回 Conflict
     virtual core::Result<ActiveConfigRow> activate(ITransaction& tx, const std::string& scope,
@@ -105,7 +106,7 @@ struct CommandResultRow {
 };
 
 class IControlRepository {
-public:
+   public:
     virtual ~IControlRepository() = default;
 
     /// 追加意图；event/intent ID 唯一约束兜底，重复同载荷幂等，异载荷 Conflict
@@ -127,8 +128,9 @@ public:
                                                const core::CallContext& ctx) = 0;
 
     /// 查询稳定 ID 已有结果（提交响应丢失后按原 ID 对账）
-    virtual core::Result<CommandResultRow> find_command_result(
-        ITransaction& tx, const std::string& command_id, const core::CallContext& ctx) = 0;
+    virtual core::Result<CommandResultRow> find_command_result(ITransaction& tx,
+                                                               const std::string& command_id,
+                                                               const core::CallContext& ctx) = 0;
 };
 
 // ---------------------------------------------------------------------------
@@ -147,7 +149,7 @@ struct AlarmEventRow {
 };
 
 class IAlarmRepository {
-public:
+   public:
     virtual ~IAlarmRepository() = default;
 
     /// 追加告警生命周期事件；event_id 唯一，重复幂等
@@ -165,12 +167,12 @@ public:
 // ---------------------------------------------------------------------------
 
 struct OutboxRecord {
-    std::string event_id;          ///< 唯一；同 ID 不同载荷属于冲突
-    std::string business_ref_id;   ///< 业务关联稳定 ID
+    std::string event_id;         ///< 唯一；同 ID 不同载荷属于冲突
+    std::string business_ref_id;  ///< 业务关联稳定 ID
     std::string scope;
     std::string topic;
     std::string schema_version;
-    std::string payload;           ///< 不可变载荷
+    std::string payload;  ///< 不可变载荷
     std::int64_t created_at_us{0};
 };
 
@@ -182,7 +184,7 @@ struct ClaimedOutboxItem {
 };
 
 class IOutboxRepository {
-public:
+   public:
     virtual ~IOutboxRepository() = default;
 
     /// 与业务写同一事务 append；event_id 唯一约束兜底
@@ -190,9 +192,11 @@ public:
                                 const core::CallContext& ctx) = 0;
 
     /// 短事务有界领取（claim_timeout 内到期未确认可被接管）
-    virtual core::Result<std::vector<ClaimedOutboxItem>> claim(
-        ITransaction& tx, const std::string& claimer_id, std::int64_t claim_timeout_ms,
-        std::uint32_t max_items, const core::CallContext& ctx) = 0;
+    virtual core::Result<std::vector<ClaimedOutboxItem>> claim(ITransaction& tx,
+                                                               const std::string& claimer_id,
+                                                               std::int64_t claim_timeout_ms,
+                                                               std::uint32_t max_items,
+                                                               const core::CallContext& ctx) = 0;
 
     /// 确认发布；校验领取令牌，防止旧领取者覆盖新状态
     virtual core::Status mark_published(ITransaction& tx, std::int64_t outbox_id,

@@ -14,7 +14,7 @@
 namespace ems::config {
 
 class IConfigValidator {
-public:
+   public:
     virtual ~IConfigValidator() = default;
 
     /// 校验候选完整快照；聚合有上限的字段错误，不返回首个 bool

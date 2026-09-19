@@ -19,8 +19,7 @@ namespace {
 constexpr std::size_t kMaxIssues = 256;
 
 /// 资产环检测：从根出发 DFS，沿 parent 链检测回边
-bool detect_asset_cycle(const ModelCatalog& catalog,
-                        std::vector<ValidationIssue>& issues) {
+bool detect_asset_cycle(const ModelCatalog& catalog, std::vector<ValidationIssue>& issues) {
     std::unordered_map<std::string, int> color;  // 0=未访问 1=在栈 2=完成
     bool cyclic = false;
     for (const auto& asset : catalog.assets) {
@@ -44,9 +43,8 @@ bool detect_asset_cycle(const ModelCatalog& catalog,
         if (cur != nullptr && color[cur->asset_id.value()] == 1) {
             // 回到栈中节点：成环
             cyclic = true;
-            issues.push_back({validation_code::kAssetCycle,
-                              cur->asset_id.value(), "parent_asset_id",
-                              "资产引用成环"});
+            issues.push_back({validation_code::kAssetCycle, cur->asset_id.value(),
+                              "parent_asset_id", "资产引用成环"});
         }
         for (auto* n : stack) {
             color[n->asset_id.value()] = 2;
@@ -59,15 +57,19 @@ bool detect_asset_cycle(const ModelCatalog& catalog,
 
 bool value_matches_type(const PointValue& value, ValueType type) noexcept {
     switch (type) {
-        case ValueType::Bool:   return std::holds_alternative<bool>(value);
-        case ValueType::Int64:  return std::holds_alternative<std::int64_t>(value);
-        case ValueType::UInt64: return std::holds_alternative<std::uint64_t>(value);
+        case ValueType::Bool:
+            return std::holds_alternative<bool>(value);
+        case ValueType::Int64:
+            return std::holds_alternative<std::int64_t>(value);
+        case ValueType::UInt64:
+            return std::holds_alternative<std::uint64_t>(value);
         case ValueType::Double: {
             if (!std::holds_alternative<double>(value)) return false;
             const double d = std::get<double>(value);
             return std::isfinite(d);  // 禁止 NaN/Inf
         }
-        case ValueType::String: return std::holds_alternative<std::string>(value);
+        case ValueType::String:
+            return std::holds_alternative<std::string>(value);
     }
     return false;
 }
@@ -80,8 +82,8 @@ void ModelCatalog::add_issue(std::vector<ValidationIssue>& issues, const char* c
     auto key = object_id + "|" + code + "|" + field_path;
     if (!issued_codes_.insert(std::move(key)).second) return;
     if (issues.size() == kMaxIssues - 1) {
-        issues.push_back({validation_code::kInvalidValue, "", "",
-                          "校验错误数超过上限，报告被截断"});
+        issues.push_back(
+            {validation_code::kInvalidValue, "", "", "校验错误数超过上限，报告被截断"});
         return;
     }
     issues.push_back({code, object_id, field_path, reason});
@@ -110,8 +112,8 @@ ValidationReport ModelCatalog::build_indexes() {
             continue;
         }
         if (!asset_index_.emplace(a.asset_id.value(), i).second) {
-            add_issue(issues, validation_code::kDuplicateIdentity, a.asset_id.value(),
-                      "asset_id", "资产 ID 重复");
+            add_issue(issues, validation_code::kDuplicateIdentity, a.asset_id.value(), "asset_id",
+                      "资产 ID 重复");
         }
     }
     for (std::size_t i = 0; i < device_types.size(); ++i) {
@@ -133,8 +135,8 @@ ValidationReport ModelCatalog::build_indexes() {
             continue;
         }
         if (!device_index_.emplace(d.device_id.value(), i).second) {
-            add_issue(issues, validation_code::kDuplicateIdentity, d.device_id.value(),
-                      "device_id", "设备 ID 重复");
+            add_issue(issues, validation_code::kDuplicateIdentity, d.device_id.value(), "device_id",
+                      "设备 ID 重复");
             continue;
         }
         device_bindings_index_.emplace(d.device_id.value(), std::vector<std::size_t>{});
@@ -146,8 +148,8 @@ ValidationReport ModelCatalog::build_indexes() {
             continue;
         }
         if (!point_index_.emplace(p.point_id.value(), i).second) {
-            add_issue(issues, validation_code::kDuplicateIdentity, p.point_id.value(),
-                      "point_id", "点 ID 重复");
+            add_issue(issues, validation_code::kDuplicateIdentity, p.point_id.value(), "point_id",
+                      "点 ID 重复");
             continue;
         }
         asset_points_index_[p.asset_id.value()].push_back(i);
@@ -170,8 +172,8 @@ ValidationReport ModelCatalog::build_indexes() {
             continue;
         }
         if (!binding_index_.emplace(b.binding_id, i).second) {
-            add_issue(issues, validation_code::kDuplicateIdentity, b.binding_id,
-                      "binding_id", "绑定 ID 重复");
+            add_issue(issues, validation_code::kDuplicateIdentity, b.binding_id, "binding_id",
+                      "绑定 ID 重复");
             continue;
         }
         auto it = device_bindings_index_.find(b.device_id.value());
@@ -213,8 +215,8 @@ ValidationReport ModelCatalog::build_indexes() {
     for (const auto& d : devices) {
         if (d.device_id.empty() || !device_index_.count(d.device_id.value())) continue;
         if (!asset_index_.count(d.asset_id.value())) {
-            add_issue(issues, validation_code::kMissingReference, d.device_id.value(),
-                      "asset_id", "设备所属资产不存在: " + d.asset_id.value());
+            add_issue(issues, validation_code::kMissingReference, d.device_id.value(), "asset_id",
+                      "设备所属资产不存在: " + d.asset_id.value());
         }
         if (!device_type_index_.count(d.type_version_id)) {
             add_issue(issues, validation_code::kVersionMismatch, d.device_id.value(),
@@ -224,12 +226,12 @@ ValidationReport ModelCatalog::build_indexes() {
     for (const auto& p : points) {
         if (p.point_id.empty() || !point_index_.count(p.point_id.value())) continue;
         if (!asset_index_.count(p.asset_id.value())) {
-            add_issue(issues, validation_code::kMissingReference, p.point_id.value(),
-                      "asset_id", "点所属资产不存在: " + p.asset_id.value());
+            add_issue(issues, validation_code::kMissingReference, p.point_id.value(), "asset_id",
+                      "点所属资产不存在: " + p.asset_id.value());
         }
         if (p.code.empty()) {
-            add_issue(issues, validation_code::kInvalidValue, p.point_id.value(),
-                      "code", "点业务编码为空");
+            add_issue(issues, validation_code::kInvalidValue, p.point_id.value(), "code",
+                      "点业务编码为空");
         }
         // 命令反馈依赖：feedback_of 必须指向存在的命令点
         if (p.feedback_of.has_value()) {
@@ -253,23 +255,22 @@ ValidationReport ModelCatalog::build_indexes() {
         for (const auto& b : bindings) {
             if (b.binding_id.empty() || !binding_index_.count(b.binding_id)) continue;
             if (!device_index_.count(b.device_id.value())) {
-                add_issue(issues, validation_code::kMissingReference, b.binding_id,
-                          "device_id", "绑定的设备不存在: " + b.device_id.value());
+                add_issue(issues, validation_code::kMissingReference, b.binding_id, "device_id",
+                          "绑定的设备不存在: " + b.device_id.value());
             }
             if (!channel_index_.count(b.channel_id.value())) {
-                add_issue(issues, validation_code::kMissingReference, b.binding_id,
-                          "channel_id", "绑定的通道不存在: " + b.channel_id.value());
+                add_issue(issues, validation_code::kMissingReference, b.binding_id, "channel_id",
+                          "绑定的通道不存在: " + b.channel_id.value());
             }
             if (b.operations.empty()) {
-                add_issue(issues, validation_code::kInvalidValue, b.binding_id,
-                          "operations", "绑定操作集合为空");
+                add_issue(issues, validation_code::kInvalidValue, b.binding_id, "operations",
+                          "绑定操作集合为空");
             }
             std::string pair_key = b.device_id.value() + "|" + b.channel_id.value();
             auto it = pair_seen.find(pair_key);
             if (it != pair_seen.end()) {
                 add_issue(issues, validation_code::kDuplicateBinding, b.binding_id,
-                          "device_id/channel_id",
-                          "同设备同通道重复绑定，另一绑定: " + it->second);
+                          "device_id/channel_id", "同设备同通道重复绑定，另一绑定: " + it->second);
             } else {
                 pair_seen.emplace(std::move(pair_key), b.binding_id);
             }
@@ -282,16 +283,16 @@ ValidationReport ModelCatalog::build_indexes() {
         for (const auto& r : vendor_routes) {
             if (r.route_id.empty()) continue;
             if (!point_index_.count(r.point_id.value())) {
-                add_issue(issues, validation_code::kMissingReference, r.route_id,
-                          "point_id", "路由引用的标准点不存在: " + r.point_id.value());
+                add_issue(issues, validation_code::kMissingReference, r.route_id, "point_id",
+                          "路由引用的标准点不存在: " + r.point_id.value());
             }
             if (!binding_index_.count(r.binding_id)) {
-                add_issue(issues, validation_code::kMissingReference, r.route_id,
-                          "binding_id", "路由引用的绑定不存在: " + r.binding_id);
+                add_issue(issues, validation_code::kMissingReference, r.route_id, "binding_id",
+                          "路由引用的绑定不存在: " + r.binding_id);
             }
             if (r.vendor_address.empty()) {
-                add_issue(issues, validation_code::kInvalidValue, r.route_id,
-                          "vendor_address", "厂家点地址为空");
+                add_issue(issues, validation_code::kInvalidValue, r.route_id, "vendor_address",
+                          "厂家点地址为空");
             }
             std::string key = r.point_id.value() + "|" + r.binding_id + "|" + r.vendor_address;
             auto it = route_seen.find(key);
@@ -309,12 +310,12 @@ ValidationReport ModelCatalog::build_indexes() {
     for (const auto& m : forwarding_maps) {
         if (m.map_id.empty()) continue;
         if (!point_index_.count(m.point_id.value())) {
-            add_issue(issues, validation_code::kMissingReference, m.map_id,
-                      "point_id", "转发映射引用的标准点不存在: " + m.point_id.value());
+            add_issue(issues, validation_code::kMissingReference, m.map_id, "point_id",
+                      "转发映射引用的标准点不存在: " + m.point_id.value());
         }
         if (m.north_address.empty()) {
-            add_issue(issues, validation_code::kInvalidValue, m.map_id,
-                      "north_address", "北向协议地址为空");
+            add_issue(issues, validation_code::kInvalidValue, m.map_id, "north_address",
+                      "北向协议地址为空");
         }
     }
 
@@ -367,12 +368,14 @@ const DeviceChannelBinding* ModelCatalog::find_binding(const std::string& bindin
     return it == binding_index_.end() ? nullptr : &bindings[it->second];
 }
 
-const CapabilityDefinition* ModelCatalog::find_capability(const std::string& capability_code) const {
+const CapabilityDefinition* ModelCatalog::find_capability(
+    const std::string& capability_code) const {
     auto it = capability_index_.find(capability_code);
     return it == capability_index_.end() ? nullptr : &capabilities[it->second];
 }
 
-const DeviceTypeDefinition* ModelCatalog::find_device_type(const std::string& type_version_id) const {
+const DeviceTypeDefinition* ModelCatalog::find_device_type(
+    const std::string& type_version_id) const {
     auto it = device_type_index_.find(type_version_id);
     return it == device_type_index_.end() ? nullptr : &device_types[it->second];
 }

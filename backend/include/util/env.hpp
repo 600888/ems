@@ -1,8 +1,8 @@
 #pragma once
 #include <cstdlib>
+#include <filesystem>
 #include <fstream>
 #include <string>
-#include <filesystem>
 
 #ifndef VAR_ENV
 #define VAR_ENV "EMS_ROOT"
@@ -12,8 +12,7 @@
 #define DEFAULT_ROOT_DIR "/home/cdy/ems/backend/build"
 #endif
 
-inline std::string rootPath()
-{
+inline std::string rootPath() {
     std::string rootDir;
     const char* envSecuRoot = getenv(VAR_ENV);
     if (nullptr == envSecuRoot) {
@@ -46,8 +45,7 @@ inline std::string downloadBasePath() { return rootPath() + "/download/"; }
 inline std::string wwwPackagePath() { return rootPath() + "/www/"; }
 
 /// @brief modbus 转发配置路径
-inline std::string transpondConfDir()
-{
+inline std::string transpondConfDir() {
     std::string path = confBasePath() + "/comm/protocol/transpond/";
     if (!std::filesystem::exists(path)) {
         std::filesystem::create_directories(path);
@@ -56,8 +54,7 @@ inline std::string transpondConfDir()
 }
 
 /// @brief ems_mqtt_cloud 配置路径
-inline std::string emsMqttCloudConfDir()
-{
+inline std::string emsMqttCloudConfDir() {
     std::string path = confBasePath() + "/ems_mqtt_cloud/";
     if (!std::filesystem::exists(path)) {
         std::filesystem::create_directories(path);
@@ -66,8 +63,7 @@ inline std::string emsMqttCloudConfDir()
 }
 
 /// @brief ems_provd 配置路径
-inline std::string emsProvdConfDir()
-{
+inline std::string emsProvdConfDir() {
     std::string path = confBasePath() + "/ems_provd/";
     if (!std::filesystem::exists(path)) {
         std::filesystem::create_directories(path);
@@ -76,8 +72,7 @@ inline std::string emsProvdConfDir()
 }
 
 /// @brief 主接线图备份路径
-inline std::string wiringBackupPath()
-{
+inline std::string wiringBackupPath() {
     std::string path = dataPath() + "/wiring_backup/";
     if (!std::filesystem::exists(path)) {
         std::filesystem::create_directories(path);
@@ -86,8 +81,7 @@ inline std::string wiringBackupPath()
 }
 
 /// @brief python 脚本路径
-inline std::string pythonScriptPath()
-{
+inline std::string pythonScriptPath() {
     std::string path = rootPath() + "/python/";
     if (!std::filesystem::exists(path)) {
         std::filesystem::create_directories(path);
@@ -96,8 +90,7 @@ inline std::string pythonScriptPath()
 }
 
 /// @brief 策略模型python脚本路径
-inline std::string strategyModelPythonScriptPath()
-{
+inline std::string strategyModelPythonScriptPath() {
     std::string path = pythonScriptPath() + "/proj/";
     if (!std::filesystem::exists(path)) {
         std::filesystem::create_directories(path);
@@ -106,8 +99,7 @@ inline std::string strategyModelPythonScriptPath()
 }
 
 /// @brief ems升级文件路径
-inline std::string emsUpgradeFolderPath()
-{
+inline std::string emsUpgradeFolderPath() {
     std::string path = rootPath() + "/upgrade/";
     if (!std::filesystem::exists(path)) {
         std::filesystem::create_directories(path);

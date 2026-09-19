@@ -8,12 +8,6 @@
  */
 #pragma once
 
-#include <cstddef>
-#include <optional>
-#include <unordered_map>
-#include <unordered_set>
-#include <vector>
-
 #include <common/core/identity.h>
 #include <common/model/asset.h>
 #include <common/model/binding.h>
@@ -23,11 +17,17 @@
 #include <common/model/point.h>
 #include <common/model/validation.h>
 
+#include <cstddef>
+#include <optional>
+#include <unordered_map>
+#include <unordered_set>
+#include <vector>
+
 namespace ems::model {
 
 /// 一份完整候选/生效配置的模型聚合
 class ModelCatalog {
-public:
+   public:
     // ---- 数据集合（发布前可填充；build_indexes 后视作只读）----
     std::vector<AssetNode> assets;
     std::vector<EssUnitInfo> ess_units;
@@ -65,7 +65,7 @@ public:
     /// 资产的点列表
     std::vector<const Point*> points_of_asset(const core::AssetId& asset_id) const;
 
-private:
+   private:
     void add_issue(std::vector<ValidationIssue>& issues, const char* code,
                    const std::string& object_id, const std::string& field_path,
                    const std::string& reason) const;
@@ -81,7 +81,8 @@ private:
     std::unordered_map<std::string, std::vector<std::size_t>> device_bindings_index_;
     /// asset_id → 点下标集合
     std::unordered_map<std::string, std::vector<std::size_t>> asset_points_index_;
-    std::unordered_set<std::string> mutable issued_codes_;  ///< 校验去重（同对象同码同字段只报一次）
+    std::unordered_set<
+        std::string> mutable issued_codes_;  ///< 校验去重（同对象同码同字段只报一次）
 
     bool indexed_{false};
 };

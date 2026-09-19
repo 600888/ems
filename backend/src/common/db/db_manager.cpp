@@ -8,13 +8,15 @@
  */
 #include "db/db_manager.h"
 
+#include <unistd.h>
+
+#include <array>  // for YLT_REFL macro (std::array)
 #include <cstdlib>
 #include <cstring>
 #include <fstream>
-#include <sstream>
-#include <unistd.h>
-#include <array>          // for YLT_REFL macro (std::array)
 #include <nlohmann/json.hpp>
+#include <sstream>
+
 #include "util/conf.hpp"
 
 // ============================================================
@@ -27,46 +29,32 @@
 // 这些宏在 struct 所在的命名空间上下文中展开
 // ============================================================
 namespace ems::db {
-YLT_REFL(device,
-    id, code, name, device_type, group_id, description, enable, created_at, updated_at);
+YLT_REFL(device, id, code, name, device_type, group_id, description, enable, created_at,
+         updated_at);
 
-YLT_REFL(channel,
-    id, code, name, device_id, protocol_type, conn_type,
-    ip, port, com_port, baud_rate, data_bits, stop_bits, parity,
-    rtu_addr, timeout, enable, created_at, updated_at);
+YLT_REFL(channel, id, code, name, device_id, protocol_type, conn_type, ip, port, com_port,
+         baud_rate, data_bits, stop_bits, parity, rtu_addr, timeout, enable, created_at,
+         updated_at);
 
-YLT_REFL(point_yc,
-    id, code, name, channel_id, device_id,
-    protocol_type, func_code, slave_id, reg_addr, bit_position,
-    data_id, casdu, ioa, object_ref,
-    decode_code, mul_coe, add_coe, min_limit, max_limit, unit,
-    enable, description, created_at, updated_at);
+YLT_REFL(point_yc, id, code, name, channel_id, device_id, protocol_type, func_code, slave_id,
+         reg_addr, bit_position, data_id, casdu, ioa, object_ref, decode_code, mul_coe, add_coe,
+         min_limit, max_limit, unit, enable, description, created_at, updated_at);
 
-YLT_REFL(point_yx,
-    id, code, name, channel_id, device_id,
-    protocol_type, func_code, slave_id, reg_addr, bit_position,
-    data_id, casdu, ioa, object_ref,
-    decode_code, bit, reverse_flag,
-    enable, description, created_at, updated_at);
+YLT_REFL(point_yx, id, code, name, channel_id, device_id, protocol_type, func_code, slave_id,
+         reg_addr, bit_position, data_id, casdu, ioa, object_ref, decode_code, bit, reverse_flag,
+         enable, description, created_at, updated_at);
 
-YLT_REFL(point_yk,
-    id, code, name, channel_id, device_id,
-    protocol_type, func_code, slave_id, reg_addr, bit_position,
-    data_id, casdu, ioa, object_ref,
-    decode_code, bit, command_type, related_yx_id,
-    enable, description, created_at, updated_at);
+YLT_REFL(point_yk, id, code, name, channel_id, device_id, protocol_type, func_code, slave_id,
+         reg_addr, bit_position, data_id, casdu, ioa, object_ref, decode_code, bit, command_type,
+         related_yx_id, enable, description, created_at, updated_at);
 
-YLT_REFL(point_yt,
-    id, code, name, channel_id, device_id,
-    protocol_type, func_code, slave_id, reg_addr, bit_position,
-    data_id, casdu, ioa, object_ref,
-    decode_code, mul_coe, add_coe, min_limit, max_limit, unit,
-    enable, description, created_at, updated_at);
+YLT_REFL(point_yt, id, code, name, channel_id, device_id, protocol_type, func_code, slave_id,
+         reg_addr, bit_position, data_id, casdu, ioa, object_ref, decode_code, mul_coe, add_coe,
+         min_limit, max_limit, unit, enable, description, created_at, updated_at);
 
-YLT_REFL(point_collect,
-    id, point_code, point_type, channel_id, device_id,
-    raw_value, eng_value, quality, collect_time);
-} // namespace ems::db
+YLT_REFL(point_collect, id, point_code, point_type, channel_id, device_id, raw_value, eng_value,
+         quality, collect_time);
+}  // namespace ems::db
 
 // ============================================================
 // 条件编译 MySQL/SQLite 后端
@@ -74,9 +62,10 @@ YLT_REFL(point_collect,
 // ============================================================
 #ifdef EMS_DB_HAS_MYSQL
 #include <mysql/mysql.h>
-#include <ormpp/mysql.hpp>
+
 #include <ormpp/dbng.hpp>
 #include <ormpp/entity.hpp>
+#include <ormpp/mysql.hpp>
 #endif
 
 #if __has_include(<sqlite3.h>)
@@ -91,7 +80,7 @@ namespace db {
 // 内部实现类 (PIMPL)
 // ============================================================
 class DbManager::Impl {
-public:
+   public:
     ~Impl() { disconnect(); }
 
     // ---- MySQL 连接 ----
@@ -99,9 +88,9 @@ public:
 #ifdef EMS_DB_HAS_MYSQL
         using_mysql_ = true;
 
-        if (auto tp = std::make_tuple(cfg.host, cfg.user, cfg.password,
-                                       cfg.dbname, std::optional<int>(cfg.timeout),
-                                       std::optional<int>(cfg.port));
+        if (auto tp =
+                std::make_tuple(cfg.host, cfg.user, cfg.password, cfg.dbname,
+                                std::optional<int>(cfg.timeout), std::optional<int>(cfg.port));
             !mysql_.connect(tp)) {
             last_err_ = mysql_.get_last_error();
             return false;
@@ -118,9 +107,8 @@ public:
 #ifdef EMS_DB_HAS_SQLITE
         using_mysql_ = false;
 
-        if (auto tp = std::make_tuple(std::string(""), std::string(""),
-                                       std::string(""), db_path,
-                                       std::optional<int>{}, std::optional<int>{});
+        if (auto tp = std::make_tuple(std::string(""), std::string(""), std::string(""), db_path,
+                                      std::optional<int>{}, std::optional<int>{});
             !sqlite_.connect(tp)) {
             last_err_ = sqlite_.get_last_error();
             return false;
@@ -145,7 +133,7 @@ public:
     }
 
     bool is_connected() const {
-        return true; // ormpp 无 is_connected，由业务层维护
+        return true;  // ormpp 无 is_connected，由业务层维护
     }
 
     std::string last_error() const { return last_err_; }
@@ -196,9 +184,8 @@ public:
 
     bool delete_device(int64_t id) {
 #ifdef EMS_DB_HAS_MYSQL
-        return exec_write([this, id]() {
-            return mysql_.delete_records_s<device>("id=" + std::to_string(id));
-        });
+        return exec_write(
+            [this, id]() { return mysql_.delete_records_s<device>("id=" + std::to_string(id)); });
 #else
         return false;
 #endif
@@ -258,9 +245,8 @@ public:
 
     bool delete_channel(int64_t id) {
 #ifdef EMS_DB_HAS_MYSQL
-        return exec_write([this, id]() {
-            return mysql_.delete_records_s<channel>("id=" + std::to_string(id));
-        });
+        return exec_write(
+            [this, id]() { return mysql_.delete_records_s<channel>("id=" + std::to_string(id)); });
 #else
         return false;
 #endif
@@ -270,8 +256,7 @@ public:
 
     std::vector<point_yc> query_yc_points(int64_t channel_id) {
 #ifdef EMS_DB_HAS_MYSQL
-        if (channel_id > 0)
-            return exec_query<point_yc>("channel_id=" + std::to_string(channel_id));
+        if (channel_id > 0) return exec_query<point_yc>("channel_id=" + std::to_string(channel_id));
         return exec_query<point_yc>("");
 #else
         return {};
@@ -280,8 +265,7 @@ public:
 
     std::vector<point_yx> query_yx_points(int64_t channel_id) {
 #ifdef EMS_DB_HAS_MYSQL
-        if (channel_id > 0)
-            return exec_query<point_yx>("channel_id=" + std::to_string(channel_id));
+        if (channel_id > 0) return exec_query<point_yx>("channel_id=" + std::to_string(channel_id));
         return exec_query<point_yx>("");
 #else
         return {};
@@ -290,8 +274,7 @@ public:
 
     std::vector<point_yk> query_yk_points(int64_t channel_id) {
 #ifdef EMS_DB_HAS_MYSQL
-        if (channel_id > 0)
-            return exec_query<point_yk>("channel_id=" + std::to_string(channel_id));
+        if (channel_id > 0) return exec_query<point_yk>("channel_id=" + std::to_string(channel_id));
         return exec_query<point_yk>("");
 #else
         return {};
@@ -300,8 +283,7 @@ public:
 
     std::vector<point_yt> query_yt_points(int64_t channel_id) {
 #ifdef EMS_DB_HAS_MYSQL
-        if (channel_id > 0)
-            return exec_query<point_yt>("channel_id=" + std::to_string(channel_id));
+        if (channel_id > 0) return exec_query<point_yt>("channel_id=" + std::to_string(channel_id));
         return exec_query<point_yt>("");
 #else
         return {};
@@ -318,13 +300,13 @@ public:
         entities.reserve(data_list.size());
         for (const auto& d : data_list) {
             point_collect e;
-            e.point_code   = d.point_code;
-            e.point_type   = d.point_type;
-            e.channel_id   = d.channel_id;
-            e.device_id    = d.device_id;
-            e.raw_value    = d.raw_value;
-            e.eng_value    = d.eng_value;
-            e.quality      = d.quality;
+            e.point_code = d.point_code;
+            e.point_type = d.point_type;
+            e.channel_id = d.channel_id;
+            e.device_id = d.device_id;
+            e.raw_value = d.raw_value;
+            e.eng_value = d.eng_value;
+            e.quality = d.quality;
             e.collect_time = d.collect_time;
             entities.push_back(std::move(e));
         }
@@ -336,20 +318,18 @@ public:
 #endif
     }
 
-private:
+   private:
 #ifdef EMS_DB_HAS_MYSQL
-    template<typename T>
+    template <typename T>
     std::vector<T> exec_query(const std::string& where) {
-        auto result = where.empty()
-            ? mysql_.query_s<T>()
-            : mysql_.query_s<T>(where);
+        auto result = where.empty() ? mysql_.query_s<T>() : mysql_.query_s<T>(where);
         if (mysql_.has_error()) {
             last_err_ = mysql_.get_last_error();
         }
         return result;
     }
 
-    template<typename F>
+    template <typename F>
     bool exec_write(F&& f) {
         bool ok = f();
         if (!ok && mysql_.has_error()) {
@@ -363,9 +343,12 @@ private:
         std::string out;
         out.reserve(s.size());
         for (char c : s) {
-            if (c == '\'') out += "\\'";
-            else if (c == '\\') out += "\\\\";
-            else out += c;
+            if (c == '\'')
+                out += "\\'";
+            else if (c == '\\')
+                out += "\\\\";
+            else
+                out += c;
         }
         return out;
     }
@@ -373,8 +356,10 @@ private:
     bool using_mysql_ = true;
     ormpp::dbng<ormpp::mysql> mysql_;
 #else
-    template<typename T>
-    std::vector<T> noop_query(const std::string&) { return {}; }
+    template <typename T>
+    std::vector<T> noop_query(const std::string&) {
+        return {};
+    }
     bool noop_write() { return false; }
 #endif
 
@@ -394,81 +379,53 @@ DbManager::~DbManager() = default;
 DbManager::DbManager(DbManager&&) noexcept = default;
 DbManager& DbManager::operator=(DbManager&&) noexcept = default;
 
-bool DbManager::connect(const DbConfig& config) {
-    return impl_->connect(config);
-}
+bool DbManager::connect(const DbConfig& config) { return impl_->connect(config); }
 
 bool DbManager::connect_sqlite(const std::string& db_path) {
     return impl_->connect_sqlite(db_path);
 }
 
-void DbManager::disconnect() {
-    impl_->disconnect();
-}
+void DbManager::disconnect() { impl_->disconnect(); }
 
-bool DbManager::is_connected() const {
-    return impl_->is_connected();
-}
+bool DbManager::is_connected() const { return impl_->is_connected(); }
 
-std::string DbManager::last_error() const {
-    return impl_->last_error();
-}
+std::string DbManager::last_error() const { return impl_->last_error(); }
 
 // ---- 设备 ----
 
-std::vector<device> DbManager::query_all_devices() {
-    return impl_->query_all_devices();
-}
+std::vector<device> DbManager::query_all_devices() { return impl_->query_all_devices(); }
 
-device DbManager::query_device_by_id(int64_t id) {
-    return impl_->query_device_by_id(id);
-}
+device DbManager::query_device_by_id(int64_t id) { return impl_->query_device_by_id(id); }
 
 device DbManager::query_device_by_code(const std::string& code) {
     return impl_->query_device_by_code(code);
 }
 
-bool DbManager::insert_device(const device& device) {
-    return impl_->insert_device(device);
-}
+bool DbManager::insert_device(const device& device) { return impl_->insert_device(device); }
 
-bool DbManager::update_device(const device& device) {
-    return impl_->update_device(device);
-}
+bool DbManager::update_device(const device& device) { return impl_->update_device(device); }
 
-bool DbManager::delete_device(int64_t id) {
-    return impl_->delete_device(id);
-}
+bool DbManager::delete_device(int64_t id) { return impl_->delete_device(id); }
 
 // ---- 通道 ----
 
-std::vector<channel> DbManager::query_all_channels() {
-    return impl_->query_all_channels();
-}
+std::vector<channel> DbManager::query_all_channels() { return impl_->query_all_channels(); }
 
 std::vector<channel> DbManager::query_channels_by_device(int64_t device_id) {
     return impl_->query_channels_by_device(device_id);
 }
 
-channel DbManager::query_channel_by_id(int64_t id) {
-    return impl_->query_channel_by_id(id);
-}
+channel DbManager::query_channel_by_id(int64_t id) { return impl_->query_channel_by_id(id); }
 
 channel DbManager::query_channel_by_code(const std::string& code) {
     return impl_->query_channel_by_code(code);
 }
 
-bool DbManager::insert_channel(const channel& channel) {
-    return impl_->insert_channel(channel);
-}
+bool DbManager::insert_channel(const channel& channel) { return impl_->insert_channel(channel); }
 
-bool DbManager::update_channel(const channel& channel) {
-    return impl_->update_channel(channel);
-}
+bool DbManager::update_channel(const channel& channel) { return impl_->update_channel(channel); }
 
-bool DbManager::delete_channel(int64_t id) {
-    return impl_->delete_channel(id);
-}
+bool DbManager::delete_channel(int64_t id) { return impl_->delete_channel(id); }
 
 // ---- 测点 ----
 
@@ -532,12 +489,12 @@ DbConfig get_default_db_config() {
             json j;
             ifs >> j;
 
-            if (j.contains("host"))     cfg.host     = j["host"].get<std::string>();
-            if (j.contains("port"))     cfg.port     = j["port"].get<int>();
-            if (j.contains("user"))     cfg.user     = j["user"].get<std::string>();
+            if (j.contains("host")) cfg.host = j["host"].get<std::string>();
+            if (j.contains("port")) cfg.port = j["port"].get<int>();
+            if (j.contains("user")) cfg.user = j["user"].get<std::string>();
             if (j.contains("password")) cfg.password = j["password"].get<std::string>();
-            if (j.contains("dbname"))   cfg.dbname   = j["dbname"].get<std::string>();
-            if (j.contains("timeout"))  cfg.timeout  = j["timeout"].get<int>();
+            if (j.contains("dbname")) cfg.dbname = j["dbname"].get<std::string>();
+            if (j.contains("timeout")) cfg.timeout = j["timeout"].get<int>();
             if (j.contains("conn_num")) cfg.conn_num = j["conn_num"].get<int>();
         } catch (const std::exception& e) {
             // JSON 解析失败, 回退到默认值 + 环境变量
@@ -551,11 +508,11 @@ DbConfig get_default_db_config() {
     const char* env_pass = std::getenv("EMS_DB_PASS");
     const char* env_name = std::getenv("EMS_DB_NAME");
 
-    if (env_host) cfg.host     = env_host;
-    if (env_port) cfg.port     = std::atoi(env_port);
-    if (env_user) cfg.user     = env_user;
+    if (env_host) cfg.host = env_host;
+    if (env_port) cfg.port = std::atoi(env_port);
+    if (env_user) cfg.user = env_user;
     if (env_pass) cfg.password = env_pass;
-    if (env_name) cfg.dbname   = env_name;
+    if (env_name) cfg.dbname = env_name;
 
     return cfg;
 }
@@ -723,8 +680,7 @@ CREATE TABLE IF NOT EXISTS point_yt (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
 )sql";
 
-static bool exec_sql(const DbConfig& config, const std::string& db,
-                      const std::string& sql) {
+static bool exec_sql(const DbConfig& config, const std::string& db, const std::string& sql) {
     // 写入临时文件执行，避免 shell 转义和命令行长度限制
     std::string tmpfile = "/tmp/ems_db_init_" + std::to_string(getpid()) + ".sql";
     {
@@ -733,9 +689,9 @@ static bool exec_sql(const DbConfig& config, const std::string& db,
         ofs << sql;
     }
 
-    std::string cmd = "mysql -h" + config.host + " -P" + std::to_string(config.port)
-                    + " -u" + config.user + " -p'" + config.password + "'"
-                    + " " + db + " < " + tmpfile + " 2>/dev/null";
+    std::string cmd = "mysql -h" + config.host + " -P" + std::to_string(config.port) + " -u" +
+                      config.user + " -p'" + config.password + "'" + " " + db + " < " + tmpfile +
+                      " 2>/dev/null";
     int rc = system(cmd.c_str());
     std::remove(tmpfile.c_str());
     return rc == 0;
@@ -754,8 +710,8 @@ static std::string replace_dbname(const std::string& sql, const std::string& dbn
 bool ensure_database(const DbConfig& config) {
     auto sql = replace_dbname(DB_INIT_SQL, config.dbname);
     // 先不指定库，建库后再建表
-    std::string createDb = "CREATE DATABASE IF NOT EXISTS " + config.dbname
-                         + " DEFAULT CHARACTER SET utf8mb4;";
+    std::string createDb =
+        "CREATE DATABASE IF NOT EXISTS " + config.dbname + " DEFAULT CHARACTER SET utf8mb4;";
     if (!exec_sql(config, "", createDb)) return false;
 
     // 拆成多个 CREATE TABLE 语句逐一执行
@@ -808,5 +764,5 @@ INSERT IGNORE INTO point_yx (id, code, name, channel_id, device_id, slave_id,
     return exec_sql(config, config.dbname, seed);
 }
 
-} // namespace db
-} // namespace ems
+}  // namespace db
+}  // namespace ems

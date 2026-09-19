@@ -1,22 +1,23 @@
 #ifndef EMS_RTDB_H
 #define EMS_RTDB_H
 
-#include <string>
-#include <vector>
+#include <atomic>
+#include <chrono>
+#include <functional>
+#include <future>
 #include <map>
 #include <memory>
 #include <mutex>
-#include <atomic>
-#include <functional>
-#include <chrono>
-#include <future>
+#include <string>
+#include <vector>
+
 #include "rtdb/rtdb_point.h"
 
 namespace sw {
 namespace redis {
 class Redis;
 }
-}
+}  // namespace sw
 
 namespace ems {
 namespace rtdb {
@@ -36,7 +37,7 @@ struct RtDbConfig {
 };
 
 class RtDb {
-public:
+   public:
     RtDb();
     ~RtDb();
 
@@ -67,7 +68,8 @@ public:
     bool incrByFloat(const std::string& key, double value, double& result);
 
     bool publish(const std::string& channel, const std::string& message);
-    bool subscribe(const std::string& channel, std::function<void(const std::string&, const std::string&)> callback);
+    bool subscribe(const std::string& channel,
+                   std::function<void(const std::string&, const std::string&)> callback);
 
     bool setYc(const std::string& pointCode, const YcPoint& point);
     bool getYc(const std::string& pointCode, YcPoint& point);
@@ -112,7 +114,7 @@ public:
     std::string getLastError() const { return lastError_; }
     uint64_t getCommandCount() const { return cmdCount_.load(); }
 
-private:
+   private:
     bool connect();
     bool connectSentinel();
     void disconnect();
@@ -123,7 +125,7 @@ private:
     std::string buildYkKey(const std::string& pointCode) const;
     std::string buildYtKey(const std::string& pointCode) const;
 
-    template<typename T>
+    template <typename T>
     static std::string pointHashFields(const T& point);
 
     std::unique_ptr<sw::redis::Redis> redis_;
@@ -136,7 +138,7 @@ private:
 
 std::unique_ptr<RtDb> createRtDb(const RtDbConfig& config);
 
-}
-}
+}  // namespace rtdb
+}  // namespace ems
 
 #endif

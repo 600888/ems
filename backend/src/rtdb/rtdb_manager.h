@@ -1,12 +1,13 @@
 #ifndef EMS_RTDB_MANAGER_H
 #define EMS_RTDB_MANAGER_H
 
-#include <string>
-#include <vector>
-#include <map>
-#include <memory>
 #include <functional>
 #include <future>
+#include <map>
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "rtdb.h"
 #include "rtdb_cache.h"
 
@@ -14,7 +15,7 @@ namespace ems {
 namespace rtdb {
 
 class RtDbManager {
-public:
+   public:
     RtDbManager();
     ~RtDbManager();
 
@@ -31,11 +32,8 @@ public:
     bool loadYtConfigsFromDb();
     bool loadAllConfigs();
 
-    using DataChangeCallback = std::function<void(
-        const std::string& pointType,
-        const std::string& pointCode,
-        const void* data
-    )>;
+    using DataChangeCallback = std::function<void(const std::string& pointType,
+                                                  const std::string& pointCode, const void* data)>;
 
     void setDataChangeCallback(DataChangeCallback callback);
 
@@ -59,14 +57,10 @@ public:
     bool getYk(const std::string& code, YkPoint& data);
     bool getYt(const std::string& code, YtPoint& data);
 
-    bool getYcFull(const std::string& code,
-                   RtDbPointManager::YcFullPoint& fullPoint);
-    bool getYxFull(const std::string& code,
-                   RtDbPointManager::YxFullPoint& fullPoint);
-    bool getYkFull(const std::string& code,
-                   RtDbPointManager::YkFullPoint& fullPoint);
-    bool getYtFull(const std::string& code,
-                   RtDbPointManager::YtFullPoint& fullPoint);
+    bool getYcFull(const std::string& code, RtDbPointManager::YcFullPoint& fullPoint);
+    bool getYxFull(const std::string& code, RtDbPointManager::YxFullPoint& fullPoint);
+    bool getYkFull(const std::string& code, RtDbPointManager::YkFullPoint& fullPoint);
+    bool getYtFull(const std::string& code, RtDbPointManager::YtFullPoint& fullPoint);
 
     std::vector<YcPoint> getAllYcData();
     std::vector<YxPoint> getAllYxData();
@@ -93,7 +87,7 @@ public:
     bool loadConfigFromJson(const std::string& filepath);
     bool loadConfigFromCsv(const std::string& filepath);
 
-private:
+   private:
     std::shared_ptr<RtDb> rtdb_;
     std::shared_ptr<RtDbConfigCache> configCache_;
     std::shared_ptr<RtDbPointManager> pointManager_;
@@ -102,7 +96,7 @@ private:
 
 std::unique_ptr<RtDbManager> createRtdbManager(const RtDbConfig& config);
 
-}
-}
+}  // namespace rtdb
+}  // namespace ems
 
 #endif

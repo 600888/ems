@@ -7,10 +7,10 @@
  */
 #pragma once
 
-#include <string>
-
 #include <common/core/result.h>
 #include <common/messaging/event.h>
+
+#include <string>
 
 namespace ems::codec {
 

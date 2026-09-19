@@ -7,26 +7,24 @@
 #ifndef EMS_NET_MODBUS_CLIENT_H
 #define EMS_NET_MODBUS_CLIENT_H
 
-#include <string>
-#include <map>
-#include <memory>
-#include <functional>
-#include <chrono>
-#include <cstdint>
+#include <modbuspp/data.h>
 #include <modbuspp/master.h>
 #include <modbuspp/slave.h>
-#include <modbuspp/data.h>
+
+#include <chrono>
+#include <cstdint>
+#include <functional>
+#include <map>
+#include <memory>
+#include <string>
 
 namespace ems {
 namespace net {
 namespace modbus {
 
 class ModbusClient {
-public:
-    enum class NetType {
-        RTU = 0,
-        TCP = 1
-    };
+   public:
+    enum class NetType { RTU = 0, TCP = 1 };
 
     enum class ErrorCode {
         Success = 0,
@@ -62,13 +60,13 @@ public:
     ErrorCode writeMultipleCoils(int slaveId, int addr, const bool* src, int nb);
     ErrorCode writeMultipleRegisters(int slaveId, int addr, const uint16_t* src, int nb);
     ErrorCode writeReadRegisters(int slaveId, int writeAddr, const uint16_t* src, int writeNb,
-                                  int readAddr, uint16_t* dest, int readNb);
+                                 int readAddr, uint16_t* dest, int readNb);
 
     bool addSlave(int slaveId);
     bool removeSlave(int slaveId);
     bool hasSlave(int slaveId) const;
 
-    template<typename T, Modbus::Endian E = Modbus::EndianBig>
+    template <typename T, Modbus::Endian E = Modbus::EndianBig>
     ErrorCode readData(int slaveId, int addr, Modbus::Data<T, E>& data) {
         int regCount = sizeof(T) / 2;
         auto ret = readHoldingRegisters(slaveId, addr, data.registers().data(), regCount);
@@ -78,7 +76,7 @@ public:
         return ret;
     }
 
-    template<typename T, Modbus::Endian E = Modbus::EndianBig>
+    template <typename T, Modbus::Endian E = Modbus::EndianBig>
     ErrorCode writeData(int slaveId, int addr, const Modbus::Data<T, E>& data) {
         int regCount = sizeof(T) / 2;
         return writeMultipleRegisters(slaveId, addr, data.registers().data(), regCount);
@@ -87,7 +85,7 @@ public:
     int getLastError() const { return lastError_; }
     std::string getLastErrorMsg() const { return lastErrorMsg_; }
 
-private:
+   private:
     ErrorCode translateError(int modbusRet);
     Modbus::Slave* getSlave(int slaveId);
 
@@ -101,16 +99,14 @@ private:
     bool connected_{false};
 };
 
-template<Modbus::Endian E = Modbus::EndianBig>
+template <Modbus::Endian E = Modbus::EndianBig>
 class ModbusClientWithData {
-public:
+   public:
     ModbusClientWithData(typename ModbusClient::NetType type, const std::string& connection,
                          const std::string& settings, int slaveId = 1)
         : client_(type, connection, settings), slave_id_(slaveId) {}
 
-    bool connect() {
-        return client_.connect();
-    }
+    bool connect() { return client_.connect(); }
 
     void disconnect() { client_.disconnect(); }
     bool isConnected() const { return client_.isConnected(); }
@@ -206,13 +202,13 @@ public:
 
     ModbusClient& client() { return client_; }
 
-private:
+   private:
     ModbusClient client_;
     int slave_id_;
 };
 
-} // namespace modbus
-} // namespace net
-} // namespace ems
+}  // namespace modbus
+}  // namespace net
+}  // namespace ems
 
-#endif // EMS_NET_MODBUS_CLIENT_H
+#endif  // EMS_NET_MODBUS_CLIENT_H

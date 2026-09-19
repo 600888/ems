@@ -21,18 +21,18 @@ namespace ems::core {
 
 /// 稳定错误码（跨模块/跨语言契约的一部分，只增不改义）
 enum class ErrorCode {
-    InvalidArgument,     ///< 参数非法
-    NotFound,            ///< 对象不存在
-    Conflict,            ///< 并发冲突/唯一约束冲突/版本不符
-    PermissionDenied,    ///< 权限不足
-    NotReady,            ///< 对象存在但尚未就绪
-    Unavailable,         ///< 依赖后端暂不可用（可退避）
-    DeadlineExceeded,    ///< 调用预算耗尽
-    ResourceExhausted,   ///< 池/队列/磁盘等资源预算耗尽
-    Unsupported,         ///< 不支持的后端/版本/操作
-    SchemaMismatch,      ///< 数据与 schema 不符（旧记录带无效 revision 等）
-    CorruptData,         ///< 数据损坏（校验失败/帧损坏）
-    Internal             ///< 内部错误
+    InvalidArgument,    ///< 参数非法
+    NotFound,           ///< 对象不存在
+    Conflict,           ///< 并发冲突/唯一约束冲突/版本不符
+    PermissionDenied,   ///< 权限不足
+    NotReady,           ///< 对象存在但尚未就绪
+    Unavailable,        ///< 依赖后端暂不可用（可退避）
+    DeadlineExceeded,   ///< 调用预算耗尽
+    ResourceExhausted,  ///< 池/队列/磁盘等资源预算耗尽
+    Unsupported,        ///< 不支持的后端/版本/操作
+    SchemaMismatch,     ///< 数据与 schema 不符（旧记录带无效 revision 等）
+    CorruptData,        ///< 数据损坏（校验失败/帧损坏）
+    Internal            ///< 内部错误
 };
 
 /// 失败时的写入确定性
@@ -61,27 +61,42 @@ using Deadline = std::chrono::steady_clock::time_point;
 
 inline const char* to_string(ErrorCode code) noexcept {
     switch (code) {
-        case ErrorCode::InvalidArgument:    return "InvalidArgument";
-        case ErrorCode::NotFound:           return "NotFound";
-        case ErrorCode::Conflict:           return "Conflict";
-        case ErrorCode::PermissionDenied:   return "PermissionDenied";
-        case ErrorCode::NotReady:           return "NotReady";
-        case ErrorCode::Unavailable:        return "Unavailable";
-        case ErrorCode::DeadlineExceeded:   return "DeadlineExceeded";
-        case ErrorCode::ResourceExhausted:  return "ResourceExhausted";
-        case ErrorCode::Unsupported:        return "Unsupported";
-        case ErrorCode::SchemaMismatch:     return "SchemaMismatch";
-        case ErrorCode::CorruptData:        return "CorruptData";
-        case ErrorCode::Internal:           return "Internal";
+        case ErrorCode::InvalidArgument:
+            return "InvalidArgument";
+        case ErrorCode::NotFound:
+            return "NotFound";
+        case ErrorCode::Conflict:
+            return "Conflict";
+        case ErrorCode::PermissionDenied:
+            return "PermissionDenied";
+        case ErrorCode::NotReady:
+            return "NotReady";
+        case ErrorCode::Unavailable:
+            return "Unavailable";
+        case ErrorCode::DeadlineExceeded:
+            return "DeadlineExceeded";
+        case ErrorCode::ResourceExhausted:
+            return "ResourceExhausted";
+        case ErrorCode::Unsupported:
+            return "Unsupported";
+        case ErrorCode::SchemaMismatch:
+            return "SchemaMismatch";
+        case ErrorCode::CorruptData:
+            return "CorruptData";
+        case ErrorCode::Internal:
+            return "Internal";
     }
     return "Unknown";
 }
 
 inline const char* to_string(WriteEffect effect) noexcept {
     switch (effect) {
-        case WriteEffect::NotApplicable: return "NotApplicable";
-        case WriteEffect::NotApplied:    return "NotApplied";
-        case WriteEffect::Unknown:       return "Unknown";
+        case WriteEffect::NotApplicable:
+            return "NotApplicable";
+        case WriteEffect::NotApplied:
+            return "NotApplied";
+        case WriteEffect::Unknown:
+            return "Unknown";
     }
     return "Unknown";
 }

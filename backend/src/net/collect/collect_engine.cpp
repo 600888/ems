@@ -3,11 +3,14 @@
  * @brief 采集引擎主类实现
  */
 #include "collect_engine.h"
-#include "net/para_loader/para_loader.h"
-#include <algorithm>
-#include <sstream>
-#include <nlohmann/json.hpp>
+
 #include <spdlog/fmt/bundled/format.h>
+
+#include <algorithm>
+#include <nlohmann/json.hpp>
+#include <sstream>
+
+#include "net/para_loader/para_loader.h"
 
 namespace ems {
 namespace net {
@@ -22,9 +25,7 @@ using json = nlohmann::json;
 
 CollectEngine::CollectEngine() = default;
 
-CollectEngine::~CollectEngine() {
-    shutdown();
-}
+CollectEngine::~CollectEngine() { shutdown(); }
 
 // ============================================================
 // 初始化
@@ -32,13 +33,15 @@ CollectEngine::~CollectEngine() {
 
 bool CollectEngine::initialize(const EngineConfig& config) {
     if (state_.load() != EngineState::Idle) {
-        LOG_WARN(fmt::format("采集引擎已被使用, 当前状态={}", static_cast<int>(state_.load())).c_str());
+        LOG_WARN(
+            fmt::format("采集引擎已被使用, 当前状态={}", static_cast<int>(state_.load())).c_str());
         return false;
     }
 
     LOG_INFO(fmt::format("初始化采集引擎: 插件目录={}, Redis={}:{}, 默认周期={}ms",
                          config.pluginDir_, config.redisHost_, config.redisPort_,
-                         config.defaultPollIntervalMs_).c_str());
+                         config.defaultPollIntervalMs_)
+                 .c_str());
     config_ = config;
 
     // 1. 设置插件目录
@@ -46,17 +49,19 @@ bool CollectEngine::initialize(const EngineConfig& config) {
 
     // 2. 初始化数据分发器
     DataDispatcherConfig dispatchConfig;
-    dispatchConfig.redisHost_     = config.redisHost_;
-    dispatchConfig.redisPort_     = config.redisPort_;
+    dispatchConfig.redisHost_ = config.redisHost_;
+    dispatchConfig.redisPort_ = config.redisPort_;
     dispatchConfig.redisPassword_ = config.redisPassword_;
-    dispatchConfig.redisDb_       = config.redisDb_;
-    dispatchConfig.poolSize_      = config.redisPoolSize_;
-    dispatchConfig.timeoutMs_     = config.redisTimeoutMs_;
-    dispatchConfig.keyPrefix_     = config.redisPrefix_;
+    dispatchConfig.redisDb_ = config.redisDb_;
+    dispatchConfig.poolSize_ = config.redisPoolSize_;
+    dispatchConfig.timeoutMs_ = config.redisTimeoutMs_;
+    dispatchConfig.keyPrefix_ = config.redisPrefix_;
 
     dispatcher_ = std::make_shared<DataDispatcher>();
     if (!dispatcher_->initialize(dispatchConfig)) {
-        LOG_ERROR(fmt::format("数据分发器初始化失败, Redis={}:{}", config.redisHost_, config.redisPort_).c_str());
+        LOG_ERROR(
+            fmt::format("数据分发器初始化失败, Redis={}:{}", config.redisHost_, config.redisPort_)
+                .c_str());
         dispatcher_.reset();
         return false;
     }
@@ -71,8 +76,8 @@ bool CollectEngine::initialize(const EngineConfig& config) {
 // ============================================================
 
 int CollectEngine::start_all(ParaLoader& para_loader,
-                              const std::vector<ems::db::point_yc>* yc_points,
-                              const std::vector<ems::db::point_yx>* yx_points) {
+                             const std::vector<ems::db::point_yc>* yc_points,
+                             const std::vector<ems::db::point_yx>* yx_points) {
     if (state_.load() == EngineState::Running) {
         LOG_WARN("采集引擎已在运行中");
         return 0;
@@ -91,7 +96,9 @@ int CollectEngine::start_all(ParaLoader& para_loader,
     }
 
     if (channels.size() > static_cast<size_t>(config_.maxChannels_)) {
-        LOG_WARN(fmt::format("通道数量{}超过最大值{}, 截断处理", channels.size(), config_.maxChannels_).c_str());
+        LOG_WARN(
+            fmt::format("通道数量{}超过最大值{}, 截断处理", channels.size(), config_.maxChannels_)
+                .c_str());
         channels.resize(config_.maxChannels_);
     }
 
@@ -120,10 +127,10 @@ int CollectEngine::start_all(ParaLoader& para_loader,
             continue;
         }
 
-        LOG_INFO(fmt::format("启动通道[{}] {}, 协议={}, 连接={}",
-                             chConfig.id_, chConfig.name_,
+        LOG_INFO(fmt::format("启动通道[{}] {}, 协议={}, 连接={}", chConfig.id_, chConfig.name_,
                              ems::rtdb::protocolTypeToString(chConfig.protocol_),
-                             chConfig.connection_).c_str());
+                             chConfig.connection_)
+                     .c_str());
 
         // 构建设备上下文
         auto devices = build_device_contexts(chConfig, yc_points, yx_points);
@@ -135,17 +142,15 @@ int CollectEngine::start_all(ParaLoader& para_loader,
 
         // 设置错误回调
         channelThread->set_error_callback(
-            [this](int64_t chId, const std::string& err) {
-                on_channel_error(chId, err);
-            });
+            [this](int64_t chId, const std::string& err) { on_channel_error(chId, err); });
 
         // 加载协议插件
         std::string protocolName = ems::rtdb::protocolTypeToString(chConfig.protocol_);
         void* pluginInstance = plugin_manager_.load(protocolName);
         if (!pluginInstance) {
-            LOG_ERROR(fmt::format("通道[{}] 加载插件失败: 协议={}", chConfig.id_, protocolName).c_str());
-            on_channel_error(chConfig.id_,
-                "Failed to load plugin for protocol: " + protocolName);
+            LOG_ERROR(
+                fmt::format("通道[{}] 加载插件失败: 协议={}", chConfig.id_, protocolName).c_str());
+            on_channel_error(chConfig.id_, "Failed to load plugin for protocol: " + protocolName);
             continue;
         }
 
@@ -174,7 +179,9 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
     std::lock_guard lock(channels_mutex_);
 
     if (channels_.size() >= static_cast<size_t>(config_.maxChannels_)) {
-        LOG_WARN(fmt::format("通道数量达到上限{}, 无法启动通道[{}]", config_.maxChannels_, channelConfig.id_).c_str());
+        LOG_WARN(fmt::format("通道数量达到上限{}, 无法启动通道[{}]", config_.maxChannels_,
+                             channelConfig.id_)
+                     .c_str());
         return false;
     }
 
@@ -184,10 +191,11 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
         return false;
     }
 
-    LOG_INFO(fmt::format("启动单个通道[{}] {}, 协议={}, 连接={}",
-                         channelConfig.id_, channelConfig.name_,
+    LOG_INFO(fmt::format("启动单个通道[{}] {}, 协议={}, 连接={}", channelConfig.id_,
+                         channelConfig.name_,
                          ems::rtdb::protocolTypeToString(channelConfig.protocol_),
-                         channelConfig.connection_).c_str());
+                         channelConfig.connection_)
+                 .c_str());
 
     auto channelThread = std::make_shared<ChannelThread>(channelConfig, dispatcher_);
     channelThread->set_poll_interval(config_.defaultPollIntervalMs_);
@@ -198,13 +206,13 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
     std::string protocolName = ems::rtdb::protocolTypeToString(channelConfig.protocol_);
     void* pluginInstance = plugin_manager_.load(protocolName);
     if (!pluginInstance) {
-        LOG_ERROR(fmt::format("通道[{}] 加载插件失败: 协议={}", channelConfig.id_, protocolName).c_str());
+        LOG_ERROR(
+            fmt::format("通道[{}] 加载插件失败: 协议={}", channelConfig.id_, protocolName).c_str());
         channels_.erase(channelConfig.id_);
         return false;
     }
 
-    channelThread->start(plugin_manager_, pluginInstance,
-                          PluginManager::PluginFunctions{});
+    channelThread->start(plugin_manager_, pluginInstance, PluginManager::PluginFunctions{});
     return true;
 }
 
@@ -225,8 +233,7 @@ bool CollectEngine::stop_channel(int64_t channel_id) {
     channel->join();
 
     // 卸载协议
-    std::string protocolName = ems::rtdb::protocolTypeToString(
-        channel->channel_config().protocol_);
+    std::string protocolName = ems::rtdb::protocolTypeToString(channel->channel_config().protocol_);
     plugin_manager_.unload(protocolName);
 
     {
@@ -301,9 +308,7 @@ size_t CollectEngine::channel_count() const {
 size_t CollectEngine::running_count() const {
     std::lock_guard lock(channels_mutex_);
     return std::count_if(channels_.begin(), channels_.end(),
-        [](const auto& pair) {
-            return pair.second->is_running();
-        });
+                         [](const auto& pair) { return pair.second->is_running(); });
 }
 
 std::vector<std::shared_ptr<ChannelThread>> CollectEngine::channels() const {
@@ -338,10 +343,8 @@ void CollectEngine::on_channel_error(int64_t channel_id, const std::string& erro
 // ============================================================
 
 std::vector<DeviceContext> CollectEngine::build_device_contexts(
-    const ems::rtdb::ChannelConfig& channelConfig,
-    const std::vector<ems::db::point_yc>* yc_points,
-    const std::vector<ems::db::point_yx>* yx_points)
-{
+    const ems::rtdb::ChannelConfig& channelConfig, const std::vector<ems::db::point_yc>* yc_points,
+    const std::vector<ems::db::point_yx>* yx_points) {
     std::unordered_map<int64_t, DeviceContext> deviceMap;
 
     // 处理 YC 测点
@@ -350,7 +353,7 @@ std::vector<DeviceContext> CollectEngine::build_device_contexts(
             if (pt.channel_id != channelConfig.id_) continue;
 
             auto& ctx = deviceMap[pt.device_id];
-            ctx.deviceId_   = pt.device_id;
+            ctx.deviceId_ = pt.device_id;
             ctx.deviceName_ = pt.name;
             ctx.ycPointCodes_.push_back(pt.code);
         }
@@ -362,7 +365,7 @@ std::vector<DeviceContext> CollectEngine::build_device_contexts(
             if (pt.channel_id != channelConfig.id_) continue;
 
             auto& ctx = deviceMap[pt.device_id];
-            ctx.deviceId_   = pt.device_id;
+            ctx.deviceId_ = pt.device_id;
             ctx.deviceName_ = pt.name;
             ctx.yxPointCodes_.push_back(pt.code);
         }
@@ -377,6 +380,6 @@ std::vector<DeviceContext> CollectEngine::build_device_contexts(
     return result;
 }
 
-} // namespace collect
-} // namespace net
-} // namespace ems
+}  // namespace collect
+}  // namespace net
+}  // namespace ems

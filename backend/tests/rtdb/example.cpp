@@ -1,8 +1,9 @@
-#include "rtdb.h"
-#include "rtdb_cache.h"
+#include <chrono>
 #include <iostream>
 #include <thread>
-#include <chrono>
+
+#include "rtdb.h"
+#include "rtdb_cache.h"
 
 int main() {
     ems::net::RtDbConfig config;
@@ -32,7 +33,8 @@ int main() {
     yc.code_ = "voltage_a";
     yc.value_ = 220.5;
     yc.timestamp_ = std::chrono::duration_cast<std::chrono::milliseconds>(
-        std::chrono::system_clock::now().time_since_epoch()).count();
+                        std::chrono::system_clock::now().time_since_epoch())
+                        .count();
     yc.quality_ = ems::net::PointQuality::Good;
 
     if (rtdb->setYc("voltage_a", yc)) {
@@ -41,10 +43,8 @@ int main() {
 
     ems::net::YcPoint readYc;
     if (rtdb->getYc("voltage_a", readYc)) {
-        std::cout << "YC point - Code: " << readYc.code_
-                  << ", Value: " << readYc.value_
-                  << ", Quality: " << static_cast<int>(readYc.quality_)
-                  << std::endl;
+        std::cout << "YC point - Code: " << readYc.code_ << ", Value: " << readYc.value_
+                  << ", Quality: " << static_cast<int>(readYc.quality_) << std::endl;
     }
 
     ems::net::YxPoint yx;
@@ -58,16 +58,12 @@ int main() {
 
     ems::net::YxPoint readYx;
     if (rtdb->getYx("breaker_001", readYx)) {
-        std::cout << "YX point - Code: " << readYx.code_
-                  << ", Value: " << readYx.value_
+        std::cout << "YX point - Code: " << readYx.code_ << ", Value: " << readYx.value_
                   << std::endl;
     }
 
     std::map<std::string, std::string> systemInfo = {
-        {"version", "1.0.0"},
-        {"status", "running"},
-        {"mode", "auto"}
-    };
+        {"version", "1.0.0"}, {"status", "running"}, {"mode", "auto"}};
     rtdb->setHash("system:info", systemInfo);
 
     std::map<std::string, std::string> retrievedInfo;

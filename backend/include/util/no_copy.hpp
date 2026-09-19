@@ -1,7 +1,7 @@
-#pragma once 
+#pragma once
 
 class NoCopy {
-public:
+   public:
     NoCopy() = default;
     ~NoCopy() = default;
 

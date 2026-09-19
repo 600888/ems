@@ -13,7 +13,7 @@ namespace ems::config {
 
 /// 默认校验器：调用候选目录的索引构建与纯模型校验
 class CatalogValidator final : public IConfigValidator {
-public:
+   public:
     /// 校验候选完整快照；聚合有上限的字段错误，不返回首个 bool
     model::ValidationReport validate(const model::ModelCatalog& candidate) override;
 };

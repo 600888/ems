@@ -1,21 +1,17 @@
 #pragma once
-#include <thread>
 #include <atomic>
+#include <condition_variable>
 #include <functional>
 #include <mutex>
-#include <condition_variable>
+#include <thread>
 
 class Task {
-public:
-    Task()
-        : _running(false)
-    {
-    }
+   public:
+    Task() : _running(false) {}
     Task(const Task&) = delete;
     Task& operator=(const Task&) = delete;
 
-    virtual ~Task()
-    {
+    virtual ~Task() {
         stop();
         // 等待线程结束，防止线程对象被销毁时线程仍在运行
         if (_thread.joinable()) {
@@ -23,16 +19,14 @@ public:
         }
     }
 
-    void start()
-    {
+    void start() {
         if (!_running) {
             _running = true;
             _thread = std::thread(std::bind(&Task::_start, this));
         }
     }
 
-    virtual void stop()
-    {
+    virtual void stop() {
         if (_running) {
             _running = false;
             if (_thread.joinable()) {
@@ -48,27 +42,25 @@ public:
 
     bool isRunning() const { return _running; }
 
-    void wait_for_ready()
-    {
+    void wait_for_ready() {
         std::unique_lock<std::mutex> lock(_mtx);
         _cv.wait(lock, [this] { return _ready; });
     }
 
-protected:
-    void _start()
-    {
+   protected:
+    void _start() {
         svc();
         _running = false;
     }
 
     virtual void svc() = 0;
 
-protected:
+   protected:
     std::condition_variable _cv;
     bool _ready = false;
     std::mutex _mtx;
 
-private:
+   private:
     std::atomic<bool> _running;
     std::thread _thread;
 };

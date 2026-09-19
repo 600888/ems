@@ -20,21 +20,21 @@
 #ifndef EMS_NET_COLLECT_COLLECT_ENGINE_H
 #define EMS_NET_COLLECT_COLLECT_ENGINE_H
 
-#include <string>
-#include <vector>
-#include <memory>
-#include <unordered_map>
 #include <atomic>
-#include <mutex>
 #include <functional>
+#include <memory>
+#include <mutex>
+#include <string>
+#include <unordered_map>
+#include <vector>
 
-#include "rtdb/rtdb_device.h"
-#include "db/device.h"
-#include "db/channel.h"
-#include "db/point.h"
-#include "plugin_manager.h"
 #include "channel_thread.h"
 #include "data_dispatcher.h"
+#include "db/channel.h"
+#include "db/device.h"
+#include "db/point.h"
+#include "plugin_manager.h"
+#include "rtdb/rtdb_device.h"
 
 namespace ems {
 namespace net {
@@ -48,15 +48,15 @@ namespace collect {
  * @brief 采集引擎配置
  */
 struct EngineConfig {
-    std::string pluginDir_{"./lib"};           // 插件动态库目录
+    std::string pluginDir_{"./lib"};  // 插件动态库目录
 
     // Redis/RTDB 配置
     std::string redisHost_{"127.0.0.1"};
-    int         redisPort_{6379};
+    int redisPort_{6379};
     std::string redisPassword_;
-    int         redisDb_{0};
-    int         redisPoolSize_{4};
-    int         redisTimeoutMs_{3000};
+    int redisDb_{0};
+    int redisPoolSize_{4};
+    int redisTimeoutMs_{3000};
     std::string redisPrefix_{"ems:"};
 
     // 默认采集周期
@@ -69,12 +69,7 @@ struct EngineConfig {
 /**
  * @brief 采集引擎状态
  */
-enum class EngineState : int {
-    Idle    = 0,
-    Running = 1,
-    Stopped = 2,
-    Error   = 3
-};
+enum class EngineState : int { Idle = 0, Running = 1, Stopped = 2, Error = 3 };
 
 /**
  * @brief 采集引擎主类
@@ -82,7 +77,7 @@ enum class EngineState : int {
  * 线程安全：内部持有互斥锁保护通道列表。
  */
 class CollectEngine {
-public:
+   public:
     CollectEngine();
     ~CollectEngine();
 
@@ -193,23 +188,18 @@ public:
     // ============================================================
 
     /** @brief 通道状态变更回调 */
-    using ChannelStateCallback = std::function<void(
-        int64_t channel_id, const std::string& channelName,
-        ChannelState oldState, ChannelState newState)>;
+    using ChannelStateCallback =
+        std::function<void(int64_t channel_id, const std::string& channelName,
+                           ChannelState oldState, ChannelState newState)>;
 
     /** @brief 采集错误回调 */
-    using ErrorCallback = std::function<void(
-        int64_t channel_id, const std::string& error)>;
+    using ErrorCallback = std::function<void(int64_t channel_id, const std::string& error)>;
 
-    void set_channel_state_callback(ChannelStateCallback cb) {
-        state_cb_ = std::move(cb);
-    }
+    void set_channel_state_callback(ChannelStateCallback cb) { state_cb_ = std::move(cb); }
 
-    void set_error_callback(ErrorCallback cb) {
-        error_cb_ = std::move(cb);
-    }
+    void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
 
-private:
+   private:
     /**
      * @brief 创建设备上下文列表
      */
@@ -220,24 +210,24 @@ private:
 
     void on_channel_error(int64_t channel_id, const std::string& error);
 
-    EngineConfig                      config_;
-    std::atomic<EngineState>          state_{EngineState::Idle};
-    PluginManager                     plugin_manager_;
+    EngineConfig config_;
+    std::atomic<EngineState> state_{EngineState::Idle};
+    PluginManager plugin_manager_;
 
     // 通道管理
-    mutable std::mutex                channels_mutex_;
+    mutable std::mutex channels_mutex_;
     std::unordered_map<int64_t, std::shared_ptr<ChannelThread>> channels_;
 
     // 数据分发器（所有通道线程共享）
-    std::shared_ptr<DataDispatcher>   dispatcher_;
+    std::shared_ptr<DataDispatcher> dispatcher_;
 
     // 回调
-    ChannelStateCallback              state_cb_;
-    ErrorCallback                     error_cb_;
+    ChannelStateCallback state_cb_;
+    ErrorCallback error_cb_;
 };
 
-} // namespace collect
-} // namespace net
-} // namespace ems
+}  // namespace collect
+}  // namespace net
+}  // namespace ems
 
-#endif // EMS_NET_COLLECT_COLLECT_ENGINE_H
+#endif  // EMS_NET_COLLECT_COLLECT_ENGINE_H

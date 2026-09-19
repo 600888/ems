@@ -15,13 +15,14 @@
  *       默认: ./rtu_client /dev/ttyUSB0 9600 1
  */
 
-#include <iostream>
-#include <iomanip>
-#include <thread>
 #include <chrono>
 #include <csignal>
-#include <cstring>
 #include <cstdlib>
+#include <cstring>
+#include <iomanip>
+#include <iostream>
+#include <thread>
+
 #include "modbus_client.h"
 
 using namespace ems::net::modbus;
@@ -29,9 +30,7 @@ using namespace ems::net::modbus;
 static std::atomic<bool> g_running{true};
 static int g_slave_id = 1;
 
-void signalHandler(int sig) {
-    g_running = false;
-}
+void signalHandler(int sig) { g_running = false; }
 
 static float registersToFloat(const uint16_t* reg) {
     uint32_t bits = (static_cast<uint32_t>(reg[0]) << 16) | reg[1];
@@ -66,26 +65,27 @@ bool demoBasicOperations(ModbusClient& client, int slave_id) {
     uint16_t test_value = 0x1234;
     if (client.writeSingleRegister(slave_id, 0, test_value) == ModbusClient::ErrorCode::Success) {
         uint16_t read_value;
-        if (client.readHoldingRegisters(slave_id, 0, &read_value, 1) == ModbusClient::ErrorCode::Success) {
-            std::cout << "单寄存器 R/W: 写入=0x" << std::hex << test_value
-                      << ", 读取=0x" << read_value << std::dec;
+        if (client.readHoldingRegisters(slave_id, 0, &read_value, 1) ==
+            ModbusClient::ErrorCode::Success) {
+            std::cout << "单寄存器 R/W: 写入=0x" << std::hex << test_value << ", 读取=0x"
+                      << read_value << std::dec;
             if (test_value == read_value) {
                 std::cout << " [OK]\n";
-            }
-            else {
+            } else {
                 std::cout << " [FAIL]\n";
             }
         }
-    }
-    else {
+    } else {
         std::cerr << "单寄存器操作失败\n";
         return false;
     }
 
     uint16_t multi_write[] = {100, 200, 300, 400, 500};
-    if (client.writeMultipleRegisters(slave_id, 10, multi_write, 5) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 10, multi_write, 5) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t multi_read[5];
-        if (client.readHoldingRegisters(slave_id, 10, multi_read, 5) == ModbusClient::ErrorCode::Success) {
+        if (client.readHoldingRegisters(slave_id, 10, multi_read, 5) ==
+            ModbusClient::ErrorCode::Success) {
             std::cout << "多寄存器 R/W [10-14]: ";
             bool ok = true;
             for (int i = 0; i < 5; i++) {
@@ -141,13 +141,12 @@ bool demoAnalogSensor(ModbusClient& client, int slave_id) {
 
         constexpr float kFactor = 0.01f;
         std::cout << "转换后的物理值:\n";
-        std::cout << "  温度1: " << std::fixed << std::setprecision(2)
-                  << raw_adc[0] * kFactor << " °C\n";
+        std::cout << "  温度1: " << std::fixed << std::setprecision(2) << raw_adc[0] * kFactor
+                  << " °C\n";
         std::cout << "  温度2: " << raw_adc[1] * kFactor << " °C\n";
         std::cout << "  湿度:   " << raw_adc[2] * kFactor << " %\n";
         std::cout << "  压力:   " << raw_adc[3] * kFactor << " bar\n";
-    }
-    else {
+    } else {
         std::cout << "读取传感器数据失败 (设备可能不支持)\n";
     }
 
@@ -159,21 +158,23 @@ bool demoFloatData(ModbusClient& client, int slave_id) {
     std::cout << std::string(60, '-') << "\n";
 
     Modbus::Data<float, Modbus::EndianBig> temp_write(25.5f);
-    if (client.writeMultipleRegisters(slave_id, 100, temp_write.registers().data(), 2) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 100, temp_write.registers().data(), 2) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t reg[2];
         client.readHoldingRegisters(slave_id, 100, reg, 2);
         float temp_read = registersToFloat(reg);
-        std::cout << "温度 [100-101]: 写入=" << temp_write.value()
-                  << ", 读取=" << temp_read << " °C\n";
+        std::cout << "温度 [100-101]: 写入=" << temp_write.value() << ", 读取=" << temp_read
+                  << " °C\n";
     }
 
     Modbus::Data<float, Modbus::EndianBig> voltage_write(220.75f);
-    if (client.writeMultipleRegisters(slave_id, 102, voltage_write.registers().data(), 2) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 102, voltage_write.registers().data(), 2) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t reg[2];
         client.readHoldingRegisters(slave_id, 102, reg, 2);
         float voltage_read = registersToFloat(reg);
-        std::cout << "电压 [102-103]: 写入=" << voltage_write.value()
-                  << ", 读取=" << voltage_read << " V\n";
+        std::cout << "电压 [102-103]: 写入=" << voltage_write.value() << ", 读取=" << voltage_read
+                  << " V\n";
     }
 
     return true;
@@ -194,7 +195,8 @@ bool demoInt32Data(ModbusClient& client, int slave_id) {
     }
     std::cout << std::dec << "\n";
 
-    if (client.writeMultipleRegisters(slave_id, 200, counter_write.registers().data(), 2) == ModbusClient::ErrorCode::Success) {
+    if (client.writeMultipleRegisters(slave_id, 200, counter_write.registers().data(), 2) ==
+        ModbusClient::ErrorCode::Success) {
         uint16_t reg[2];
         client.readHoldingRegisters(slave_id, 200, reg, 2);
         int32_t counter_read = registersToInt32(reg);
@@ -212,21 +214,19 @@ bool demoConfigRegister(ModbusClient& client, int slave_id) {
         uint16_t addr;
         const char* name;
         uint16_t value;
-    } configs[] = {
-        {300, "采样率", 100},
-        {301, "滤波系数", 50},
-        {302, "报警阈值高", 1000},
-        {303, "报警阈值低", 100},
-        {304, "通信超时", 3000}
-    };
+    } configs[] = {{300, "采样率", 100},
+                   {301, "滤波系数", 50},
+                   {302, "报警阈值高", 1000},
+                   {303, "报警阈值低", 100},
+                   {304, "通信超时", 3000}};
 
     std::cout << "写入配置寄存器:\n";
     for (const auto& cfg : configs) {
-        if (client.writeSingleRegister(slave_id, cfg.addr, cfg.value) == ModbusClient::ErrorCode::Success) {
+        if (client.writeSingleRegister(slave_id, cfg.addr, cfg.value) ==
+            ModbusClient::ErrorCode::Success) {
             uint16_t read_val;
             client.readHoldingRegisters(slave_id, cfg.addr, &read_val, 1);
-            std::cout << "  [" << cfg.addr << "] " << cfg.name
-                      << " = " << read_val << "\n";
+            std::cout << "  [" << cfg.addr << "] " << cfg.name << " = " << read_val << "\n";
         }
     }
 

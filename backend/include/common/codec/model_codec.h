@@ -13,19 +13,18 @@
  */
 #pragma once
 
-#include <string>
-
 #include <common/core/result.h>
 #include <common/model/asset.h>
 #include <common/model/binding.h>
 #include <common/model/device.h>
 #include <common/model/point.h>
 
+#include <string>
+
 namespace ems::codec {
 
 /// 类型化值 → JSON 文本（非法组合返回 InvalidArgument，如 NaN/Inf）
-core::Result<std::string> encode_point_value(model::ValueType type,
-                                             const model::PointValue& value);
+core::Result<std::string> encode_point_value(model::ValueType type, const model::PointValue& value);
 
 /// JSON 文本 → 类型化值（类型不符返回 SchemaMismatch）
 core::Result<model::PointValue> decode_point_value(model::ValueType type,

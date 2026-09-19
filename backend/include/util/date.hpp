@@ -1,19 +1,19 @@
 #pragma once
-#include <string>
 #include <ctime>
 #include <regex>
+#include <string>
+
 #include "util/exception.hpp"
 using namespace std;
 
 class Date {
-private:
+   private:
     int _day;
     int _month;
     int _year;
 
-public:
-    Date()
-    {
+   public:
+    Date() {
         time_t t = time(NULL);
         struct tm lt;
         localtime_r(&t, &lt);
@@ -22,8 +22,7 @@ public:
         _year = lt.tm_year + 1900;
     }
 
-    Date(int d, int m, int y)
-    {
+    Date(int d, int m, int y) {
         // 是否符合日期特性
         if (y < 1900 || y > 9999 || m < 1 || m > 12 || d < 1 || d > 31) {
             throw std::runtime_error("Invalid date");
@@ -46,8 +45,7 @@ public:
         _year = y;
     }
 
-    Date(const std::tm& tm)
-    {
+    Date(const std::tm& tm) {
         _day = tm.tm_mday;
         _month = tm.tm_mon + 1;
         _year = tm.tm_year + 1900;
@@ -55,73 +53,66 @@ public:
 
     Date(time_t t)
         : Date([](time_t t) {
-            struct tm lt;
-            localtime_r(&t, &lt);
-            return lt;
-        }(t))
-    {
-    }
+              struct tm lt;
+              localtime_r(&t, &lt);
+              return lt;
+          }(t)) {}
 
-    Date(const Date& d)
-    {
+    Date(const Date& d) {
         _day = d._day;
         _month = d._month;
         _year = d._year;
     }
 
-    Date(const Date&& d)
-    {
+    Date(const Date&& d) {
         _day = d._day;
         _month = d._month;
         _year = d._year;
     }
 
-    Date operator=(const Date& d)
-    {
+    Date operator=(const Date& d) {
         _day = d._day;
         _month = d._month;
         _year = d._year;
         return *this;
     }
 
-    Date operator=(const Date&& d)
-    {
+    Date operator=(const Date&& d) {
         _day = d._day;
         _month = d._month;
         _year = d._year;
         return *this;
     }
 
-    bool operator==(const Date& d) const { return _year == d._year && _month == d._month && _day == d._day; }
-
-    bool operator!=(const Date& d) const { return _year != d._year || _month != d._month || _day != d._day; }
-
-    bool operator<(const Date& d) const
-    {
-        return _year < d._year || (_year == d._year && _month < d._month)
-            || (_year == d._year && _month == d._month && _day < d._day);
+    bool operator==(const Date& d) const {
+        return _year == d._year && _month == d._month && _day == d._day;
     }
 
-    bool operator<=(const Date& d) const
-    {
-        return _year < d._year || (_year == d._year && _month < d._month)
-            || (_year == d._year && _month == d._month && _day <= d._day);
+    bool operator!=(const Date& d) const {
+        return _year != d._year || _month != d._month || _day != d._day;
     }
 
-    bool operator>(const Date& d) const
-    {
-        return _year > d._year || (_year == d._year && _month > d._month)
-            || (_year == d._year && _month == d._month && _day > d._day);
+    bool operator<(const Date& d) const {
+        return _year < d._year || (_year == d._year && _month < d._month) ||
+               (_year == d._year && _month == d._month && _day < d._day);
     }
 
-    bool operator>=(const Date& d) const
-    {
-        return _year > d._year || (_year == d._year && _month > d._month)
-            || (_year == d._year && _month == d._month && _day >= d._day);
+    bool operator<=(const Date& d) const {
+        return _year < d._year || (_year == d._year && _month < d._month) ||
+               (_year == d._year && _month == d._month && _day <= d._day);
     }
 
-    struct tm* toLocalTime()
-    {
+    bool operator>(const Date& d) const {
+        return _year > d._year || (_year == d._year && _month > d._month) ||
+               (_year == d._year && _month == d._month && _day > d._day);
+    }
+
+    bool operator>=(const Date& d) const {
+        return _year > d._year || (_year == d._year && _month > d._month) ||
+               (_year == d._year && _month == d._month && _day >= d._day);
+    }
+
+    struct tm* toLocalTime() {
         struct tm* lt = new struct tm;
         lt->tm_sec = 0;
         lt->tm_min = 0;
@@ -135,21 +126,19 @@ public:
         return lt;
     }
 
-    time_t toTimeT()
-    {
-        struct tm lt = *toLocalTime(); // 创建一个新的 struct tm 结构体实例并复制内容
+    time_t toTimeT() {
+        struct tm lt = *toLocalTime();  // 创建一个新的 struct tm 结构体实例并复制内容
         return mktime(&lt);
     }
 
-    int operator-(const Date& d) const
-    {
-        struct tm t1 = { 0 };
+    int operator-(const Date& d) const {
+        struct tm t1 = {0};
         t1.tm_year = _year - 1900;
         t1.tm_mon = _month - 1;
         t1.tm_mday = _day;
         time_t time1 = mktime(&t1);
 
-        struct tm t2 = { 0 };
+        struct tm t2 = {0};
         t2.tm_year = d._year - 1900;
         t2.tm_mon = d._month - 1;
         t2.tm_mday = d._day;
@@ -161,14 +150,12 @@ public:
         return days;
     }
 
-    Date addDays(int n)
-    {
+    Date addDays(int n) {
         time_t t = toTimeT();
         return Date(t + n * 24 * 60 * 60);
     }
 
-    Date addMonths(int n)
-    {
+    Date addMonths(int n) {
         int y = _year;
         int m = _month + n;
         int d = _day;
@@ -202,8 +189,7 @@ public:
         return Date(d, m, y);
     }
 
-    Date addYears(int n)
-    {
+    Date addYears(int n) {
         int y = _year + n;
         int m = _month;
         int d = _day;
@@ -218,16 +204,14 @@ public:
         return Date(d, m, y);
     }
 
-    std::string toString() const
-    {
+    std::string toString() const {
         char buf[100];
         sprintf(buf, "%04d-%02d-%02d", _year, _month, _day);
         return buf;
     }
 
     // 格式化输出 格式化字符串支持yyyy,mm,dd
-    std::string toString(const std::string& format) const
-    {
+    std::string toString(const std::string& format) const {
         std::string res = format;
         // 兼容大小写
         std::transform(res.begin(), res.end(), res.begin(), ::tolower);
@@ -252,8 +236,7 @@ public:
     }
 
     // 是否合法
-    static bool isValidDate(const std::string& str)
-    {
+    static bool isValidDate(const std::string& str) {
         std::string date = str;
         std::regex pattern(R"(^\d{4}-\d{2}-\d{2}$)");
         bool isMatch = std::regex_match(date, pattern);
@@ -263,8 +246,7 @@ public:
         return true;
     }
 
-    static Date fromString(const std::string& str)
-    {
+    static Date fromString(const std::string& str) {
         int d, m, y;
         if (isValidDate(str)) {
             sscanf(str.c_str(), "%04d-%02d-%02d", &y, &m, &d);
@@ -278,8 +260,7 @@ public:
     }
 
     // 更新为当前日期
-    void update()
-    {
+    void update() {
         time_t t = time(NULL);
         struct tm lt;
         localtime_r(&t, &lt);
