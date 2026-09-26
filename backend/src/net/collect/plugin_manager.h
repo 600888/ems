@@ -57,23 +57,42 @@ class PluginManager {
         explicit operator bool() const { return create_fn != nullptr && destroy_fn != nullptr; }
     };
 
+    /** @brief 构造 PluginManager 实例。 */
     PluginManager();
+    /** @brief 释放 PluginManager 持有的资源。 */
     ~PluginManager();
 
     // ---- 拷贝/赋值 禁用 ----
-    PluginManager(const PluginManager&) = delete;
-    PluginManager& operator=(const PluginManager&) = delete;
-    PluginManager(PluginManager&&) noexcept = delete;
-    PluginManager& operator=(PluginManager&&) noexcept = delete;
+    /**
+     * @brief 禁止复制或移动该对象。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    PluginManager(const PluginManager& other) = delete;
+    /**
+     * @brief 禁止复制赋值。
+     * @param[in] other 待赋值的源对象。
+     */
+    PluginManager& operator=(const PluginManager& other) = delete;
+    /**
+     * @brief 禁止复制或移动该对象。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    PluginManager(PluginManager&& other) noexcept = delete;
+    /**
+     * @brief 禁止复制或移动赋值。
+     * @param[in] other 待赋值的源对象。
+     */
+    PluginManager& operator=(PluginManager&& other) noexcept = delete;
 
     /**
      * @brief 设置动态库搜索目录
-     * @param dir 绝对或相对路径，默认 "./lib"
+     * @param[in] dir 绝对或相对路径，默认 "./lib"
      */
     void set_plugin_dir(const std::string& dir);
 
     /**
      * @brief 获取动态库搜索目录
+     * @return 对应对象的引用。
      */
     const std::string& plugin_dir() const { return plugin_dir_; }
 
@@ -82,7 +101,7 @@ class PluginManager {
      *
      * 如果该协议已加载则增加引用计数并复用已有句柄。
      *
-     * @param protocol_name 协议名称, 如 "ModbusTCP", "IEC104"
+     * @param[in] protocol_name 协议名称, 如 "ModbusTCP", "IEC104"
      * @return 插件实例指针, 失败返回 nullptr
      */
     void* load(const std::string& protocol_name);
@@ -92,46 +111,53 @@ class PluginManager {
      *
      * 引用计数为 0 时真正执行 dlclose 卸载。
      *
-     * @param protocol_name 协议名称
+     * @param[in] protocol_name 协议名称
      */
     void unload(const std::string& protocol_name);
 
     /**
      * @brief 检查协议是否已加载
+     * @param[in] protocol_name 协议名称。
+     * @return true 表示条件成立；false 表示不成立。
      */
     bool is_loaded(const std::string& protocol_name) const;
 
     /**
      * @brief 获取已加载的所有协议名
+     * @return 匹配条件的数据集合。
      */
     std::vector<std::string> loaded_protocols() const;
 
     /**
      * @brief 获取插件信息
-     * @param instance 插件实例指针
+     * @param[in] instance 插件实例指针
      * @return 插件信息指针, 失败返回 nullptr
      */
     const EmPluginInfo* get_plugin_info(void* instance) const;
 
     /**
      * @brief 获取已加载插件的函数指针
-     * @param protocol_name 协议名称
+     * @param[in] protocol_name 协议名称
      * @return PluginFunctions（如果协议未加载则返回空的 PluginFunctions）
      */
     PluginFunctions get_functions(const std::string& protocol_name) const;
 
     /**
      * @brief 获取最近一次错误信息
+     * @return 最近一次错误的说明文本。
      */
     std::string last_error() const { return last_err_; }
 
     /**
      * @brief 获取默认的协议-库文件名映射表
+     * @return 对应对象的引用。
      */
     static const std::unordered_map<std::string, std::string>& default_lib_map();
 
     /**
      * @brief 注册自定义协议映射（覆盖默认映射）
+     * @param[in] protocol_name 协议名称。
+     * @param[in] lib_name 动态库文件名。
      */
     void register_mapping(const std::string& protocol_name, const std::string& lib_name);
 
@@ -145,7 +171,18 @@ class PluginManager {
         int ref_count{0};
     };
 
+    /**
+     * @brief 解析协议插件的动态库路径。
+     * @param[in] protocol_name 协议名称。
+     * @return 对应的文本内容。
+     */
     std::string resolve_lib_path(const std::string& protocol_name) const;
+    /**
+     * @brief 从动态库解析插件函数入口。
+     * @param[in] handle 动态库句柄。
+     * @param[in,out] fns 插件函数表。
+     * @return true 表示操作成功；false 表示失败。
+     */
     bool load_symbols(void* handle, PluginFunctions& fns);
 
     mutable std::mutex mutex_;

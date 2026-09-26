@@ -44,18 +44,37 @@ namespace device {
  */
 class ParaLoader {
    public:
+    /** @brief 构造 ParaLoader 实例。 */
     ParaLoader();
+    /** @brief 释放 ParaLoader 持有的资源。 */
     ~ParaLoader();
 
     // ---- 拷贝/赋值 禁用 ----
-    ParaLoader(const ParaLoader&) = delete;
-    ParaLoader& operator=(const ParaLoader&) = delete;
-    ParaLoader(ParaLoader&&) noexcept = default;
-    ParaLoader& operator=(ParaLoader&&) noexcept = default;
+    /**
+     * @brief 禁止复制或移动该对象。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ParaLoader(const ParaLoader& other) = delete;
+    /**
+     * @brief 禁止复制赋值。
+     * @param[in] other 待赋值的源对象。
+     */
+    ParaLoader& operator=(const ParaLoader& other) = delete;
+    /**
+     * @brief 构造 ParaLoader 实例。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ParaLoader(ParaLoader&& other) noexcept = default;
+    /**
+     * @brief 执行复制或移动赋值。
+     * @param[in] other 待赋值的源对象。
+     * @return 当前对象的引用。
+     */
+    ParaLoader& operator=(ParaLoader&& other) noexcept = default;
 
     /**
      * @brief 初始化数据库连接
-     * @param config 数据库配置
+     * @param[in] config 数据库配置
      * @return true 成功
      */
     bool initialize(const ems::db::DbConfig& config);
@@ -72,11 +91,15 @@ class ParaLoader {
 
     /**
      * @brief 按 ID 加载设备
+     * @param[in] id 对象标识。
+     * @return 得到的设备记录。
      */
     ems::db::device load_device_by_id(int64_t id);
 
     /**
      * @brief 按编码加载设备
+     * @param[in] code 对象编码。
+     * @return 得到的设备记录。
      */
     ems::db::device load_device_by_code(const std::string& code);
 
@@ -86,13 +109,15 @@ class ParaLoader {
 
     /**
      * @brief 从 DB 加载所有启用通道 (enable=1)
-     * @param device_id 可选: 按设备过滤, 0=全部
+     * @param[in] device_id 可选: 按设备过滤, 0=全部
      * @return 通道实体列表
      */
     std::vector<ems::db::channel> load_channels(int64_t device_id = 0);
 
     /**
      * @brief 按 ID 加载通道
+     * @param[in] id 对象标识。
+     * @return 得到的通道记录。
      */
     ems::db::channel load_channel_by_id(int64_t id);
 
@@ -102,22 +127,29 @@ class ParaLoader {
 
     /**
      * @brief 加载 YC (遥测) 测点配置
-     * @param channel_id 可选: 按通道过滤, 0=全部
+     * @param[in] channel_id 可选: 按通道过滤, 0=全部
+     * @return 匹配条件的数据集合。
      */
     std::vector<ems::db::point_yc> load_yc_points(int64_t channel_id = 0);
 
     /**
      * @brief 加载 YX (遥信) 测点配置
+     * @param[in] channel_id 通道 ID。
+     * @return 匹配条件的数据集合。
      */
     std::vector<ems::db::point_yx> load_yx_points(int64_t channel_id = 0);
 
     /**
      * @brief 加载 YK (遥控) 测点配置
+     * @param[in] channel_id 通道 ID。
+     * @return 匹配条件的数据集合。
      */
     std::vector<ems::db::point_yk> load_yk_points(int64_t channel_id = 0);
 
     /**
      * @brief 加载 YT (遥调) 测点配置
+     * @param[in] channel_id 通道 ID。
+     * @return 匹配条件的数据集合。
      */
     std::vector<ems::db::point_yt> load_yt_points(int64_t channel_id = 0);
 
@@ -129,6 +161,9 @@ class ParaLoader {
      * @brief 将 device 列表转换为运行时 DeviceConfig 列表
      *
      * 自动关联通道到设备、以及空测点列表 (需后续加载)。
+     * @param[in] devices 设备列表。
+     * @param[in] channels 通道列表。
+     * @return 匹配条件的数据集合。
      */
     std::vector<ems::rtdb::DeviceConfig> to_device_configs(
         const std::vector<ems::db::device>& devices,
@@ -136,12 +171,16 @@ class ParaLoader {
 
     /**
      * @brief 将 channel 列表转换为运行时 ChannelConfig 列表
+     * @param[in] channels 通道列表。
+     * @return 匹配条件的数据集合。
      */
     std::vector<ems::rtdb::ChannelConfig> to_channel_configs(
         const std::vector<ems::db::channel>& channels);
 
     /**
      * @brief 单条转换
+     * @param[in] ch 通道配置。
+     * @return 得到的通道配置。
      */
     ems::rtdb::ChannelConfig to_channel_config(const ems::db::channel& ch);
 
@@ -165,11 +204,13 @@ class ParaLoader {
 
     /**
      * @brief 是否已初始化
+     * @return true 表示条件成立；false 表示不成立。
      */
     bool is_initialized() const { return initialized_; }
 
     /**
      * @brief 获取最近一次错误信息
+     * @return 最近一次错误的说明文本。
      */
     std::string last_error() const { return last_err_; }
 

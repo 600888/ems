@@ -46,6 +46,11 @@ struct AlarmEvent {
     core::UtcMicros ingest_time{core::kInvalidUtcMicros};
 };
 
+/**
+ * @brief 返回告警等级的稳定诊断名称。
+ * @param[in] s 待解析的文本。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(AlarmSeverity s) noexcept {
     switch (s) {
         case AlarmSeverity::Info:
@@ -58,6 +63,11 @@ inline const char* to_string(AlarmSeverity s) noexcept {
     return "Unknown";
 }
 
+/**
+ * @brief 返回告警生命周期状态的稳定诊断名称。
+ * @param[in] l 长度或左侧值。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(AlarmLifecycle l) noexcept {
     switch (l) {
         case AlarmLifecycle::Occurred:

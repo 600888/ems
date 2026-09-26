@@ -23,16 +23,35 @@ using UtcMicros = std::int64_t;
 /// 无效时间哨兵（源时间缺失等场景）
 constexpr UtcMicros kInvalidUtcMicros = std::numeric_limits<std::int64_t>::min();
 
+/**
+ * @brief 判断业务时间是否不是无效哨兵。
+ * @param[in] t 待转换的枚举值。
+ * @return true 表示条件成立；false 表示不成立。
+ */
 inline bool is_valid_time(UtcMicros t) noexcept { return t != kInvalidUtcMicros; }
 
+/**
+ * @brief 将系统时钟时间点转为 UTC Unix 微秒。
+ * @param[in] tp 时间点。
+ * @return 得到的UTC 微秒时间戳。
+ */
 inline UtcMicros to_utc_micros(const std::chrono::system_clock::time_point& tp) noexcept {
     return std::chrono::duration_cast<std::chrono::microseconds>(tp.time_since_epoch()).count();
 }
 
+/**
+ * @brief 从 UTC Unix 微秒还原系统时钟时间点。
+ * @param[in] t 待转换的枚举值。
+ * @return 得到的时间点。
+ */
 inline std::chrono::system_clock::time_point from_utc_micros(UtcMicros t) noexcept {
     return std::chrono::system_clock::time_point(std::chrono::microseconds(t));
 }
 
+/**
+ * @brief 返回当前 UTC Unix 微秒时间。
+ * @return 得到的UTC 微秒时间戳。
+ */
 inline UtcMicros now_utc_micros() noexcept {
     return to_utc_micros(std::chrono::system_clock::now());
 }
@@ -40,6 +59,8 @@ inline UtcMicros now_utc_micros() noexcept {
 /**
  * @brief 格式化为 RFC3339 UTC 文本（秒精度 + 固定 .mmm 毫秒）
  * @note  仅用于日志/诊断输出；契约传输使用 int64 微秒本身
+ * @param[in] t 待转换的枚举值。
+ * @return 对应的文本内容。
  */
 inline std::string format_rfc3339_utc(UtcMicros t) {
     if (!is_valid_time(t)) {

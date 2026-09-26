@@ -19,23 +19,63 @@
 
 namespace ems::core {
 
-/// 强类型稳定 ID 包装（文本）
+/** @brief 以文本保存且不与其他 Tag 类型混用的稳定 ID。 */
 template <typename Tag>
 class StrongId {
    public:
+    /** @brief 构造空 ID。 */
     StrongId() = default;
+
+    /**
+     * @brief 从稳定文本构造 ID。
+     * @param[in] value 输入值。
+     */
     explicit StrongId(std::string value) : value_(std::move(value)) {}
 
-    /// 旧数字 ID → 十进制文本
+    /**
+     * @brief 将旧数字 ID 转为十进制文本，保持原有编号。
+     * @param[in] numeric 数值输入。
+     * @return 得到的稳定 ID。
+     */
     static StrongId from_number(std::uint64_t numeric) { return StrongId(std::to_string(numeric)); }
 
+    /**
+     * @brief 返回底层 ID 文本。
+     * @return 保存的 ID 或文本值。
+     */
     const std::string& value() const noexcept { return value_; }
+
+    /**
+     * @brief 判断 ID 文本是否为空。
+     * @return true 表示对象为空；false 表示非空。
+     */
     bool empty() const noexcept { return value_.empty(); }
+
+    /**
+     * @brief 判断 ID 是否非空。
+     * @return true 表示对象非空且有效；false 表示为空。
+     */
     explicit operator bool() const noexcept { return !value_.empty(); }
 
+    /**
+     * @brief 按 ID 文本判等。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示两者相等；false 表示不相等。
+     */
     bool operator==(const StrongId& other) const noexcept { return value_ == other.value_; }
+
+    /**
+     * @brief 按 ID 文本判不等。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示两者不相等；false 表示相等。
+     */
     bool operator!=(const StrongId& other) const noexcept { return value_ != other.value_; }
-    /// 仅用于容器排序；ID 文本不承载业务顺序语义
+
+    /**
+     * @brief 按文本排序供容器使用，不代表业务顺序。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示左侧值按定义顺序小于右侧值。
+     */
     bool operator<(const StrongId& other) const noexcept { return value_ < other.value_; }
 
    private:
@@ -43,14 +83,23 @@ class StrongId {
 };
 
 struct StationIdTag {};
+
 struct EssUnitIdTag {};
+
 struct AssetIdTag {};
+
 struct DeviceIdTag {};
+
 struct PointIdTag {};
+
 struct ChannelIdTag {};
+
 struct EventIdTag {};
+
 struct IntentIdTag {};
+
 struct CommandIdTag {};
+
 struct ConfigVersionTag {};
 
 using StationId = StrongId<StationIdTag>;          ///< 站
@@ -68,8 +117,24 @@ using ConfigVersion = StrongId<ConfigVersionTag>;  ///< 不可变配置版本，
 struct Revision {
     std::string opaque;
 
+    /**
+     * @brief 判断 CAS 令牌是否为空。
+     * @return true 表示对象为空；false 表示非空。
+     */
     bool empty() const noexcept { return opaque.empty(); }
+
+    /**
+     * @brief 比较 CAS 令牌是否相同。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示两者相等；false 表示不相等。
+     */
     bool operator==(const Revision& other) const noexcept { return opaque == other.opaque; }
+
+    /**
+     * @brief 比较 CAS 令牌是否不同。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示两者不相等；false 表示相等。
+     */
     bool operator!=(const Revision& other) const noexcept { return opaque != other.opaque; }
 };
 
@@ -77,8 +142,24 @@ struct Revision {
 struct Epoch {
     std::uint64_t value{0};
 
+    /**
+     * @brief 判断代次是否有效。零为无效代次。
+     * @return true 表示条件成立；false 表示不成立。
+     */
     bool valid() const noexcept { return value != 0; }
+
+    /**
+     * @brief 比较代次值是否相同。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示两者相等；false 表示不相等。
+     */
     bool operator==(const Epoch& other) const noexcept { return value == other.value; }
+
+    /**
+     * @brief 比较代次值是否不同。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示两者不相等；false 表示相等。
+     */
     bool operator!=(const Epoch& other) const noexcept { return value != other.value; }
 };
 
@@ -95,6 +176,10 @@ namespace std {
 /// 支持放入 unordered 容器
 template <typename Tag>
 struct hash<ems::core::StrongId<Tag>> {
+    /**
+     * @brief 按稳定文本计算哈希值。
+     * @return 计算得到的数值。
+     */
     size_t operator()(const ems::core::StrongId<Tag>& id) const noexcept {
         return std::hash<std::string>{}(id.value());
     }

@@ -5,14 +5,30 @@ static constexpr const char* LOGGER_NAME = "net";
 
 // 通道报文日志
 class ChannelMsgLogger {
+    /** @brief 禁止复制或移动该对象。 */
     ChannelMsgLogger() = delete;
-    ChannelMsgLogger(const ChannelMsgLogger&) = delete;
+    /**
+     * @brief 禁止复制或移动该对象。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ChannelMsgLogger(const ChannelMsgLogger& other) = delete;
 
    public:
+    /**
+     * @brief 生成通道报文日志器名称。
+     * @param[in] channelCode 通道编码。
+     * @return 对应的文本内容。
+     */
     static inline std::string channelMsgLoggerName(const std::string& channelCode) noexcept {
         return std::string("msg-") + channelCode;
     }
 
+    /**
+     * @brief 创建并注册通道报文日志器。
+     * @param[in] channelCode 通道编码。
+     * @param[in] log_level 日志级别。
+     * @return 对应对象的指针。
+     */
     static inline std::shared_ptr<spdlog::logger> addChannelLogger(const std::string& channelCode,
                                                                    LV log_level) noexcept {
         try {
@@ -46,6 +62,11 @@ class ChannelMsgLogger {
         return nullptr;
     }
 
+    /**
+     * @brief 获取通道报文日志器，必要时创建。
+     * @param[in] channelCode 通道编码。
+     * @return 匹配的对象指针；未找到时为空。
+     */
     static inline std::shared_ptr<spdlog::logger> getChannelMsgLogger(
         const std::string channelCode) noexcept {
         try {
@@ -62,6 +83,12 @@ class ChannelMsgLogger {
         return nullptr;
     }
 
+    /**
+     * @brief 向通道报文日志写入Msg级别消息。
+     * @param[in] channelCode 通道编码。
+     * @param[in] format 日志格式字符串。
+     * @param[in] args 日志格式化参数。
+     */
     template <typename... Args>
     static inline void logChannelMsg(const std::string& channelCode, const char* format,
                                      const Args&... args) noexcept {
@@ -73,6 +100,12 @@ class ChannelMsgLogger {
         }
     }
 
+    /**
+     * @brief 向通道报文日志写入Trace级别消息。
+     * @param[in] channelCode 通道编码。
+     * @param[in] format 日志格式字符串。
+     * @param[in] args 日志格式化参数。
+     */
     template <typename... Args>
     static inline void logChannelTrace(const std::string& channelCode, const char* format,
                                        const Args&... args) noexcept {
@@ -84,6 +117,12 @@ class ChannelMsgLogger {
         }
     }
 
+    /**
+     * @brief 向通道报文日志写入Debug级别消息。
+     * @param[in] channelCode 通道编码。
+     * @param[in] format 日志格式字符串。
+     * @param[in] args 日志格式化参数。
+     */
     template <typename... Args>
     static inline void logChannelDebug(const std::string& channelCode, const char* format,
                                        const Args&... args) noexcept {
@@ -95,6 +134,12 @@ class ChannelMsgLogger {
         }
     }
 
+    /**
+     * @brief 向通道报文日志写入Info级别消息。
+     * @param[in] channelCode 通道编码。
+     * @param[in] format 日志格式字符串。
+     * @param[in] args 日志格式化参数。
+     */
     template <typename... Args>
     static inline void logChannelInfo(const std::string& channelCode, const char* format,
                                       const Args&... args) noexcept {
@@ -106,6 +151,12 @@ class ChannelMsgLogger {
         }
     }
 
+    /**
+     * @brief 向通道报文日志写入Warn级别消息。
+     * @param[in] channelCode 通道编码。
+     * @param[in] format 日志格式字符串。
+     * @param[in] args 日志格式化参数。
+     */
     template <typename... Args>
     static inline void logChannelWarn(const std::string& channelCode, const char* format,
                                       const Args&... args) noexcept {
@@ -117,6 +168,12 @@ class ChannelMsgLogger {
         }
     }
 
+    /**
+     * @brief 向通道报文日志写入Error级别消息。
+     * @param[in] channelCode 通道编码。
+     * @param[in] format 日志格式字符串。
+     * @param[in] args 日志格式化参数。
+     */
     template <typename... Args>
     static inline void logChannelError(const std::string& channelCode, const char* format,
                                        const Args&... args) noexcept {
@@ -128,6 +185,12 @@ class ChannelMsgLogger {
         }
     }
 
+    /**
+     * @brief 向通道报文日志写入Critical级别消息。
+     * @param[in] channelCode 通道编码。
+     * @param[in] format 日志格式字符串。
+     * @param[in] args 日志格式化参数。
+     */
     template <typename... Args>
     static inline void logChannelCritical(const std::string& channelCode, const char* format,
                                           const Args&... args) noexcept {

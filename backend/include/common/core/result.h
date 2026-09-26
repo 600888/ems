@@ -59,6 +59,11 @@ using Status = Result<Unit>;
 /// steady_clock 期限（进程内超时预算；序列化只传业务时间或剩余预算）
 using Deadline = std::chrono::steady_clock::time_point;
 
+/**
+ * @brief 返回稳定错误码的诊断名称。
+ * @param[in] code 对象编码。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(ErrorCode code) noexcept {
     switch (code) {
         case ErrorCode::InvalidArgument:
@@ -89,6 +94,11 @@ inline const char* to_string(ErrorCode code) noexcept {
     return "Unknown";
 }
 
+/**
+ * @brief 返回写入确定性枚举的诊断名称。
+ * @param[in] effect 写入影响标记。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(WriteEffect effect) noexcept {
     switch (effect) {
         case WriteEffect::NotApplicable:
@@ -101,7 +111,13 @@ inline const char* to_string(WriteEffect effect) noexcept {
     return "Unknown";
 }
 
-/// 构造 Error
+/**
+ * @brief 构造带错误码、写入效果和诊断文本的 Error。
+ * @param[in] code 对象编码。
+ * @param[in] effect 写入影响标记。
+ * @param[in] message 命令结果说明。
+ * @return 得到的错误对象。
+ */
 inline Error make_error(ErrorCode code, WriteEffect effect, std::string message = {}) {
     Error e;
     e.code = code;
@@ -110,25 +126,40 @@ inline Error make_error(ErrorCode code, WriteEffect effect, std::string message 
     return e;
 }
 
-/// 是否成功（index 0 = T）
+/**
+ * @brief 判断 Result 是否携带成功值（variant 索引为零）。
+ * @param[in] r 结果对象。
+ * @return true 表示条件成立；false 表示不成立。
+ */
 template <class T>
 bool is_ok(const Result<T>& r) noexcept {
     return r.index() == 0;
 }
 
-/// 取失败 Error（前置条件：is_ok(r) == false）
+/**
+ * @brief 取失败 Error；调用前必须确认 is_ok(r) 为 false。
+ * @param[in] r 结果对象。
+ * @return 对应对象的引用。
+ */
 template <class T>
 const Error& error_of(const Result<T>& r) noexcept {
     return std::get<1>(r);
 }
 
-/// 取成功值（前置条件：is_ok(r) == true）
+/**
+ * @brief 取成功值；调用前必须确认 is_ok(r) 为 true。
+ * @param[in] r 结果对象。
+ * @return 对应对象的引用。
+ */
 template <class T>
 const T& value_of(const Result<T>& r) noexcept {
     return std::get<0>(r);
 }
 
-/// 无载荷成功值
+/**
+ * @brief 构造无载荷的成功状态。
+ * @return 得到的操作状态。
+ */
 inline Status ok_status() { return Status{Unit{}}; }
 
 }  // namespace ems::core

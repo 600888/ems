@@ -1,15 +1,21 @@
 #pragma once
 #include "default_logger.hpp"
 
-// 打印函数开始和结束
+/** @brief 输出函数开始或结束位置的调试日志。 */
 #define LOG_FUNC_BEG LOG_DEBUG("begin func {}", __FUNCTION__);
 #define LOG_FUNC_END LOG_DEBUG("end func {}", __FUNCTION__);
 
-// 打印函数开始和结束，根据日志级别 lv 打印不同的日志
+/** @brief 日志等级枚举别名。 */
 using LV = spdlog::level::level_enum;
+
+/** @brief 构造时和析构时分别记录函数边界。 */
 template <LV lv = LV::debug>
 class LogGuard {
    public:
+    /**
+     * @brief 记录操作开始，并保存结束日志所需的消息。
+     * @param[in] msg 消息内容。
+     */
     LogGuard(const std::string& msg) : _msg(msg) {
         switch (_lv) {
             case LV::debug:
@@ -22,6 +28,7 @@ class LogGuard {
         }
     }
 
+    /** @brief 记录操作结束。 */
     ~LogGuard() {
         switch (_lv) {
             case LV::debug:

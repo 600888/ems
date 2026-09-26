@@ -13,8 +13,11 @@ namespace ems::model {
 namespace {
 
 core::AssetId aid(const char* s) { return core::AssetId(s); }
+
 core::DeviceId did(const char* s) { return core::DeviceId(s); }
+
 core::PointId pid(const char* s) { return core::PointId(s); }
+
 core::ChannelId cid(const char* s) { return core::ChannelId(s); }
 
 /// 构造一份合法目录：1 站 + 2 单元 + 设备（多通道 + 共享总线）+ 点/绑定/能力

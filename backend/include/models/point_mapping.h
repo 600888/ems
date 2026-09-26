@@ -15,9 +15,16 @@
 namespace ems {
 namespace model {
 
+/** @brief 保存目标点与来源点的映射和计算公式。 */
 class PointMapping : public BaseModelWithId, public TimestampMixin, public StatusMixin {
    public:
+    /** @brief 构造默认点映射。 */
     PointMapping() = default;
+
+    /**
+     * @brief 从数据库 ID 构造点映射。
+     * @param[in] id 对象标识。
+     */
     explicit PointMapping(int64_t id) : BaseModelWithId(id) {}
 
     std::string device_name;
@@ -26,6 +33,10 @@ class PointMapping : public BaseModelWithId, public TimestampMixin, public Statu
     std::string formula;
     std::string description;
 
+    /**
+     * @copydoc BaseModel::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const override {
         json j = BaseModelWithId::to_json();
         j["device_name"] = device_name;
@@ -38,6 +49,10 @@ class PointMapping : public BaseModelWithId, public TimestampMixin, public Statu
         return j;
     }
 
+    /**
+     * @copydoc BaseModel::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         BaseModelWithId::from_json(j);
 
@@ -55,6 +70,10 @@ class PointMapping : public BaseModelWithId, public TimestampMixin, public Statu
         if (j.contains("status")) StatusMixin::from_json(j["status"]);
     }
 
+    /**
+     * @brief 返回便于展示的来源点及计算公式文本。
+     * @return 对应的文本内容。
+     */
     std::string to_formula_string() const {
         std::string result = target_point_code + " = " + formula + " (";
         for (size_t i = 0; i < source_point_codes.size(); ++i) {

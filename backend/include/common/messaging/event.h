@@ -34,6 +34,11 @@ enum class EventType : std::uint8_t {
     // 已移除事件的编号 7 保留，不复用。
 };
 
+/**
+ * @brief 返回事件类型的稳定诊断名称。
+ * @param[in] t 待转换的枚举值。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(EventType t) noexcept {
     switch (t) {
         case EventType::Telemetry:

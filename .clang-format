@@ -68,4 +68,7 @@ SpacesBeforeTrailingComments: 2
 
 # 连续空行折叠为最多 1 行。
 MaxEmptyLinesToKeep: 1
+
+# 函数、类、结构体等定义块之间自动保留空行。
+SeparateDefinitionBlocks: Always
 ...

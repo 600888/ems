@@ -78,13 +78,31 @@ enum class EngineState : int { Idle = 0, Running = 1, Stopped = 2, Error = 3 };
  */
 class CollectEngine {
    public:
+    /** @brief 构造 CollectEngine 实例。 */
     CollectEngine();
+    /** @brief 释放 CollectEngine 持有的资源。 */
     ~CollectEngine();
 
-    CollectEngine(const CollectEngine&) = delete;
-    CollectEngine& operator=(const CollectEngine&) = delete;
-    CollectEngine(CollectEngine&&) noexcept = delete;
-    CollectEngine& operator=(CollectEngine&&) noexcept = delete;
+    /**
+     * @brief 禁止复制或移动该对象。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    CollectEngine(const CollectEngine& other) = delete;
+    /**
+     * @brief 禁止复制赋值。
+     * @param[in] other 待赋值的源对象。
+     */
+    CollectEngine& operator=(const CollectEngine& other) = delete;
+    /**
+     * @brief 禁止复制或移动该对象。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    CollectEngine(CollectEngine&& other) noexcept = delete;
+    /**
+     * @brief 禁止复制或移动赋值。
+     * @param[in] other 待赋值的源对象。
+     */
+    CollectEngine& operator=(CollectEngine&& other) noexcept = delete;
 
     // ============================================================
     // 生命周期
@@ -92,7 +110,7 @@ class CollectEngine {
 
     /**
      * @brief 初始化引擎
-     * @param config 引擎配置
+     * @param[in] config 引擎配置
      * @return true 成功
      */
     bool initialize(const EngineConfig& config);
@@ -102,9 +120,9 @@ class CollectEngine {
      *
      * 从 ParaLoader 加载通道配置，逐一创建并启动通道线程。
      *
-     * @param para_loader 参数加载器引用
-     * @param yc_points   遥测测点配置（可选，用于构建设备上下文）
-     * @param yx_points   遥信测点配置（可选）
+     * @param[in] para_loader 参数加载器引用
+     * @param[in] yc_points   遥测测点配置（可选，用于构建设备上下文）
+     * @param[in] yx_points   遥信测点配置（可选）
      * @return 成功启动的通道数
      */
     int start_all(device::ParaLoader& para_loader,
@@ -113,7 +131,7 @@ class CollectEngine {
 
     /**
      * @brief 启动单个通道
-     * @param channelConfig 通道配置
+     * @param[in] channelConfig 通道配置
      * @return true 成功
      */
     bool start_channel(const ems::rtdb::ChannelConfig& channelConfig);
@@ -125,7 +143,7 @@ class CollectEngine {
 
     /**
      * @brief 停止单个通道
-     * @param channel_id 通道 ID
+     * @param[in] channel_id 通道 ID
      * @return true 成功
      */
     bool stop_channel(int64_t channel_id);
@@ -141,31 +159,38 @@ class CollectEngine {
 
     /**
      * @brief 获取引擎状态
+     * @return 得到的采集引擎状态。
      */
     EngineState state() const { return state_.load(); }
 
     /**
      * @brief 获取通道数量
+     * @return 处理或统计得到的数据项数量。
      */
     size_t channel_count() const;
 
     /**
      * @brief 获取运行中的通道数量
+     * @return 处理或统计得到的数据项数量。
      */
     size_t running_count() const;
 
     /**
      * @brief 获取所有通道线程列表
+     * @return 对应对象的指针。
      */
     std::vector<std::shared_ptr<ChannelThread>> channels() const;
 
     /**
      * @brief 按 ID 查找通道
+     * @param[in] channel_id 通道 ID。
+     * @return 匹配的对象指针；未找到时为空。
      */
     std::shared_ptr<ChannelThread> find_channel(int64_t channel_id) const;
 
     /**
      * @brief 是否正在运行
+     * @return true 表示条件成立；false 表示不成立。
      */
     bool is_running() const { return state_.load() == EngineState::Running; }
 
@@ -175,11 +200,13 @@ class CollectEngine {
 
     /**
      * @brief 获取插件管理器引用
+     * @return 对应对象的引用。
      */
     PluginManager& plugin_manager() { return plugin_manager_; }
 
     /**
      * @brief 获取数据分发器引用
+     * @return 对应对象的指针。
      */
     std::shared_ptr<DataDispatcher> data_dispatcher() { return dispatcher_; }
 
@@ -195,19 +222,36 @@ class CollectEngine {
     /** @brief 采集错误回调 */
     using ErrorCallback = std::function<void(int64_t channel_id, const std::string& error)>;
 
+    /**
+     * @brief 设置通道状态变化回调。
+     * @param[in] cb 操作完成或变化时调用的回调。
+     */
     void set_channel_state_callback(ChannelStateCallback cb) { state_cb_ = std::move(cb); }
 
+    /**
+     * @brief 设置错误回调。
+     * @param[in] cb 操作完成或变化时调用的回调。
+     */
     void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
 
    private:
     /**
      * @brief 创建设备上下文列表
+     * @param[in] channelConfig 通道配置。
+     * @param[in] yc_points 遥测测点列表。
+     * @param[in] yx_points 遥信测点列表。
+     * @return 匹配条件的数据集合。
      */
     std::vector<DeviceContext> build_device_contexts(
         const ems::rtdb::ChannelConfig& channelConfig,
         const std::vector<ems::db::point_yc>* yc_points,
         const std::vector<ems::db::point_yx>* yx_points);
 
+    /**
+     * @brief 处理通道上报的错误。
+     * @param[in] channel_id 通道 ID。
+     * @param[in] error 错误说明。
+     */
     void on_channel_error(int64_t channel_id, const std::string& error);
 
     EngineConfig config_;

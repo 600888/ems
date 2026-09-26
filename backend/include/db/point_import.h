@@ -23,11 +23,15 @@ namespace db {
  */
 class PointImporter {
    public:
+    /**
+     * @brief 绑定负责写入采集数据的数据库管理器。
+     * @param[in] dbm 数据库管理器。
+     */
     explicit PointImporter(DbManager& dbm) : dbm_(dbm) {}
 
     /**
      * @brief 导入一批采集数据 (增量追加)
-     * @param data_list 采集数据列表
+     * @param[in] data_list 采集数据列表
      * @return >=0 导入条数, -1 失败
      */
     int import_collected(const std::vector<CollectImportData>& data_list) {
@@ -36,6 +40,14 @@ class PointImporter {
 
     /**
      * @brief 构建一条 YC 采集数据
+     * @param[in] point_code 测点编码。
+     * @param[in] channel_id 通道 ID。
+     * @param[in] device_id 设备 ID。
+     * @param[in] raw_value 原始采集值。
+     * @param[in] eng_value 工程值。
+     * @param[in] quality 测点品质码。
+     * @param[in] collect_time 采集时间。
+     * @return 得到的采集导入数据。
      */
     static CollectImportData make_yc_data(const std::string& point_code, int64_t channel_id,
                                           int64_t device_id, int64_t raw_value, double eng_value,
@@ -45,6 +57,12 @@ class PointImporter {
 
     /**
      * @brief 构建一条 YX 采集数据
+     * @param[in] point_code 测点编码。
+     * @param[in] channel_id 通道 ID。
+     * @param[in] device_id 设备 ID。
+     * @param[in] value 输入值。
+     * @param[in] collect_time 采集时间。
+     * @return 得到的采集导入数据。
      */
     static CollectImportData make_yx_data(const std::string& point_code, int64_t channel_id,
                                           int64_t device_id, int value,
@@ -61,6 +79,12 @@ class PointImporter {
 
     /**
      * @brief 构建一条 YK 采集数据
+     * @param[in] point_code 测点编码。
+     * @param[in] channel_id 通道 ID。
+     * @param[in] device_id 设备 ID。
+     * @param[in] value 输入值。
+     * @param[in] collect_time 采集时间。
+     * @return 得到的采集导入数据。
      */
     static CollectImportData make_yk_data(const std::string& point_code, int64_t channel_id,
                                           int64_t device_id, int value,
@@ -77,6 +101,13 @@ class PointImporter {
 
     /**
      * @brief 构建一条 YT 采集数据
+     * @param[in] point_code 测点编码。
+     * @param[in] channel_id 通道 ID。
+     * @param[in] device_id 设备 ID。
+     * @param[in] raw_value 原始采集值。
+     * @param[in] eng_value 工程值。
+     * @param[in] collect_time 采集时间。
+     * @return 得到的采集导入数据。
      */
     static CollectImportData make_yt_data(const std::string& point_code, int64_t channel_id,
                                           int64_t device_id, int64_t raw_value, double eng_value,

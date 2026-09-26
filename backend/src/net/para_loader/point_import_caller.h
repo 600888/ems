@@ -25,29 +25,32 @@ namespace device {
  */
 class PointImportCaller {
    public:
+    /** @brief 构造 PointImportCaller 实例。 */
     PointImportCaller();
+    /** @brief 释放 PointImportCaller 持有的资源。 */
     ~PointImportCaller();
 
     /**
      * @brief 初始化 (建立数据库连接)
-     * @param config 数据库配置
+     * @param[in] config 数据库配置
      * @return true 成功
      */
     bool initialize(const ems::db::DbConfig& config);
 
     /**
      * @brief 批量导入读取到的测点采集数据
-     * @param data_list 采集数据列表
+     * @param[in] data_list 采集数据列表
      * @return >=0 成功导入条数, -1 失败
      */
     int import_collected(const std::vector<ems::db::CollectImportData>& data_list);
 
     /**
      * @brief 批量导入 YC 采集数据 (便捷接口)
-     * @param channel_id  通道ID
-     * @param device_id   设备ID
-     * @param values      测点值列表 {point_code, raw_value, eng_value}
-     * @param collect_time 采集时间
+     * @param[in] channel_id  通道ID
+     * @param[in] device_id   设备ID
+     * @param[in] values      测点值列表 {point_code, raw_value, eng_value}
+     * @param[in] collect_time 采集时间
+     * @return 成功处理的数据项数量；失败时返回错误值。
      */
     int import_yc_batch(int64_t channel_id, int64_t device_id,
                         const std::vector<std::tuple<std::string, int64_t, double>>& values,
@@ -55,6 +58,11 @@ class PointImportCaller {
 
     /**
      * @brief 批量导入 YX 采集数据 (便捷接口)
+     * @param[in] channel_id 通道 ID。
+     * @param[in] device_id 设备 ID。
+     * @param[in] values 待读取或写入的数值列表。
+     * @param[in] collect_time 采集时间。
+     * @return 成功处理的数据项数量；失败时返回错误值。
      */
     int import_yx_batch(int64_t channel_id, int64_t device_id,
                         const std::vector<std::pair<std::string, int>>& values,
@@ -62,6 +70,7 @@ class PointImportCaller {
 
     /**
      * @brief 是否已初始化
+     * @return true 表示条件成立；false 表示不成立。
      */
     bool is_initialized() const { return initialized_; }
 

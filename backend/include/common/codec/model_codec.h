@@ -23,35 +23,105 @@
 
 namespace ems::codec {
 
-/// 类型化值 → JSON 文本（非法组合返回 InvalidArgument，如 NaN/Inf）
+/**
+ * @brief 将类型化点值编码为 JSON；非法类型组合或 NaN/Inf 返回 InvalidArgument。
+ * @param[in] type 连接或数据类型。
+ * @param[in] value 输入值。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<std::string> encode_point_value(model::ValueType type, const model::PointValue& value);
 
-/// JSON 文本 → 类型化值（类型不符返回 SchemaMismatch）
+/**
+ * @brief 从 JSON 解码类型化点值；类型不符返回 SchemaMismatch。
+ * @param[in] type 连接或数据类型。
+ * @param[in] json_text JSON 文本。
+ * @return 成功时包含测点值；失败时包含错误信息。
+ */
 core::Result<model::PointValue> decode_point_value(model::ValueType type,
                                                    const std::string& json_text);
 
-/// AssetNode ↔ JSON
+/**
+ * @brief 将资产节点编码为 JSON。
+ * @param[in] asset 资产对象。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<std::string> encode_asset(const model::AssetNode& asset);
+
+/**
+ * @brief 从 JSON 解码资产节点。
+ * @param[in] json_text JSON 文本。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<model::AssetNode> decode_asset(const std::string& json_text);
 
-/// Device ↔ JSON
+/**
+ * @brief 将设备编码为 JSON。
+ * @param[in] device 设备对象。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<std::string> encode_device(const model::Device& device);
+
+/**
+ * @brief 从 JSON 解码设备。
+ * @param[in] json_text JSON 文本。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<model::Device> decode_device(const std::string& json_text);
 
-/// Point ↔ JSON
+/**
+ * @brief 将点定义编码为 JSON。
+ * @param[in] point 测点数据。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<std::string> encode_point(const model::Point& point);
+
+/**
+ * @brief 从 JSON 解码点定义。
+ * @param[in] json_text JSON 文本。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<model::Point> decode_point(const std::string& json_text);
 
-/// DeviceChannelBinding ↔ JSON
+/**
+ * @brief 将设备通道绑定编码为 JSON。
+ * @param[in] binding 设备与通道的绑定关系。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<std::string> encode_binding(const model::DeviceChannelBinding& binding);
+
+/**
+ * @brief 从 JSON 解码设备通道绑定。
+ * @param[in] json_text JSON 文本。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<model::DeviceChannelBinding> decode_binding(const std::string& json_text);
 
-/// VendorPointRoute ↔ JSON
+/**
+ * @brief 将厂商点路由编码为 JSON。
+ * @param[in] route 路由配置。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<std::string> encode_vendor_route(const model::VendorPointRoute& route);
+
+/**
+ * @brief 从 JSON 解码厂商点路由。
+ * @param[in] json_text JSON 文本。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<model::VendorPointRoute> decode_vendor_route(const std::string& json_text);
 
-/// ForwardingPointMap ↔ JSON
+/**
+ * @brief 将转发点映射编码为 JSON。
+ * @param[in] map 键值映射。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<std::string> encode_forwarding_map(const model::ForwardingPointMap& map);
+
+/**
+ * @brief 从 JSON 解码转发点映射。
+ * @param[in] json_text JSON 文本。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<model::ForwardingPointMap> decode_forwarding_map(const std::string& json_text);
 
 }  // namespace ems::codec

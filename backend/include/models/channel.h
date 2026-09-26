@@ -15,9 +15,16 @@
 namespace ems {
 namespace model {
 
+/** @brief 保存设备通道的协议和连接配置。 */
 class channel : public BaseModelWithId, public TimestampMixin, public StatusMixin {
    public:
+    /** @brief 构造默认通道模型。 */
     channel() = default;
+
+    /**
+     * @brief 从数据库 ID 构造通道模型。
+     * @param[in] id 对象标识。
+     */
     explicit channel(int64_t id) : BaseModelWithId(id) {}
 
     std::string code;
@@ -45,6 +52,10 @@ class channel : public BaseModelWithId, public TimestampMixin, public StatusMixi
     std::vector<std::shared_ptr<class point_yt>> yt_points;
     std::vector<std::shared_ptr<class Slave>> slaves;
 
+    /**
+     * @copydoc BaseModel::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const override {
         json j = BaseModelWithId::to_json();
         j["code"] = code;
@@ -76,6 +87,10 @@ class channel : public BaseModelWithId, public TimestampMixin, public StatusMixi
         return j;
     }
 
+    /**
+     * @copydoc BaseModel::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         BaseModelWithId::from_json(j);
 
@@ -109,6 +124,10 @@ class channel : public BaseModelWithId, public TimestampMixin, public StatusMixi
         if (j.contains("status")) StatusMixin::from_json(j["status"]);
     }
 
+    /**
+     * @brief 返回协议类型的人类可读名称。
+     * @return 对应的文本内容。
+     */
     std::string get_protocol_name() const {
         switch (protocol_type) {
             case ProtocolType::ModbusRTU:
@@ -130,6 +149,10 @@ class channel : public BaseModelWithId, public TimestampMixin, public StatusMixi
         }
     }
 
+    /**
+     * @brief 返回连接类型的人类可读名称。
+     * @return 对应的文本内容。
+     */
     std::string get_conn_type_name() const {
         switch (conn_type) {
             case ConnectionType::Serial:
@@ -145,6 +168,10 @@ class channel : public BaseModelWithId, public TimestampMixin, public StatusMixi
         }
     }
 
+    /**
+     * @brief 汇总通道下各类测点的数量。
+     * @return 处理或统计得到的数据项数量。
+     */
     int get_total_point_count() const {
         return static_cast<int>(yc_points.size() + yx_points.size() + yk_points.size() +
                                 yt_points.size());

@@ -20,7 +20,7 @@
 
 namespace ems::realtime {
 
-/// 后端规格：type 为稳定注册名，options 为该后端声明的配置键值
+/** @brief 后端规格；type 为稳定注册名，options 为后端声明的配置键值。 */
 struct BackendSpec {
     std::string type;
     std::map<std::string, std::string> options;
@@ -29,9 +29,15 @@ struct BackendSpec {
 using Creator =
     std::function<Result<std::unique_ptr<IRealtimeStore>>(const BackendSpec&, const CallContext&)>;
 
+/** @brief 注册并按配置创建实时存储后端。 */
 class BackendFactory {
    public:
-    /// 注册后端；重复类型或注册阶段结束后冻结时返回 Conflict/NotApplied
+    /**
+     * @brief 注册后端创建器。
+     * @param[in] type 稳定的后端类型名。
+     * @param[in] creator 该类型的创建器。
+     * @return 重复注册或冻结后返回 Conflict/NotApplied。
+     */
     Result<bool> register_backend(std::string type, Creator creator) {
         if (frozen_) {
             return core::make_error(ErrorCode::Conflict, core::WriteEffect::NotApplied,
@@ -48,12 +54,21 @@ class BackendFactory {
         return true;
     }
 
-    /// 冻结注册表；冻结后 register_backend 一律失败
+    /** @brief 冻结注册表，拒绝后续注册。 */
     void freeze() noexcept { frozen_ = true; }
 
+    /**
+     * @brief 查询注册表是否已冻结。
+     * @return true 表示条件成立；false 表示不成立。
+     */
     bool is_frozen() const noexcept { return frozen_; }
 
-    /// 按规格创建后端；未注册类型返回 Unsupported（启动失败，不降级）
+    /**
+     * @brief 按规格创建后端。
+     * @param[in] spec 后端类型及选项。
+     * @param[in] ctx 调用预算。
+     * @return 未注册类型返回 Unsupported，不自动降级。
+     */
     Result<std::unique_ptr<IRealtimeStore>> create(const BackendSpec& spec,
                                                    const CallContext& ctx) const {
         auto it = creators_.find(spec.type);

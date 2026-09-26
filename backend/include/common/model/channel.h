@@ -49,6 +49,11 @@ struct ChannelConfig {
     bool enabled{true};
 };
 
+/**
+ * @brief 返回连接模式的稳定诊断名称。
+ * @param[in] m 数据映射。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(ConnectionMode m) noexcept {
     switch (m) {
         case ConnectionMode::Serial:

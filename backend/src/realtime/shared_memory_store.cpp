@@ -26,7 +26,9 @@ namespace {
 using namespace detail;
 constexpr std::uint32_t layout_version = 1, ready = 2;
 constexpr std::uint64_t magic = 0x315452534d454d53ULL;
+
 constexpr std::size_t align64(std::size_t n) { return (n + 63) & ~std::size_t(63); }
+
 struct alignas(64) Header {
     std::uint64_t magic_value;
     std::uint32_t version, endian, header_size, sync_size;
@@ -35,18 +37,22 @@ struct alignas(64) Header {
     char generation[32];
     alignas(4) std::uint32_t state;
 };
+
 struct alignas(64) Shard {
 #ifndef _WIN32
     pthread_mutex_t mutex;
 #endif
     std::uint32_t broken;
 };
+
 struct alignas(64) Slot {
     alignas(4) std::uint32_t active;
 };
+
 struct Image {
     std::uint32_t length, crc;
 };
+
 std::uint32_t load_word(std::uint32_t* word) {
 #ifdef _WIN32
     return static_cast<std::uint32_t>(
@@ -57,6 +63,7 @@ std::uint32_t load_word(std::uint32_t* word) {
     return __atomic_load_n(word, __ATOMIC_ACQUIRE);
 #endif
 }
+
 void publish_word(std::uint32_t* word, std::uint32_t value) {
 #ifdef _WIN32
     InterlockedExchange(reinterpret_cast<volatile LONG*>(word), static_cast<LONG>(value));
@@ -64,6 +71,7 @@ void publish_word(std::uint32_t* word, std::uint32_t value) {
     __atomic_store_n(word, value, __ATOMIC_RELEASE);
 #endif
 }
+
 std::uint32_t sync_abi() {
 #ifdef _WIN32
     return 0x57494e00u + sizeof(void*);
@@ -72,6 +80,7 @@ std::uint32_t sync_abi() {
            sizeof(void*);
 #endif
 }
+
 bool valid_name(const std::string& s) {
     if (s.empty() || s.size() > 64) return false;
     for (char c : s)
@@ -80,9 +89,11 @@ bool valid_name(const std::string& s) {
             return false;
     return true;
 }
+
 Error timeout(WriteEffect e) {
     return error(ErrorCode::DeadlineExceeded, e, "shared-memory deadline exceeded");
 }
+
 Error corrupt(WriteEffect e) {
     return error(ErrorCode::CorruptData, e,
                  "shared-memory shard quarantined: invalid active image");
@@ -108,6 +119,7 @@ struct SharedMemoryStore::Impl {
     int fd = -1;
 #endif
     ~Impl() { close(); }
+
     void close() noexcept {
 #ifdef _WIN32
         for (auto lock : locks) CloseHandle(lock);
@@ -123,21 +135,26 @@ struct SharedMemoryStore::Impl {
         memory = nullptr;
         header = nullptr;
     }
+
     Shard* shard(std::size_t i) const {
         return reinterpret_cast<Shard*>(static_cast<char*>(memory) + sizeof(Header)) + i;
     }
+
     Slot* slot(std::size_t i) const {
         return reinterpret_cast<Slot*>(static_cast<char*>(memory) + slots_offset + i * slot_stride);
     }
+
     Image* image(Slot* s, std::uint32_t index) const {
         return reinterpret_cast<Image*>(reinterpret_cast<char*>(s) + sizeof(Slot) +
                                         index * image_stride);
     }
+
     struct Stored {
         bool live = false;
         std::string key, revision;
         Fields fields;
     };
+
     Result<Stored> inspect(Slot* s, WriteEffect effect) {
         const auto active = load_word(&s->active);
         if (active == 0) return Stored{};
@@ -158,61 +175,85 @@ struct SharedMemoryStore::Impl {
         out.live = state == 1;
         return out;
     }
+    enum class LockAttempt { Busy, Acquired, Abandoned };
+
+    Result<LockAttempt> try_lock_shard(std::size_t id, [[maybe_unused]] const CallContext& ctx,
+                                       WriteEffect effect) {
+#ifdef _WIN32
+        const auto remaining =
+            std::chrono::duration_cast<std::chrono::milliseconds>(core::remaining_budget(ctx))
+                .count();
+        const auto wait_ms =
+            static_cast<DWORD>(std::min<std::int64_t>(std::max<std::int64_t>(1, remaining), 50));
+        const auto status = WaitForSingleObject(locks[id], wait_ms);
+        if (status == WAIT_OBJECT_0) return LockAttempt::Acquired;
+        if (status == WAIT_ABANDONED) return LockAttempt::Abandoned;
+        if (status == WAIT_TIMEOUT) return LockAttempt::Busy;
+        return error(ErrorCode::Unavailable, effect, "shared-memory mutex wait failed");
+#else
+        const auto status = pthread_mutex_trylock(&shard(id)->mutex);
+        if (status == 0) return LockAttempt::Acquired;
+        if (status == EOWNERDEAD) return LockAttempt::Abandoned;
+        if (status != EBUSY)
+            return error(ErrorCode::CorruptData, effect, "shared-memory mutex unrecoverable");
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        return LockAttempt::Busy;
+#endif
+    }
+
+    void unlock_shard(std::size_t id) noexcept {
+#ifdef _WIN32
+        ReleaseMutex(locks[id]);
+#else
+        pthread_mutex_unlock(&shard(id)->mutex);
+#endif
+    }
+
+    bool make_shard_consistent([[maybe_unused]] std::size_t id) noexcept {
+#ifdef _WIN32
+        return true;
+#else
+        return pthread_mutex_consistent(&shard(id)->mutex) == 0;
+#endif
+    }
+
     struct Guard {
         Impl* owner;
         std::size_t id;
+
         Guard(Impl* o, std::size_t i) : owner(o), id(i) {}
+
         Guard(const Guard&) = delete;
+
+        Guard(Guard&& other) noexcept : owner(std::exchange(other.owner, nullptr)), id(other.id) {}
+
         ~Guard() {
-#ifdef _WIN32
-            ReleaseMutex(owner->locks[id]);
-#else
-            pthread_mutex_unlock(&owner->shard(id)->mutex);
-#endif
+            if (owner) owner->unlock_shard(id);
         }
     };
-    Result<bool> lock(std::size_t id, const CallContext& ctx, WriteEffect effect) {
-        bool abandoned = false;
+
+    Result<Guard> lock(std::size_t id, const CallContext& ctx, WriteEffect effect) {
+        auto attempt = LockAttempt::Busy;
         while (true) {
             if (core::has_expired(ctx)) return timeout(effect);
-#ifdef _WIN32
-            auto remaining =
-                std::chrono::duration_cast<std::chrono::milliseconds>(core::remaining_budget(ctx))
-                    .count();
-            auto status =
-                WaitForSingleObject(locks[id], static_cast<DWORD>(std::min<std::int64_t>(
-                                                   std::max<std::int64_t>(1, remaining), 50)));
-            if (status == WAIT_OBJECT_0 || status == WAIT_ABANDONED) {
-                abandoned = status == WAIT_ABANDONED;
-                break;
-            }
-            if (status != WAIT_TIMEOUT)
-                return error(ErrorCode::Unavailable, effect, "shared-memory mutex wait failed");
-#else
-            auto status = pthread_mutex_trylock(&shard(id)->mutex);
-            if (status == 0 || status == EOWNERDEAD) {
-                abandoned = status == EOWNERDEAD;
-                break;
-            }
-            if (status != EBUSY)
-                return error(ErrorCode::CorruptData, effect, "shared-memory mutex unrecoverable");
-            std::this_thread::sleep_for(std::chrono::milliseconds(1));
-#endif
+            auto result = try_lock_shard(id, ctx, effect);
+            if (!core::is_ok(result)) return core::error_of(result);
+            attempt = core::value_of(result);
+            if (attempt != LockAttempt::Busy) break;
         }
-        // The caller owns the lock on success, even if the shard is marked broken.
-        if (abandoned) {
+        Guard guard(this, id);
+        if (attempt == LockAttempt::Abandoned) {
             auto count = options.capacity / options.shard_count;
             for (std::size_t i = id * count; i < (id + 1) * count; ++i)
                 if (!core::is_ok(inspect(slot(i), effect))) {
                     shard(id)->broken = 1;
                     break;
                 }
-#ifndef _WIN32
-            if (pthread_mutex_consistent(&shard(id)->mutex) != 0) shard(id)->broken = 1;
-#endif
+            if (!make_shard_consistent(id)) shard(id)->broken = 1;
         }
-        return true;
+        return std::move(guard);
     }
+
     Result<std::pair<Slot*, Stored>> find(const std::string& key, std::size_t id,
                                           WriteEffect effect) {
         if (shard(id)->broken) return corrupt(effect);
@@ -231,6 +272,7 @@ struct SharedMemoryStore::Impl {
         }
         return std::make_pair(vacant, Stored{});
     }
+
     Result<Revision> commit(Slot* s, const std::string& key, const std::string& encoded,
                             bool tombstone, const CallContext& ctx) {
         auto nonce = token();
@@ -262,8 +304,11 @@ struct SharedMemoryStore::Impl {
 };
 
 SharedMemoryStore::SharedMemoryStore(std::unique_ptr<Impl> impl) : impl_(std::move(impl)) {}
+
 SharedMemoryStore::~SharedMemoryStore() = default;
+
 BackendInfo SharedMemoryStore::info() const { return impl_->capabilities; }
+
 void SharedMemoryStore::close() noexcept { impl_->close(); }
 
 Result<std::unique_ptr<IRealtimeStore>> SharedMemoryStore::open(const SharedMemoryOptions& o,
@@ -296,14 +341,17 @@ Result<std::unique_ptr<IRealtimeStore>> SharedMemoryStore::open(const SharedMemo
     if (!bootstrap)
         return error(ErrorCode::PermissionDenied, no,
                      "cannot open shared-memory initialization lock");
+
     struct Boot {
         HANDLE h;
         bool held = false;
+
         ~Boot() {
             if (held) ReleaseMutex(h);
             CloseHandle(h);
         }
     } boot{bootstrap};
+
     while (!boot.held) {
         if (core::has_expired(ctx)) return timeout(no);
         auto r = WaitForSingleObject(bootstrap, 1);
@@ -438,7 +486,7 @@ Result<Record> SharedMemoryStore::read(const RecordKey& key, const CallContext& 
     auto id = hash(encoded) % impl_->options.shard_count;
     auto locked = impl_->lock(id, ctx, e);
     if (!core::is_ok(locked)) return core::error_of(locked);
-    Impl::Guard guard(impl_.get(), id);
+    auto guard = std::get<Impl::Guard>(std::move(locked));
     if (core::has_expired(ctx)) return timeout(e);
     auto result = impl_->find(encoded, id, e);
     if (!core::is_ok(result)) return core::error_of(result);
@@ -446,6 +494,7 @@ Result<Record> SharedMemoryStore::read(const RecordKey& key, const CallContext& 
     if (!stored.live) return error(ErrorCode::NotFound, e, "record not found");
     return Record{std::move(stored.fields), Revision{stored.revision}};
 }
+
 Result<WriteReceipt> SharedMemoryStore::compareExchange(const WriteRequest& req,
                                                         const CallContext& ctx) {
     constexpr auto e = WriteEffect::NotApplied;
@@ -460,7 +509,7 @@ Result<WriteReceipt> SharedMemoryStore::compareExchange(const WriteRequest& req,
     auto id = hash(key) % impl_->options.shard_count;
     auto locked = impl_->lock(id, ctx, e);
     if (!core::is_ok(locked)) return core::error_of(locked);
-    Impl::Guard guard(impl_.get(), id);
+    auto guard = std::get<Impl::Guard>(std::move(locked));
     auto found = impl_->find(key, id, e);
     if (!core::is_ok(found)) return core::error_of(found);
     auto& pair = core::value_of(found);
@@ -472,6 +521,7 @@ Result<WriteReceipt> SharedMemoryStore::compareExchange(const WriteRequest& req,
     if (!core::is_ok(rev)) return core::error_of(rev);
     return WriteReceipt{core::value_of(rev)};
 }
+
 Result<EraseReceipt> SharedMemoryStore::erase(const EraseRequest& req, const CallContext& ctx) {
     constexpr auto e = WriteEffect::NotApplied;
     if (!impl_->memory) return error(ErrorCode::NotReady, e, "shared-memory store closed");
@@ -483,7 +533,7 @@ Result<EraseReceipt> SharedMemoryStore::erase(const EraseRequest& req, const Cal
     auto id = hash(key) % impl_->options.shard_count;
     auto locked = impl_->lock(id, ctx, e);
     if (!core::is_ok(locked)) return core::error_of(locked);
-    Impl::Guard guard(impl_.get(), id);
+    auto guard = std::get<Impl::Guard>(std::move(locked));
     auto found = impl_->find(key, id, e);
     if (!core::is_ok(found)) return core::error_of(found);
     auto& pair = core::value_of(found);
@@ -494,6 +544,7 @@ Result<EraseReceipt> SharedMemoryStore::erase(const EraseRequest& req, const Cal
     if (!core::is_ok(rev)) return core::error_of(rev);
     return EraseReceipt{};
 }
+
 Result<bool> register_shared_memory_backend(BackendFactory& factory) {
     return factory.register_backend(
         "shm",

@@ -18,9 +18,14 @@ namespace ems::database {
 
 class IDatabase {
    public:
+    /** @brief 销毁数据库连接池接口。 */
     virtual ~IDatabase() = default;
 
-    /// 在 deadline 内独占取得连接并开启事务；池耗尽/超时返回明确错误
+    /**
+     * @brief 在 deadline 内独占取得连接并开启事务；池耗尽或超时返回错误。
+     * @param[in] ctx 调用上下文，包含截止时间等信息。
+     * @return 成功时包含结果；失败时包含错误信息。
+     */
     virtual core::Result<std::unique_ptr<ITransaction>> begin(const core::CallContext& ctx) = 0;
 };
 

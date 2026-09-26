@@ -30,6 +30,11 @@ enum class CommandStatus : std::uint8_t {
     Unknown = 8     ///< 结果未知（提交响应丢失等）
 };
 
+/**
+ * @brief 返回命令状态的稳定诊断名称。
+ * @param[in] s 待解析的文本。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(CommandStatus s) noexcept {
     switch (s) {
         case CommandStatus::Created:

@@ -187,8 +187,11 @@ class PointModelCache {
     }
 
     size_t getYCCount() const { return yc_models_.size(); }
+
     size_t getYXCount() const { return yx_models_.size(); }
+
     size_t getYKCount() const { return yk_models_.size(); }
+
     size_t getYTCount() const { return yt_models_.size(); }
 
    private:
@@ -291,6 +294,7 @@ class MultiProcessRTDBManager {
     }
 
     bool isInitialized() const { return is_initialized_; }
+
     std::shared_ptr<PointModelCache> getModelCache() const { return model_cache_; }
 
    private:

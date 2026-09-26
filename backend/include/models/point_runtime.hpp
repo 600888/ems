@@ -18,10 +18,6 @@
 namespace ems {
 namespace model {
 
-// ============================================================
-// 运行时测点虚基类接口
-// ============================================================
-
 /**
  * @brief 运行时测点基类接口
  *
@@ -31,27 +27,71 @@ namespace model {
  */
 class IRuntimePoint {
    public:
+    /** @brief 销毁运行时测点。 */
     virtual ~IRuntimePoint() = default;
 
+    /**
+     * @brief 返回测点编码。
+     * @return 对应的文本内容。
+     */
     virtual std::string code() const = 0;
+
+    /**
+     * @brief 返回测点名称。
+     * @return 对应的文本内容。
+     */
     virtual std::string name() const = 0;
+
+    /**
+     * @brief 返回测点类别。
+     * @return 得到的测点类型。
+     */
     virtual PointType type() const = 0;
+
+    /**
+     * @brief 返回测点采集时间戳。
+     * @return 计算得到的数值。
+     */
     virtual uint64_t timestamp() const = 0;
+
+    /**
+     * @brief 返回测点品质。
+     * @return 得到的测点品质。
+     */
     virtual PointQuality quality() const = 0;
 
+    /**
+     * @brief 从同类运行时测点复制最新值、时间戳和品质。
+     * @param[in] other 用于比较的另一个对象。
+     */
     virtual void update(const IRuntimePoint& other) = 0;
+
+    /**
+     * @brief 将运行时测点编码为 JSON。
+     * @return 序列化后的 JSON 数据。
+     */
     virtual json to_json() const = 0;
+
+    /**
+     * @brief 从 JSON 更新运行时测点。
+     * @param[in] j 元素索引。
+     */
     virtual void from_json(const json& j) = 0;
 
+    /**
+     * @brief 将运行时测点编码为紧凑 JSON 文本。
+     * @return 对应的文本内容。
+     */
     std::string to_string() const { return to_json().dump(); }
 
+    /**
+     * @brief 从 JSON 文本更新运行时测点。
+     * @param[in] s 待解析的文本。
+     */
     void from_string(const std::string& s) { from_json(json::parse(s)); }
 };
 
-// ============================================================
-// YcPoint - 遥测运行时数据
-// ============================================================
-
+/** @brief 遥测运行时数据。 */
 struct YcPoint : public IRuntimePoint {
     std::string code_;
     std::string name_;
@@ -67,14 +107,46 @@ struct YcPoint : public IRuntimePoint {
     PointQuality quality_{PointQuality::Good};
     int status_{0};
 
+    /**
+     * @copydoc IRuntimePoint::code
+     * @return 对应的文本内容。
+     */
     std::string code() const override { return code_; }
+
+    /**
+     * @copydoc IRuntimePoint::name
+     * @return 对应的文本内容。
+     */
     std::string name() const override { return name_; }
+
+    /**
+     * @copydoc IRuntimePoint::type
+     * @return 得到的测点类型。
+     */
     PointType type() const override { return PointType::YC; }
+
+    /**
+     * @copydoc IRuntimePoint::timestamp
+     * @return 计算得到的数值。
+     */
     uint64_t timestamp() const override { return timestamp_; }
+
+    /**
+     * @copydoc IRuntimePoint::quality
+     * @return 得到的测点品质。
+     */
     PointQuality quality() const override { return quality_; }
 
+    /**
+     * @brief 对原始遥测值应用乘数和偏移量。
+     * @return 按指定类型解释的数值。
+     */
     double transformedValue() const { return rawValue_ * mulCoe_ + addCoe_; }
 
+    /**
+     * @copydoc IRuntimePoint::update
+     * @param[in] other 用于比较的另一个对象。
+     */
     void update(const IRuntimePoint& other) override {
         if (other.type() == PointType::YC) {
             const auto& yc = static_cast<const YcPoint&>(other);
@@ -86,6 +158,10 @@ struct YcPoint : public IRuntimePoint {
         }
     }
 
+    /**
+     * @copydoc IRuntimePoint::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const override {
         json j;
         j["code"] = code_;
@@ -105,6 +181,10 @@ struct YcPoint : public IRuntimePoint {
         return j;
     }
 
+    /**
+     * @copydoc IRuntimePoint::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         if (j.contains("code")) code_ = j["code"].get<std::string>();
         if (j.contains("name")) name_ = j["name"].get<std::string>();
@@ -123,9 +203,7 @@ struct YcPoint : public IRuntimePoint {
     }
 };
 
-// ============================================================
-// YxPoint - 遥信运行时数据
-// ============================================================
+/** @brief 遥信运行时数据。 */
 
 struct YxPoint : public IRuntimePoint {
     std::string code_;
@@ -138,12 +216,40 @@ struct YxPoint : public IRuntimePoint {
     PointQuality quality_{PointQuality::Good};
     int status_{0};
 
+    /**
+     * @copydoc IRuntimePoint::code
+     * @return 对应的文本内容。
+     */
     std::string code() const override { return code_; }
+
+    /**
+     * @copydoc IRuntimePoint::name
+     * @return 对应的文本内容。
+     */
     std::string name() const override { return name_; }
+
+    /**
+     * @copydoc IRuntimePoint::type
+     * @return 得到的测点类型。
+     */
     PointType type() const override { return PointType::YX; }
+
+    /**
+     * @copydoc IRuntimePoint::timestamp
+     * @return 计算得到的数值。
+     */
     uint64_t timestamp() const override { return timestamp_; }
+
+    /**
+     * @copydoc IRuntimePoint::quality
+     * @return 得到的测点品质。
+     */
     PointQuality quality() const override { return quality_; }
 
+    /**
+     * @copydoc IRuntimePoint::update
+     * @param[in] other 用于比较的另一个对象。
+     */
     void update(const IRuntimePoint& other) override {
         if (other.type() == PointType::YX) {
             const auto& yx = static_cast<const YxPoint&>(other);
@@ -154,6 +260,10 @@ struct YxPoint : public IRuntimePoint {
         }
     }
 
+    /**
+     * @copydoc IRuntimePoint::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const override {
         json j;
         j["code"] = code_;
@@ -169,6 +279,10 @@ struct YxPoint : public IRuntimePoint {
         return j;
     }
 
+    /**
+     * @copydoc IRuntimePoint::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         if (j.contains("code")) code_ = j["code"].get<std::string>();
         if (j.contains("name")) name_ = j["name"].get<std::string>();
@@ -183,9 +297,7 @@ struct YxPoint : public IRuntimePoint {
     }
 };
 
-// ============================================================
-// YkPoint - 遥控运行时数据
-// ============================================================
+/** @brief 遥控运行时数据。 */
 
 struct YkPoint : public IRuntimePoint {
     std::string code_;
@@ -198,14 +310,42 @@ struct YkPoint : public IRuntimePoint {
     uint64_t executeTime_{0};
     std::string result_;
 
+    /**
+     * @copydoc IRuntimePoint::code
+     * @return 对应的文本内容。
+     */
     std::string code() const override { return code_; }
+
+    /**
+     * @copydoc IRuntimePoint::name
+     * @return 对应的文本内容。
+     */
     std::string name() const override { return name_; }
+
+    /**
+     * @copydoc IRuntimePoint::type
+     * @return 得到的测点类型。
+     */
     PointType type() const override { return PointType::YK; }
+
+    /**
+     * @copydoc IRuntimePoint::timestamp
+     * @return 计算得到的数值。
+     */
     uint64_t timestamp() const override { return timestamp_; }
+
+    /**
+     * @copydoc IRuntimePoint::quality
+     * @return 得到的测点品质。
+     */
     PointQuality quality() const override {
         return status_ == YKStatus::Success ? PointQuality::Good : PointQuality::Invalid;
     }
 
+    /**
+     * @copydoc IRuntimePoint::update
+     * @param[in] other 用于比较的另一个对象。
+     */
     void update(const IRuntimePoint& other) override {
         if (other.type() == PointType::YK) {
             const auto& yk = static_cast<const YkPoint&>(other);
@@ -218,6 +358,10 @@ struct YkPoint : public IRuntimePoint {
         }
     }
 
+    /**
+     * @copydoc IRuntimePoint::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const override {
         json j;
         j["code"] = code_;
@@ -233,6 +377,10 @@ struct YkPoint : public IRuntimePoint {
         return j;
     }
 
+    /**
+     * @copydoc IRuntimePoint::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         if (j.contains("code")) code_ = j["code"].get<std::string>();
         if (j.contains("name")) name_ = j["name"].get<std::string>();
@@ -247,9 +395,7 @@ struct YkPoint : public IRuntimePoint {
     }
 };
 
-// ============================================================
-// YtPoint - 遥调运行时数据
-// ============================================================
+/** @brief 遥调运行时数据。 */
 
 struct YtPoint : public IRuntimePoint {
     std::string code_;
@@ -265,12 +411,40 @@ struct YtPoint : public IRuntimePoint {
     PointQuality quality_{PointQuality::Good};
     int status_{0};
 
+    /**
+     * @copydoc IRuntimePoint::code
+     * @return 对应的文本内容。
+     */
     std::string code() const override { return code_; }
+
+    /**
+     * @copydoc IRuntimePoint::name
+     * @return 对应的文本内容。
+     */
     std::string name() const override { return name_; }
+
+    /**
+     * @copydoc IRuntimePoint::type
+     * @return 得到的测点类型。
+     */
     PointType type() const override { return PointType::YT; }
+
+    /**
+     * @copydoc IRuntimePoint::timestamp
+     * @return 计算得到的数值。
+     */
     uint64_t timestamp() const override { return timestamp_; }
+
+    /**
+     * @copydoc IRuntimePoint::quality
+     * @return 得到的测点品质。
+     */
     PointQuality quality() const override { return quality_; }
 
+    /**
+     * @copydoc IRuntimePoint::update
+     * @param[in] other 用于比较的另一个对象。
+     */
     void update(const IRuntimePoint& other) override {
         if (other.type() == PointType::YT) {
             const auto& yt = static_cast<const YtPoint&>(other);
@@ -281,6 +455,10 @@ struct YtPoint : public IRuntimePoint {
         }
     }
 
+    /**
+     * @copydoc IRuntimePoint::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const override {
         json j;
         j["code"] = code_;
@@ -299,6 +477,10 @@ struct YtPoint : public IRuntimePoint {
         return j;
     }
 
+    /**
+     * @copydoc IRuntimePoint::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         if (j.contains("code")) code_ = j["code"].get<std::string>();
         if (j.contains("name")) name_ = j["name"].get<std::string>();

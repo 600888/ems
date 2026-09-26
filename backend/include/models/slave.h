@@ -13,9 +13,16 @@
 namespace ems {
 namespace model {
 
+/** @brief 保存通道下从站的身份与状态。 */
 class Slave : public BaseModelWithId, public TimestampMixin, public StatusMixin {
    public:
+    /** @brief 构造默认从站模型。 */
     Slave() = default;
+
+    /**
+     * @brief 从数据库 ID 构造从站模型。
+     * @param[in] id 对象标识。
+     */
     explicit Slave(int id) : BaseModelWithId(id) {}
 
     int channel_id{0};
@@ -23,6 +30,10 @@ class Slave : public BaseModelWithId, public TimestampMixin, public StatusMixin 
     std::string name;
     std::string description;
 
+    /**
+     * @copydoc BaseModel::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const override {
         json j = BaseModelWithId::to_json();
         j["channel_id"] = channel_id;
@@ -34,6 +45,10 @@ class Slave : public BaseModelWithId, public TimestampMixin, public StatusMixin 
         return j;
     }
 
+    /**
+     * @copydoc BaseModel::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         BaseModelWithId::from_json(j);
 

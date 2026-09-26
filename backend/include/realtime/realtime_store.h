@@ -29,7 +29,7 @@
 
 namespace ems::realtime {
 
-// 与公共模块共用基础结果类型，避免出现两个不能互换的 Error
+/** @brief 复用公共模块的结果类型，保证各后端错误可以互换。 */
 using ErrorCode = ems::core::ErrorCode;
 using WriteEffect = ems::core::WriteEffect;
 using Error = ems::core::Error;
@@ -61,8 +61,24 @@ struct RecordKey {
 struct Revision {
     std::string opaque;  ///< 上限 128 字节；删除重建/共享段重建不得复用
 
+    /**
+     * @brief 判断版本令牌是否为空。
+     * @return true 表示对象为空；false 表示非空。
+     */
     bool empty() const noexcept { return opaque.empty(); }
+
+    /**
+     * @brief 比较两个不透明版本令牌是否相同。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示两者相等；false 表示不相等。
+     */
     bool operator==(const Revision& other) const noexcept { return opaque == other.opaque; }
+
+    /**
+     * @brief 比较两个不透明版本令牌是否不同。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示两者不相等；false 表示相等。
+     */
     bool operator!=(const Revision& other) const noexcept { return opaque != other.opaque; }
 };
 
@@ -114,30 +130,59 @@ struct BackendInfo {
  */
 class IRealtimeStore {
    public:
+    /** @brief 销毁存储实例。调用者须先停止并等待在途调用。 */
     virtual ~IRealtimeStore() = default;
 
+    /**
+     * @brief 返回后端能力信息，不执行外部探测。
+     * @return 得到的后端信息。
+     */
     virtual BackendInfo info() const = 0;
 
-    /// 读取完整记录；不存在返回 NotFound（不等于值为零）
+    /**
+     * @brief 读取同一已提交版本的完整记录。
+     * @param[in] key 逻辑记录键。
+     * @param[in] ctx 调用预算。
+     * @return 不存在时返回 NotFound，不等于记录值为零。
+     */
     virtual Result<Record> read(const RecordKey& key, const CallContext& ctx) = 0;
 
-    /// 条件替换/创建；版本不符 Conflict，超期未开始 DeadlineExceeded/NotApplied，
-    /// 可能提交但响应丢失 Unknown
+    /**
+     * @brief 按版本条件完整替换或创建记录。
+     * @param[in] request 包含记录键、新字段及预期版本。
+     * @param[in] ctx 调用预算。
+     * @return 版本不符返回 Conflict；结果不确定时标记 Unknown。
+     */
     virtual Result<WriteReceipt> compareExchange(const WriteRequest& request,
                                                  const CallContext& ctx) = 0;
 
-    /// 条件删除；不存在 NotFound/NotApplied，版本不符 Conflict/NotApplied
+    /**
+     * @brief 按预期版本删除记录。
+     * @return 不存在时为 NotFound/NotApplied，版本不符时为 Conflict/NotApplied。
+     * @param[in] request 操作请求。
+     * @param[in] ctx 调用上下文，包含截止时间等信息。
+     */
     virtual Result<EraseReceipt> erase(const EraseRequest& request, const CallContext& ctx) = 0;
 
-    /// 逐项批量读；结果与输入一一对应，同键按输入顺序执行
+    /**
+     * @brief 逐项批量读取；结果与输入一一对应，同键按输入顺序执行。
+     * @param[in] keys 键集合。
+     * @param[in] ctx 调用上下文，包含截止时间等信息。
+     * @return 成功时包含记录；失败时包含错误信息。
+     */
     virtual std::vector<Result<Record>> readMany(const std::vector<RecordKey>& keys,
                                                  const CallContext& ctx) = 0;
 
-    /// 逐项批量写；部分失败不会被压成一个 bool
+    /**
+     * @brief 逐项批量写入；分别返回每项的成功或失败结果。
+     * @param[in] requests 操作请求列表。
+     * @param[in] ctx 调用上下文，包含截止时间等信息。
+     * @return 成功时包含写入凭据；失败时包含错误信息。
+     */
     virtual std::vector<Result<WriteReceipt>> writeMany(const std::vector<WriteRequest>& requests,
                                                         const CallContext& ctx) = 0;
 
-    /// 幂等关闭；停止接受新调用并结束阻塞操作，未确认数据交由部署代次恢复
+    /** @brief 幂等关闭，停止接受新调用并结束阻塞操作。 */
     virtual void close() noexcept = 0;
 };
 
@@ -150,6 +195,12 @@ class IRealtimeStore {
  */
 class RealtimeStoreBase : public IRealtimeStore {
    public:
+    /**
+     * @copydoc IRealtimeStore::readMany
+     * @param[in] keys 键集合。
+     * @param[in] ctx 调用上下文，包含截止时间等信息。
+     * @return 成功时包含记录；失败时包含错误信息。
+     */
     std::vector<Result<Record>> readMany(const std::vector<RecordKey>& keys,
                                          const CallContext& ctx) override {
         if (keys.size() > info().max_batch_items) {
@@ -165,6 +216,12 @@ class RealtimeStoreBase : public IRealtimeStore {
         return out;
     }
 
+    /**
+     * @copydoc IRealtimeStore::writeMany
+     * @param[in] requests 操作请求列表。
+     * @param[in] ctx 调用上下文，包含截止时间等信息。
+     * @return 成功时包含写入凭据；失败时包含错误信息。
+     */
     std::vector<Result<WriteReceipt>> writeMany(const std::vector<WriteRequest>& requests,
                                                 const CallContext& ctx) override {
         if (requests.size() > info().max_batch_items) {
@@ -181,8 +238,11 @@ class RealtimeStoreBase : public IRealtimeStore {
     }
 };
 
-/// RecordKey 组合合法性公共验证器（补充契约 5.1-2；适配器拒绝非法输入）
-/// 返回空字符串表示合法，否则为原因文本。
+/**
+ * @brief 验证逻辑记录键的组合是否合法。
+ * @return 合法时返回空字符串，否则返回原因文本。
+ * @param[in] key Redis 键。
+ */
 std::string validate_record_key(const RecordKey& key);
 
 }  // namespace ems::realtime

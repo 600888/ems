@@ -34,9 +34,15 @@
         ((int16_t*)(tab_int16))[(index) + 3] = (int16_t)(value);         \
     } while (0)
 
+/** @brief 在 Modbus 寄存器与字节序列之间转换位和浮点数。 */
 class ModbusUtil {
    public:
-    // 从一个字节获取 8 个位数据填充到 dest 的 idx 位置后面
+    /**
+     * @brief 将一个字节的 8 位展开到目标位数组。
+     * @param[out] dest 目标数据缓冲区。
+     * @param[in] idx 元素索引。
+     * @param[in] value 输入值。
+     */
     static void modbus_set_bits_from_byte(uint8_t* dest, int idx, const uint8_t value) {
         int i;
 
@@ -45,7 +51,13 @@ class ModbusUtil {
         }
     }
 
-    // 从 tab_byte 字节组获取 nb_bits 个位数据填充到 dest 的 idx 位置后面
+    /**
+     * @brief 将字节数组中的指定数量位展开到目标位数组。
+     * @param[out] dest 目标数据缓冲区。
+     * @param[in] idx 元素索引。
+     * @param[in] nb_bits 线圈数量。
+     * @param[in] tab_byte 制表符字节。
+     */
     static void modbus_set_bits_from_bytes(uint8_t* dest, int idx, unsigned int nb_bits,
                                            const uint8_t* tab_byte) {
         unsigned int i;
@@ -59,7 +71,13 @@ class ModbusUtil {
         }
     }
 
-    // 从 src 的 idx 位置处取 nb_bits 个位数据获取一个字节值
+    /**
+     * @brief 从最多 8 个位数组元素组合出一个字节。
+     * @param[in] src 源数据缓冲区。
+     * @param[in] idx 元素索引。
+     * @param[in] nb_bits 线圈数量。
+     * @return 得到的8 位无符号整数。
+     */
     static uint8_t modbus_get_byte_from_bits(const uint8_t* src, int idx, unsigned int nb_bits) {
         unsigned int i;
         uint8_t value = 0;
@@ -78,7 +96,11 @@ class ModbusUtil {
         return value;
     }
 
-    // 从4字节返回一个float 值，无需任何转换 (ABCD)
+    /**
+     * @brief 按 ABCD 字节序从两个寄存器读取浮点数。
+     * @param[in] src 源数据缓冲区。
+     * @return 按指定类型解释的数值。
+     */
     static float modbus_get_float_abcd(const uint16_t* src) {
         float f;
         uint32_t i;
@@ -98,7 +120,11 @@ class ModbusUtil {
         return f;
     }
 
-    // 从4字节返回一个float 值，按 DCBA 字序
+    /**
+     * @brief 按 DCBA 字节序从两个寄存器读取浮点数。
+     * @param[in] src 源数据缓冲区。
+     * @return 按指定类型解释的数值。
+     */
     static float modbus_get_float_dcba(const uint16_t* src) {
         float f;
         uint32_t i;
@@ -117,7 +143,11 @@ class ModbusUtil {
         return f;
     }
 
-    // Get a float from 4 bytes (Modbus) with swapped bytes (BADC)
+    /**
+     * @brief 按 BADC 字节序从两个寄存器读取浮点数。
+     * @param[in] src 源数据缓冲区。
+     * @return 按指定类型解释的数值。
+     */
     static float modbus_get_float_badc(const uint16_t* src) {
         float f;
         uint32_t i;
@@ -136,7 +166,11 @@ class ModbusUtil {
         return f;
     }
 
-    // Get a float from 4 bytes (Modbus) with swapped bytes (CDAB)
+    /**
+     * @brief 按 CDAB 字节序从两个寄存器读取浮点数。
+     * @param[in] src 源数据缓冲区。
+     * @return 按指定类型解释的数值。
+     */
     static float modbus_get_float_cdab(const uint16_t* src) {
         float f;
         uint32_t i;
@@ -155,10 +189,18 @@ class ModbusUtil {
         return f;
     }
 
-    // DEPRECATED - Get a float from 4 bytes in sort of Modbus format
+    /**
+     * @brief 按兼容的 CDAB 字节序读取浮点数。
+     * @param[in] src 源数据缓冲区。
+     * @return 按指定类型解释的数值。
+     */
     static float modbus_get_float(const uint16_t* src) { return modbus_get_float_cdab(src); }
 
-    /* Set a float to 4 bytes for Modbus w/o any conversion (ABCD) */
+    /**
+     * @brief 按 ABCD 字节序写入两个寄存器。
+     * @param[in] f 待编码的浮点数。
+     * @param[out] dest 目标数据缓冲区。
+     */
     static void modbus_set_float_abcd(float f, uint16_t* dest) {
         // The straight-forward type conversion won't work because of type-punned pointer aliasing warning
         // uint32_t i = *(uint32_t*)(&f);
@@ -176,6 +218,11 @@ class ModbusUtil {
         dest[1] = (c << 8) | d;
     }
 
+    /**
+     * @brief 按 ABCD 字节序写入四个字节。
+     * @param[in] f 待编码的浮点数。
+     * @param[out] dest 目标数据缓冲区。
+     */
     static void modbus_set_float_abcd_8(float f, uint8_t* dest) {
         // The straight-forward type conversion won't work because of type-punned pointer aliasing warning
         // uint32_t i = *(uint32_t*)(&f);
@@ -198,7 +245,11 @@ class ModbusUtil {
         // memcpy(dest, &f, 4);
     }
 
-    /* Set a float to 4 bytes for Modbus with byte and word swap conversion (DCBA) */
+    /**
+     * @brief 按 DCBA 字节序写入两个寄存器。
+     * @param[in] f 待编码的浮点数。
+     * @param[out] dest 目标数据缓冲区。
+     */
     static void modbus_set_float_dcba(float f, uint16_t* dest) {
         float* fptr = &f;
         uint32_t* iptr = (uint32_t*)fptr;
@@ -213,6 +264,12 @@ class ModbusUtil {
         dest[0] = (d << 8) | c;
         dest[1] = (b << 8) | a;
     }
+
+    /**
+     * @brief 按 DCBA 字节序写入四个字节。
+     * @param[in] f 待编码的浮点数。
+     * @param[out] dest 目标数据缓冲区。
+     */
     static void modbus_set_float_dcba_8(float f, uint8_t* dest) {
         float* fptr = &f;
         uint32_t* iptr = (uint32_t*)fptr;
@@ -230,7 +287,11 @@ class ModbusUtil {
         dest[3] = a;
     }
 
-    /* Set a float to 4 bytes for Modbus with byte swap conversion (BADC) */
+    /**
+     * @brief 按 BADC 字节序写入两个寄存器。
+     * @param[in] f 待编码的浮点数。
+     * @param[out] dest 目标数据缓冲区。
+     */
     static void modbus_set_float_badc(float f, uint16_t* dest) {
         float* fptr = &f;
         uint32_t* iptr = (uint32_t*)fptr;
@@ -246,6 +307,11 @@ class ModbusUtil {
         dest[1] = (d << 8) | c;
     }
 
+    /**
+     * @brief 按 BADC 字节序写入四个字节。
+     * @param[in] f 待编码的浮点数。
+     * @param[out] dest 目标数据缓冲区。
+     */
     static void modbus_set_float_badc_8(float f, uint8_t* dest) {
         float* fptr = &f;
         uint32_t* iptr = (uint32_t*)fptr;
@@ -263,7 +329,11 @@ class ModbusUtil {
         dest[3] = c;
     }
 
-    /* Set a float to 4 bytes for Modbus with word swap conversion (CDAB) */
+    /**
+     * @brief 按 CDAB 字节序写入两个寄存器。
+     * @param[in] f 待编码的浮点数。
+     * @param[out] dest 目标数据缓冲区。
+     */
     static void modbus_set_float_cdab(float f, uint16_t* dest) {
         float* fptr = &f;
         uint32_t* iptr = (uint32_t*)fptr;
@@ -279,6 +349,11 @@ class ModbusUtil {
         dest[1] = (a << 8) | b;
     }
 
+    /**
+     * @brief 按 CDAB 字节序写入四个字节。
+     * @param[in] f 待编码的浮点数。
+     * @param[out] dest 目标数据缓冲区。
+     */
     static void modbus_set_float_cdab_8(float f, uint8_t* dest) {
         float* fptr = &f;
         uint32_t* iptr = (uint32_t*)fptr;
@@ -296,21 +371,12 @@ class ModbusUtil {
         dest[3] = b;
     }
 
-    /* DEPRECATED - Set a float to 4 bytes in a sort of Modbus format! */
-    static void modbus_set_float(float f, uint16_t* dest) { modbus_set_float_cdab(f, dest); }
-
-#ifndef HAVE_STRLCPY
-    /*
-     * Function strlcpy was originally developed by
-     * Todd C. Miller <Todd.Miller@courtesan.com> to simplify writing secure code.
-     * See ftp://ftp.openbsd.org/pub/OpenBSD/src/lib/libc/string/strlcpy.3
-     * for more information.
-     *
-     * Thank you Ulrich Drepper... not!
-     *
-     * Copy src to string dest of size dest_size.  At most dest_size-1 characters
-     * will be copied.  Always NUL terminates (unless dest_size == 0).  Returns
-     * strlen(src); if retval >= dest_size, truncation occurred.
+    /**
+     * @brief 将字符串复制到固定容量的缓冲区并以 NUL 结尾。
+     * @param[out] dest 目标数据缓冲区。
+     * @param[in] src 源字符串。
+     * @param[in] dest_size 目标缓冲区容量，包含结尾的 NUL。
+     * @return 源字符串的长度；返回值不包括结尾的 NUL。
      */
     static size_t strlcpy(char* dest, const char* src, size_t dest_size) {
         char* d = dest;

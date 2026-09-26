@@ -50,17 +50,36 @@ struct WriteTask {
  */
 class ProtocolHandler {
    public:
+    /** @brief 销毁协议插件处理器。 */
     virtual ~ProtocolHandler() = default;
 
-    // ---- 拷贝/赋值 禁用 ----
-    ProtocolHandler(const ProtocolHandler&) = delete;
-    ProtocolHandler& operator=(const ProtocolHandler&) = delete;
-    ProtocolHandler(ProtocolHandler&&) noexcept = default;
-    ProtocolHandler& operator=(ProtocolHandler&&) noexcept = default;
+    /**
+     * @brief 禁止复制协议处理器。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ProtocolHandler(const ProtocolHandler& other) = delete;
+
+    /**
+     * @brief 禁止复制赋值协议处理器。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ProtocolHandler& operator=(const ProtocolHandler& other) = delete;
+
+    /**
+     * @brief 转移协议处理器状态。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ProtocolHandler(ProtocolHandler&& other) noexcept = default;
+
+    /**
+     * @brief 通过移动赋值转移协议处理器状态。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ProtocolHandler& operator=(ProtocolHandler&& other) noexcept = default;
 
     /**
      * @brief 初始化插件（解析 JSON 配置）
-     * @param config JSON 配置对象
+     * @param[in] config JSON 配置对象
      * @return true 成功
      */
     virtual bool initialize(const json& config) = 0;
@@ -73,11 +92,13 @@ class ProtocolHandler {
 
     /**
      * @brief 断开连接
+     * @return true 表示操作成功；false 表示失败。
      */
     virtual bool disconnect() = 0;
 
     /**
      * @brief 是否已连接
+     * @return true 表示条件成立；false 表示不成立。
      */
     virtual bool is_connected() const = 0;
 
@@ -87,8 +108,8 @@ class ProtocolHandler {
      * 插件应尽量合并连续地址的读请求以减少网络 I/O，
      * 保证输出的 results 与输入的 point_codes 一一对应。
      *
-     * @param point_codes 测点编码列表
-     * @param results     [out] 读取结果（与 point_codes 等长）
+     * @param[in] point_codes 测点编码列表
+     * @param[out] results     [out] 读取结果（与 point_codes 等长）
      * @return 成功读取的测点数, -1 表示失败
      */
     virtual int read_batch(const std::vector<std::string>& point_codes,
@@ -96,23 +117,26 @@ class ProtocolHandler {
 
     /**
      * @brief 写入单个测点值
-     * @param point_code 测点编码
-     * @param value      工程值
+     * @param[in] point_code 测点编码
+     * @param[in] value      工程值
      * @return true 写入成功
      */
     virtual bool write_value(const std::string& point_code, double value) = 0;
 
     /**
      * @brief 获取最近一次错误信息
+     * @return 最近一次错误的说明文本。
      */
     virtual std::string last_error() const = 0;
 
     /**
      * @brief 获取协议名称
+     * @return 协议名称。
      */
     virtual std::string protocol_name() const = 0;
 
    protected:
+    /** @brief 构造供派生插件使用的处理器基类。 */
     ProtocolHandler() = default;
 };
 
@@ -121,6 +145,7 @@ class ProtocolHandler {
  *
  * 每个 .so 应定义一个全局工厂实例，
  * 在 C 导出函数 ems_plugin_create 中调用。
+ * @return 创建的对象；创建失败时为空。
  */
 template <typename T, typename = std::enable_if_t<std::is_base_of_v<ProtocolHandler, T>>>
 ProtocolHandler* create_handler() {
@@ -129,6 +154,7 @@ ProtocolHandler* create_handler() {
 
 /**
  * @brief 销毁处理器
+ * @param[in] handler 待销毁的协议处理器。
  */
 inline void destroy_handler(ProtocolHandler* handler) { delete handler; }
 

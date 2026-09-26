@@ -31,12 +31,22 @@ struct SnapshotEnvelope {
 /// 不可变配置快照（模型聚合 + 封套）
 class ConfigSnapshot {
    public:
+    /**
+     * @brief 接管快照封套与已构建索引的模型目录。
+     * @param[in] envelope 事件封装对象。
+     * @param[in] catalog 模型目录。
+     */
     ConfigSnapshot(SnapshotEnvelope envelope, model::ModelCatalog catalog)
         : envelope_(std::move(envelope)), catalog_(std::move(catalog)) {}
 
+    /**
+     * @brief 返回不可变快照封套。
+     * @return 对应对象的引用。
+     */
     const SnapshotEnvelope& envelope() const noexcept { return envelope_; }
 
     /// 目录必须已调用 build_indexes()（发布/加载方负责校验）
+    /// @return 对应对象的引用。
     const model::ModelCatalog& catalog() const noexcept { return catalog_; }
 
    private:

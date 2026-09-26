@@ -18,11 +18,22 @@ namespace test {
 
 class TestModbusServerHelper {
    public:
+    /** @brief 构造 TestModbusServerHelper 实例。 */
     TestModbusServerHelper() = default;
+    /** @brief 释放 TestModbusServerHelper 持有的资源。 */
     ~TestModbusServerHelper();
 
+    /**
+     * @brief 配置并启动测试用 Modbus 服务端。
+     * @param[in] handler 待销毁的协议处理器。
+     * @param[in] port 服务监听端口。
+     */
     void setup_server(ModbusServerHandler& handler, int port);
 
+    /**
+     * @brief 停止并清理测试用 Modbus 服务端。
+     * @param[in] handler 待销毁的协议处理器。
+     */
     void teardown_server(ModbusServerHandler& handler);
 
    private:

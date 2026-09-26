@@ -67,28 +67,28 @@ typedef void* (*ems_plugin_create_fn)();
 
 /**
  * @brief 销毁插件实例
- * @param instance 由 ems_plugin_create() 返回的指针
+ * @param[in] instance 由 ems_plugin_create() 返回的指针
  */
 typedef void (*ems_plugin_destroy_fn)(void* instance);
 
 /**
  * @brief 初始化插件（传入 JSON 配置）
- * @param instance    插件实例指针
- * @param json_config JSON 格式的配置字符串
+ * @param[in] instance    插件实例指针
+ * @param[in] json_config JSON 格式的配置字符串
  * @return 0 成功, -1 失败
  */
 typedef int (*ems_plugin_init_fn)(void* instance, const char* json_config);
 
 /**
  * @brief 连接设备
- * @param instance 插件实例指针
+ * @param[in] instance 插件实例指针
  * @return 0 成功, -1 失败
  */
 typedef int (*ems_plugin_connect_fn)(void* instance);
 
 /**
  * @brief 断开连接
- * @param instance 插件实例指针
+ * @param[in] instance 插件实例指针
  * @return 0 成功, -1 失败
  */
 typedef int (*ems_plugin_disconnect_fn)(void* instance);
@@ -107,11 +107,11 @@ typedef int (*ems_plugin_disconnect_fn)(void* instance);
  *     {"code":"1:3:2:UINT16","value":100,"quality":0,"timestamp":1700000000}
  *   ]
  *
- * @param instance      插件实例指针
- * @param point_codes   测点编码数组
- * @param point_count   测点数量
- * @param result_json   输出缓冲区，接收 JSON 结果
- * @param result_buf_size 输出缓冲区大小
+ * @param[in] instance      插件实例指针
+ * @param[in] point_codes   测点编码数组
+ * @param[in] point_count   测点数量
+ * @param[out] result_json   输出缓冲区，接收 JSON 结果
+ * @param[in] result_buf_size 输出缓冲区大小
  * @return >=0 成功读取的测点数, -1 失败
  */
 typedef int (*ems_plugin_read_batch_fn)(void* instance, const char* point_codes[], int point_count,
@@ -119,23 +119,23 @@ typedef int (*ems_plugin_read_batch_fn)(void* instance, const char* point_codes[
 
 /**
  * @brief 写入单个测点值
- * @param instance  插件实例指针
- * @param point_code 测点编码
- * @param value     写入值
+ * @param[in] instance  插件实例指针
+ * @param[in] point_code 测点编码
+ * @param[in] value     写入值
  * @return 0 成功, -1 失败
  */
 typedef int (*ems_plugin_write_fn)(void* instance, const char* point_code, double value);
 
 /**
  * @brief 获取连接状态
- * @param instance 插件实例指针
+ * @param[in] instance 插件实例指针
  * @return 1 已连接, 0 未连接, -1 错误
  */
 typedef int (*ems_plugin_is_connected_fn)(void* instance);
 
 /**
  * @brief 获取最近一次错误信息
- * @param instance 插件实例指针
+ * @param[in] instance 插件实例指针
  * @return 错误描述字符串（生命周期：下次调用前有效）
  */
 typedef const char* (*ems_plugin_last_error_fn)(void* instance);

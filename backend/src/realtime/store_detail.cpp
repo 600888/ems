@@ -17,6 +17,7 @@
 
 namespace ems::realtime::detail {
 Error error(ErrorCode c, WriteEffect e, const char* m) { return {c, e, m}; }
+
 bool utf8(std::string_view s) {
     for (std::size_t i = 0; i < s.size();) {
         auto c = static_cast<unsigned char>(s[i++]);
@@ -47,6 +48,7 @@ bool utf8(std::string_view s) {
     }
     return true;
 }
+
 bool valid_code(std::string_view s, bool device) {
     if (s.empty() || s.size() > 64) return false;
     auto alnum = [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'); };
@@ -61,10 +63,12 @@ bool valid_code(std::string_view s, bool device) {
             if (s == reserved) return false;
     return true;
 }
+
 std::string hash_tag(const RecordKey& k) {
     return "{" + std::string(k.scope.kind == ScopeKind::Station ? "station:" : "") + k.scope.code +
            "}";
 }
+
 std::string physical_key(const RecordKey& k) {
     std::string s = (k.kind == RecordKind::Point ? "ems:rt:point:" : "ems:") + hash_tag(k);
     for (const auto& part : k.device_path) s += ':' + part;
@@ -80,6 +84,7 @@ std::string physical_key(const RecordKey& k) {
     }
     return {};
 }
+
 std::uint64_t hash(std::string_view s) {
     std::uint64_t h = 14695981039346656037ULL;
     for (unsigned char c : s) {
@@ -88,6 +93,7 @@ std::uint64_t hash(std::string_view s) {
     }
     return h;
 }
+
 std::uint32_t checksum(std::string_view s) {
     std::uint32_t crc = ~0u;
     for (unsigned char c : s) {
@@ -96,6 +102,7 @@ std::uint32_t checksum(std::string_view s) {
     }
     return ~crc;
 }
+
 Result<std::string> token() {
     unsigned char bytes[16];
 #ifdef _WIN32
@@ -116,9 +123,11 @@ Result<std::string> token() {
     }
     return s;
 }
+
 void append_u32(std::string& s, std::uint32_t v) {
     for (unsigned i = 0; i < 4; ++i) s += static_cast<char>((v >> (i * 8)) & 255);
 }
+
 bool take_u32(std::string_view& s, std::uint32_t& v) {
     if (s.size() < 4) return false;
     v = 0;
@@ -127,10 +136,12 @@ bool take_u32(std::string_view& s, std::uint32_t& v) {
     s.remove_prefix(4);
     return true;
 }
+
 void append_string(std::string& s, std::string_view v) {
     append_u32(s, static_cast<std::uint32_t>(v.size()));
     s.append(v);
 }
+
 bool take_string(std::string_view& s, std::string& out) {
     std::uint32_t size;
     if (!take_u32(s, size) || size > s.size()) return false;
@@ -138,6 +149,7 @@ bool take_string(std::string_view& s, std::string& out) {
     s.remove_prefix(size);
     return true;
 }
+
 Result<std::string> encode_fields(const Fields& fields, std::size_t limit, WriteEffect effect) {
     if (fields.size() > max_fields)
         return error(ErrorCode::InvalidArgument, effect, "field count limit exceeded");
@@ -162,6 +174,7 @@ Result<std::string> encode_fields(const Fields& fields, std::size_t limit, Write
     }
     return out;
 }
+
 Result<Fields> decode_fields(std::string_view data, std::size_t limit, WriteEffect effect) {
     std::uint32_t n;
     if (data.size() > limit || !take_u32(data, n) || n > max_fields)
@@ -176,10 +189,12 @@ Result<Fields> decode_fields(std::string_view data, std::size_t limit, WriteEffe
         return error(ErrorCode::CorruptData, effect, "invalid stored fields");
     return fields;
 }
+
 bool parse_size(const std::string& s, std::size_t& out) {
     auto r = std::from_chars(s.data(), s.data() + s.size(), out);
     return !s.empty() && r.ec == std::errc{} && r.ptr == s.data() + s.size();
 }
+
 bool known_options(const BackendSpec& s, std::initializer_list<const char*> keys) {
     for (const auto& entry : s.options) {
         bool found = false;

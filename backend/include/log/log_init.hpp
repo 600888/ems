@@ -41,8 +41,16 @@ struct LogInfo {
     int count = 10;
 };
 
+/** @brief 按配置初始化默认异步日志器。 */
 class LogInitializer {
    public:
+    /**
+     * @brief 仅在首次构造时初始化指定日志器。
+     * @param[in] defaultLoggerName 默认日志器名称。
+     * @param[in] defalutLogLevel 默认日志级别。
+     * @param[in] enableTerminalLog 是否同时输出到终端。
+     * @param[in] threadNum 工作线程数量。
+     */
     LogInitializer(const std::string& defaultLoggerName, LV defalutLogLevel = LV::debug,
                    bool enableTerminalLog = false, const int threadNum = 1) noexcept {
         static std::once_flag flag = std::once_flag();
@@ -51,10 +59,22 @@ class LogInitializer {
     }
 
    private:
-    LogInitializer(const LogInitializer&) = delete;
-    LogInitializer& operator=(const LogInitializer&) = delete;
+    /**
+     * @brief 禁止复制日志初始化器。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    LogInitializer(const LogInitializer& other) = delete;
 
-    // 读取日志配置文件
+    /**
+     * @brief 禁止复制赋值日志初始化器。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    LogInitializer& operator=(const LogInitializer& other) = delete;
+
+    /**
+     * @brief 从配置文件读取各模块日志等级和滚动参数。
+     * @return 匹配条件的数据集合。
+     */
     static inline std::unordered_map<std::string, LogInfo> _readLogConf() {
         std::unordered_map<std::string, LogInfo> logConfMap;
         std::unordered_map<std::string, LV> logLevelMap{
@@ -102,6 +122,13 @@ class LogInitializer {
         return logConfMap;
     }
 
+    /**
+     * @brief 建立日志 sink、异步线程池和默认日志器。
+     * @param[in] defaultLoggerName 默认日志器名称。
+     * @param[in] defalutLogLevel 默认日志级别。
+     * @param[in] enableTerminalLog 是否同时输出到终端。
+     * @param[in] threadNum 工作线程数量。
+     */
     static inline void init(const std::string& defaultLoggerName, LV defalutLogLevel,
                             bool enableTerminalLog, const int threadNum) noexcept {
         try {

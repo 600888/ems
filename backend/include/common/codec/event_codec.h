@@ -14,10 +14,18 @@
 
 namespace ems::codec {
 
-/// EventEnvelope → JSON（包含信封字段与版本化载荷）
+/**
+ * @brief 将事件信封及版本化载荷编码为 JSON。
+ * @param[in] event 事件数据。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<std::string> encode_event(const messaging::EventEnvelope& event);
 
-/// JSON → EventEnvelope；未知 type/schema_version 返回 SchemaMismatch
+/**
+ * @brief 从 JSON 解码事件信封；未知类型或 schema 版本返回 SchemaMismatch。
+ * @param[in] json_text JSON 文本。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
 core::Result<messaging::EventEnvelope> decode_event(const std::string& json_text);
 
 }  // namespace ems::codec

@@ -15,9 +15,12 @@ namespace ems::config {
 
 class IConfigValidator {
    public:
+    /** @brief 销毁配置校验接口。 */
     virtual ~IConfigValidator() = default;
 
     /// 校验候选完整快照；聚合有上限的字段错误，不返回首个 bool
+    /// @param[in] candidate 候选配置。
+    /// @return 得到的校验报告。
     virtual model::ValidationReport validate(const model::ModelCatalog& candidate) = 0;
 };
 

@@ -24,12 +24,15 @@ namespace rtdb {
 
 /**
  * @brief 设备类型转字符串
+ * @param[in] t 待转换的枚举值。
+ * @return 对应对象的指针。
  */
 const char* deviceTypeToString(model::DeviceType t);
 
 /**
  * @brief 字符串转设备类型
  * @return 成功返回设备类型，失败返回 nullopt
+ * @param[in] s 待解析的文本。
  */
 std::optional<model::DeviceType> stringToDeviceType(const std::string& s);
 

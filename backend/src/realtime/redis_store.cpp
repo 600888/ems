@@ -32,11 +32,14 @@ using Reply = std::unique_ptr<redisReply, decltype(&freeReplyObject)>;
 #ifdef _WIN32
 using Socket = SOCKET;
 constexpr Socket invalid_socket = INVALID_SOCKET;
+
 void close_socket(Socket s) { closesocket(s); }
+
 bool again() {
     auto e = WSAGetLastError();
     return e == WSAEWOULDBLOCK || e == WSAEINPROGRESS || e == WSAEINTR;
 }
+
 bool socket_runtime() {
     static const bool ready = []() {
         WSADATA d;
@@ -47,16 +50,20 @@ bool socket_runtime() {
 #else
 using Socket = int;
 constexpr Socket invalid_socket = -1;
+
 void close_socket(Socket s) { ::close(s); }
+
 bool again() {
     return errno == EAGAIN || errno == EWOULDBLOCK || errno == EINPROGRESS || errno == EINTR;
 }
+
 bool socket_runtime() { return true; }
 #endif
 Error network_error(const CallContext& ctx, WriteEffect effect) {
     return error(core::has_expired(ctx) ? ErrorCode::DeadlineExceeded : ErrorCode::Unavailable,
                  effect, "Redis transport failed; connection must be revalidated");
 }
+
 bool wait_socket(Socket s, bool write, const CallContext& ctx) {
     while (!core::has_expired(ctx)) {
         auto us = std::chrono::duration_cast<std::chrono::microseconds>(core::remaining_budget(ctx))
@@ -74,11 +81,14 @@ bool wait_socket(Socket s, bool write, const CallContext& ctx) {
     }
     return false;
 }
+
 struct Connection {
     Socket socket = invalid_socket;
+
     ~Connection() {
         if (socket != invalid_socket) close_socket(socket);
     }
+
     Result<bool> connect(const RedisOptions& o, const CallContext& ctx) {
         if (!socket_runtime())
             return error(ErrorCode::Unavailable, WriteEffect::NotApplied,
@@ -129,6 +139,7 @@ struct Connection {
         }
         return true;
     }
+
     Result<Reply> command(const std::vector<std::string>& args, const CallContext& ctx,
                           bool mutating, std::size_t max_reply) {
         const auto before = mutating ? WriteEffect::NotApplied : WriteEffect::NotApplicable;
@@ -185,9 +196,11 @@ struct Connection {
         }
     }
 };
+
 bool text_is(const redisReply* r, const char* s) {
     return r && r->str && std::string_view(r->str, r->len) == s;
 }
+
 Error server_error(const redisReply* r, WriteEffect effect) {
     std::string_view s = r->str ? std::string_view(r->str, r->len) : std::string_view{};
     if (s.find("NOAUTH") == 0 || s.find("WRONGPASS") == 0 || s.find("NOPERM") == 0)
@@ -236,6 +249,7 @@ if old~=ARGV[1] then return 2 end
 redis.call('DEL',KEYS[1])
 return 0
 )lua";
+
 Result<bool> script_result(redisReply* r) {
     if (r->type == REDIS_REPLY_ERROR) return server_error(r, WriteEffect::Unknown);
     if (r->type != REDIS_REPLY_INTEGER)
@@ -270,16 +284,20 @@ struct RedisStore::Impl {
     std::vector<bool> busy;
     std::atomic<bool> recovery_required{false};
     bool closed = false;
+
     struct Lease {
         Impl* p;
         std::size_t i;
+
         Lease(Impl* p, std::size_t i) : p(p), i(i) {}
+
         ~Lease() {
             std::lock_guard<std::mutex> lock(p->mutex);
             p->busy[i] = false;
             p->available.notify_one();
         }
     };
+
     Result<Reply> run(const std::vector<std::string>& args, const CallContext& ctx, bool write) {
         auto effect = write ? WriteEffect::NotApplied : WriteEffect::NotApplicable;
         std::unique_lock<std::mutex> lock(mutex);
@@ -316,15 +334,20 @@ struct RedisStore::Impl {
         return r;
     }
 };
+
 RedisStore::RedisStore(std::unique_ptr<Impl> p) : impl_(std::move(p)) {}
+
 RedisStore::~RedisStore() = default;
+
 BackendInfo RedisStore::info() const { return impl_->capabilities; }
+
 void RedisStore::close() noexcept {
     std::lock_guard<std::mutex> lock(impl_->mutex);
     impl_->closed = true;
     impl_->connections.clear();
     impl_->available.notify_all();
 }
+
 Result<std::unique_ptr<IRealtimeStore>> RedisStore::open(const RedisOptions& o,
                                                          const CallContext& ctx) {
     auto e = WriteEffect::NotApplied;
@@ -386,6 +409,7 @@ Result<std::unique_ptr<IRealtimeStore>> RedisStore::open(const RedisOptions& o,
     }
     return std::unique_ptr<IRealtimeStore>(new RedisStore(std::move(p)));
 }
+
 Result<Record> RedisStore::read(const RecordKey& key, const CallContext& ctx) {
     auto e = WriteEffect::NotApplicable;
     if (!validate_record_key(key).empty())
@@ -415,6 +439,7 @@ Result<Record> RedisStore::read(const RecordKey& key, const CallContext& ctx) {
         return error(ErrorCode::CorruptData, e, "stored Redis fields violate contract");
     return out;
 }
+
 Result<WriteReceipt> RedisStore::compareExchange(const WriteRequest& req, const CallContext& ctx) {
     auto e = WriteEffect::NotApplied;
     if (!validate_record_key(req.key).empty() ||
@@ -444,6 +469,7 @@ Result<WriteReceipt> RedisStore::compareExchange(const WriteRequest& req, const 
     if (!core::is_ok(status)) return core::error_of(status);
     return WriteReceipt{Revision{revision}};
 }
+
 Result<EraseReceipt> RedisStore::erase(const EraseRequest& req, const CallContext& ctx) {
     if (!validate_record_key(req.key).empty() || req.expected.empty() ||
         req.expected.opaque.size() > 128)
@@ -455,6 +481,7 @@ Result<EraseReceipt> RedisStore::erase(const EraseRequest& req, const CallContex
     if (!core::is_ok(status)) return core::error_of(status);
     return EraseReceipt{};
 }
+
 Result<bool> register_redis_backend(BackendFactory& factory) {
     return factory.register_backend(
         "redis",

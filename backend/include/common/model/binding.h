@@ -23,6 +23,11 @@ enum class BindingOp : std::uint8_t {
     Forward = 2   ///< 转发（北向）
 };
 
+/**
+ * @brief 返回设备通道绑定操作的稳定诊断名称。
+ * @param[in] op 数据库操作。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(BindingOp op) noexcept {
     switch (op) {
         case BindingOp::Collect:

@@ -10,7 +10,12 @@ class Time {
     int _second;
 
    public:
-    // 构造函数
+    /**
+     * @brief 从时、分、秒构造时间；非法值抛出异常。
+     * @param[in] h 小时数。
+     * @param[in] m 数据映射。
+     * @param[in] s 待解析的文本。
+     */
     Time(int h, int m, int s) {
         // 是否符合时间特性
         if (h < 0 || h > 23 || m < 0 || m > 59 || s < 0 || s > 59) {
@@ -21,6 +26,10 @@ class Time {
         _second = s;
     }
 
+    /**
+     * @brief 从 Unix 时间戳构造本地时间。
+     * @param[in] t 待转换的枚举值。
+     */
     Time(time_t t) {
         struct tm* now = localtime(&t);
         _hour = now->tm_hour;
@@ -28,6 +37,7 @@ class Time {
         _second = now->tm_sec;
     }
 
+    /** @brief 用当前本地时间构造对象。 */
     Time() {
         time_t t = time(nullptr);
         struct tm* now = localtime(&t);
@@ -36,25 +46,49 @@ class Time {
         _second = now->tm_sec;
     }
 
+    /**
+     * @brief 从本地日历时间构造对象。
+     * @param[in] tm 日历时间结构。
+     */
     Time(const std::tm& tm) {
         _hour = tm.tm_hour;
         _minute = tm.tm_min;
         _second = tm.tm_sec;
     }
 
+    /**
+     * @brief 计算与另一时间相差的秒数。
+     * @param[in] t 待转换的枚举值。
+     * @return 计算得到的数值。
+     */
     int operator-(const Time& t) const {
         int seconds = (_hour - t._hour) * 3600 + (_minute - t._minute) * 60 + (_second - t._second);
         return seconds;
     }
 
+    /**
+     * @brief 判断两个时间是否相同。
+     * @param[in] t 待转换的枚举值。
+     * @return true 表示两者相等；false 表示不相等。
+     */
     bool operator==(const Time& t) const {
         return _hour == t._hour && _minute == t._minute && _second == t._second;
     }
 
+    /**
+     * @brief 判断两个时间是否不同。
+     * @param[in] t 待转换的枚举值。
+     * @return true 表示两者不相等；false 表示相等。
+     */
     bool operator!=(const Time& t) const {
         return _hour != t._hour || _minute != t._minute || _second != t._second;
     }
 
+    /**
+     * @brief 判断时间是否早于另一时间。
+     * @param[in] t 待转换的枚举值。
+     * @return true 表示左侧值按定义顺序小于右侧值。
+     */
     bool operator<(const Time& t) const {
         if (_hour < t._hour) {
             return true;
@@ -68,6 +102,11 @@ class Time {
         return false;
     }
 
+    /**
+     * @brief 判断时间是否晚于另一时间。
+     * @param[in] t 待转换的枚举值。
+     * @return true 表示操作成功；false 表示失败。
+     */
     bool operator>(const Time& t) const {
         if (_hour > t._hour) {
             return true;
@@ -81,6 +120,11 @@ class Time {
         return false;
     }
 
+    /**
+     * @brief 判断时间是否早于或等于另一时间。
+     * @param[in] t 待转换的枚举值。
+     * @return true 表示操作成功；false 表示失败。
+     */
     bool operator<=(const Time& t) const {
         if (_hour < t._hour) {
             return true;
@@ -94,6 +138,11 @@ class Time {
         return false;
     }
 
+    /**
+     * @brief 判断时间是否晚于或等于另一时间。
+     * @param[in] t 待转换的枚举值。
+     * @return true 表示操作成功；false 表示失败。
+     */
     bool operator>=(const Time& t) const {
         if (_hour > t._hour) {
             return true;
@@ -107,13 +156,21 @@ class Time {
         return false;
     }
 
+    /**
+     * @brief 按 HH:MM:SS 格式输出时间。
+     * @return 对应的文本内容。
+     */
     std::string toString() {
         char buf[100];
         sprintf(buf, "%02d:%02d:%02d", _hour, _minute, _second);
         return buf;
     }
 
-    // 格式化输出 格式化字符串支持 hh:mm:ss
+    /**
+     * @brief 按含 HH、MM、SS 的模板输出时间。
+     * @param[in] format 日志格式字符串。
+     * @return 对应的文本内容。
+     */
     std::string toString(const std::string& format) {
         std::string res = format;
         // 兼容大小写
@@ -143,6 +200,11 @@ class Time {
         return res;
     }
 
+    /**
+     * @brief 从 HH:MM:SS 文本解析时间；非法输入抛出异常。
+     * @param[in] str 输入字符串。
+     * @return 得到的时间。
+     */
     static Time fromString(const std::string& str) {
         int h, m, s;
         try {
@@ -153,7 +215,7 @@ class Time {
         return Time(h, m, s);
     }
 
-    // 更新为现在时间
+    /** @brief 更新为当前本地时间。 */
     void update() {
         time_t t = time(nullptr);
         struct tm* now = localtime(&t);
@@ -162,25 +224,46 @@ class Time {
         _second = now->tm_sec;
     }
 
-    // 获取小时
+    /**
+     * @brief 返回小时。
+     * @return 计算得到的数值。
+     */
     int hour() { return _hour; }
 
-    // 设置小时
+    /**
+     * @brief 设置小时。
+     * @param[in] h 小时数。
+     */
     void setHour(int h) { _hour = h; }
 
-    // 获取分钟
+    /**
+     * @brief 返回分钟。
+     * @return 计算得到的数值。
+     */
     int minute() { return _minute; }
 
-    // 设置分钟
+    /**
+     * @brief 设置分钟。
+     * @param[in] m 数据映射。
+     */
     void setMinute(int m) { _minute = m; }
 
-    // 获取秒钟
+    /**
+     * @brief 返回秒数。
+     * @return 计算得到的数值。
+     */
     int second() { return _second; }
 
-    // 设置秒钟
+    /**
+     * @brief 设置秒数。
+     * @param[in] s 待解析的文本。
+     */
     void setSecond(int s) { _second = s; }
 
-    // 获取时间戳
+    /**
+     * @brief 将时间字段应用于当前本地日期并返回时间戳。
+     * @return 得到的Unix 时间值。
+     */
     time_t getTimestamp() {
         time_t t = time(nullptr);
         struct tm* now = localtime(&t);

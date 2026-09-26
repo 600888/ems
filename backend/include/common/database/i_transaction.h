@@ -17,23 +17,42 @@
 
 namespace ems::database {
 
-/// 提交回执（成功仅由 Receipt 表达；Unknown 由 Error 表达）
-struct CommitReceipt {
-    // 成功提交；后续可扩展提交时间戳等回执信息
-};
+/** @brief 成功提交回执；不确定结果由 Unknown 错误表达。 */
+struct CommitReceipt {};
 
+/** @brief 与单个数据库连接绑定的不可复制事务接口。 */
 class ITransaction {
    public:
+    /** @brief 构造未提交事务接口。 */
     ITransaction() = default;
+
+    /** @brief 销毁事务；未提交时由实现尝试回滚。 */
     virtual ~ITransaction() = default;
 
-    ITransaction(const ITransaction&) = delete;
-    ITransaction& operator=(const ITransaction&) = delete;
+    /**
+     * @brief 禁止复制事务。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ITransaction(const ITransaction& other) = delete;
 
-    /// 提交事务；响应丢失返回 Unknown（此后禁止继续使用本事务）
+    /**
+     * @brief 禁止复制赋值事务。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ITransaction& operator=(const ITransaction& other) = delete;
+
+    /**
+     * @brief 提交事务；响应丢失时返回 Unknown，之后不得继续使用该事务。
+     * @param[in] ctx 调用上下文，包含截止时间等信息。
+     * @return 成功时包含结果；失败时包含错误信息。
+     */
     virtual core::Result<CommitReceipt> commit(const core::CallContext& ctx) = 0;
 
-    /// 回滚事务；幂等
+    /**
+     * @brief 幂等回滚事务。
+     * @param[in] ctx 调用上下文，包含截止时间等信息。
+     * @return 得到的操作状态。
+     */
     virtual core::Status rollback(const core::CallContext& ctx) = 0;
 };
 

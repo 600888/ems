@@ -22,28 +22,59 @@ namespace model {
 using json = nlohmann::json;
 using TimePoint = std::chrono::system_clock::time_point;
 
+/** @brief 提供 JSON 编解码的模型基类。 */
 class BaseModel {
    public:
+    /** @brief 销毁模型实例。 */
     virtual ~BaseModel() = default;
 
+    /**
+     * @brief 将模型编码为 JSON 对象。
+     * @return 序列化后的 JSON 数据。
+     */
     virtual json to_json() const = 0;
+
+    /**
+     * @brief 从 JSON 对象更新模型字段。
+     * @param[in] j 元素索引。
+     */
     virtual void from_json(const json& j) = 0;
 
+    /**
+     * @brief 返回便于诊断的缩进 JSON 文本。
+     * @return 对应的文本内容。
+     */
     virtual std::string to_string() const { return to_json().dump(2); }
 };
 
+/** @brief 带数据库 ID 的模型基类。 */
 class BaseModelWithId : public BaseModel {
    public:
     int64_t id{0};
+
+    /** @brief 构造 ID 为零的模型。 */
     BaseModelWithId() = default;
+
+    /**
+     * @brief 从数据库 ID 构造模型。
+     * @param[in] id 对象标识。
+     */
     explicit BaseModelWithId(int64_t id) : id(id) {}
 
+    /**
+     * @copydoc BaseModel::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     virtual json to_json() const override {
         json j;
         j["id"] = id;
         return j;
     }
 
+    /**
+     * @copydoc BaseModel::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         if (j.contains("id")) {
             id = j["id"].get<int64_t>();
@@ -51,10 +82,15 @@ class BaseModelWithId : public BaseModel {
     }
 };
 
+/** @brief 为模型提供创建和更新时间的 JSON 转换。 */
 struct TimestampMixin {
     TimePoint created_at{std::chrono::system_clock::now()};
     TimePoint updated_at{std::chrono::system_clock::now()};
 
+    /**
+     * @brief 将时间戳编码为 Unix 秒。
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const {
         return {{"created_at",
                  std::chrono::duration_cast<std::chrono::seconds>(created_at.time_since_epoch())
@@ -64,6 +100,10 @@ struct TimestampMixin {
                      .count()}};
     }
 
+    /**
+     * @brief 从 Unix 秒字段恢复时间戳。
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) {
         if (j.contains("created_at")) {
             created_at = TimePoint(std::chrono::seconds(j["created_at"].get<int64_t>()));
@@ -74,12 +114,21 @@ struct TimestampMixin {
     }
 };
 
+/** @brief 为模型提供状态与启用标记的 JSON 转换。 */
 struct StatusMixin {
     int status{0};
     bool enable{true};
 
+    /**
+     * @brief 将状态与启用标记编码为 JSON。
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const { return {{"status", status}, {"enable", enable}}; }
 
+    /**
+     * @brief 从 JSON 更新状态与启用标记。
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) {
         if (j.contains("status")) status = j["status"].get<int>();
         if (j.contains("enable")) enable = j["enable"].get<bool>();
@@ -176,6 +225,8 @@ enum class EndianCode : int {
 
 /**
  * @brief 获取单寄存器类型的对应字节数
+ * @param[in] code 对象编码。
+ * @return 处理或统计得到的数据项数量。
  */
 constexpr int decode_size(DecodeCode code) noexcept {
     switch (code) {
@@ -199,6 +250,8 @@ constexpr int decode_size(DecodeCode code) noexcept {
 
 /**
  * @brief 获取解码类型对应的寄存器数量
+ * @param[in] code 对象编码。
+ * @return 处理或统计得到的数据项数量。
  */
 constexpr int decode_reg_count(DecodeCode code) noexcept { return decode_size(code) / 2; }
 
@@ -212,9 +265,16 @@ enum class PointQuality : int { Good = 0, Invalid = 1, Reserved = 2, Error = 3 }
  */
 enum class YKStatus : int { Idle = 0, Pending = 1, Executing = 2, Success = 3, Failed = 4 };
 
+/** @brief 带采集地址和解码元数据的测点模型。 */
 class BasePoint : public BaseModelWithId {
    public:
+    /** @brief 构造默认测点模型。 */
     BasePoint() = default;
+
+    /**
+     * @brief 从数据库 ID 构造测点模型。
+     * @param[in] id 对象标识。
+     */
     explicit BasePoint(int64_t id) : BaseModelWithId(id) {}
 
     std::string rtu_addr{"1"};
@@ -240,6 +300,10 @@ class BasePoint : public BaseModelWithId {
     std::optional<bool> is_valid;
     bool is_locked_by_mapping{false};
 
+    /**
+     * @copydoc BaseModel::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const override {
         json j = BaseModelWithId::to_json();
         j["rtu_addr"] = rtu_addr;
@@ -267,6 +331,10 @@ class BasePoint : public BaseModelWithId {
         return j;
     }
 
+    /**
+     * @copydoc BaseModel::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         BaseModelWithId::from_json(j);
 
@@ -297,6 +365,11 @@ class BasePoint : public BaseModelWithId {
     }
 
    private:
+    /**
+     * @brief 将数值格式化为固定宽度十六进制文本。
+     * @param[in] value 输入值。
+     * @return 对应的文本内容。
+     */
     static std::string decimal_to_hex_formatted(int value) {
         char buf[32];
         snprintf(buf, sizeof(buf), "0x%08X", value);

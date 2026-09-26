@@ -83,6 +83,7 @@ class FakeStore final : public RealtimeStoreBase {
         s += "|" + std::to_string(static_cast<int>(k.kind)) + "|" + k.name;
         return s;
     }
+
     std::map<std::string, Record> records_;
     int counter_{0};
 };

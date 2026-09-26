@@ -20,6 +20,11 @@ enum class HealthState : std::uint8_t {
     Failed = 3     ///< 故障
 };
 
+/**
+ * @brief 返回组件健康状态的稳定诊断名称。
+ * @param[in] s 待解析的文本。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(HealthState s) noexcept {
     switch (s) {
         case HealthState::Ready:

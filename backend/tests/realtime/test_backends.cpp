@@ -20,8 +20,10 @@
 
 namespace ems::realtime {
 void set_shared_memory_test_hook(void (*)(int));
+
 namespace {
 CallContext ctx(int ms = 2000) { return core::make_call_context(std::chrono::milliseconds(ms)); }
+
 void crash_exit(int code) {
 #ifdef _WIN32
     TerminateProcess(GetCurrentProcess(), static_cast<UINT>(code));
@@ -29,26 +31,31 @@ void crash_exit(int code) {
     _exit(code);
 #endif
 }
+
 RecordKey key(std::string name = "active_power") {
     return {{ScopeKind::Unit, "ess01"}, RecordKind::Point, {"pcs01"}, std::move(name)};
 }
+
 template <class T>
 T take(Result<T> value) {
     if (!core::is_ok(value)) throw std::runtime_error(core::error_of(value).message);
     return std::get<T>(std::move(value));
 }
+
 template <class T>
 void expect_error(const Result<T>& value, ErrorCode code, WriteEffect effect) {
     ASSERT_FALSE(core::is_ok(value));
     EXPECT_EQ(core::error_of(value).code, code);
     EXPECT_EQ(core::error_of(value).effect, effect);
 }
+
 class BackendContract : public ::testing::TestWithParam<std::string> {
    protected:
     std::unique_ptr<IRealtimeStore> store, peer;
     SharedMemoryOptions shm;
     std::string scope;
     bool redis = false;
+
     void SetUp() override {
         scope = "t" + take(detail::token());
         redis = GetParam() == "redis";
@@ -77,11 +84,13 @@ class BackendContract : public ::testing::TestWithParam<std::string> {
 #endif
         }
     }
+
     RecordKey k(std::string name = "active_power") {
         auto r = key(name);
         r.scope.code = scope;
         return r;
     }
+
     void TearDown() override {
         // Delete only this test's known keys. Never FLUSHDB or touch another scope.
         if (redis && peer)
@@ -97,6 +106,7 @@ class BackendContract : public ::testing::TestWithParam<std::string> {
 #endif
     }
 };
+
 TEST_P(BackendContract, CompleteReplacementCopiedReadAndABA) {
     expect_error(store->read(k(), ctx()), ErrorCode::NotFound, WriteEffect::NotApplicable);
     auto first = take(store->compareExchange(
@@ -120,6 +130,7 @@ TEST_P(BackendContract, CompleteReplacementCopiedReadAndABA) {
                  WriteEffect::NotApplied);
     EXPECT_TRUE(take(peer->read(k(), ctx())).fields.empty());
 }
+
 TEST_P(BackendContract, ConcurrentCASHasOneWinner) {
     auto initial = take(store->compareExchange({k(), {{"v", "initial"}}, {}}, ctx()));
     std::atomic<int> wins{0}, conflicts{0};
@@ -142,6 +153,7 @@ TEST_P(BackendContract, ConcurrentCASHasOneWinner) {
     EXPECT_EQ(wins, 1);
     EXPECT_EQ(conflicts, 7);
 }
+
 TEST_P(BackendContract, InputLimitsDeadlineAndClose) {
     expect_error(store->compareExchange({k(), {{"_store_revision", "forged"}}, {}}, ctx()),
                  ErrorCode::InvalidArgument, WriteEffect::NotApplied);
@@ -165,6 +177,7 @@ TEST_P(BackendContract, InputLimitsDeadlineAndClose) {
                  WriteEffect::NotApplied);
     EXPECT_EQ(take(peer->read(k(), ctx())).revision, binary.revision);
 }
+
 TEST_P(BackendContract, BatchOrderPartialFailureAndNoOversizeEffects) {
     std::vector<WriteRequest> batch{{k(), {{"v", "one"}}, {}}, {k(), {}, {}}, {k("other"), {}, {}}};
     auto results = store->writeMany(batch, ctx());
@@ -182,6 +195,7 @@ TEST_P(BackendContract, BatchOrderPartialFailureAndNoOversizeEffects) {
     EXPECT_EQ(reads.size(), 3u);
     EXPECT_EQ(take(std::move(reads[1])).revision, take(std::move(reads[2])).revision);
 }
+
 std::vector<std::string> backends() {
     std::vector<std::string> out;
 #ifdef EMS_REALTIME_TEST_SHM
@@ -192,6 +206,7 @@ std::vector<std::string> backends() {
 #endif
     return out;
 }
+
 INSTANTIATE_TEST_SUITE_P(SharedContract, BackendContract, ::testing::ValuesIn(backends()));
 
 TEST(KeyEncoding, PhysicalKeysAndInvalidIdentity) {
@@ -215,6 +230,7 @@ TEST(KeyEncoding, PhysicalKeysAndInvalidIdentity) {
 struct ShmTest : ::testing::Test {
     SharedMemoryOptions options;
     std::unique_ptr<IRealtimeStore> owner;
+
     void SetUp() override {
         // GTest re-executes the fixture on Windows: use the inherited run identity.
         options.segment_name =
@@ -227,11 +243,13 @@ struct ShmTest : ::testing::Test {
         options.create_if_missing = true;
         owner = take(SharedMemoryStore::open(options, ctx()));
     }
+
     WriteReceipt seed() {
         auto old = owner->read(key(), ctx());
         if (core::is_ok(old)) return {core::value_of(old).revision};
         return take(owner->compareExchange({key(), {{"v", "old"}}, {}}, ctx()));
     }
+
     void TearDown() override {
         owner.reset();
         set_shared_memory_test_hook(nullptr);
@@ -240,6 +258,7 @@ struct ShmTest : ::testing::Test {
 #endif
     }
 };
+
 TEST_F(ShmTest, CapacityReuseAndAttachFences) {
     auto one = take(owner->compareExchange({key(), {}, {}}, ctx()));
     take(owner->compareExchange({key("other"), {}, {}}, ctx()));
@@ -259,6 +278,7 @@ TEST_F(ShmTest, CapacityReuseAndAttachFences) {
     mismatch.expected_generation = owner->info().storage_generation;
     EXPECT_TRUE(core::is_ok(SharedMemoryStore::open(mismatch, ctx())));
 }
+
 TEST_F(ShmTest, FactoryRejectsUnknownOptions) {
     BackendFactory factory;
     ASSERT_TRUE(core::is_ok(register_shared_memory_backend(factory)));
@@ -270,6 +290,7 @@ TEST_F(ShmTest, FactoryRejectsUnknownOptions) {
                      {"shm", {{"segment_name", options.segment_name}, {"capacity", "-1"}}}, ctx()),
                  ErrorCode::InvalidArgument, WriteEffect::NotApplied);
 }
+
 // Each subprocess reopens the OS mapping, proving actual cross-process access.
 // Crash immediately before or after the aligned selector update while holding the shard lock.
 TEST_F(ShmTest, OwnerDeathBeforeCommitPreservesOldImage) {
@@ -288,6 +309,7 @@ TEST_F(ShmTest, OwnerDeathBeforeCommitPreservesOldImage) {
     EXPECT_TRUE(
         core::is_ok(owner->compareExchange({key(), {{"v", "after"}}, initial.revision}, ctx())));
 }
+
 TEST_F(ShmTest, OwnerDeathAfterCommitPreservesNewImage) {
     auto initial = seed();
     ASSERT_EXIT(

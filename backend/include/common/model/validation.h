@@ -25,7 +25,16 @@ struct ValidationReport {
     std::vector<ValidationIssue> issues;
     bool truncated{false};  ///< 超过上限被截断
 
+    /**
+     * @brief 判断报告是否没有问题且未截断。
+     * @return true 表示操作成功；false 表示失败。
+     */
     bool ok() const noexcept { return issues.empty() && !truncated; }
+
+    /**
+     * @brief 返回已记录的问题数量。
+     * @return 处理或统计得到的数据项数量。
+     */
     size_t issue_count() const noexcept { return issues.size(); }
 };
 

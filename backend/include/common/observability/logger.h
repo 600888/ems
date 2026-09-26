@@ -26,9 +26,14 @@ struct LogField {
 
 class ILogger {
    public:
+    /** @brief 销毁结构化日志接口。 */
     virtual ~ILogger() = default;
 
     /// 输出一条结构化日志；fields 数量有上限（防滥用）
+    /// @param[in] level 日志级别。
+    /// @param[in] module 日志模块名称。
+    /// @param[in] message 命令结果说明。
+    /// @param[in] fields 字段映射。
     virtual void log(LogLevel level, std::string_view module, std::string_view message,
                      std::initializer_list<LogField> fields = {}) = 0;
 };

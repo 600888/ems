@@ -4,9 +4,9 @@
 #include <memory>
 
 namespace ems::realtime {
+/** @brief Redis 连接和实时记录容量配置。 */
 struct RedisOptions {
-    // A numeric IPv4/IPv6 address avoids unbounded synchronous DNS resolution.
-    std::string address{"127.0.0.1"};
+    std::string address{"127.0.0.1"};  ///< 使用数值地址，避免同步 DNS 查询耗尽预算。
     unsigned port{6379};
     unsigned database{0};
     std::string username;
@@ -16,20 +16,69 @@ struct RedisOptions {
     std::size_t max_batch_items{256};
 };
 
+/** @brief 使用 Redis 保存实时记录。 */
 class RedisStore final : public RealtimeStoreBase {
    public:
-    static Result<std::unique_ptr<IRealtimeStore>> open(const RedisOptions&, const CallContext&);
+    /**
+     * @brief 在截止时间前建立 Redis 后端实例。
+     * @param[in] options Redis 连接和容量配置。
+     * @param[in] ctx 调用上下文，包含截止时间。
+     * @return 成功时包含结果；失败时包含错误信息。
+     */
+    static Result<std::unique_ptr<IRealtimeStore>> open(const RedisOptions& options,
+                                                        const CallContext& ctx);
+
+    /** @brief 释放此实例持有的 Redis 资源。 */
     ~RedisStore() override;
+
+    /**
+     * @copydoc IRealtimeStore::info
+     * @return 得到的后端信息。
+     */
     BackendInfo info() const override;
-    Result<Record> read(const RecordKey&, const CallContext&) override;
-    Result<WriteReceipt> compareExchange(const WriteRequest&, const CallContext&) override;
-    Result<EraseReceipt> erase(const EraseRequest&, const CallContext&) override;
+
+    /**
+     * @copydoc IRealtimeStore::read
+     * @param[in] key 待读取的逻辑记录键。
+     * @param[in] ctx 调用上下文，包含截止时间。
+     * @return 成功时包含记录；失败时包含错误信息。
+     */
+    Result<Record> read(const RecordKey& key, const CallContext& ctx) override;
+
+    /**
+     * @copydoc IRealtimeStore::compareExchange
+     * @param[in] request 带预期修订号的写入请求。
+     * @param[in] ctx 调用上下文，包含截止时间。
+     * @return 成功时包含写入凭据；失败时包含错误信息。
+     */
+    Result<WriteReceipt> compareExchange(const WriteRequest& request,
+                                         const CallContext& ctx) override;
+
+    /**
+     * @copydoc IRealtimeStore::erase
+     * @param[in] request 带预期修订号的删除请求。
+     * @param[in] ctx 调用上下文，包含截止时间。
+     * @return 成功时包含删除凭据；失败时包含错误信息。
+     */
+    Result<EraseReceipt> erase(const EraseRequest& request, const CallContext& ctx) override;
+
+    /** @copydoc IRealtimeStore::close */
     void close() noexcept override;
 
    private:
     struct Impl;
-    explicit RedisStore(std::unique_ptr<Impl>);
+    /**
+     * @brief 接管已完成初始化的实现对象。
+     * @param[in] impl 已初始化的实现对象，所有权转交给本实例。
+     */
+    explicit RedisStore(std::unique_ptr<Impl> impl);
     std::unique_ptr<Impl> impl_;
 };
-Result<bool> register_redis_backend(BackendFactory&);
+
+/**
+ * @brief 向工厂注册 Redis 后端。
+ * @param[in,out] factory 接收后端注册的工厂。
+ * @return 成功时包含结果；失败时包含错误信息。
+ */
+Result<bool> register_redis_backend(BackendFactory& factory);
 }  // namespace ems::realtime

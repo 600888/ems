@@ -15,9 +15,16 @@
 namespace ems {
 namespace model {
 
+/** @brief 保存设备分组及其子分组和设备引用。 */
 class DeviceGroup : public BaseModelWithId, public TimestampMixin, public StatusMixin {
    public:
+    /** @brief 构造默认设备分组。 */
     DeviceGroup() = default;
+
+    /**
+     * @brief 从数据库 ID 构造设备分组。
+     * @param[in] id 对象标识。
+     */
     explicit DeviceGroup(int64_t id) : BaseModelWithId(id) {}
 
     std::string code;
@@ -28,6 +35,10 @@ class DeviceGroup : public BaseModelWithId, public TimestampMixin, public Status
     std::vector<std::shared_ptr<DeviceGroup>> children;
     std::vector<int64_t> device_ids;
 
+    /**
+     * @copydoc BaseModel::to_json
+     * @return 序列化后的 JSON 数据。
+     */
     json to_json() const override {
         json j = BaseModelWithId::to_json();
         j["code"] = code;
@@ -47,6 +58,10 @@ class DeviceGroup : public BaseModelWithId, public TimestampMixin, public Status
         return j;
     }
 
+    /**
+     * @copydoc BaseModel::from_json
+     * @param[in] j 元素索引。
+     */
     void from_json(const json& j) override {
         BaseModelWithId::from_json(j);
 
@@ -62,8 +77,16 @@ class DeviceGroup : public BaseModelWithId, public TimestampMixin, public Status
         if (j.contains("status")) StatusMixin::from_json(j["status"]);
     }
 
+    /**
+     * @brief 返回当前分组名称作为显示路径。
+     * @return 对应的文本内容。
+     */
     std::string get_full_path() const { return name; }
 
+    /**
+     * @brief 返回当前分组直接关联的设备数量。
+     * @return 处理或统计得到的数据项数量。
+     */
     int get_device_count() const { return static_cast<int>(device_ids.size()); }
 };
 

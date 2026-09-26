@@ -21,12 +21,21 @@ struct CallContext {
     std::string trace_id;  ///< 链路追踪 ID（跨进程传播）
 };
 
-/// 用剩余预算构造 deadline
+/**
+ * @brief 从当前 steady_clock 时间按预算构造截止点。
+ * @param[in] budget 调用可用的时间预算。
+ * @return 按当前时间和预算计算的截止点。
+ */
 inline Deadline make_deadline(std::chrono::milliseconds budget) {
     return std::chrono::steady_clock::now() + budget;
 }
 
-/// 构造带预算的调用上下文
+/**
+ * @brief 构造包含截止点和链路标识的调用上下文。
+ * @param[in] budget 调用可用的时间预算。
+ * @param[in] trace_id 链路追踪标识。
+ * @return 构造完成的调用上下文。
+ */
 inline CallContext make_call_context(std::chrono::milliseconds budget, std::string trace_id = {}) {
     CallContext ctx;
     ctx.deadline = make_deadline(budget);
@@ -34,22 +43,37 @@ inline CallContext make_call_context(std::chrono::milliseconds budget, std::stri
     return ctx;
 }
 
-/// 剩余预算（可能为负，表示已超期）
+/**
+ * @brief 返回剩余预算；负值表示已超期。
+ * @param[in] ctx 调用上下文，包含截止时间等信息。
+ * @return 剩余的时间预算；负值表示已超期。
+ */
 inline std::chrono::steady_clock::duration remaining_budget(const CallContext& ctx) {
     return ctx.deadline - std::chrono::steady_clock::now();
 }
 
-/// 剩余预算（毫秒，负值表示已超期）
+/**
+ * @brief 以毫秒返回剩余预算；负值表示已超期。
+ * @param[in] ctx 调用上下文，包含截止时间等信息。
+ * @return 剩余的时间预算；负值表示已超期。
+ */
 inline int64_t remaining_budget_ms(const CallContext& ctx) {
     return std::chrono::duration_cast<std::chrono::milliseconds>(remaining_budget(ctx)).count();
 }
 
-/// 预算是否已耗尽
+/**
+ * @brief 判断调用预算是否已耗尽。
+ * @param[in] ctx 调用上下文，包含截止时间等信息。
+ * @return true 表示条件成立；false 表示不成立。
+ */
 inline bool has_expired(const CallContext& ctx) {
     return std::chrono::steady_clock::now() >= ctx.deadline;
 }
 
-/// 无预算上下文仅用于纯内存操作；任何 I/O 都必须显式给出期限
+/**
+ * @brief 构造零预算上下文，仅供纯内存操作使用。
+ * @return 构造完成的调用上下文。
+ */
 inline CallContext immediate_context() { return make_call_context(std::chrono::milliseconds(0)); }
 
 }  // namespace ems::core

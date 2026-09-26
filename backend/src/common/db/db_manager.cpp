@@ -360,6 +360,7 @@ class DbManager::Impl {
     std::vector<T> noop_query(const std::string&) {
         return {};
     }
+
     bool noop_write() { return false; }
 #endif
 
@@ -375,6 +376,7 @@ class DbManager::Impl {
 // ============================================================
 
 DbManager::DbManager() : impl_(std::make_unique<Impl>()) {}
+
 DbManager::~DbManager() = default;
 DbManager::DbManager(DbManager&&) noexcept = default;
 DbManager& DbManager::operator=(DbManager&&) noexcept = default;

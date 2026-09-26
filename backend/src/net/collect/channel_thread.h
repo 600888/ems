@@ -81,17 +81,34 @@ enum class ChannelState : int {
 class ChannelThread {
    public:
     /**
-     * @param channelConfig 通道配置
-     * @param dispatcher    数据分发器（共享引用）
+     * @param[in] channelConfig 通道配置
+     * @param[in] dispatcher    数据分发器（共享引用）
      */
     explicit ChannelThread(const ChannelConfig& channelConfig,
                            std::shared_ptr<DataDispatcher> dispatcher);
+    /** @brief 释放 ChannelThread 持有的资源。 */
     ~ChannelThread();
 
-    ChannelThread(const ChannelThread&) = delete;
-    ChannelThread& operator=(const ChannelThread&) = delete;
-    ChannelThread(ChannelThread&&) noexcept = delete;
-    ChannelThread& operator=(ChannelThread&&) noexcept = delete;
+    /**
+     * @brief 禁止复制或移动该对象。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ChannelThread(const ChannelThread& other) = delete;
+    /**
+     * @brief 禁止复制赋值。
+     * @param[in] other 待赋值的源对象。
+     */
+    ChannelThread& operator=(const ChannelThread& other) = delete;
+    /**
+     * @brief 禁止复制或移动该对象。
+     * @param[in] other 待复制或移动的源对象。
+     */
+    ChannelThread(ChannelThread&& other) noexcept = delete;
+    /**
+     * @brief 禁止复制或移动赋值。
+     * @param[in] other 待赋值的源对象。
+     */
+    ChannelThread& operator=(ChannelThread&& other) noexcept = delete;
 
     // ============================================================
     // 生命周期管理
@@ -103,9 +120,9 @@ class ChannelThread {
      * 创建 std::thread 并进入采集循环。
      * 根据协议名称通过 PluginManager 加载对应插件。
      *
-     * @param plugin_manager 插件管理器
-     * @param plugin_instance 协议插件实例（由 PluginManager::load 创建）
-     * @param plugin_fns 插件函数指针结构
+     * @param[in] plugin_manager 插件管理器
+     * @param[in] plugin_instance 协议插件实例（由 PluginManager::load 创建）
+     * @param[in] plugin_fns 插件函数指针结构
      */
     void start(PluginManager& plugin_manager, void* plugin_instance,
                const PluginManager::PluginFunctions& plugin_fns);
@@ -122,6 +139,7 @@ class ChannelThread {
 
     /**
      * @brief 获取通道状态
+     * @return 得到的通道状态。
      */
     ChannelState state() const { return state_.load(); }
 
@@ -131,22 +149,25 @@ class ChannelThread {
 
     /**
      * @brief 设置采集周期
-     * @param ms 毫秒
+     * @param[in] ms 毫秒
      */
     void set_poll_interval(int ms);
 
     /**
      * @brief 获取采集周期
+     * @return 计算得到的数值。
      */
     int poll_interval() const { return poll_interval_ms_.load(); }
 
     /**
      * @brief 添加设备上下文
+     * @param[in] device 设备对象。
      */
     void add_device(DeviceContext device);
 
     /**
      * @brief 设置设备列表
+     * @param[in] devices 设备列表。
      */
     void set_devices(std::vector<DeviceContext> devices);
 
@@ -160,9 +181,9 @@ class ChannelThread {
      * 命令进入队列，在采集循环中优先处理。
      * 通过返回的 std::future<bool> 获取执行结果。
      *
-     * @param pointCode 测点编码
-     * @param value     控制值
-     * @param timeoutMs 超时时间
+     * @param[in] pointCode 测点编码
+     * @param[in] value     控制值
+     * @param[in] timeoutMs 超时时间
      * @return 异步结果
      */
     std::future<bool> post_command(const std::string& pointCode, double value,
@@ -174,41 +195,49 @@ class ChannelThread {
 
     /**
      * @brief 获取通道配置
+     * @return 对应对象的引用。
      */
     const ChannelConfig& channel_config() const { return channel_config_; }
 
     /**
      * @brief 获取通道编码（用于日志标识）
+     * @return 对应对象的引用。
      */
     const std::string& chanCode() const { return channel_config_.name_; }
 
     /**
      * @brief 获取通道 ID
+     * @return 计算得到的数值。
      */
     int64_t channel_id() const { return channel_config_.id_; }
 
     /**
      * @brief 获取通道名称
+     * @return 对应对象的引用。
      */
     const std::string& channel_name() const { return channel_config_.name_; }
 
     /**
      * @brief 获取设备列表
+     * @return 匹配条件的数据集合。
      */
     std::vector<DeviceContext> devices() const;
 
     /**
      * @brief 获取重连统计
+     * @return 处理或统计得到的数据项数量。
      */
     int reconnect_count() const { return reconnect_count_.load(); }
 
     /**
      * @brief 是否正在运行
+     * @return true 表示条件成立；false 表示不成立。
      */
     bool is_running() const { return state_.load() == ChannelState::Running; }
 
     /**
      * @brief 获取最近错误信息
+     * @return 最近一次错误的说明文本。
      */
     std::string last_error() const { return last_err_; }
 
@@ -217,23 +246,57 @@ class ChannelThread {
     // ============================================================
 
     using ErrorCallback = std::function<void(int64_t channel_id, const std::string& error)>;
+
+    /**
+     * @brief 设置错误回调。
+     * @param[in] cb 操作完成或变化时调用的回调。
+     */
     void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
 
    private:
     // ---- 线程主循环 ----
+    /**
+     * @brief 运行通道采集循环。
+     * @param[in] plugin_manager 协议插件管理器。
+     */
     void run(PluginManager& plugin_manager);
 
     // ---- 采集步骤 ----
+    /**
+     * @brief 检查通道连接状态。
+     * @return true 表示条件成立；false 表示不成立。
+     */
     bool check_connection();
+    /**
+     * @brief 重新建立连接。
+     * @return true 表示操作成功；false 表示失败。
+     */
     bool reconnect();
+    /** @brief 处理待下发的控制命令。 */
     void process_command_queue();
+    /**
+     * @brief 采集指定设备的测点。
+     * @param[in] device 设备对象。
+     */
     void collect_device(const DeviceContext& device);
+    /**
+     * @brief 批量采集指定测点。
+     * @param[in] pointCodes 测点编码列表。
+     */
     void collect_points(const std::vector<std::string>& pointCodes);
 
     // ---- 状态切换 ----
+    /**
+     * @brief 更新通道运行状态。
+     * @param[in] new_state 目标通道状态。
+     */
     void set_state(ChannelState new_state);
 
     // ---- 重连退避 ----
+    /**
+     * @brief 计算下次重连的退避时间。
+     * @return 计算得到的数值。
+     */
     int backoff_delay() const;
 
     const ChannelConfig channel_config_;

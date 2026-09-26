@@ -17,7 +17,18 @@ namespace ems::messaging {
 /// 传输游标（如 Redis Stream ID）；仅传输层含义，不替代 event_id
 struct TransportCursor {
     std::string value;
+
+    /**
+     * @brief 判断传输游标是否为空。
+     * @return true 表示对象为空；false 表示非空。
+     */
     bool empty() const noexcept { return value.empty(); }
+
+    /**
+     * @brief 比较两个传输游标是否相同。
+     * @param[in] other 用于比较的另一个对象。
+     * @return true 表示两者相等；false 表示不相等。
+     */
     bool operator==(const TransportCursor& other) const noexcept { return value == other.value; }
 };
 

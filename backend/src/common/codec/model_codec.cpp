@@ -24,6 +24,7 @@ std::string json_to_id(const json& j, const char* field) {
 }
 
 json i64_to_json(std::int64_t v) { return json(std::to_string(v)); }
+
 json u64_to_json(std::uint64_t v) { return json(std::to_string(v)); }
 
 core::Result<std::int64_t> json_to_i64(const json& j, const char* field) {

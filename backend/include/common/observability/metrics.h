@@ -16,17 +16,27 @@ namespace ems::observability {
 
 class IMetrics {
    public:
+    /** @brief 销毁指标接口。 */
     virtual ~IMetrics() = default;
 
     /// 累加计数（如错误数、Unknown 数、拒绝数）
+    /// @param[in] name 对象名称。
+    /// @param[in] delta 变化量。
+    /// @param[in] labels_json JSON 格式的标签数据。
     virtual void add(std::string_view name, std::uint64_t delta,
                      std::string_view labels_json = {}) = 0;
 
     /// 设置瞬时值（如池占用、队列长度、磁盘余量）
+    /// @param[in] name 对象名称。
+    /// @param[in] value 待写入的值。
+    /// @param[in] labels_json JSON 格式的标签数据。
     virtual void set_gauge(std::string_view name, double value,
                            std::string_view labels_json = {}) = 0;
 
     /// 记录一次延迟观测（毫秒；内部聚合 P95/P99）
+    /// @param[in] name 对象名称。
+    /// @param[in] value_ms 毫秒数值。
+    /// @param[in] labels_json JSON 格式的标签数据。
     virtual void observe_latency_ms(std::string_view name, double value_ms,
                                     std::string_view labels_json = {}) = 0;
 };

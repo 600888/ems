@@ -15,6 +15,8 @@ namespace ems::config {
 class CatalogValidator final : public IConfigValidator {
    public:
     /// 校验候选完整快照；聚合有上限的字段错误，不返回首个 bool
+    /// @param[in] candidate 候选配置。
+    /// @return 得到的校验报告。
     model::ValidationReport validate(const model::ModelCatalog& candidate) override;
 };
 

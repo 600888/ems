@@ -23,12 +23,15 @@ namespace rtdb {
 
 /**
  * @brief 协议类型转字符串
+ * @param[in] t 待转换的枚举值。
+ * @return 对应对象的指针。
  */
 const char* protocolTypeToString(model::ProtocolType t);
 
 /**
  * @brief 字符串转协议类型
  * @return 成功返回协议类型，失败返回 nullopt
+ * @param[in] s 待解析的文本。
  */
 std::optional<model::ProtocolType> stringToProtocolType(const std::string& s);
 

@@ -49,6 +49,11 @@ enum class Quality : std::uint8_t {
     Disabled = 10       ///< 配置禁用
 };
 
+/**
+ * @brief 返回点值品质的稳定诊断名称。
+ * @param[in] q 待提交的数据项。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(Quality q) noexcept {
     switch (q) {
         case Quality::Good:
@@ -77,6 +82,11 @@ inline const char* to_string(Quality q) noexcept {
     return "Unknown";
 }
 
+/**
+ * @brief 返回点值类型的稳定诊断名称。
+ * @param[in] t 待转换的枚举值。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(ValueType t) noexcept {
     switch (t) {
         case ValueType::Bool:
@@ -93,6 +103,11 @@ inline const char* to_string(ValueType t) noexcept {
     return "Unknown";
 }
 
+/**
+ * @brief 返回点类别的稳定诊断名称。
+ * @param[in] k 键或索引。
+ * @return 对应对象的指针。
+ */
 inline const char* to_string(PointKind k) noexcept {
     switch (k) {
         case PointKind::Telemetry:
@@ -148,6 +163,9 @@ struct PointSample {
 };
 
 /// 校验值与声明类型的组合是否匹配（编码器使用；字符串值禁止 NaN/Inf 混入）
+/// @param[in] value 输入值。
+/// @param[in] type 连接或数据类型。
+/// @return true 表示操作成功；false 表示失败。
 bool value_matches_type(const PointValue& value, ValueType type) noexcept;
 
 }  // namespace ems::model

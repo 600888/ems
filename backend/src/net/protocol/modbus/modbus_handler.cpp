@@ -25,11 +25,13 @@ constexpr int MAX_REGS_PER_REQUEST = 125;
 
 ModbusServerHandler::ModbusServerHandler()
     : netType_(modbus::ModbusServer::NetType::TCP), connection_("127.0.0.1"), settings_("502") {}
+
 ModbusServerHandler::ModbusServerHandler(Logger logger)
     : logger_(logger),
       netType_(modbus::ModbusServer::NetType::TCP),
       connection_("127.0.0.1"),
       settings_("502") {}
+
 ModbusServerHandler::~ModbusServerHandler() { stop(); }
 
 void ModbusServerHandler::initialize(const std::unordered_map<std::string, ValueType>& config) {
@@ -163,6 +165,7 @@ void ModbusServerHandler::setValueByAddress(int funcCode, int slaveId, int addre
 ValueType ModbusServerHandler::getValueByAddressWithDecode(int, int, int, const std::string&) {
     return {};
 }
+
 void ModbusServerHandler::setValueByAddressWithDecode(int, int, int, const ValueType&,
                                                       const std::string&) {}
 
@@ -170,12 +173,15 @@ std::vector<CapturedMessage> ModbusServerHandler::getCapturedMessages(int limit)
     return getMessageCapture() ? getMessageCapture()->getMessages(limit)
                                : std::vector<CapturedMessage>{};
 }
+
 void ModbusServerHandler::clearCapturedMessages() {
     if (getMessageCapture()) getMessageCapture()->clear();
 }
+
 AvgTimeStats ModbusServerHandler::getAvgTime() const {
     return getMessageCapture() ? getMessageCapture()->getAvgTime() : AvgTimeStats{};
 }
+
 void ModbusServerHandler::setWriteCallback(std::shared_ptr<ModbusWriteCallback> callback) {
     writeCallback_ = callback;
 }
@@ -196,6 +202,7 @@ int ModbusServerHandler::parseAddress(const std::string& s) const {
                ? std::stoi(s, nullptr, 16)
                : std::stoi(s);
 }
+
 int ModbusServerHandler::getRegisterCount(const std::string& decode) const {
     if (decode.empty() || decode == "0x41" || decode == "AB" || decode == "BA") return 1;
     if (decode == "0x42" || decode == "ABCD" || decode == "CDAB" || decode == "BADC" ||
@@ -204,6 +211,7 @@ int ModbusServerHandler::getRegisterCount(const std::string& decode) const {
     if (decode == "0x43" || decode == "ABCDEFGH") return 4;
     return 1;
 }
+
 bool ModbusServerHandler::valueToInt(const ValueType& value, int& result) const {
     if (auto v = std::get_if<int>(&value)) {
         result = *v;
@@ -410,6 +418,7 @@ void ModbusClientHandler::addPoints(const std::vector<std::shared_ptr<ProtocolPo
         if (pointsSet_.insert(p).second) points_.push_back(p);
     }
 }
+
 std::vector<CapturedMessage> ModbusClientHandler::getCapturedMessages(int) const { return {}; }
 
 void ModbusClientHandler::clearCapturedMessages() {}
@@ -434,6 +443,7 @@ std::vector<int> ModbusClientHandler::readRegistersBatchAsync(int fc, int sid, i
     for (int i = 0; i < cnt; ++i) r.push_back(static_cast<int>(vals[i]));
     return r;
 }
+
 std::vector<int> ModbusClientHandler::readHoldingRegisters(int sid, int sa, int cnt) {
     return readRegistersBatchAsync(3, sid, sa, cnt);
 }
@@ -529,6 +539,7 @@ std::vector<MergedRange> ModbusClientHandler::merge_ranges(
         int sid, fc;
         auto operator<=>(const K&) const = default;
     };
+
     std::map<K, std::vector<size_t>> g;
     for (size_t i = 0; i < pts.size(); ++i) g[{pts[i].slaveId, pts[i].funcCode}].push_back(i);
     std::vector<MergedRange> r;
