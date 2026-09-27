@@ -12,7 +12,7 @@
 
 #include "modbus_handler.h"
 #include "net/log.h"
-#include "net/protocol/common/protocol_plugin_api.h"
+#include "net/protocol/protocol_plugin_api.h"
 
 using Handler = ems::net::device::ModbusClientHandler;
 using ValueType = ems::net::device::ValueType;

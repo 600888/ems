@@ -8,7 +8,6 @@
 | --- | --- | --- |
 | `backend/include` `backend/src` `backend/tests` `backend/examples` | 是 | 项目自有代码 |
 | `backend/3rd/**` | 否 | 第三方依赖，跟随上游版本更新 |
-| 其他 vendored 单头库（如 `backend/include/util/rapidcsv.h`） | 否 | 由根目录 `.clang-format-ignore` 声明 |
 
 `3rd/` 目录内另有 `.clang-format`（`DisableFormat: true`）作为兜底，防止 IDE 或编辑器自动格式化误改第三方代码。
 
@@ -84,7 +83,7 @@ git diff --name-only --cached --diff-filter=ACM \
 可以接受的少数非空白改动：
 
 - **宏定义折行**：超过列宽的 `#define` 会被拆成多行并补 `\`，展开结果不变。
-- **长字符串字面量拆分**：仅 `backend/include/util/modbus_mapping_map.hpp` 受影响（8 处），相邻字面量在编译期拼接，运行结果不变；但按完整 message 文本 grep 时会失效，如不接受可将 `BreakStringLiterals` 设为 `false`。
+- **长字符串字面量拆分**：仅 `backend/src/net/protocol/modbus/modbus_mapping_map.hpp` 受影响（8 处），相邻字面量在编译期拼接，运行结果不变；但按完整 message 文本 grep 时会失效，如不接受可将 `BreakStringLiterals` 设为 `false`。
 
 ## 常见问题
 
@@ -94,5 +93,5 @@ git diff --name-only --cached --diff-filter=ACM \
 **改动别人的文件造成大 diff 怎么办？**
 先只格式化自己改动的文件：`./scripts/format.sh <改动的文件列表>`。全量格式化只在需要时做一次，并单独提交。
 
-**`backend/include/util/` 下的文件看起来是旧代码，也要格式化吗？**
-该目录混有项目自研工具头与 vendored 单头库。目前只排除了有明确第三方版权头的 `rapidcsv.h`；`date.hpp`、`time.hpp`、`date_time.hpp`、`timer.hpp`、`task.hpp`、`map.hpp`、`crc_check.h`、`proto_modbus_util.hpp` 等旧风格文件仍在格式化范围内。其中 `crc_check.h` 依赖未定义的 `hUChar`、`modbus_mapping_map.hpp` 依赖未定义的 `ushort`，本身已无法编译，属于遗留代码，如需排除请加入 `.clang-format-ignore`。
+**`backend/src/util/` 下的文件看起来是旧代码，也要格式化吗？**
+该目录只保留项目自研工具头；第三方 `rapidcsv.h` 已移至 `backend/3rd/rapidcsv/`。`date.hpp`、`time.hpp`、`date_time.hpp`、`timer.hpp`、`task.hpp`、`map.hpp`、`crc_check.h` 等旧风格文件仍在格式化范围内。Modbus 专用工具位于 `backend/src/net/protocol/modbus/`。其中 `crc_check.h` 依赖未定义的 `hUChar`、`modbus_mapping_map.hpp` 依赖未定义的 `ushort`，本身已无法编译，属于遗留代码，如需排除请加入 `.clang-format-ignore`。

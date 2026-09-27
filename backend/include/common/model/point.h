@@ -130,7 +130,7 @@ struct QualityInfo {
 
 /// 标准点定义（设备类型目录中的标准语义）
 struct StandardPointDefinition {
-    std::string semantic_code;                ///< 标准语义编码，如 pcs.active_power
+    std::string semantic_code;                ///< 类型内标准语义编码，如 active_power
     ValueType value_type{ValueType::Double};  ///< 值类型
     std::string unit;                         ///< 单位
     PointKind kind{PointKind::Telemetry};     ///< 点种类

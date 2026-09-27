@@ -27,7 +27,7 @@
 
 #include "data_dispatcher.h"
 #include "net/log.h"
-#include "net/protocol/common/protocol_plugin_api.h"
+#include "net/protocol/protocol_plugin_api.h"
 #include "plugin_manager.h"
 #include "rtdb/rtdb_channel.h"
 

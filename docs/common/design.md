@@ -222,6 +222,8 @@ UnitController              -> 策略模块：约束与控制决策
 
 模型不继承强制 `to_json/from_json` 的基类，序列化由 codec 承担；不带 ORM 注解或数据库连接方法。数据库行实体可以与模型不同，但必须通过显式映射函数转换，不能让业务使用表字段作为协议配置。
 
+设备业务类型目录可由 `DeviceModel` 基类与 PCS/BMS/消防子类生成；基类只持有类型标识、版本和名称，类型专有的固有点与能力保留在子类。生成后的 `DeviceTypeDefinition` 及实例 `Device` 仍是上述快照中的值对象，不能把多态对象或协议连接放入跨进程契约。
+
 ### 6.3 查询与校验接口
 
 首期不增加万能 `DeviceManager`。只读 `ModelView` 从固定版本快照提供下列操作，全部为内存操作：
@@ -405,7 +407,7 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 
 ### 12.1 日志、指标和健康
 
-运行日志继续复用现有 spdlog 及 `backend/include/log/` 封装，公共模块只统一初始化、级别、轮转、异步队列及上下文字段。已有 ILogger 如保留，仅作薄适配，不另建日志框架；运行日志不承担采样补传或控制恢复。
+运行日志继续复用现有 spdlog 及 `backend/src/log/` 封装，公共模块只统一初始化、级别、轮转、异步队列及上下文字段。已有 ILogger 如保留，仅作薄适配，不另建日志框架；运行日志不承担采样补传或控制恢复。
 
 结构化日志统一包含 process_name、instance_id、module、trace_id，以及适用的 station/unit/device/point、config_version、event_id/command_id、error_code。密码、令牌、连接串凭据和原始认证载荷不输出。后台异步日志队列有界；业务审计不依赖调试日志保存。
 
@@ -449,11 +451,11 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 
 | 当前路径/内容 | 目标归属 | 迁移重点 |
 | --- | --- | --- |
-| backend/include/models/base.h | common/core + common/model + codec | 拆分身份/枚举与 JSON 基类，保留旧枚举值转换表 |
-| backend/include/models/device.h、device_group.h | common/model/asset、device | 使用资产归属；设备通过 binding 引用通道 |
-| backend/include/models/channel.h、slave.h | common/model/channel、binding | 从站地址迁到绑定，消除单设备通道假设；运行连接归采集 |
-| backend/include/models/point_runtime.hpp | common/model/point + realtime | 分离配置、实时值、厂家解码；保留值类型/质量/时间 |
-| backend/include/models/point_mapping.h | 对应标准绑定模型或策略派生点配置 | 现有公式映射不等于厂家点绑定，不能直接改名合并 |
+| backend/src/models/base.h | common/core + common/model + codec | 拆分身份/枚举与 JSON 基类，保留旧枚举值转换表 |
+| backend/src/models/device.h、device_group.h | common/model/asset、device | 使用资产归属；设备通过 binding 引用通道 |
+| backend/src/models/channel.h、slave.h | common/model/channel、binding | 从站地址迁到绑定，消除单设备通道假设；运行连接归采集 |
+| backend/src/models/point_runtime.hpp | common/model/point + realtime | 分离配置、实时值、厂家解码；保留值类型/质量/时间 |
+| backend/src/models/point_mapping.h | 对应标准绑定模型或策略派生点配置 | 现有公式映射不等于厂家点绑定，不能直接改名合并 |
 | backend/include/db/*.h | common/database 公共接口 + src/common/db/mysql 私有行实体 | 业务不再依赖 ORM 行结构，迁移显式转换与稳定 ID |
 | backend/src/common/db/db_manager.cpp | database_mysql 与各 Repository | 拆开连接、事务和业务 CRUD；采样历史写入迁往 history/storage |
 | backend/src/rtdb/rtdb_device.h、rtdb_channel.h、rtdb_config.h | common/model + config | 配置定义脱离 rtdb，统一设备/通道/点定义 |
@@ -461,8 +463,8 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | backend/src/net/para_loader/* | collector 配置适配 + common/config | 读取和校验复用公共库；通道准备/应用留采集 |
 | backend/src/net/collect/data_dispatcher.* | collector | 注入实时/事件接口，管理有界内存队列，保留分发编排责任 |
 | backend/src/net/protocol/* | protocol | 保留插件边界，不搬到 common；只复用纯模型/契约 |
-| backend/include/util/proto_modbus_util.hpp、modbus_mapping_map.hpp | protocol/modbus | 协议专用工具移出通用工具 |
-| backend/include/log/*、通用 util | observability / util | 按实际复用迁移，不把所有旧工具整体照搬 |
+| backend/src/net/protocol/modbus/proto_modbus_util.hpp、modbus_mapping_map.hpp | protocol/modbus | 协议专用工具移出通用工具 |
+| backend/src/log/*、通用 util | observability / util | 按实际复用迁移，不把所有旧工具整体照搬 |
 
 旧数据中的 ID、时间单位、质量码、设备类型、code 和绑定必须先导出映射报告。旧 YC/YX/YK/YT 保留导入转换：映射为标准 telemetry/status/command，并把反馈独立出来；不能仅改枚举名称。
 

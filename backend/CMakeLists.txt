@@ -50,7 +50,7 @@ include_directories(${LIBMODBUS_INCLUDE_DIRS})
 
 include_directories(src)
 
-add_subdirectory(include)
+add_subdirectory(src/models)
 add_subdirectory(tests)
 add_subdirectory(3rd)
 add_subdirectory(src)

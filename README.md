@@ -102,7 +102,11 @@ python -m pip install clang-format==22.1.8
 
 也可以在 `backend/build` 下使用 CMake 目标：`make format`、`make format-check`。
 
-`backend/3rd/` 下的第三方代码以及 `backend/include/util/rapidcsv.h` 不参与格式化。
+`backend/3rd/` 下的第三方代码不参与格式化。
+
+## 头文件目录
+
+`backend/include/` 只放供外部使用的公共接口，包括 `common/`、`db/`、`realtime/` 和协议插件 C 接口。模块内部头文件放在对应的 `backend/src/` 模块目录；第三方头文件放在 `backend/3rd/`。新增内部头文件时，不要把所在模块的目录作为公共 include 路径导出。
 
 ## C++ 标准
 

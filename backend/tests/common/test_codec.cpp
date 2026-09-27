@@ -168,6 +168,46 @@ TEST(ModelCodec, BindingRoundtrip) {
     EXPECT_EQ(back.protocol_address, "1");
 }
 
+TEST(ModelCodec, ImportedVendorRouteRoundtrip) {
+    model::VendorPointRoute route;
+    route.route_id = "point-table:pcs-1:power";
+    route.point_id = core::PointId("point-active_power");
+    route.binding_id = "binding-1";
+    route.vendor_address = "modbus:holding_register:0";
+    route.template_key = "power";
+    route.vendor_name = "厂家功率";
+    route.protocol = "modbus";
+    route.address_space = "holding_register";
+    route.address_offset = 0;
+    route.wire_type = "f32";
+    route.byte_order = "CDAB";
+    route.scale = -0.001;
+
+    auto text = expect_ok(codec::encode_vendor_route(route));
+    auto decoded = expect_ok(codec::decode_vendor_route(text));
+    EXPECT_EQ(decoded.template_key, route.template_key);
+    EXPECT_EQ(decoded.vendor_name, route.vendor_name);
+    EXPECT_EQ(decoded.address_space, route.address_space);
+    EXPECT_EQ(decoded.address_offset, route.address_offset);
+    EXPECT_EQ(decoded.wire_type, route.wire_type);
+    EXPECT_EQ(decoded.byte_order, route.byte_order);
+    EXPECT_EQ(decoded.scale, route.scale);
+}
+
+TEST(ModelCodec, ImportedVendorRouteRejectsBadOffsetType) {
+    auto result = codec::decode_vendor_route(
+        R"({"route_id":"r","point_id":"p","binding_id":"b","address_offset":"bad"})");
+    ASSERT_FALSE(core::is_ok(result));
+    EXPECT_EQ(core::error_of(result).code, core::ErrorCode::SchemaMismatch);
+}
+
+TEST(ModelCodec, ImportedVendorRouteRejectsBadScaleType) {
+    auto result = codec::decode_vendor_route(
+        R"({"route_id":"r","point_id":"p","binding_id":"b","scale":"bad"})");
+    ASSERT_FALSE(core::is_ok(result));
+    EXPECT_EQ(core::error_of(result).code, core::ErrorCode::SchemaMismatch);
+}
+
 TEST(ModelCodec, DecodeMissingRequiredFieldIsSchemaMismatch) {
     // 缺 device_id
     auto r = codec::decode_device("{\"asset_id\":\"d-1\"}");

@@ -1,12 +1,2 @@
 # clang-format 忽略清单（语法同 .gitignore，相对本文件所在目录）。
-#
-# 用途：排除「不在 backend/3rd/ 下、但同样属于第三方 vendored 代码」的文件，
-#       这些文件跟随上游版本更新，不应被本项目格式化。
-#
-# backend/3rd/ 已由该目录内的 .clang-format（DisableFormat）整体排除，
-# 无需在此重复声明。
-#
-# 需要 clang-format >= 18。
-
-# rapidcsv —— 第三方单头 CSV 库（d99kris/rapidcsv, BSD-3-Clause）
-backend/include/util/rapidcsv.h
+# 第三方单头 CSV 库 rapidcsv 已移到 backend/3rd/，由该目录的规则排除。

@@ -18,6 +18,8 @@ target_compile_features(ems_common_core INTERFACE cxx_std_17)
 add_library(ems_common_model STATIC
     model/validation.cpp
     model/model_view.cpp
+    model/device_config.cpp
+    model/device_models.cpp
 )
 target_include_directories(ems_common_model PUBLIC ${CMAKE_SOURCE_DIR}/include)
 target_link_libraries(ems_common_model PUBLIC ems_common_core)
@@ -79,7 +81,6 @@ target_compile_features(ems_observability INTERFACE cxx_std_17)
 add_library(ems_realtime_api INTERFACE)
 target_include_directories(ems_realtime_api INTERFACE
     ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/src
 )
 target_link_libraries(ems_realtime_api INTERFACE ems_common_core)
 target_compile_features(ems_realtime_api INTERFACE cxx_std_17)
@@ -94,11 +95,10 @@ add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../realtime ${CMAKE_CURRENT_BINARY_
 # ---------------------------------------------------------------------------
 add_library(ems_config_core STATIC
     config/catalog_validator.cpp
+    config/point_table.cpp
 )
-target_include_directories(ems_config_core PUBLIC
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/src
-)
+target_include_directories(ems_config_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
+target_include_directories(ems_config_core PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(ems_config_core PUBLIC ems_config_api)
 set_target_properties(ems_config_core PROPERTIES
     CXX_STANDARD 17

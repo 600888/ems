@@ -4,7 +4,7 @@
  * @file rtdb_channel.h
  * @brief 通道配置与协议类型 - 引用共享模型定义
  *
- * 协议类型 (ProtocolType) 已统一迁移至 inc/models/base.h。
+ * 协议类型 (ProtocolType) 已统一迁移至 src/models/base.h。
  * ChannelConfig 已迁移至公共头文件 rtdb_config.h。
  */
 

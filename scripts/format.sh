@@ -94,11 +94,10 @@ CF_MAJOR="${CF_VERSION%%.*}"
 # 用非固定版本执行 --check 会产生假告警，所以这里显式提示。
 PINNED_CF_VERSION="22.1.8"
 
-# 低于 18 的版本不支持根目录 .clang-format-ignore，会误改 vendored 单头库，直接拒绝
+# 保持原有工具版本门槛，避免旧版格式化结果与项目规则不一致。
 if [[ "${CF_MAJOR}" =~ ^[0-9]+$ ]] && (( CF_MAJOR < 18 )); then
   echo "clang-format 版本过低（${CF_VERSION}），需要 18 及以上。" >&2
-  echo "原因：根目录 .clang-format-ignore 的忽略机制自 18 起才支持，" >&2
-  echo "      低版本会误改 backend/include/util/rapidcsv.h 等第三方单头库。" >&2
+  echo "原因：低版本不支持项目使用的全部格式化选项。" >&2
   echo "建议：python -m pip install clang-format==${PINNED_CF_VERSION}" >&2
   exit 1
 fi

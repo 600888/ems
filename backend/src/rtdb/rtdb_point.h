@@ -5,7 +5,7 @@
  * @file rtdb_point.h
  * @brief 运行时测点类型 - 引用共享模型定义 (point_runtime.hpp)
  *
- * 运行时测点数据结构已统一迁移至 inc/models/point_runtime.hpp。
+ * 运行时测点数据结构已统一迁移至 src/models/point_runtime.hpp。
  * 本文件仅作为兼容层，将共享模型类型引入 ems::rtdb 命名空间，
  * 同时保留 PointConfig 配置转换结构体。
  *

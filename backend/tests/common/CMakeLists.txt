@@ -9,6 +9,8 @@ include(GoogleTest)
 add_executable(test_ems_common
     test_core.cpp
     test_model.cpp
+    test_device_config.cpp
+    test_point_table.cpp
     test_codec.cpp
     test_realtime.cpp
 )

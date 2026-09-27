@@ -338,11 +338,21 @@ core::Result<model::DeviceChannelBinding> decode_binding(const std::string& json
 // ---- VendorPointRoute ----
 
 core::Result<std::string> encode_vendor_route(const model::VendorPointRoute& r) {
+    if (!std::isfinite(r.scale) || !std::isfinite(r.offset) || r.address_offset > 65535) {
+        return argument_error("VendorPointRoute 转换系数或地址偏移非法");
+    }
     json j;
     j["route_id"] = r.route_id;
     j["point_id"] = id_to_json(r.point_id.value());
     j["binding_id"] = r.binding_id;
     j["vendor_address"] = r.vendor_address;
+    j["template_key"] = r.template_key;
+    j["vendor_name"] = r.vendor_name;
+    j["protocol"] = r.protocol;
+    j["address_space"] = r.address_space;
+    j["address_offset"] = r.address_offset;
+    j["wire_type"] = r.wire_type;
+    j["byte_order"] = r.byte_order;
     j["scale"] = r.scale;
     j["offset"] = r.offset;
     j["writable"] = r.writable;
@@ -359,11 +369,31 @@ core::Result<model::VendorPointRoute> decode_vendor_route(const std::string& jso
     r.point_id = core::PointId(require_str(j, "point_id", ok));
     r.binding_id = require_str(j, "binding_id", ok);
     if (!ok) return schema_error("VendorPointRoute 缺少必需字段");
-    r.vendor_address = j.value("vendor_address", std::string{});
-    r.scale = get_double(j, "scale", 1.0);
-    r.offset = get_double(j, "offset", 0.0);
-    r.writable = get_bool(j, "writable", false);
-    r.enabled = get_bool(j, "enabled", true);
+    if ((j.contains("scale") && !j["scale"].is_number()) ||
+        (j.contains("offset") && !j["offset"].is_number()) ||
+        (j.contains("writable") && !j["writable"].is_boolean()) ||
+        (j.contains("enabled") && !j["enabled"].is_boolean())) {
+        return schema_error("VendorPointRoute 字段类型非法");
+    }
+    try {
+        r.vendor_address = j.value("vendor_address", std::string{});
+        r.template_key = j.value("template_key", std::string{});
+        r.vendor_name = j.value("vendor_name", std::string{});
+        r.protocol = j.value("protocol", std::string{});
+        r.address_space = j.value("address_space", std::string{});
+        r.address_offset = j.value("address_offset", std::uint32_t{0});
+        r.wire_type = j.value("wire_type", std::string{});
+        r.byte_order = j.value("byte_order", std::string{});
+        r.scale = get_double(j, "scale", 1.0);
+        r.offset = get_double(j, "offset", 0.0);
+        r.writable = get_bool(j, "writable", false);
+        r.enabled = get_bool(j, "enabled", true);
+    } catch (...) {
+        return schema_error("VendorPointRoute 字段类型非法");
+    }
+    if (!std::isfinite(r.scale) || !std::isfinite(r.offset) || r.address_offset > 65535) {
+        return schema_error("VendorPointRoute 转换系数或地址偏移非法");
+    }
     return r;
 }
 

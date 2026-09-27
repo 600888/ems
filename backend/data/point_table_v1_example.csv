@@ -1,0 +1,3 @@
+template_key,standard_code,vendor_name,address_space,address_offset,access,wire_type,byte_order,scale,offset,unit
+power_feedback,active_power,厂家交流有功,holding_register,0,read,f32,CDAB,-0.001,0,kW
+dc_bus_voltage,,厂家直流母线电压,input_register,16,read,u16,,1,0,V

@@ -75,7 +75,7 @@ ModelCatalog build_valid_catalog() {
     Point cmd;
     cmd.point_id = pid("p-cmd");
     cmd.asset_id = aid("d-1");
-    cmd.code = "pcs01.charge_cmd";
+    cmd.code = "charge_cmd";
     cmd.kind = PointKind::Command;
     cmd.value_type = ValueType::Bool;
     c.points.push_back(cmd);
@@ -83,7 +83,7 @@ ModelCatalog build_valid_catalog() {
     Point fb;
     fb.point_id = pid("p-fb");
     fb.asset_id = aid("d-1");
-    fb.code = "pcs01.charge_fb";
+    fb.code = "charge_fb";
     fb.kind = PointKind::Status;
     fb.feedback_of = pid("p-cmd");  // 反馈点指回命令点
     c.points.push_back(fb);
@@ -91,7 +91,7 @@ ModelCatalog build_valid_catalog() {
     Point tel;
     tel.point_id = pid("p-pow");
     tel.asset_id = aid("d-1");
-    tel.code = "pcs01.active_power";
+    tel.code = "active_power";
     tel.kind = PointKind::Telemetry;
     tel.unit = "kW";
     c.points.push_back(tel);

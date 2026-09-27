@@ -16,6 +16,11 @@
   },
   {
     "type": "file",
+    "name": "point-table-import",
+    "label": "点表 CSV 导入"
+  },
+  {
+    "type": "file",
     "name": "channel-protocol",
     "label": "设备、通道与协议"
   }

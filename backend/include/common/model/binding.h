@@ -11,6 +11,7 @@
 #include <common/core/identity.h>
 #include <common/model/channel.h>
 
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -53,11 +54,18 @@ struct DeviceChannelBinding {
 
 /// 厂家点路由：厂家点身份 → 标准点（南向）
 struct VendorPointRoute {
-    std::string route_id;        ///< 稳定路由 ID
-    core::PointId point_id;      ///< 标准点身份（独立于通信路径）
-    std::string binding_id;      ///< 引用设备-通道绑定
-    std::string vendor_address;  ///< 厂家点身份/寄存器地址等
-    double scale{1.0};           ///< 逻辑转换：标准值 = 原始值 * scale + offset
+    std::string route_id;             ///< 稳定路由 ID
+    core::PointId point_id;           ///< 标准点身份（独立于通信路径）
+    std::string binding_id;           ///< 引用设备-通道绑定
+    std::string vendor_address;       ///< 厂家点身份/寄存器地址等
+    std::string template_key;         ///< 设备内稳定厂家点键，重复导入据此更新
+    std::string vendor_name;          ///< 厂家点显示名称
+    std::string protocol;             ///< 首期导入为 modbus
+    std::string address_space;        ///< coil/discrete_input/input_register/holding_register
+    std::uint32_t address_offset{0};  ///< 零基协议偏移
+    std::string wire_type;            ///< bool/i16/u16/i32/u32/f32
+    std::string byte_order;           ///< 多寄存器字节序；单寄存器为空
+    double scale{1.0};                ///< 逻辑转换：标准值 = 原始值 * scale + offset
     double offset{0.0};
     bool writable{false};  ///< 是否可作为控制下发路径
     bool enabled{true};

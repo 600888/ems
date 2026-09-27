@@ -11,7 +11,7 @@
 #include <vector>
 
 #include "db/db_manager.h"
-#include "db/point_import.h"
+#include "point_import.h"
 
 namespace ems {
 namespace net {
