@@ -1,24 +1,24 @@
 # EMS 系统架构设计文档
 
-> 版本：2.10｜更新日期：2026-09-19｜状态：目标架构，待分阶段实现。
+> 版本：2.12｜更新日期：2026-09-28｜状态：目标架构，待分阶段实现。
 > 本文是整体架构决策基线；采集细节见 [数据采集架构](../processes/collector/design.md)，实时数据与配置入口见 [实时数据与配置](../common/realtime/index.md)。下列进程名、接口、消息与数据模型是设计约定，不代表仓库已经实现。
 
 ## 1. 架构决策
 
 | 项目 | 决策 | 边界与理由 |
 | --- | --- | --- |
-| C++ 标准 | 所有自研 C++ 模块统一 C++17 | 采集、存储、策略及公共库、协议插件使用同一标准；Go 和前端使用各自工具链 |
+| C++ 标准 | 所有自研 C++ 模块统一 C++17 | 采集、存储、策略、Web 后端及公共库、协议插件使用同一标准；前端使用自身工具链 |
 | 后台进程 | 采集与上送、存储、策略、Web 后端四类进程 | 通信进程同时管理南向采集与北向上送，按模块/队列隔离；分布式部署可增加同类实例 |
-| 多语言 | 采集、存储、策略使用 C++17；Web 后端使用 Go | 通过版本化通信契约协作，不跨进程共享 C++ 对象 |
-| 前端 | Vue 3 + TypeScript + Tailwind CSS | 通过 Go 的 REST API 和 WebSocket 访问系统 |
+| 后端框架 | 四类业务进程均使用 C++17；Web 后端采用 Drogon | 通过版本化通信契约协作，不跨进程共享 C++ 对象；Drogon 负责 HTTP/WebSocket 层 |
+| 前端 | Vue 3 + TypeScript + Tailwind CSS | 通过 Drogon Web 后端的 REST API 和 WebSocket 访问系统 |
 | 共享实时数据 | 统一抽象接口 + 可选后端；Redis 为默认实现 | 最新测点值、质量、设备/通道与控制状态支持共享内存、Redis、其他内存数据库；同一作用域只有一个权威后端，见 [公共实时数据访问接口设计](../common/realtime/access-design.md) |
 | 配置快照 | 独立配置仓储，默认 Redis，MySQL 为权威配置源 | 与实时状态后端分开选择；共享内存模式不自动替换配置仓储 |
 | Redis 键 | 全局唯一储能单元 code 为根，设备 code 按资产层级逐级展开 | 单元 hash tag 为 `{unit_code}`；站级公共资源使用 `{station:station_code}`；详见 [Redis 键设计](../common/realtime/redis-key-design.md) |
-| 异步消息 | Redis Streams | 历史采样、告警、控制意图、执行命令和回执；Pub/Sub 仅用于允许丢失的刷新提示 |
+| 异步消息 | ZeroMQ 通知与命令；Streams 暂承载历史采样 | PUB/SUB 传递可丢失的变化提示；REQ/REP 交接执行命令，MySQL outbox/inbox 保证恢复；历史原始样本仍走独立可靠事件通道 |
 | gRPC | 建议首期引入，限定用于跨进程服务 API | 用于历史查询等由目标进程提供的服务；各进程自身的业务数据库操作直接使用对应 ORM |
 | 独立 MQ | 首期不引入 Kafka/RabbitMQ 等独立中间件 | 达到明确的吞吐、积压、回放或跨站复制需求后再评估 |
 | 历史存储 | TDengine | 时序值和聚合结果，由存储进程统一访问 |
-| 业务存储 | MySQL；Go 使用 GORM，C++ 使用 ormpp | C++ 数据库 API 封装到公共模块供采集、存储、策略复用；每个进程独立创建和管理连接或连接池 |
+| 业务存储 | MySQL；四类 C++ 进程复用公共 ormpp Repository | 数据库 API 封装到公共模块；每个进程独立创建和管理连接或连接池，Web 同步查询进入有界业务工作池 |
 | 设备模型 | 站点 → 储能单元 → 设备/部件，加独立关系模型 | 分开描述资产归属、电气连接、控制能力与通信路径 |
 | 设备点位抽象 | 类型固有点位 → 厂家点表 → 实例绑定 | 导入先选实际设备，缺失能力显式禁用；标准读取、设定命令与反馈分开，见 [设备模型与点表绑定](device-model.md) |
 | 通道模型 | 设备与通道多对多；通道引用一个协议 profile 版本 | 分开定义采集/上送用途、EMS 客户端/服务端角色、连接模式与操作权限；详见 [设备、通道与协议](channel-protocol.md) |
@@ -29,19 +29,28 @@
 
 ### 2.1 整体架构图
 
-下图及本文 Redis 数据流描述采用默认部署。实时状态访问在业务侧统一为 `RealtimeService → IRealtimeStore`，通过共享内存、Redis 或其他派生类实现。选择共享内存时，C++ 进程映射同机共享段，Go 实时查询通过存储进程内新增的实时查询 gRPC；可靠事件仍经独立 `IEventBus`，首期使用 Redis Streams。完整接口、部署限制和恢复语义见 [公共实时数据访问接口设计](../common/realtime/access-design.md)。
+下图将实时状态与消息传输分开。实时状态访问在业务侧统一为 `RealtimeService → IRealtimeStore`，通过共享内存、Redis 或其他派生类实现。选择共享内存时，C++ 进程映射同机共享段，Web 实时查询通过存储进程内的只读查询 gRPC；消息订阅与命令下发分别使用 ZeroMQ PUB/SUB 与 REQ/REP。历史采样仍经独立 `IEventBus`，当前使用 Redis Streams。详细语义见 [公共实时数据访问接口设计](../common/realtime/access-design.md) 与 [ZeroMQ 消息与命令设计](../common/realtime/zeromq-messaging-design.md)。
 
 ```mermaid
 flowchart TB
-    UI[Vue 3 + Tailwind CSS] <-->|REST / WebSocket| WEB[Web 后端 ems-web / Go]
+    UI[Vue 3 + Tailwind CSS] <-->|REST / WebSocket| WEB[Web 后端 ems-web / C++17 + Drogon]
     WEB <-->|历史查询等内部 gRPC| STORE[存储 ems-storage / C++17]
-    WEB -->|GORM / 本进程连接池| MYSQL[(MySQL)]
+    WEB -->|公共 ormpp Repository / 本进程连接池| MYSQL[(MySQL)]
     STORE -->|公共数据库 API / ormpp / 本进程连接池| MYSQL
     STORE --> TD[(TDengine)]
-    WEB <-->|实时快照 / 控制状态查询| REDIS[(Redis / Hash + Streams)]
-    STORE <-->|消费事件 / 发布配置与控制 outbox| REDIS
-    STRATEGY[策略 ems-strategy / C++17] <-->|状态 / 仲裁 / 命令回执| REDIS
-    COLLECT[采集与上送 ems-collector / C++17] <-->|采样 / 命令 / 回执| REDIS
+    RT[IRealtimeStore] --> REDIS[(Redis 最新值 / 历史 Streams)]
+    RT --> SHM[(共享内存最新值)]
+    WEB <-->|实时快照 / 控制状态查询| STORE
+    STORE <-->|历史采样与配置快照| REDIS
+    STRATEGY[策略 ems-strategy / C++17] --> RT
+    COLLECT[采集与上送 ems-collector / C++17] --> RT
+    COLLECT -->|原始历史样本| REDIS
+    COLLECT -->|变化提示 PUB| ZMQ[ZeroMQ 通知]
+    ZMQ -->|SUB| STRATEGY
+    ZMQ -->|SUB| STORE
+    ZMQ -->|SUB / Web 推送| WEB
+    STORE -->|命令 outbox / REQ| CMD[ZeroMQ 命令]
+    CMD -->|REP / 持久 inbox| COLLECT
     STRATEGY -->|公共数据库 API / ormpp / 本进程连接池| MYSQL
     COLLECT -->|公共数据库 API / ormpp / 本进程连接池| MYSQL
     STRATEGY <-->|历史查询| STORE
@@ -56,16 +65,16 @@ flowchart TB
 | 采集与上送 | 南向协议接入/执行/回读、北向状态出口/意图受理、通道会话管理、有界采样缓冲 | 现场与上级协议对端、公共实时库、事件通道；公共 ormpp API 读配置、持久意图/outbox | 不做调度优化，不直写 TDengine，不绕过策略执行任何外部控制 |
 | 存储 | 时序批量写入/查询、告警/命令回执归档、配置快照发布、outbox 发布与补发 | Redis、MySQL（公共 ormpp API）、TDengine；提供内部 gRPC | 不建立现场连接，不生成调度决策 |
 | 策略 | 单元状态聚合、站级优化、功率分配、告警规则、手自动仲裁、约束检查 | Redis、MySQL（公共 ormpp API）；经存储 gRPC 查询历史 | 不直接操作协议句柄，不绕开采集进程控制设备 |
-| Web 后端 | 登录与权限、请求校验、REST API、实时推送、业务 CRUD、配置编辑和查询编排 | Redis、MySQL（GORM）；经存储 gRPC 查询历史 | 不直连设备，不绕过策略仲裁下发执行命令 |
+| Web 后端 | Drogon HTTP/WebSocket、登录与权限、业务 CRUD、配置编辑和查询编排 | Redis、MySQL（公共 ormpp Repository）；经存储 gRPC 查询历史 | 不直连设备，不绕过策略仲裁下发执行命令 |
 
 各进程按业务职责直接访问同一 MySQL，连接和事务上下文归各自进程所有；C++ 公共数据库模块是可复用的库，不增加数据库代理进程。gRPC 服务运行于存储进程内，不增加业务进程。存储进程内部将时序写入、归档事务和历史查询分配到独立队列/工作池，限制查询时长与返回行数，避免大报表挤占审计归档和配置发布资源。
 
 ### 2.3 主要数据流
 
-1. **遥测**：设备 → 采集 → Redis 最新值与采样 Stream → 存储 → TDengine；策略读取最新快照，前端通过 Go 查看。
-2. **控制**：Web 人工意图、北向协议上级意图或策略自动意图 → 策略统一仲裁 → 执行命令 Stream → 所属采集实例 → 协议写入/回读 → 回执 Stream → 状态展示与归档。意图与命令的持久审计/outbox 见第 6 节。
-3. **配置**：Vue → Go 鉴权/校验 → GORM 在 MySQL 事务中保存配置版本和 outbox → 存储发布 Redis 快照/变更 → 采集与策略应用并反馈版本。C++ 侧需要修改配置时，通过公共 ormpp API 遵循相同事务与版本规则。
-4. **查询**：Vue → Go → GORM 查询 MySQL 业务数据；TDengine 历史由 Go 经存储 gRPC 查询；实时最新值由 Go 读 Redis。C++ 各进程通过公共 ormpp API 查询职责内的业务数据。
+1. **遥测**：设备 → 采集 → 选定的共享内存或 Redis 最新值后端，同时将原始采样送历史事件通道 → 存储 → TDengine；ZeroMQ 提示策略与前端重读快照。
+2. **控制**：Web 人工意图、北向协议上级意图或策略自动意图 → 策略统一仲裁 → MySQL 命令/outbox → ZeroMQ REQ/REP → 所属采集实例的持久 inbox → 协议写入/回读 → MySQL 回执与 ZeroMQ 状态提示。持久审计和重复执行防护见第 6 节。
+3. **配置**：Vue → Drogon Web 鉴权/校验 → 公共 ormpp Repository 在 MySQL 事务中保存配置版本和 outbox → 存储发布 Redis 快照/变更 → 采集与策略应用并反馈版本。各进程遵循相同事务与版本规则。
+4. **查询**：Vue → Drogon Web → 公共 ormpp Repository 查询 MySQL 业务数据；TDengine 历史由 Web 经存储 gRPC 查询；实时最新值按部署经 Redis 或存储实时查询 gRPC 获取。各进程通过公共 ormpp API 查询职责内的业务数据。
 5. **上送**：标准逻辑点 → 通信进程的出口映像/北向映射 → IEC 104、MMS 或 Modbus 等上送通道 → 调度中心/第三方；peer 控制请求进入持久意图与统一仲裁。
 
 ## 3. 储能与设备建模
@@ -191,14 +200,15 @@ Modbus TCP/RTU 优先复用现有 C/C++ 封装；IEC 60870-5-104 复用现有依
 | 机制 | 使用场景 | 保证边界 |
 | --- | --- | --- |
 | Redis Hash/String | 最新值、设备/通道/单元状态、配置快照、命令状态 | 当前状态不是完整历史，通过版本/质量识别陈旧 |
-| Redis Streams | 采样、告警、控制、回执、配置变化 | 消费组配合 ACK、待处理恢复和去重实现至少一次处理，不等于设备动作恰好一次 |
-| Redis Pub/Sub | 页面刷新、缓存失效提示 | 断开期间会漏消息，重连需重新读快照，不承载唯一历史/命令副本 |
+| Redis Streams | 当前历史原始采样 | 消费组配合 ACK、待处理恢复和去重实现至少一次处理；未来完全去 Redis 需替换持久采样队列 |
+| ZeroMQ PUB/SUB | 页面刷新、缓存失效与状态变化提示 | 断开期间会漏消息，重连需重新读权威快照，不承载唯一历史/命令副本 |
+| ZeroMQ REQ/REP | 执行命令交接 | 应答只表示采集端持久受理状态，MySQL outbox/inbox 与执行状态机处理重试、去重和结果核验；见[设计文档](../common/realtime/zeromq-messaging-design.md) |
 | gRPC + Protobuf | 分页历史等跨进程服务调用 | 类型化请求响应与 deadline；超时不代表服务端没有完成操作 |
 | 独立 MQ | 后续大规模事件总线 | 额外部署、容量、监控和一致性成本，首期不启用 |
 
 消息语义参考 [Redis Pub/Sub](https://redis.io/docs/latest/develop/pubsub/) 和 [Redis Streams](https://redis.io/docs/latest/develop/use-cases/streaming/)。gRPC 接口生成、deadline 与调用双方结果可能不同的行为见 [gRPC 核心概念](https://grpc.io/docs/what-is-grpc/core-concepts/)。
 
-**gRPC 结论**：四进程系统也可以使用内部 REST；本项目希望历史查询等跨进程服务使用统一的 Go/C++ 类型契约，因此建议首期采用 gRPC。Go 使用 GORM、C++ 使用公共 ormpp API 直接完成各自的业务数据库操作，是否走 gRPC 取决于服务职责。需要承担 Protobuf 生成工具链和两端兼容测试成本。它不替代 Redis 共享状态或持久化队列，不承载逐点遥测广播。
+**gRPC 结论**：四进程系统也可以使用内部 REST；本项目希望历史查询等跨进程服务使用统一的版本化类型契约，因此建议首期采用 gRPC。各 C++ 进程使用公共 ormpp API 直接完成职责内的 MySQL 操作，是否走 gRPC 取决于服务职责。仍需承担 Protobuf 生成工具链和进程间兼容测试成本。它不替代 Redis 共享状态或持久化队列，不承载逐点遥测广播。
 
 **MQ 结论**：目前没有设备数量、采样率、最大中断时间的实测输入，暂不增加独立 MQ。先测算峰值样本率、消息大小、积压时长、消费者数与内存开销；队列容量近似为“峰值消息字节率 × 最大中断秒数 × 安全系数”，另计索引、PEL、复制和进程内采样缓冲。
 
@@ -218,7 +228,7 @@ ems:{ess000001}:stream:telemetry
 ems:rt:point:{station:station001}:pcc-meter01:active_power
 ```
 
-同父节点的设备 code 唯一，code 路径表达资产归属；通道与共享物理资源使用独立 station 路径，不能从设备层级推断。`station_id / station_code` 保留在元数据、消息和权限上下文中。事件流按单元汇集，命令仍按 owner_shard 路由；存储和策略分别消费完整回执，配置按实例跟踪应用版本。
+同父节点的设备 code 唯一，code 路径表达资产归属；通道与共享物理资源使用独立 station 路径，不能从设备层级推断。`station_id / station_code` 保留在元数据、消息和权限上下文中。历史采样事件流按单元汇集，命令按 owner_shard 路由到对应 ZeroMQ 端点；存储和策略分别查询持久回执，配置按实例跟踪应用版本。
 
 `{unit_code}` 是单元级 hash tag，设备层级不参与槽位划分。同单元最新值与采样 Stream 可安排同槽操作；跨单元及 station 数据不承诺原子快照或全局顺序。大单元可能形成热点，按容量验证后另行设计单元内分片迁移，首期不在 tag 中加入分片编号。Cluster 同槽规则见 [Redis Cluster 规范](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/)。
 
@@ -228,9 +238,9 @@ ems:rt:point:{station:station001}:pcc-meter01:active_power
 - 历史消费者以 Stream 内采样值入库，不能收到通知后读 Hash 代替原采样；目标数据库确认后才 XACK，并实现待处理消息接管、退避、重复投递和失败隔离。
 - 按所有必需消费者进度及回放窗口裁剪，不仅凭近似 MAXLEN 删除仍需处理的消息。积压超限报警、背压；未发布采样按有界内存预算与显式丢弃策略处理；降采样须显式配置，命令/告警/审计不能静默丢弃。
 - AOF、复制及故障切换仍有丢失窗口，不能把 Redis 写成功当作永久保存。采集内存缓冲在 Streams 接受后释放，消费者落库后 ACK；进程重启或缓冲耗尽时，尚未发布的采样可能丢失，不能承诺完整补传。Redis 已接收事件的恢复边界由部署持久化与保留策略决定。[Redis 持久化](https://redis.io/docs/latest/operate/oss_and_stack/management/persistence/)。
-- Go 通过 GORM、C++ 各进程通过公共 ormpp API 将业务数据与 outbox 同事务写入 MySQL。首期由存储内发布器统一扫描已提交的 outbox 并重试发布，业务写入进程不重复发布同一事件；存储多实例需使用领取租约/并发控制，消费者按 ID/版本幂等。周期对账 MySQL 生效配置与 Redis 快照，修复故障切换缺失，不能只看一次发布成功标志。
+- 四类 C++ 进程通过公共 ormpp API 将职责内的业务数据与 outbox 同事务写入 MySQL。存储内发布器扫描已提交 outbox：命令经 ZeroMQ REQ/REP 交接，其他状态变化经 PUB/SUB 提示并由消费者查询 MySQL；原始历史样本另由采集的事件通道传递。存储多实例需使用领取租约/并发控制，消费者按 ID/版本幂等。周期对账 MySQL 生效配置与当前快照，不能只看一次发布成功标志。
 
-### 5.4 跨语言数据契约
+### 5.4 跨进程与前后端数据契约
 
 统一 `schema_version、event_id、trace_id、station_id、station_code、unit_id、unit_code、producer_id、config_version、event_time、ingest_time`；station 级事件的单元字段为 null，设备事件另携带 `asset_id、device_path`，路径是按层级排列的 code 数组。时间采用 UTC 并明确精度，展示按站点时区转换。业务 ID、64 位计数器和高精度时间在 JSON 中用字符串，避免 JavaScript 精度丢失；浮点工程值用数字，无效值用 null 加质量，禁止 NaN/Infinity。
 
@@ -246,36 +256,38 @@ ems:rt:point:{station:station001}:pcc-meter01:active_power
 
 ```mermaid
 sequenceDiagram
-    participant W as Go Web
+    participant W as Drogon Web
     participant M as MySQL
     participant P as C++ 存储
-    participant R as Redis Streams
+    participant Z as ZeroMQ
     participant S as C++ 策略
     participant C as C++ 采集
     participant D as 设备
-    W->>M: GORM 事务保存人工意图 + outbox
+    W->>M: 公共 ormpp Repository 事务保存人工意图 + outbox
     M-->>W: 提交成功后返回受理
     P->>M: 公共 ormpp API 读取已提交 outbox
-    P->>R: outbox 发布 control-intent
-    R->>S: 意图
+    P->>Z: 发布意图变化提示
+    Z->>S: 提示后查询持久意图
     S->>S: 模式/约束/控制权仲裁
     S->>M: 公共 ormpp API 事务保存执行命令 + outbox
     M-->>S: 提交成功
     P->>M: 公共 ormpp API 读取已提交 outbox
-    P->>R: outbox 发布 command
-    R->>C: 分片命令
-    C->>C: 幂等/有效期/所有权/互锁校验
+    P->>Z: REQ 下发稳定 command_id
+    Z->>C: 命令请求
+    C->>M: 幂等校验与持久 inbox 登记
+    C-->>P: REP 接收确认或重试状态
+    C->>C: 执行前有效期/所有权/互锁校验
     C->>D: 事务边界优先写入
     D-->>C: 协议确认及反馈
-    C->>R: command-result
-    R-->>P: 归档并持久确认
-    R-->>S: 结果更新
-    W->>R: 查询状态并推送前端
+    C->>M: 持久保存 command-result
+    C->>Z: 结果变化提示
+    Z-->>S: 提示后查询命令状态
+    W->>M: 查询状态并推送前端
 ```
 
 消息包含 `command_id、intent_id、target_asset_id、capability、value、unit、priority、issued_at、expires_at、expected_config_version、owner_epoch、actor、reason、trace_id`。设备/通道/寄存器路由由后端配置解析；浏览器不能指定任意地址，不能只凭前端提交的 actor/priority 授权。
 
-Web 返回受理前，通过 GORM 以稳定 ID 将人工意图和 outbox 同事务写 MySQL；策略通过公共 ormpp API 持久保存自动意图，并在仲裁后将执行命令和 outbox 同事务写 MySQL。存储进程发布这些已提交事件到 Stream，持久受理与事件发布是两个阶段。MySQL 不可用时拒绝新的常规控制；事务提交结果不确定时以原 ID 查询/重试，存储周期对账未终结命令。
+Web 返回受理前，通过公共 ormpp Repository 以稳定 ID 将人工意图和 outbox 同事务写 MySQL；策略通过同一公共 API 持久保存自动意图，并在仲裁后将执行命令和 outbox 同事务写 MySQL。存储进程按 outbox 通过 ZeroMQ REQ/REP 下发命令；采集持久登记 inbox 后才回复 `Accepted`。持久受理与设备执行是两个阶段。MySQL 不可用时拒绝新的常规控制；事务提交或 ZeroMQ 应答结果不确定时以原 ID 查询/重试，存储周期对账未终结命令。
 
 ### 6.2 状态、回读与重复处理
 
@@ -288,9 +300,9 @@ accepted → validated → queued → dispatched → protocol_acked → verified
 
 accepted 仅表示可靠接收，protocol_acked 仅表示协议确认；只有满足配置反馈条件才为 verified。回读应是发送后的新样本，在误差/稳定窗口内验证；无法回读的动作显示“协议已确认，未验证设备结果”。
 
-采集在 I/O 前通过公共 Repository 条件登记 MySQL 执行状态，回执与 outbox 同事务持久提交后才确认消费，恢复时结合数据库记录与设备状态。登记失败不执行新动作，执行后数据库不可用则保持未 ACK 并停止新控制，恢复后对账。重复 command_id 返回已知状态。设备执行后、记账前崩溃仍可能结果不确定；切换、复位、脉冲等非幂等动作不能盲目重发。所有者切换后持久状态不可得或结果未知时，先进入 unknown 并回读/人工核验，仅在证明安全时重试。
+采集先将命令登记到持久 inbox，再在 I/O 前通过公共 Repository 条件登记 MySQL 执行状态；回执与 outbox 同事务持久提交，恢复时结合数据库记录与设备状态。登记失败不执行新动作，执行后数据库不可用则停止新控制并在恢复后对账。重复 command_id 返回已知状态。设备执行后、记账前崩溃仍可能结果不确定；切换、复位、脉冲等非幂等动作不能盲目重发。所有者切换后持久状态不可得或结果未知时，先进入 unknown 并回读/人工核验，仅在证明安全时重试。
 
-命令回执和告警生命周期事件分别由采集、策略通过公共 ormpp API 将业务记录与 outbox 同事务保存，由存储统一发布和对账；不设置本地执行日志、文件回放或归档确认回传。按稳定 event_id 去重，Redis 投递成功不作为业务审计数据的唯一清理依据。
+命令回执和告警生命周期事件分别由采集、策略通过公共 ormpp API 将业务记录与 outbox 同事务保存，ZeroMQ 仅提供变化提示，消费者查询持久记录并对账；不设置本地执行日志或文件回放。按稳定 event_id/command_id 去重，通知发送成功不作为业务审计数据的唯一清理依据。
 
 ### 6.3 分布式控制权
 
@@ -313,11 +325,11 @@ Redis 异步复制租约本身不能保证网络分区下现场单写，PCS/串�
 | 原始测点、派生指标、历史、聚合 | TDengine | 最新值及待持久化流 |
 | 心跳、通道在线、新鲜度、临时控制权 | Redis | 运行时状态，重启后结合实际设备重建 |
 
-### 7.2 MySQL、GORM 与公共 ormpp 模块
+### 7.2 MySQL 与公共 ormpp 模块
 
-Go 侧采用 `Service → Repository → GORM → MySQL`，负责 Web 业务 CRUD、配置编辑、用户权限和人工控制意图等数据操作。C++ 侧采用 `业务模块 → 公共数据库 API / Repository → ormpp → MySQL`，采集、存储和策略进程按各自职责复用公共模块。
+四类 C++ 进程统一采用 `业务模块 → 公共数据库 API / Repository → ormpp → MySQL`。Web 的业务 CRUD、配置编辑、用户权限和人工控制意图与采集、存储、策略的职责内操作复用相同数据库模型；连接池与事务仍由各进程独立管理。Drogon 只承担 Web HTTP/WebSocket 框架职责，Web 中的同步 ormpp 操作放入有界业务工作池，不阻塞网络 I/O 线程。
 
-公共数据库模块规划放在 `backend/src/common/db/`，封装连接配置与创建、实体映射、Repository、事务接口和错误转换。公共 API 面向配置版本、命令、告警等业务数据，允许调用方在同一事务中组合业务写入与 outbox 写入。Go 的 GORM Repository 与 C++ 的 ormpp Repository 遵循同一表结构、字段语义、版本规则和事件契约。
+公共数据库模块规划放在 `backend/src/common/db/`，封装连接配置与创建、实体映射、Repository、事务接口和错误转换。公共 API 面向配置版本、命令、告警等业务数据，允许调用方在同一事务中组合业务写入与 outbox 写入；Web 专属用户/权限 Repository 仍使用相同事务接口与 schema 迁移规则。
 
 **每个进程独立建立数据库连接或连接池**：进程启动后按需初始化，由本进程维护连接获取、归还、重连和退出关闭。公共模块只复用代码及配置结构，不跨进程共享连接对象、连接池、socket 或事务句柄；使用 fork 时，子进程应重新创建连接。进程内并发按连接独占使用或连接池借还规则执行，一个事务绑定同一连接；各进程连接上限应计入数据库总连接预算。
 
@@ -327,35 +339,33 @@ TDengine 仍由存储进程通过独立 `TimeSeriesRepository` 和官方客户�
 
 [ormpp 官方仓库](https://github.com/qicosmos/ormpp)说明其使用 C++17，支持 MySQL、PostgreSQL、SQLite。Repository 可降低替换成本，但不能消除 SQL 方言、类型、索引、ID 生成、事务隔离、批量写入及 schema 迁移差异；切换仍需适配、迁移和兼容测试，不承诺只改连接串。
 
-Go 和 C++ 的业务写入统一使用事务、乐观版本检查和唯一 event_id/command_id 约束；同一业务变更及其 outbox 必须在本进程同一连接的事务内提交，不拆成跨进程事务。结构通过一套版本化迁移管理，避免 GORM 与 ormpp 各自自动建表或多实例并发迁移。配置区分“已保存/已发布/各实例已应用”，采集和策略版本不一致时拒绝依赖新映射的控制。
+各进程的业务写入统一使用事务、乐观版本检查和唯一 event_id/command_id 约束；同一业务变更及其 outbox 必须在本进程同一连接的事务内提交，不拆成跨进程事务。表结构只通过一套版本化迁移管理，应用不自动建表或多实例并发迁移。配置区分“已保存/已发布/各实例已应用”，采集和策略版本不一致时拒绝依赖新映射的控制。
 
 ### 7.3 TDengine 时序模型
 
 首期按数据类型划分超级表、每个测点一张子表，适配不同设备点表/采样周期；同构高频设备可经容量测试评估宽表。标签是子表级元数据，不能在同一子表逐行更换 point_id 标签混存多个点。[TDengine 数据建模](https://docs.taosdata.com/quick-start/data-modeling/)、[数据表说明](https://docs.taosdata.com/tdengine-sql/ddl/table/)。
 
-下面为数值点逻辑示例，数据库需先创建；生产版本、精度及更新语义验证后再形成迁移脚本。
+下面为数值点逻辑示例，数据库需先创建；本方案要求验证 TDengine 3.3.0.0 及以上的复合主键能力，再形成迁移脚本。完整的点位版本目录、类型化表和消费规则见[存储进程详细设计](../processes/storage/design.md)。
 
 ```sql
 CREATE STABLE IF NOT EXISTS ems.telemetry_numeric (
     ts TIMESTAMP,
+    event_id VARCHAR(64) COMPOSITE KEY,
     sample_value DOUBLE,
     quality INT,
-    ingest_ts TIMESTAMP,
-    event_id BINARY(64)
+    ingest_ts TIMESTAMP
 ) TAGS (
-    station_id BINARY(64),
-    device_id BINARY(64),
-    point_id BINARY(64)
+    point_id VARCHAR(64)
 );
 
-CREATE TABLE IF NOT EXISTS ems.p_station01_pcs01_active_power
+CREATE TABLE IF NOT EXISTS ems.p_9f03a6c2
 USING ems.telemetry_numeric
-TAGS ('station01', 'pcs01', 'pcs01.active_power');
+TAGS ('point-001');
 ```
 
 表名由受控 ID 映射产生，值使用参数绑定。布尔、状态、字符串和高精度整数使用对应类型，不能全部转 DOUBLE。名称、单位、资产归属等可变信息通过 MySQL 版本模型解释历史，避免修改标签造成历史含义漂移。
 
-重试保留原采样时间和稳定身份。同子表同时间戳的冲突需明确：周期遥测若定义一个槽只保留一个值，按确定的来源版本/序号选择；需保存同刻多个事件时使用经验证的时间精度/复合键设计，或把离散审计存 MySQL。增加 event_id 普通列不会自动建立唯一约束。
+重试保留原采样时间和稳定身份。同一子表以 `(ts, event_id)` 区分同刻不同事件；相同事件重试必须写入相同载荷。`event_id` 只是普通列时没有上述去重保证；部署版本不支持复合主键时，须先完成替代模型设计和验收，不能直接沿用此表结构。离散命令及告警审计仍存 MySQL。
 
 ### 7.4 写入、聚合与保留
 
@@ -363,15 +373,15 @@ TAGS ('station01', 'pcs01', 'pcs01.active_power');
 
 历史保留、原始/分钟/小时粒度、压缩和副本由容量及恢复目标决定。聚合按测点语义：瞬时功率均值/极值，电量用累计表差值或功率时间积分，不能把功率采样直接求和当 kWh；质量异常/缺样记录覆盖率。选用目标 TDengine 版本支持的流计算或定时任务，迟到数据重算/补偿，不依赖未经验证的聚合建表语法。
 
-## 8. Go Web 与 Vue 前端
+## 8. Drogon Web 与 Vue 前端
 
-Go 提供版本化 REST API、WebSocket、鉴权、限流和审计上下文；内部 gRPC 设置 deadline、请求 ID 与读写权限，重试写操作必须幂等。WebSocket 重连先取快照并对齐版本，命令最终状态以查询接口为准。
+Drogon Web 提供版本化 REST API、WebSocket、鉴权、限流和审计上下文；同步 MySQL 操作及长查询进入有界业务工作池，内部 gRPC 设置 deadline、请求 ID 与读写权限，重试写操作必须幂等。WebSocket 重连先取快照并对齐版本，命令最终状态以查询接口为准。具体分层见 [Web 进程设计](../processes/web/index.md)。
 
 | 接口示例 | 行为 |
 | --- | --- |
 | `GET /api/v1/stations/{station_id}/units` | 资产树、单元能力、状态摘要 |
 | `GET /api/v1/devices/{device_id}/channels` | 角色、绑定、在线状态、应用配置版本 |
-| `GET /api/v1/points/latest` | 限定测点范围，返回 Redis 值、质量和新鲜度 |
+| `GET /api/v1/points/latest` | 限定测点范围，返回权威实时值、质量和新鲜度 |
 | `GET /api/v1/history` | 经存储 gRPC 按测点/时间/粒度分页 |
 | `PUT /api/v1/configurations/{id}` | 携带期望版本更新，展示发布/应用进度 |
 | `POST /api/v1/control-intents` | 鉴权、幂等接收，返回意图 ID/受理状态 |
@@ -380,13 +390,13 @@ Go 提供版本化 REST API、WebSocket、鉴权、限流和审计上下文；�
 
 Vue 3 + TypeScript + Tailwind CSS 按站点总览、单元、设备、通道、点表、策略计划、告警、历史曲线和运维组织。区分离线、数据陈旧、配置未应用、命令受理/执行/未知；不把写 API 成功显示为设备已动作。
 
-前端仅访问 Go，不直连 Redis/数据库/内部 gRPC。按站点/资产/操作鉴权，登录权限与设备控制权分开。数据库/Redis 采用最小权限账号，按部署边界配置 TLS/内部身份认证；凭据不进入前端响应、配置快照或日志。
+前端仅访问 Drogon Web，不直连 Redis/数据库/内部 gRPC。按站点/资产/操作鉴权，登录权限与设备控制权分开。数据库/Redis 采用最小权限账号，按部署边界配置 TLS/内部身份认证；凭据不进入前端响应、配置快照或日志。
 
 ## 9. 部署、运维与降级
 
 ### 9.1 部署路径
 
-- **单站**：systemd/容器管理四个业务进程，Vue 静态产物由 Go 或可选 Nginx 提供；Redis/MySQL/TDengine 独立配置持久化、备份。
+- **单站**：systemd/容器管理四个业务进程，Vue 静态产物由 Drogon 或可选 Nginx 提供；Redis/MySQL/TDengine 独立配置持久化、备份。
 - **站内扩展**：采集按通道/网关资源分片；策略每调度域唯一主控；存储按 Stream 分片消费并保证幂等；Web 无状态扩展，实时连接各自同步快照。
 - **多站**：站内保留本地 Redis 与控制闭环，跨站汇总单独同步；避免 WAN Redis 成为现场控制唯一依赖。Cluster 用于有容量需求的站内分片，跨站复制单独设计。
 
@@ -394,10 +404,10 @@ Vue 3 + TypeScript + Tailwind CSS 按站点总览、单元、设备、通道、�
 
 | 故障 | 行为 |
 | --- | --- |
-| Redis 不可用 | 按已验证配置继续监视，采样仅作有界内存缓冲，超限背压并报告缺口；停止新远程调度，恢复先对账状态/控制权/有效期 |
+| Redis 不可用 | Redis 为权威实时后端时停止依赖最新值的新控制；共享内存为权威后端且 MySQL、配置、控制权与 ZeroMQ 均就绪时，可继续经持久 outbox/inbox 下发命令。历史采样进入有界缓冲，超限背压并报告缺口 |
 | TDengine 不可用 | 延迟 ACK、落盘/背压和告警；实时监视可继续，历史界面显示入库延迟 |
 | MySQL 不可用或业务进程连接失败 | 既有配置继续采集/状态计算；受影响进程暂停配置修改和需持久审计的新控制 |
-| 存储进程不可用 | 历史查询、事件归档、outbox 与配置快照发布暂停；Go/C++ 其他进程仍可通过各自连接访问 MySQL；已受理意图保持待发布，新控制返回发布不可用，恢复后校验期限再处理 |
+| 存储进程不可用 | 历史查询、事件归档、outbox 与配置快照发布暂停；其他 C++ 进程仍可通过各自连接访问 MySQL；已受理意图保持待发布，新控制返回发布不可用，恢复后校验期限再处理 |
 | 策略不可用 | 采集和设备本地保护继续，停止新 EMS 调度；恢复加载快照/未终结命令 |
 | Web 不可用 | 自动策略和采集继续；界面恢复重新取状态 |
 | 采集失联 | 标记对应数据陈旧，控制不可达/未知；接管执行旧主隔离规则 |
@@ -429,8 +439,7 @@ backend/                    # C++17
     realtime/               # 业务门面、工厂、共享内存/Redis/其他后端
     messaging/              # 事件总线适配，不承载业务消费者
   apps/                     # 进程入口与后端依赖组装
-web/                        # Go 后端，独立 Go module
-  internal/repository/      # GORM Repository，Go 进程独立连接池
+  src/web/                  # Drogon Controller、Filter、Web Service；通过公共 Repository 访问 MySQL
 frontend/                   # Vue 3 + TypeScript + Tailwind CSS
 contracts/                  # Protobuf、JSON Schema、契约样例
 deploy/                     # 部署配置、数据库迁移、环境模板
@@ -445,15 +454,15 @@ docs/                       # 架构与运维
 
 | 阶段 | 工作 | 完成标准 |
 | --- | --- | --- |
-| 1. 标准/契约 | 迁移 C++17，定义单位/质量/时间/状态，锁定依赖 | 目标 Linux/ARM 构建通过，C++/Go 消息互通 |
+| 1. 标准/契约 | 迁移 C++17，定义单位/质量/时间/状态，锁定 Drogon 等依赖 | 目标 Linux/ARM 构建通过，进程间消息与前端 JSON 契约一致 |
 | 2. 资产/配置 | station 命名、全局单元 code、设备层级、固有点位与厂家绑定、导入草稿、模板版本、禁用/能力依赖；建立设备/通道多对多绑定与独立上送映射 | code 无冲突，先选设备再导入，两厂家 PCS 映射一致，缺失能力可禁用，旧配置可回滚 |
-| 3. 数据访问与存储服务 | C++ 公共 ormpp API、Go GORM Repository、统一 MySQL 迁移、TDengine、历史 gRPC | 各进程独立连接，两端读写兼容，并发事务/分页/outbox 可恢复 |
+| 3. 数据访问与存储服务 | C++ 公共 ormpp API、统一 MySQL 迁移、TDengine、历史 gRPC | 各进程独立连接，Repository 事务/分页/outbox 可恢复 |
 | 4. 采集/事件 | 按独立 Redis 文档实现层级键与两端 KeyBuilder、配置快照、Streams、有界内存缓冲、优先调度、已投递事件恢复 | 键生成契约一致，双通道/共用通道运行，控制唤醒及时、采集不饥饿 |
 | 5. 策略闭环 | 聚合、仲裁、MySQL 幂等执行状态、回读、未知状态、主控隔离 | 重复/过期/旧代次命令不误执行，审计可对账 |
-| 6. Web/前端 | Go REST、Vue 页面、推送、配置和历史 | 多单元监视、控制、查询、配置应用可完整演示 |
+| 6. Web/前端 | Drogon REST/WebSocket、Vue 页面、配置和历史 | 多单元监视、控制、查询、配置应用可完整演示 |
 | 7. 扩容验收 | 故障演练、分片、容量、备份恢复 | 量化 RPO/RTO 和性能，再决定独立 MQ |
 
-后续验收至少覆盖：单设备多通道、多设备共享 RS485、事务边界插队、持续控制下遥测新鲜度、命令重复/过期/未知、Redis/数据库中断下的已投递事件恢复与未发布采样缺口、配置并发修改、主备旧主隔离、TDengine 同刻冲突、跨语言精度，以及 Go/C++ 对同一表的读写兼容、进程独立重连/退出、连接总量限制、并发版本冲突和业务/outbox 事务原子性。本次文档修改不代表已完成这些实现测试。
+后续验收至少覆盖：单设备多通道、多设备共享 RS485、事务边界插队、持续控制下遥测新鲜度、命令重复/过期/未知、Redis/数据库中断下的已投递事件恢复与未发布采样缺口、配置并发修改、主备旧主隔离、TDengine 同刻冲突、前端 JSON 精度、Drogon I/O 线程不被同步数据库操作阻塞，以及各 C++ 进程对同一表的读写兼容、独立重连/退出、连接总量限制、并发版本冲突和业务/outbox 事务原子性。本次文档修改不代表已完成这些实现测试。
 
 ## 11. 文档修订记录
 
@@ -470,3 +479,5 @@ docs/                       # 架构与运维
 | 2.8 | 2026-09-19 | 设备关联采集/上送通道，独立协议 profile/角色/权限与会话模型；北向控制统一仲裁，文档按进程与公共专题组织 |
 | 2.9 | 2026-09-19 | 明确七个逻辑模块与四类进程的关系，设备模型归公共模块，新增公共模块实施规范及配置/数据库/消息的实施验收入口 |
 | 2.10 | 2026-09-19 | 移除本地 journal，采样采用有界内存缓冲与 Streams；命令/回执/告警使用 MySQL/outbox，明确未发布采样的丢失边界 |
+| 2.11 | 2026-09-28 | 实时最新值可选共享内存/Redis；消息订阅和命令下发分别改用 ZeroMQ PUB/SUB 与 REQ/REP，命令依赖 MySQL outbox/inbox 幂等恢复 |
+| 2.12 | 2026-09-28 | Web 后端由 Go/GORM 目标方案改为 C++17 + Drogon，四类进程复用公共 ormpp Repository；保留 Vue 前端与内部 gRPC 边界 |

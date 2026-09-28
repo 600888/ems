@@ -17,6 +17,7 @@ enable_testing()
 
 add_subdirectory(common)
 add_subdirectory(net)
+add_subdirectory(storage)
 
 message(STATUS "========================================")
 message(STATUS "EMS Models Test Configuration")

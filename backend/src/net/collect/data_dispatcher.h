@@ -2,13 +2,15 @@
  * @file data_dispatcher.h
  * @brief 采集数据分发器
  *
- * 将采集线程读取到的数据批量写入 RTDB (Redis)，并通过 Pub/Sub 通知其他进程。
+ * 将采集线程读取到的数据批量写入旧 RTDB (Redis)，并通过可选的
+ * Redis 或 ZeroMQ Pub/Sub 通知其他进程。
  * 支持 YC/YX/YK/YT 四类测点的分别写入和批量优化。
  */
 #ifndef EMS_NET_COLLECT_DATA_DISPATCHER_H
 #define EMS_NET_COLLECT_DATA_DISPATCHER_H
 
 #include <atomic>
+#include <cstddef>
 #include <functional>
 #include <map>
 #include <memory>
@@ -24,6 +26,10 @@ namespace rtdb {
 class RtDbManager;
 }
 
+namespace messaging {
+class ZmqChangePublisher;
+}
+
 namespace net {
 namespace collect {
 
@@ -33,6 +39,8 @@ using protocol::PointValue;
  * @brief 数据分发配置
  */
 struct DataDispatcherConfig {
+    enum class NotificationBackend { Redis, ZeroMQ };
+
     std::string redisHost_{"127.0.0.1"};
     int redisPort_{6379};
     std::string redisPassword_;
@@ -46,6 +54,11 @@ struct DataDispatcherConfig {
     std::string pubsubChannelYx_{"rtdb:yx:update"};
     std::string pubsubChannelYk_{"rtdb:yk:update"};
     std::string pubsubChannelYt_{"rtdb:yt:update"};
+    NotificationBackend notificationBackend_{NotificationBackend::Redis};
+    std::string zmqEndpoint_{"tcp://127.0.0.1:5557"};
+    std::size_t zmqQueueItems_{1024};
+    std::size_t zmqMaxMessageBytes_{65536};
+    int zmqHighWaterMark_{1024};
 
     // 批量写入配置
     int batchMaxSize_{500};     // 单次批量最大点数
@@ -194,7 +207,7 @@ class DataDispatcher {
      * @brief 发布变更通知
      * @param[in] pointType 测点类型
      * @param[in] jsonData  变更数据 JSON
-     * @return true 成功
+     * @return true 表示通知后端接受；不保证订阅者收到。
      */
     bool publish_change(const std::string& pointType, const std::string& jsonData);
 
@@ -265,6 +278,7 @@ class DataDispatcher {
 
     std::atomic<bool> initialized_{false};
     std::shared_ptr<ems::rtdb::RtDbManager> rtdb_mgr_;
+    std::shared_ptr<ems::messaging::ZmqChangePublisher> zmq_publisher_;
     DataDispatcherConfig config_;
     DispatchCallback callback_;
 

@@ -4,6 +4,7 @@
  */
 #include "data_dispatcher.h"
 
+#include <common/messaging/zmq_change_channel.h>
 #include <spdlog/fmt/bundled/format.h>
 
 #include <algorithm>
@@ -67,6 +68,29 @@ bool DataDispatcher::initialize(const DataDispatcherConfig& config) {
         return false;
     }
 
+    if (config.notificationBackend_ == DataDispatcherConfig::NotificationBackend::ZeroMQ) {
+#ifdef EMS_WITH_ZEROMQ
+        ems::messaging::ZmqChangeConfig zmqConfig;
+        zmqConfig.endpoint = config.zmqEndpoint_;
+        zmqConfig.max_queue_items = config.zmqQueueItems_;
+        zmqConfig.max_message_bytes = config.zmqMaxMessageBytes_;
+        zmqConfig.high_water_mark = config.zmqHighWaterMark_;
+        zmq_publisher_ = std::make_shared<ems::messaging::ZmqChangePublisher>();
+        if (!zmq_publisher_->start(zmqConfig)) {
+            LOG_ERROR("ZeroMQ 变更通知端点绑定失败");
+            zmq_publisher_.reset();
+            rtdb_mgr_->shutdown();
+            rtdb_mgr_.reset();
+            return false;
+        }
+#else
+        LOG_ERROR("当前构建未启用 EMS_WITH_ZEROMQ");
+        rtdb_mgr_->shutdown();
+        rtdb_mgr_.reset();
+        return false;
+#endif
+    }
+
     initialized_.store(true);
     LOG_INFO("数据分发器初始化成功");
     return true;
@@ -75,6 +99,12 @@ bool DataDispatcher::initialize(const DataDispatcherConfig& config) {
 void DataDispatcher::shutdown() {
     LOG_INFO("关闭数据分发器");
     initialized_.store(false);
+#ifdef EMS_WITH_ZEROMQ
+    if (zmq_publisher_) {
+        zmq_publisher_->stop();
+        zmq_publisher_.reset();
+    }
+#endif
     if (rtdb_mgr_) {
         rtdb_mgr_->shutdown();
         rtdb_mgr_.reset();
@@ -233,8 +263,8 @@ int DataDispatcher::batch_update_yc(const std::map<std::string, model::YcPoint>&
         if (batch.size() >= static_cast<size_t>(config_.batchMaxSize_)) {
             if (rtdb_mgr_->batchUpdateYc(batch)) {
                 updated += static_cast<int>(batch.size());
-                for (const auto& [c, _] : batch) {
-                    publish_change("YC", pt.to_json().dump());
+                for (const auto& [c, p] : batch) {
+                    publish_change("YC", p.to_json().dump());
                     notify_callback("YC", c, true);
                 }
             } else {
@@ -280,6 +310,12 @@ int DataDispatcher::batch_update_yx(const std::map<std::string, model::YxPoint>&
         if (batch.size() >= static_cast<size_t>(config_.batchMaxSize_)) {
             if (rtdb_mgr_->batchUpdateYx(batch)) {
                 updated += static_cast<int>(batch.size());
+                for (const auto& [c, p] : batch) {
+                    publish_change("YX", p.to_json().dump());
+                    notify_callback("YX", c, true);
+                }
+            } else {
+                for (const auto& [c, _] : batch) notify_callback("YX", c, false);
             }
             batch.clear();
         }
@@ -288,6 +324,12 @@ int DataDispatcher::batch_update_yx(const std::map<std::string, model::YxPoint>&
     if (!batch.empty()) {
         if (rtdb_mgr_->batchUpdateYx(batch)) {
             updated += static_cast<int>(batch.size());
+            for (const auto& [c, p] : batch) {
+                publish_change("YX", p.to_json().dump());
+                notify_callback("YX", c, true);
+            }
+        } else {
+            for (const auto& [c, _] : batch) notify_callback("YX", c, false);
         }
     }
 
@@ -303,13 +345,23 @@ int DataDispatcher::batch_update_yx(const std::map<std::string, model::YxPoint>&
 int DataDispatcher::batch_update_yk(const std::map<std::string, model::YkPoint>& points) {
     if (!initialized_.load() || !rtdb_mgr_ || points.empty()) return 0;
 
-    return rtdb_mgr_->batchUpdateYk(points) ? static_cast<int>(points.size()) : -1;
+    if (!rtdb_mgr_->batchUpdateYk(points)) return -1;
+    for (const auto& [code, point] : points) {
+        publish_change("YK", point.to_json().dump());
+        notify_callback("YK", code, true);
+    }
+    return static_cast<int>(points.size());
 }
 
 int DataDispatcher::batch_update_yt(const std::map<std::string, model::YtPoint>& points) {
     if (!initialized_.load() || !rtdb_mgr_ || points.empty()) return 0;
 
-    return rtdb_mgr_->batchUpdateYt(points) ? static_cast<int>(points.size()) : -1;
+    if (!rtdb_mgr_->batchUpdateYt(points)) return -1;
+    for (const auto& [code, point] : points) {
+        publish_change("YT", point.to_json().dump());
+        notify_callback("YT", code, true);
+    }
+    return static_cast<int>(points.size());
 }
 
 // ============================================================
@@ -319,12 +371,6 @@ int DataDispatcher::batch_update_yt(const std::map<std::string, model::YtPoint>&
 bool DataDispatcher::publish_change(const std::string& pointType, const std::string& jsonData) {
     if (!initialized_.load() || !rtdb_mgr_) {
         LOG_ERROR("数据分发器未初始化, 无法发布变更");
-        return false;
-    }
-
-    auto rtdb = rtdb_mgr_->getRtDb();
-    if (!rtdb) {
-        LOG_ERROR("无法获取RTDB连接, 发布变更失败");
         return false;
     }
 
@@ -343,7 +389,15 @@ bool DataDispatcher::publish_change(const std::string& pointType, const std::str
         return false;
     }
 
-    bool ok = rtdb->publish(channel, jsonData);
+    bool ok = false;
+    if (config_.notificationBackend_ == DataDispatcherConfig::NotificationBackend::ZeroMQ) {
+#ifdef EMS_WITH_ZEROMQ
+        ok = zmq_publisher_ && zmq_publisher_->publish(config_.keyPrefix_ + channel, jsonData);
+#endif
+    } else {
+        auto rtdb = rtdb_mgr_->getRtDb();
+        ok = rtdb && rtdb->publish(channel, jsonData);
+    }
 
     {
         std::lock_guard lock(stats_mutex_);

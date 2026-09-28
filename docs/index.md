@@ -5,7 +5,7 @@
 ## 架构与公共契约
 
 - [公共模块设计与实施规范](common/design.md)：设备共享模型、目录与库依赖、配置/数据库/实时/消息接口与采样恢复边界、旧代码迁移及分阶段验收；后续公共模块编码从此文档开始。
-- [EMS 系统架构设计](architecture/system-design.md)：C++17/Go/Vue 3 四进程目标架构，Redis/Streams/gRPC/MQ 评估，储能单元与设备模型，Go GORM/C++ 公共 ormpp API 与进程独立连接，MySQL/TDengine 存储、控制闭环与分阶段迁移。
+- [EMS 系统架构设计](architecture/system-design.md)：C++17 四进程与 Vue 3 前端，Drogon Web、Redis/Streams/gRPC/MQ 边界、储能单元与设备模型、公共 ormpp API 与进程独立连接、MySQL/TDengine 存储和分阶段迁移。
 - [数据采集架构](processes/collector/design.md)：C++17 采集进程、设备与通道绑定、独立采控/共用通道、事务边界插队、协议插件及可靠分发。
 - [EMS 设备模型与点表绑定设计](architecture/device-model.md)：PCS、BMS、电表、消防、空调、环控、保护与其他设备的固有点位、厂家点表、实例绑定、启用/禁用、导入页面与控制反馈。
 - [Redis 键设计](common/realtime/redis-key-design.md)：全局唯一储能单元 code、递归设备 code 路径、station 公共资源、键目录、消费组、生命周期与迁移。
@@ -19,15 +19,17 @@
 | 采集与上送 / C++17 | [通信进程](processes/collector/index.md) | 南向采样与执行、北向状态出口与外部意图受理 |
 | 存储 / C++17 | [存储进程](processes/storage/index.md) | 历史与审计归档、配置发布、outbox 与查询服务 |
 | 策略 / C++17 | [策略进程](processes/strategy/index.md) | 聚合、告警、优化调度与控制仲裁 |
-| Web / Go | [Web 后端与前端](processes/web/index.md) | 权限、配置页面、API 与实时展示编排 |
+| Web / C++17 + Drogon | [Web 后端与前端](processes/web/index.md) | 权限、配置页面、API 与实时展示编排 |
 
 ## 技术选型评估
 
-- [ZeroMQ 引入评估](decisions/zeromq-assessment.md)：结合四进程架构比较 Redis Streams、gRPC 与 ZeroMQ，说明首期不引入的理由、候选场景和后续验证条件。
+- [Web 后端采用 Drogon](decisions/drogon-web.md)：C++17 Web 技术栈、公共 MySQL Repository 与实施验收门槛。
+- [ZeroMQ 消息订阅与命令下发设计](common/realtime/zeromq-messaging-design.md)：实时值与消息解耦、PUB/SUB 变更提示、REQ/REP 命令交接及恢复边界。
+- [ZeroMQ 引入评估](decisions/zeromq-assessment.md)：引入前的历史评估和可靠性边界。
 
 ## 模块参考
 
-- [实时数据与配置](common/realtime/index.md)：Redis 最新值、Streams 可靠事件、跨语言契约与存储服务配置发布。
+- [实时数据与配置](common/realtime/index.md)：Redis 最新值、Streams 可靠事件、跨进程契约与存储服务配置发布。
 - [libmodbuspp 指南](reference/protocol/libmodbuspp-guide.md)：协议库使用参考。
 
 ## 目录组织
@@ -40,7 +42,7 @@ docs/
     collector/                     采集与上送，C++17
     storage/                       归档、发布与查询，C++17
     strategy/                      聚合、告警与仲裁，C++17
-    web/                           Go 后端与 Vue 前端协作
+    web/                           Drogon Web 后端与 Vue 前端协作
   common/                          公共模块设计与实施规范
     realtime/                      公共实时接口、数据边界与 Redis 键
   decisions/                       技术选型评估

@@ -9,11 +9,11 @@
 | 模块 | 输入 | 输出与提交边界 |
 | --- | --- | --- |
 | 历史消费者 | 原始采样事件 | TDengine 确认后才 ACK；以稳定事件身份去重 |
-| 审计消费者 | 告警、执行回执和状态事件 | MySQL 持久审计与幂等记录，不只保存最后状态 |
+| 审计对账器 | MySQL 已提交的告警、执行回执和状态记录 | 按稳定 ID 对账与归档检索；通知遗漏后仍可从持久事实恢复 |
 | outbox 发布器 | 各业务进程已提交 outbox | 可靠事件通道；领取、重试、对账，允许重复发布 |
 | 配置发布器 | MySQL 不可变配置版本 | 快照、索引、active 和变更事件；应用状态独立追踪 |
-| 历史查询服务 | Go/策略带期限查询 | 分页、时间范围与行数受限的 gRPC 结果 |
-| 实时查询服务 | 共享内存部署下 Go 只读查询 | 调用 RealtimeService，不暴露共享段布局 |
+| 历史查询服务 | Web/策略带期限查询 | 分页、时间范围与行数受限的 gRPC 结果 |
+| 实时查询服务 | 共享内存部署下 Web 只读查询 | 调用 RealtimeService，不暴露共享段布局 |
 
 历史入库使用事件中的原采样与版本，不能收到通知再读最新值代替原数据。各职责使用独立消费组；同组分担任务，不同组保持独立进度。
 
@@ -29,4 +29,4 @@
 
 入库失败保留未确认事件并有界重试；积压超限告警和背压；可靠流按必需消费者水位裁剪。验证写成功但 ACK 丢失、重复发布、配置部分发布、查询挤占和消费接管。
 
-详细规则见 [系统架构第 7 节](../../architecture/system-design.md#7-数据存储设计)、[实时数据与配置](../../common/realtime/index.md)、[Redis 键设计](../../common/realtime/redis-key-design.md)、[实时查询契约](../../common/realtime/access-design.md)。
+双库表模型、消费确认、查询和恢复的实施方案见[存储进程详细设计](design.md)。公共规则见[系统架构第 7 节](../../architecture/system-design.md#7-数据存储设计)、[实时数据与配置](../../common/realtime/index.md)、[Redis 键设计](../../common/realtime/redis-key-design.md)、[实时查询契约](../../common/realtime/access-design.md)。

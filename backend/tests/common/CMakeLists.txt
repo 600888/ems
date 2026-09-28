@@ -43,4 +43,16 @@ set_target_properties(test_ems_common PROPERTIES
 
 gtest_discover_tests(test_ems_common)
 
+if(EMS_WITH_ZEROMQ)
+    add_executable(test_ems_zmq_messaging test_zmq_messaging.cpp)
+    target_include_directories(test_ems_zmq_messaging PRIVATE
+        ${CMAKE_SOURCE_DIR}/include
+        ${CMAKE_SOURCE_DIR}/3rd/googletest/googletest/include)
+    target_link_libraries(test_ems_zmq_messaging PRIVATE
+        ems_zmq_messaging gtest Threads::Threads)
+    set_target_properties(test_ems_zmq_messaging PROPERTIES
+        CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES CXX_EXTENSIONS NO)
+    add_test(NAME zmq_messaging COMMAND test_ems_zmq_messaging)
+endif()
+
 message(STATUS "Created test_ems_common executable")

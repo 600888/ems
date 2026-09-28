@@ -6,6 +6,11 @@
   },
   {
     "type": "file",
+    "name": "drogon-web",
+    "label": "Web 后端采用 Drogon"
+  },
+  {
+    "type": "file",
     "name": "zeromq-assessment",
     "label": "ZeroMQ 引入评估"
   }

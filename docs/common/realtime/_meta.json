@@ -11,6 +11,11 @@
   },
   {
     "type": "file",
+    "name": "zeromq-messaging-design",
+    "label": "ZeroMQ 消息与命令设计"
+  },
+  {
+    "type": "file",
     "name": "redis-key-design",
     "label": "Redis 键设计"
   }

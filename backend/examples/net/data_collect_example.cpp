@@ -73,6 +73,7 @@ static void print_usage(const char* prog) {
               << "  --db-name   <name>   数据库名称 (默认: " << DEFAULT_DB_NAME << ")\n"
               << "  --redis-host <host>  Redis 地址 (默认: " << DEFAULT_REDIS_HOST << ")\n"
               << "  --redis-port <port>  Redis 端口 (默认: " << DEFAULT_REDIS_PORT << ")\n"
+              << "  --zmq-endpoint <uri>  用 ZeroMQ 发布可丢弃变更通知\n"
               << "  --modbus-ip  <addr>  Modbus 服务器地址 (默认: 从数据库读取)\n"
               << "  --modbus-port <port> Modbus 端口 (默认: 从数据库读取)\n"
               << "  --poll-ms    <ms>    采集周期 (默认: " << DEFAULT_POLL_MS << ")\n"
@@ -96,6 +97,7 @@ struct AppConfig {
     std::string dbName{DEFAULT_DB_NAME};
     std::string redisHost{DEFAULT_REDIS_HOST};
     int redisPort{DEFAULT_REDIS_PORT};
+    std::string zmqEndpoint;
     std::string modbusIp;  // 空=从数据库读取
     int modbusPort{0};
     int pollIntervalMs{DEFAULT_POLL_MS};
@@ -125,6 +127,8 @@ static AppConfig parse_args(int argc, char* argv[]) {
             cfg.redisHost = argv[++i];
         else if (arg == "--redis-port" && i + 1 < argc)
             cfg.redisPort = std::stoi(argv[++i]);
+        else if (arg == "--zmq-endpoint" && i + 1 < argc)
+            cfg.zmqEndpoint = argv[++i];
         else if (arg == "--modbus-ip" && i + 1 < argc)
             cfg.modbusIp = argv[++i];
         else if (arg == "--modbus-port" && i + 1 < argc)
@@ -216,6 +220,11 @@ int main(int argc, char* argv[]) {
     engineCfg.pluginDir_ = cfg.pluginDir;
     engineCfg.redisHost_ = cfg.redisHost;
     engineCfg.redisPort_ = cfg.redisPort;
+    if (!cfg.zmqEndpoint.empty()) {
+        engineCfg.notificationBackend_ =
+            ems::net::collect::DataDispatcherConfig::NotificationBackend::ZeroMQ;
+        engineCfg.zmqEndpoint_ = cfg.zmqEndpoint;
+    }
     engineCfg.defaultPollIntervalMs_ = cfg.pollIntervalMs;
 
     g_engine = std::make_shared<ems::net::collect::CollectEngine>();

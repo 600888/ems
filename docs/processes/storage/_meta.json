@@ -3,5 +3,10 @@
     "type": "file",
     "name": "index",
     "label": "存储进程设计"
+  },
+  {
+    "type": "file",
+    "name": "design",
+    "label": "存储进程详细设计"
   }
 ]

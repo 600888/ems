@@ -29,6 +29,10 @@ target_link_libraries(net_collect PUBLIC
     pthread
     dl
 )
+if(EMS_WITH_ZEROMQ)
+    target_link_libraries(net_collect PUBLIC ems_zmq_messaging)
+    target_compile_definitions(net_collect PRIVATE EMS_WITH_ZEROMQ)
+endif()
 
 set_target_properties(net_collect PROPERTIES
     CXX_STANDARD 20

@@ -1,5 +1,5 @@
 #pragma once
-#include "util/log_base.h"
+#include "log/log_base.h"
 
 static constexpr const char* LOGGER_NAME = "net";
 

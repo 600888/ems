@@ -1,0 +1,38 @@
+name: Upload CodeCov Report
+
+on: [ push, pull_request ]
+
+jobs:
+  build:
+  
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 2
+    
+    - name: Setup MySQL
+      uses: ankane/setup-mysql@v1
+      with: 
+        mysql-version: 8.0
+        database: test_ormppdb
+
+    - name: Verify MySQL
+      run : mysql -uroot -e'show databases;'
+
+    - name: Configure cmake
+      run : cmake -B${{ github.workspace }}/build -DCOVERAGE_TEST=ON -DENABLE_MYSQL=ON -DCMAKE_BUILD_TYPE=Debug
+
+    - name: Build
+      run : cmake --build ${{ github.workspace }}/build --config Debug
+      
+    - name: Test
+      working-directory: ${{ github.workspace }}/build
+      env :
+        CTEST_OUTPUT_ON_FAILURE: 1
+      run : ctest -C Debug -j `nproc` -V
+    
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v1

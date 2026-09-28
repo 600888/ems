@@ -6,6 +6,7 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BUILD_TESTS "Build tests" ON)
+option(EMS_WITH_ZEROMQ "Build the ZeroMQ notification and command channels" OFF)
 option(EMS_ENABLE_ARCH_TUNING "Enable architecture-specific tuning flags" ON)
 option(EMS_TARGET_LINUX_ARM "Enable Linux ARM target configuration" OFF)
 

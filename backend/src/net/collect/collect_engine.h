@@ -21,6 +21,7 @@
 #define EMS_NET_COLLECT_COLLECT_ENGINE_H
 
 #include <atomic>
+#include <cstddef>
 #include <functional>
 #include <memory>
 #include <mutex>
@@ -58,6 +59,14 @@ struct EngineConfig {
     int redisPoolSize_{4};
     int redisTimeoutMs_{3000};
     std::string redisPrefix_{"ems:"};
+
+    // 变更提示通道独立于 RTDB 存储选择。
+    DataDispatcherConfig::NotificationBackend notificationBackend_{
+        DataDispatcherConfig::NotificationBackend::Redis};
+    std::string zmqEndpoint_{"tcp://127.0.0.1:5557"};
+    std::size_t zmqQueueItems_{1024};
+    std::size_t zmqMaxMessageBytes_{65536};
+    int zmqHighWaterMark_{1024};
 
     // 默认采集周期
     int defaultPollIntervalMs_{1000};

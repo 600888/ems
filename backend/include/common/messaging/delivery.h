@@ -60,6 +60,7 @@ struct Delivery {
     TransportCursor transport_cursor;
     std::string delivery_token;  ///< ack 凭证
     std::uint32_t attempt{0};    ///< 投递尝试次数
+    std::string raw_payload;     ///< 传输层原始事件，供隔离记录保存
 };
 
 }  // namespace ems::messaging

@@ -1,7 +1,7 @@
 # ems
 储能EMS能量管理系统
 
-设计文档入口：[EMS 设计文档](docs/index.md)。文档按系统架构、采集与上送/存储/策略/Web 进程及公共模块组织，目标自研 C++ 标准为 C++17；下面的构建说明与现有实现状态分开维护。
+设计文档入口：[EMS 设计文档](docs/index.md)。目标架构包含采集与上送、存储、策略及 C++17 + Drogon Web 四类进程，前端为 Vue 3；下面的构建说明与现有实现状态分开维护。
 
 ## 依赖安装
 
@@ -106,7 +106,7 @@ python -m pip install clang-format==22.1.8
 
 ## 头文件目录
 
-`backend/include/` 只放供外部使用的公共接口，包括 `common/`、`db/`、`realtime/` 和协议插件 C 接口。模块内部头文件放在对应的 `backend/src/` 模块目录；第三方头文件放在 `backend/3rd/`。新增内部头文件时，不要把所在模块的目录作为公共 include 路径导出。
+`backend/include/` 放供外部使用的公共接口，以及通用工具头文件 `util/`；其中公共接口包括 `common/`、`db/`、`realtime/` 和协议插件 C 接口。模块内部头文件放在对应的 `backend/src/` 模块目录；第三方头文件放在 `backend/3rd/`。新增内部头文件时，不要把所在模块的目录作为公共 include 路径导出。
 
 ## C++ 标准
 

@@ -7,8 +7,8 @@
  * config_version、event_time、ingest_time。station 事件的 unit 字段为 null，
  * 根事件 device_path 为 []；各事件 schema 明确允许为空的身份字段。
  *
- * 首期 Streams 载荷使用版本化 JSON；主题物理名称引用 Redis 键专题，
- * 调用方传逻辑 topic/scope。
+ * 历史采样等保留事件使用版本化 JSON；调用方传逻辑 topic/scope。
+ * 命令下发通过独立的 ZeroMQ 命令通道，不能把此事件类型直接发到 PUB/SUB。
  */
 #pragma once
 

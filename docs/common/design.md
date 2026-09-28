@@ -1,7 +1,7 @@
 # 公共模块设计与实施规范
 
 > 版本：1.1｜日期：2026-09-19｜状态：目标设计，供后续编码、迁移与验收执行。
-> 范围：C++17 公共库、跨语言数据契约及其与采集、协议、历史、存储、Web、策略模块的边界。本次只编写设计，不代表接口或后端已经实现。
+> 范围：C++17 公共库、跨进程与前后端数据契约及其与采集、协议、历史、存储、Web、策略模块的边界。本次只编写设计，不代表接口或后端已经实现。
 
 ## 1. 设计决策与实施入口
 
@@ -19,7 +19,7 @@
 | 资产、设备、固有点、能力、点表 | [设备模型](../architecture/device-model.md) | C++ 模型归属、接口及迁移 |
 | 通道、协议 profile、通信资源、绑定 | [设备、通道与协议](../architecture/channel-protocol.md) | 公共定义与协议实现的分界 |
 | 实时读写、CAS、共享内存和 Redis | [实时访问接口](realtime/access-design.md) | 集成关系与公共类型复用 |
-| code、物理键、索引、Streams 目录 | [Redis 键设计](realtime/redis-key-design.md) | 编码器与跨语言验证 |
+| code、物理键、索引、Streams 目录 | [Redis 键设计](realtime/redis-key-design.md) | 编码器与跨进程验证 |
 | 公共目录、库依赖、配置/数据库/消息接口、实施验收 | 本文 | 公共模块实施基线 |
 
 本文不另建设备点位目录、Redis 键规则或实时存储接口的副本。实现发现冲突时，先修订对应权威专题及受影响契约，再编码；不能在某个适配器里建立隐藏例外。
@@ -32,7 +32,7 @@
 4. MySQL 为配置与业务数据权威源；Redis 默认提供实时状态、配置快照和事件传递，三类用途分别配置和预算。
 5. 每个进程独立建立连接池与事务；同一业务写入及其 outbox 使用同一数据库连接的同一事务。
 6. 公共库只定义控制意图、命令、回执的类型和持久化接口；策略负责仲裁，采集负责执行。写实时状态不能触发设备动作。
-7. C++ 与 Go 共享 schema、样例和语义，不共享 C++ 内存布局、连接对象或虚函数 ABI。
+7. 各 C++ 进程共享 schema、样例和语义，不跨进程传递 C++ 内存布局、连接对象或虚函数 ABI；浏览器与后端使用版本化 JSON 契约。
 8. 所有等待有期限，所有队列有容量，结果未知与明确未执行必须区分；禁止静默丢弃可靠数据。
 
 ## 2. 职责边界
@@ -43,7 +43,7 @@
 | model | 资产/设备/测点/能力/绑定定义，纯模型校验 | 设备会话、调度、协议 I/O、控制算法 |
 | codec | 模型与契约之间的显式编解码 | 厂家报文、寄存器字节序和协议帧解析 |
 | config | 版本配置读取、快照校验、本地不可变视图 | Web 编辑流程、存储进程发布编排、采集/策略应用 |
-| database | C++ MySQL 连接池、事务、共享配置/意图/命令/告警/outbox Repository | 历史采样规则、报表、TDengine 实现、Web 的 GORM 实现 |
+| database | C++ MySQL 连接池、事务、共享配置/意图/命令/告警/outbox Repository | 历史采样规则、报表、TDengine 实现、Drogon HTTP 层 |
 | realtime | 类型化实时访问、来源防护、CAS 与后端实现 | 来源选主、设备级隔离、策略新鲜度处理决策 |
 | messaging | 事件信封、事件总线、消费组/投递/确认接口 | 业务处理、何时 ACK、持久归档和故障处置 |
 | observability | 结构化日志、指标接口、健康状态基础类型 | 各进程 HTTP/gRPC 健康端点及就绪判定 |
@@ -83,17 +83,17 @@ backend/
     messaging/redis_streams/
     observability/
     util/
+  src/web/                  # Drogon Controller、Filter、Web Service；复用公共 Repository
   apps/                      # 各 C++ 进程入口和依赖组装，按实施阶段建立
   tests/common/              # model、codec、config、database、messaging
   tests/realtime/            # 沿用实时专题的契约及多进程测试目录
-contracts/                   # 仓库根目录，供 C++、Go、前端共同使用
+contracts/                   # 仓库根目录，供各 C++ 进程与前端共同使用
   proto/                     # gRPC 与类型定义
   jsonschema/                # 配置、事件和 JSON 映射约束
   fixtures/                  # 有效、无效、兼容版本及边界样例
   realtime/                  # 实时字段与逻辑键黄金样例，引用统一 schema
   compatibility.md           # 当前支持的 schema 范围及兼容策略
 deploy/migrations/mysql/     # 唯一一套按版本执行的数据库迁移
-web/                        # 仓库根目录的 Go 工程，独立 module
 ```
 
 命名空间采用 `ems::core`、`ems::model`、`ems::codec`、`ems::config`、`ems::database`、`ems::messaging`、`ems::observability`；实时保持 `ems::realtime`。类型用 PascalCase，字段与公开方法用 lower_snake_case；实时专题已定义的 camelCase 方法保留，不为风格统一另造一套接口。
@@ -114,6 +114,7 @@ web/                        # 仓库根目录的 Go 工程，独立 module
 | ems_realtime_redis / ems_realtime_shm | 实时后端 | realtime_api，私有平台或数据库依赖 |
 | ems_messaging_api / ems_messaging_redis | 事件接口及 Streams 实现 | model、core；codec/Redis 仅实现侧 |
 | ems_observability | 日志、指标、健康基础能力 | core，复用现有 spdlog 封装 |
+| ems_web | Drogon Controller、Filter 与 Web Service | 公共 model/database/config API、Drogon；HTTP 层不进入公共库 |
 
 上表是目标拆分，不要求每项产出动态库。纯头接口使用 INTERFACE target，普通公共实现首期优先静态链接；已有 `ems_db` 如需过渡，可作为兼容 target 转发，移除旧实现重复编译。同一程序不得同时链接两套数据库或模型实现。
 
@@ -245,7 +246,7 @@ UnitController              -> 策略模块：约束与控制决策
 | 类别 | 来源 | 生命周期 |
 | --- | --- | --- |
 | 进程部署配置 | 配置文件 + 明确允许的环境变量覆盖 | 决定后端、端点、实例身份、队列/池预算；连接/后端变更走受控重启 |
-| 业务权威配置 | MySQL 不可变版本及 active 发布元数据 | Web/GORM 或 C++ Repository 按权限修改 |
+| 业务权威配置 | MySQL 不可变版本及 active 发布元数据 | Web 或其他职责内模块经公共 C++ Repository 按权限修改 |
 | 运行快照 | Redis 不可变完整快照 + 进程本地只读对象 | 按精确版本加载、校验、应用，不做权威编辑 |
 
 部署配置解析优先级为显式启动参数 > 白名单环境变量 > 指定配置文件 > 非敏感默认值。缺失密码/密钥不能回落到示例凭据；schema、容量和超时不合法时启动失败。业务配置版本不受环境变量局部覆盖。
@@ -318,7 +319,7 @@ outbox 至少保存 event_id、业务关联 ID、scope/topic、schema_version、
 
 ### 8.3 Schema、错误与限制
 
-数据库表结构只由 `deploy/migrations/mysql` 的版本化迁移维护；Go GORM 与 C++ ormpp 不各自自动建表。迁移工具独立运行，应用检查 schema 版本范围，超出范围拒绝写就绪。滚动升级先新增兼容字段，再迁移和切换读取，最后在独立版本清理废弃列。
+数据库表结构只由 `deploy/migrations/mysql` 的版本化迁移维护；公共 ormpp Repository 与 Drogon 应用都不自动建表。迁移工具独立运行，应用检查 schema 版本范围，超出范围拒绝写就绪。滚动升级先新增兼容字段，再迁移和切换读取，最后在独立版本清理废弃列。
 
 唯一键冲突映射 Conflict；对象不存在为 NotFound；权限错误为 PermissionDenied；池耗尽/超时与服务器不可用分别返回明确错误。SQL 参数必须绑定；动态排序/列名只能来自白名单，业务接口不接收任意 SQL。
 
@@ -335,7 +336,7 @@ MySQL 不可用时停止受理和执行依赖持久状态的新常规控制；�
 - 最新值、设备/通道/单元状态及命令查询投影各有明确写角色；普通样本不能修改已批准来源字段。
 - `revision` 是并发令牌，来源代次由授权协调角色安装；公共库校验授权，不负责选主或证明旧主已隔离。
 - Redis 默认权威实时后端；共享内存为同机可选后端。相同 scope 在一个部署代次只使用一个权威后端，失败时不能自动双写或切空后端。
-- Go 在 Redis 部署下按契约读取；共享内存部署经存储进程实时查询 gRPC。Go 不读取 C++ 共享内存布局。
+- Web 在 Redis 部署下按契约读取；共享内存部署经存储进程实时查询 gRPC。Web 不直接解释共享内存布局。
 
 读到陈旧值仍可返回完整快照及 stale 状态；后端不可用不能伪装成所有设备离线，NotFound 不能伪装成 0。策略与 CAS 前置校验默认直接使用权威状态，不叠加未校验的实时读缓存。
 
@@ -435,11 +436,11 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 
 具体数值由站点规模、采样频率与目标硬件容量测试确定，不能把示例值当 SLA。实施阶段提交可运行的开发模板，以及记录设备/点数、吞吐、P95/P99 延迟、CPU/内存/磁盘和恢复时间的基线报告；未知预算不得用无限值代替。
 
-## 13. 跨语言契约与兼容升级
+## 13. 跨进程与前后端契约及兼容升级
 
-`contracts` 为 C++/Go 的共同输入，公共 C++ 库不要求 Go 通过 cgo 调用。Go 使用自身的类型、GORM 和客户端实现，但必须通过相同 fixtures：精度、null、时间、code、键、事件和版本规则保持一致。
+`contracts` 为四类 C++ 进程和 Vue 前端的共同输入。进程间仍使用版本化事件、JSON Schema 与 Protobuf，不直接序列化 C++ 对象；浏览器 JSON 与后端类型映射必须通过相同 fixtures 校验精度、null、时间、code、键、事件和版本规则。
 
-契约交付至少包括：模型/事件 JSON Schema、Protobuf、C++/Go 字段映射说明、合法/非法样例、枚举码表、schema 支持范围和变更记录。Protobuf 废弃字段保留编号，不能复用。JSON Schema 与 Protobuf 若无法自动生成同源定义，必须由同一批黄金样例检测漂移。
+契约交付至少包括：模型/事件 JSON Schema、Protobuf、C++/TypeScript 字段映射说明、合法/非法样例、枚举码表、schema 支持范围和变更记录。Protobuf 废弃字段保留编号，不能复用。JSON Schema 与 Protobuf 若无法自动生成同源定义，必须由同一批黄金样例检测漂移。
 
 同 major 下只允许有明确默认语义的兼容可选字段；字段重命名、类型/单位/枚举含义改变、新必需字段均升级不兼容版本。读取器可以忽略允许的未知可选字段，但不能忽略未知控制动作、未知权限值或不支持的 major。重放/转发保存原始载荷，避免旧读取器丢掉新字段后重新发布。
 
@@ -481,8 +482,8 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | P2 数据库与配置 | MySQL 迁移、连接池/事务、共享 Repository、outbox；快照 provider/store/validator/reporter | 同事务原子性、并发冲突、配置精确版本与发布恢复通过 |
 | P3 实时服务 | 按实时专题实现 api/core、Redis 默认后端，迁移 rtdb 调用 | 来源/CAS/完整替换/Unknown/后端恢复契约通过；设备定义已脱离 rtdb |
 | P4 事件链路 | Streams adapter、持久隔离、采集有界缓冲；MySQL 执行状态/outbox 接入 | 重复、断线、发布不确定、ACK 丢失、缓冲溢出与缺口报告通过 |
-| P5 业务集成与旧代码退出 | 采集/策略/存储注入；Go 对齐契约；逐项关闭旧接口；权限/健康/预算监控 | 四进程最小端到端链路通过，旧模型不再被生产路径引用 |
-| P6 可选后端与容量验收 | SharedMemoryStore、Go 实时 gRPC 路径；目标现场负载与恢复报告 | 共享内存契约/崩溃恢复通过；性能/RPO/RTO 有实测记录 |
+| P5 业务集成与旧代码退出 | 采集/策略/存储注入；Drogon Web 接入公共 Repository 与契约；逐项关闭旧接口；权限/健康/预算监控 | 四进程最小端到端链路通过，旧模型不再被生产路径引用 |
+| P6 可选后端与容量验收 | SharedMemoryStore、Web 实时 gRPC 路径；目标现场负载与恢复报告 | 共享内存契约/崩溃恢复通过；性能/RPO/RTO 有实测记录 |
 
 P4 的事件测试可用测试替身，但不能据此宣称历史链路完成。P5 必须接入存储进程真实归档路径验证幂等落库与 ACK 边界，并演练尚未发布的内存采样丢失场景。共享内存是规划能力；默认 Redis 版本可在 P5 验收后交付，共享内存部署须等待 P6。
 
@@ -495,7 +496,7 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 | C01 | 独立包含全部公开头，core/model 最小构建 | C++17 通过；无 Redis/MySQL/协议驱动隐式依赖 |
 | C02 | 同设备多通道、多设备共享总线、多单元同名 pcs01 | 稳定身份/绑定准确，不按全局 device_code 错误合并 |
 | C03 | 资产环、跨站父节点、缺失引用、禁用能力、命令缺反馈 | 校验给出对象/字段/原因，未配置或无效值不变成 0 |
-| C04 | int64/uint64 边界、null、坏质量、UTC 微秒、未知枚举 | C++/Go fixtures 一致，无浮点精度损失 |
+| C04 | int64/uint64 边界、null、坏质量、UTC 微秒、未知枚举 | C++/TypeScript fixtures 一致，无浮点精度损失 |
 | C05 | 事务中业务写成功、outbox 写失败；提交响应丢失 | 前者全部回滚；后者 Unknown，按原 ID 对账，无重复业务效果 |
 | C06 | 两发布者同基版本并发、快照缺失/校验失败、旧发布迟到 | 一方条件失败；不拼版本；旧发布不回退新 active |
 | C07 | 配置已发布但采集应用失败，随后回滚 | 区分发布/应用；新映射控制拒绝；回滚不重放旧命令 |
@@ -507,8 +508,8 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 | C13 | Redis/MySQL 中断、池/队列满、关闭超时 | 有界退避/背压和明确错误；持久业务可对账，未发布内存采样可能丢失 |
 | C14 | 更新实时成功但发布失败，或发布成功而实时被拒绝 | 两条进度独立恢复；历史保存原样本，快照不回退 |
 | C15 | Web/北向控制到策略、采集、回执和归档 | 统一仲裁；重复/过期/旧所有权拒绝；Unknown 不盲目重发 |
-| C16 | Go 与 C++ 同表读写、滚动升级与旧事件重放 | schema/枚举/事件兼容；同事务约束和稳定身份不变 |
-| C17 | 多进程共享内存、拥有锁的进程崩溃、重建段 | 满足实时专题；Go 走 gRPC；新代次拒绝旧授权 |
+| C16 | Web 与其他 C++ 进程同表读写、滚动升级与旧事件重放 | schema/枚举/事件兼容；同事务约束和稳定身份不变 |
+| C17 | 多进程共享内存、拥有锁的进程崩溃、重建段 | 满足实时专题；Web 走 gRPC；新代次拒绝旧授权 |
 | C18 | 现场负载、积压恢复、查询与控制并发 | 报告预算与 P95/P99、资源峰值、恢复水位及实测 RPO/RTO |
 
 默认 Redis 公共模块完成定义：P0–P5 完成，C01–C16 通过，C18 对默认部署有报告；C17 为共享内存交付门槛，不能在未实现时标通过。端到端测试需要尚未实现的策略/存储/Web 能力时，明确标依赖未完成，不用 mock 结果冒充集成验收。
@@ -523,7 +524,7 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 - 新增 `backend/src/common/model/`（validation.cpp、model_view.cpp）、`backend/src/common/codec/`（model_codec.cpp、event_codec.cpp），实现纯校验与 JSON 编解码。
 - CMake targets：ems_common_core（INTERFACE）、ems_common_model（STATIC）、ems_messaging_api（INTERFACE）、ems_common_codec（STATIC）、ems_config_api/ems_database_api/ems_observability（INTERFACE）；公共目标统一 CXX_STANDARD 17。
 - 测试：`backend/tests/common/`（test_core/test_model/test_codec，60 用例）覆盖身份/结果/时间、资产环/跨站/引用/绑定/反馈校验、多对多与共享总线、64 位整数与事件信封往返；MinGW g++ C++17 全部通过（C01/C02/C03/C04 局部覆盖）。
-- 未完成项：contracts 目录与黄金 fixtures、MySQL 迁移与 Repository 实现（P2）、实时后端（P3）、Streams 实现（P4）、Go 对齐（P5）、Linux/ARM 工具链构建检查。旧 models/、db/、rtdb/ 迁移按第 14 节另行走。
+- 未完成项：contracts 目录与黄金 fixtures、MySQL 迁移与 Repository 实现（P2）、实时后端（P3）、Streams 实现（P4）、Drogon Web 接入（P5）、Linux/ARM 工具链构建检查。旧 models/、db/、rtdb/ 迁移按第 14 节另行走。
 
 ### 2026-09-19 目录规范化与第二批实现
 

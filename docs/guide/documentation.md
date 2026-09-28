@@ -10,7 +10,7 @@
 | processes/collector | 采集与上送进程，通道调度、协议实例/会话、分发与执行 | 另一份公共设备或 Redis 键规范 |
 | processes/storage | 归档、配置/outbox 发布、查询与恢复 | 现场协议、策略算法 |
 | processes/strategy | 状态聚合、告警、优化调度、仲裁 | 厂家原始点地址 |
-| processes/web | Go API、权限、配置页面和前端协作 | 直接设备控制和数据库内部连接对象 |
+| processes/web | Drogon API、权限、配置页面和前端协作 | 直接设备控制和数据库内部连接对象 |
 | common | 共享模型的代码组织、跨进程复用技术接口、数据契约与实施规范 | 设备模型专题的重复副本、归属不明的业务逻辑 |
 | decisions | 技术选型理由、前提与验证条件 | 与正式接口相冲突的隐含新约定 |
 | reference | 第三方 SDK、协议库使用参考 | 声称示例已经过现场验收 |

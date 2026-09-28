@@ -176,9 +176,9 @@ struct ChannelContext {
 - `device_channel_binding_version` 保存 device_id、channel_id、config_version、operations 与类型化 device_address；采集专用/控制专用/采控共用对应 telemetry_in/control_out 的不同组合。本端 client/server 角色属于 channel_version.local_role，与此操作组合分开。vendor_point_route_version 保存厂家点的协议地址、编码与通道；point_binding 将标准逻辑点映射到厂家点并指定转换和主备来源。控制配置另行指定写入编码、启用条件和反馈逻辑点，写通道与反馈通道可以不同。
 - telemetry 不允许控制写入；control 无常规遥测轮询，但允许协议确认/控制反馈读取；both 串行完成读取和控制。独立采控连接需设备支持，冲突控制仍按设备仲裁。
 - 每次只开始一个有界协议事务，在响应完成或超时后检查高优先命令。不得打断已发送帧；大批量读取拆分为多个事务，避免整轮采集阻塞控制。
-- Redis 命令消费者只负责校验、入队、唤醒，不直接调用协议句柄。线程等待必须可被命令唤醒；队列锁不得跨网络 I/O 持有。
+- ZeroMQ 命令入口只负责接收、校验并持久登记 inbox；执行器从持久 inbox 恢复后入队、唤醒，不在网络回调中直接调用协议句柄。线程等待必须可被命令唤醒；队列锁不得跨网络 I/O 持有。
 - 设置控制连续预算、采集最大延迟和关键数据读取预算。优先队列满返回 queue_full；过期返回 expired。同优先级 FIFO，只有允许覆盖且未发送的设定值可合并，并记录 superseded。
-- 命令由策略仲裁，通过公共 ormpp API 将命令与 outbox 同事务保存，再由存储发布后到达采集。采集执行前再次验证有效期、配置版本、控制权代次与互锁；通过公共 Repository 条件登记 MySQL 执行状态后执行并回读验证，回执与 outbox 同事务保存，重复/不确定结果按整体架构第 6 节处理。
+- 命令由策略仲裁，通过公共 ormpp API 将命令与 outbox 同事务保存，再由 outbox 发布器用 ZeroMQ REQ/REP 交给采集的持久 inbox。采集执行前再次验证有效期、配置版本、控制权代次与互锁；通过公共 Repository 条件登记 MySQL 执行状态后执行并回读验证，回执与 outbox 同事务保存，重复/不确定结果按整体架构第 6 节处理。
 - 通道故障与来源切换更新质量和 source_epoch；回读用发送后的新样本。未确认旧采集实例隔离时，不自动接管控制。
 
 ## 4. 动态库插件机制
@@ -575,15 +575,15 @@ while running:
 
 Streams 接受后释放发布缓冲；未发布内存样本不保证跨重启恢复
 
-策略读取 Redis 最新快照；告警/回执通过各自 Stream 可靠消费
-Go Web 读取快照并推送前端；Pub/Sub 仅作可丢失的刷新提示
+策略读取权威实时快照；告警/回执先持久写 MySQL/outbox
+Drogon Web 读取快照并推送前端；ZeroMQ PUB/SUB 仅作可丢失的刷新提示
 ```
 
 分发工作由独立工作线程执行，避免数据库/Redis 阻塞直接占用协议线程；队列满必须触发显式背压/降采样规则，不可无限增长。Streams 接受仅表示进入事件通道，存储只在落库确认后 ACK；采集不等待归档确认回传。缓冲超限或进程重启可能丢失未发布采样，应报告可观察的丢弃/缺口，不以最新值伪造缺失历史。
 
 采集进程可通过 `backend/src/common/db/` 公共模块执行职责内的 MySQL 操作，数据库工作安排在配置/业务线程。公共模块封装 ormpp API；采集、存储、策略分别创建和维护自己的连接或连接池，不跨进程共享连接、事务或连接池实例，详见整体架构第 7.2 节。
 
-最新值按 source_epoch/sequence 去旧，同分片 Hash 与 XADD 的一致性、失败修复、裁剪和已投递事件重放遵守整体架构第 5 节。历史使用 Stream 原采样，不能收到通知后再读 Hash。命令回执先与 outbox 同事务写入 MySQL，再由存储发布到 command-result Stream；采集在回执持久提交后确认命令消费，不采用本地文件记录。
+最新值按 source_epoch/sequence 去旧，同分片 Hash 与 XADD 的一致性、失败修复、裁剪和已投递事件重放遵守整体架构第 5 节。历史使用 Stream 原采样，不能收到通知后再读 Hash。命令回执先与 outbox 同事务写入 MySQL，ZeroMQ 仅发出状态变化提示；采集按持久 inbox 与执行状态对账，不采用本地文件记录。
 
 ---
 

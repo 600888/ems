@@ -1,5 +1,7 @@
 # EMS 引入 ZeroMQ 的必要性评估
 
+> 历史评估（2026-09-13）。2026-09-27 已决定将 ZeroMQ 用于消息订阅与命令下发；2026-09-28 Web 后端目标方案改为 C++17 + Drogon。当前实施边界见 [系统架构](../architecture/system-design.md)与[ZeroMQ 消息订阅与命令下发设计](../common/realtime/zeromq-messaging-design.md)。下文“首期不引入”及 Go/GORM 等表述保留为当时的评估记录，不再代表当前决策。
+
 > 评估日期：2026-09-13｜范围：当前四进程目标架构｜结论：首期不引入，保留局部验证选项。
 > 本文基于 [EMS 系统架构设计](../architecture/system-design.md)、[数据采集架构](../processes/collector/design.md) 和官方资料进行设计评估。尚未开展 ZeroMQ 原型或性能测试，文中的性能收益属于待验证假设。
 

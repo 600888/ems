@@ -56,6 +56,11 @@ bool CollectEngine::initialize(const EngineConfig& config) {
     dispatchConfig.poolSize_ = config.redisPoolSize_;
     dispatchConfig.timeoutMs_ = config.redisTimeoutMs_;
     dispatchConfig.keyPrefix_ = config.redisPrefix_;
+    dispatchConfig.notificationBackend_ = config.notificationBackend_;
+    dispatchConfig.zmqEndpoint_ = config.zmqEndpoint_;
+    dispatchConfig.zmqQueueItems_ = config.zmqQueueItems_;
+    dispatchConfig.zmqMaxMessageBytes_ = config.zmqMaxMessageBytes_;
+    dispatchConfig.zmqHighWaterMark_ = config.zmqHighWaterMark_;
 
     dispatcher_ = std::make_shared<DataDispatcher>();
     if (!dispatcher_->initialize(dispatchConfig)) {
