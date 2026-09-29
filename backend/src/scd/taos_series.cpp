@@ -1,4 +1,3 @@
-#include <storage/native_adapters.h>
 #include <taos.h>
 
 #include <algorithm>
@@ -12,6 +11,8 @@
 #include <tuple>
 #include <variant>
 #include <vector>
+
+#include "native_adapters.h"
 
 namespace ems::storage {
 namespace {
@@ -75,7 +76,7 @@ core::Result<Sample> read_sample(TAOS_ROW row, const int* lengths, const SeriesM
     sample.source_id = read_text(row, lengths, 12);
     sample.source_epoch = read_text(row, lengths, 13);
     sample.sequence = read_text(row, lengths, 14);
-    sample.series_table = mapping.series_table;
+    sample.series_key = mapping.series_key;
     sample.value_type = mapping.value_type;
     std::int8_t origin = 0;
     if (sample.point_id != mapping.point_id || sample.event_id.empty() ||
@@ -161,7 +162,7 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
             return core::make_error(core::ErrorCode::DeadlineExceeded,
                                     core::WriteEffect::NotApplied, "TDengine deadline");
         }
-        if (!valid_table(sample.series_table)) {
+        if (!valid_table(sample.series_key)) {
             return core::make_error(core::ErrorCode::InvalidArgument, core::WriteEffect::NotApplied,
                                     "invalid series table");
         }
@@ -192,7 +193,7 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
         if (!statement || taos_stmt2_prepare(statement.get(), sql, 0) != 0) {
             return taos_error("prepare", core::WriteEffect::NotApplied);
         }
-        std::string table = sample.series_table;
+        std::string table = sample.series_key;
         char* table_names[] = {table.data()};
         std::int64_t timestamp = sample.source_time_us;
         std::int64_t ingest_timestamp = sample.ingest_time_us;
@@ -313,7 +314,7 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
                 return core::make_error(core::ErrorCode::DeadlineExceeded,
                                         core::WriteEffect::NotApplicable, "TDengine deadline");
             }
-            if (!valid_table(mapping.series_table)) {
+            if (!valid_table(mapping.series_key)) {
                 return core::make_error(core::ErrorCode::CorruptData,
                                         core::WriteEffect::NotApplicable, "series mapping");
             }
@@ -321,7 +322,7 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
                 "SELECT ts,event_id,sample_value,quality,ingest_ts,time_origin,time_reason,"
                 "quality_reason,payload_sha256,scope_kind,scope_id,config_version,source_id,"
                 "source_epoch,sequence,point_id FROM ems_history." +
-                mapping.series_table + " WHERE ts >= " + std::to_string(query.start_us) +
+                mapping.series_key + " WHERE ts >= " + std::to_string(query.start_us) +
                 " AND ts < " + std::to_string(query.end_us) + " AND scope_kind = '" +
                 query.scope_kind + "' AND scope_id = ?";
             bool bind_event_id = false;

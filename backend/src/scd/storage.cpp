@@ -1,5 +1,6 @@
+#include "storage.h"
+
 #include <common/codec/event_codec.h>
-#include <storage/storage.h>
 
 #include <algorithm>
 #include <array>
@@ -105,10 +106,11 @@ bool valid_id(const std::string& value, std::size_t limit = 64) {
     return !value.empty() && value.size() <= limit;
 }
 
-bool valid_series_table(const std::string& value) {
-    if (value.size() < 3 || value.size() > 96 || value.compare(0, 2, "p_") != 0) return false;
-    return std::all_of(value.begin() + 2, value.end(), [](char ch) {
-        return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+bool valid_series_key(const std::string& value) {
+    if (value.empty() || value.size() > 96) return false;
+    return std::all_of(value.begin(), value.end(), [](char ch) {
+        return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
+               ch == '-' || ch == '_';
     });
 }
 
@@ -239,13 +241,13 @@ core::Result<Sample> parse_sample(const messaging::EventEnvelope& event,
     return sample;
 }
 
-HistoryConsumer::HistoryConsumer(messaging::IEventBus& bus, IHistoryRepository& repository,
-                                 ITimeSeriesStore& series, messaging::Subscription subscription,
+HistoryConsumer::HistoryConsumer(IHistoryFeed& feed, IHistoryRepository& repository,
+                                 ITimeSeriesStore& series, std::string scope,
                                  ConsumerOptions options)
-    : bus_(bus),
+    : feed_(feed),
       repository_(repository),
       series_(series),
-      subscription_(std::move(subscription)),
+      scope_(std::move(scope)),
       options_(options) {}
 
 core::Status HistoryConsumer::process(const messaging::Delivery& delivery,
@@ -256,18 +258,20 @@ core::Status HistoryConsumer::process(const messaging::Delivery& delivery,
         const std::string raw = !delivery.raw_payload.empty() ? delivery.raw_payload
                                 : core::is_ok(encoded)        ? core::value_of(encoded)
                                                               : delivery.event.payload_json;
-        QuarantineRecord record{delivery.transport_cursor.value, subscription_.scope,
+        QuarantineRecord record{delivery.transport_cursor.value, scope_,
                                 delivery.event.event_id.value(), reason,
                                 raw.substr(0, options_.max_payload_bytes)};
         auto saved = repository_.quarantine(record, ctx);
         if (!core::is_ok(saved)) return core::error_of(saved);
-        auto acked = bus_.ack(subscription_, delivery.delivery_token, ctx);
-        if (core::is_ok(acked)) ++report.quarantined;
-        return acked;
+        ++report.quarantined;
+        return core::ok_status();
     };
     if (!core::is_ok(sample)) return quarantine(core::error_of(sample).message);
     auto value = core::value_of(sample);
-    if (value.scope_id != subscription_.scope) return quarantine("stream scope mismatch");
+    if (value.scope_id != scope_ ||
+        (!options_.scope_kind.empty() && value.scope_kind != options_.scope_kind)) {
+        return quarantine("telemetry scope mismatch");
+    }
     auto snapshot = repository_.find_point(value.scope_kind, value.scope_id, value.config_version,
                                            value.point_id, ctx);
     if (!core::is_ok(snapshot)) {
@@ -278,10 +282,10 @@ core::Status HistoryConsumer::process(const messaging::Delivery& delivery,
     if (point.value_type != value.value_type || !point.enabled ||
         point.point_id != value.point_id || point.scope_kind != value.scope_kind ||
         point.scope_id != value.scope_id || point.config_version != value.config_version ||
-        !valid_series_table(point.series_table)) {
+        !valid_series_key(point.series_key)) {
         return quarantine("point snapshot mismatch");
     }
-    value.series_table = point.series_table;
+    value.series_key = point.series_key;
     auto registered = repository_.register_event(value, ctx);
     if (!core::is_ok(registered)) {
         const auto& error = core::error_of(registered);
@@ -290,25 +294,24 @@ core::Status HistoryConsumer::process(const messaging::Delivery& delivery,
     }
     auto written = series_.write(value, ctx);
     if (!core::is_ok(written)) return core::error_of(written);
-    auto acked = bus_.ack(subscription_, delivery.delivery_token, ctx);
-    if (core::is_ok(acked)) ++report.written;
-    return acked;
+    ++report.written;
+    return core::ok_status();
 }
 
 core::Result<BatchReport> HistoryConsumer::consume_batch(const core::CallContext& ctx) {
-    if (options_.max_items == 0 || options_.max_bytes == 0 || subscription_.group.empty() ||
-        subscription_.consumer.empty() || subscription_.scope.empty() ||
-        subscription_.topic != "telemetry") {
+    if (options_.max_items == 0 || options_.max_bytes == 0 || scope_.empty() ||
+        (!options_.scope_kind.empty() && options_.scope_kind != "station" &&
+         options_.scope_kind != "unit")) {
         return core::make_error(core::ErrorCode::InvalidArgument, core::WriteEffect::NotApplicable,
                                 "consumer configuration");
     }
-    auto deliveries = bus_.read(subscription_, options_.max_items, options_.max_bytes, ctx);
+    auto deliveries = feed_.read(options_.max_items, options_.max_bytes, ctx);
     if (!core::is_ok(deliveries)) return core::error_of(deliveries);
     BatchReport report;
     for (const auto& delivery : core::value_of(deliveries)) {
         ++report.received;
         auto handled = process(delivery, ctx, report);
-        if (!core::is_ok(handled)) ++report.deferred;
+        if (!core::is_ok(handled)) ++report.dropped;
     }
     return report;
 }
@@ -362,7 +365,7 @@ core::Result<HistoryPage> HistoryQueryService::query(
         auto mapping = repository_.find_series(point_id, ctx);
         if (!core::is_ok(mapping)) return core::error_of(mapping);
         if (core::value_of(mapping).point_id != point_id ||
-            !valid_series_table(core::value_of(mapping).series_table)) {
+            !valid_series_key(core::value_of(mapping).series_key)) {
             return core::make_error(core::ErrorCode::CorruptData, core::WriteEffect::NotApplicable,
                                     "invalid series mapping");
         }

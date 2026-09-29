@@ -1,11 +1,11 @@
 # EMS Redis 键设计
 
-> 版本：1.5｜更新日期：2026-09-19｜状态：目标设计，待实现与迁移。
-> 本文是 Redis 键命名与数据组织的统一约定。整体职责见 [EMS 系统架构设计](../../architecture/system-design.md)，可靠采样与配置入口见 [实时数据与配置](index.md)。四类 C++ 进程复用公共 ormpp API，并各自管理数据库连接。
+> 版本：1.6｜更新日期：2026-09-29｜状态：目标设计，待实现与迁移。
+> 本文是 Redis 实时键命名与数据组织的约定。整体职责见 [EMS 系统架构设计](../../architecture/system-design.md)，遥测与配置入口见 [实时数据与配置](index.md)。四类 C++ 进程复用公共 ormpp API，并各自管理数据库连接。
 
 ## 1. 评估与决策
 
-本文定义 Redis 后端的物理存储约定。业务统一通过 [公共实时数据访问接口](access-design.md) 访问共享内存、Redis 或其他内存数据库；作用域和资产身份跨后端保持一致，Redis 命令与键格式留在 Redis 适配器内。配置快照与可靠事件仍按各自仓储/通道处理。
+本文定义 Redis 实时数据库的物理存储约定。业务统一通过 [公共实时数据访问接口](access-design.md) 访问共享内存、Redis 或其他内存数据库；作用域和资产身份跨后端保持一致，Redis 命令与键格式留在 Redis 适配器内。配置权威数据保存在 MySQL，消息走 ZeroMQ。
 
 采用“全局唯一储能单元 code → 设备 code → 子设备 code → 更深层设备 code”的路径设计。它与资产树一致，能直接定位单元、设备和部件，也避免让业务地址依赖采集进程的分片编号。
 
@@ -18,7 +18,7 @@
 | code 与 ID | code 构成可读地址，稳定 ID 继续作为数据库关联、历史和审计身份 |
 | 测点类型前缀 | 测点使用 `ems:rt:point:<作用域>:<设备层级>:<point_code>`；单元或 station 自身测点省略设备层级 |
 | 其他资源 | 元数据、状态等继续使用资产路径后的 `meta`、`rt:state` 等资源后缀 |
-| 事件流 | 按单元或 station 作用域汇集，事件载荷携带设备路径；不为每个子设备或测点创建一套 Stream |
+| 遥测主题 | ZeroMQ 按单元或 station 作用域区分，事件载荷携带设备路径；不创建 Redis Stream |
 | 公共资源 | station 公共设备、共享通道、站级策略拥有独立 station 根，不挂到任意单元下面 |
 
 每一级仅保留 code，节点种类由元数据 `asset_type` 区分。Rack、Pack、Cell 等没有协议连接的部件也可占用设备路径节点；路径表示资产包含关系，通信、供电和管理关系另行建模。
@@ -101,21 +101,15 @@ ems:{station:station001}:channel:rs48501:rt:state
 
 | 键模板 | 类型 | 内容与写入方 |
 | --- | --- | --- |
-| `N:meta` | Hash | 稳定 ID、code、asset_type、station_id/code、unit_id/code、父路径、config_version；存储配置发布器写，station 节点省略单元字段 |
 | `N:rt:state` | Hash | 单元/station 聚合由策略写，设备通信与运行状态由指定状态所有者写；每个 Hash 明确唯一写角色 |
 | `ems:rt:point:A:<point_code>` | Hash | A 按上述定义展开；一个测点完整最新样本，采集写原始点，策略写独立派生点 |
-| `R:config:<version>:children:<asset_id>` | Set | 指定版本下直接子节点的 asset_id，不存整棵子树；存储配置发布器写 |
-| `R:config:<version>:points:<asset_id>` | Set | 指定节点的 point_code；存储配置发布器写 |
-| `R:config:<version>:asset-path` | Hash | asset_id → device_path JSON 数组；根节点路径为空数组 |
-| `S:config:<version>:units` | Set | 当前 station 配置包含的 unit_code；存储配置发布器写 |
-| `S:channel:<channel_code>:meta` | Hash | channel_id、purpose、local_role、connection_mode、协议 profile 版本、resource_id/code、绑定/上送映射引用与 owner_shard；存储配置发布器写 |
 | `S:channel:<channel_code>:rt:state` | Hash | 通道/监听就绪、会话数与汇总状态、收发/失败时间、owner_epoch、应用版本；所属通信实例写 |
 | `S:resource:<resource_code>:owner` | String（JSON） | 物理资源 owner_id、owner_epoch、租约身份；指定所有权协调器维护，带租约 TTL |
 | `S:process:<role>:<instance_id>:heartbeat` | String（JSON） | 本实例心跳、启动代次、时间；各进程自行更新并设 TTL |
 
-instance_id、资源 ID、命令 ID 等动态后缀统一使用 `^[a-z0-9][a-z0-9_-]{0,63}$`，role 来自固定枚举，owner_shard 使用同样的安全标识格式；由 KeyBuilder 校验，不拼接用户任意输入。version 使用无前导零的正整数十进制字符串，同一作用域单调递增，与 active/applied 等固定段不冲突。配置相关的 meta 是当前缓存，构建运行配置以不可变版本快照为准，不能拼接发布中不同版本的 meta/索引。
+instance_id、资源 ID、命令 ID 等动态后缀统一使用 `^[a-z0-9][a-z0-9_-]{0,63}$`，role 来自固定枚举，owner_shard 使用同样的安全标识格式；由 KeyBuilder 校验，不拼接用户任意输入。配置版本与资产目录由 MySQL 查询，不能凭 Redis 键推断完整配置。
 
-树形查询先读取配置版本，再用 children/asset-path/points 索引逐级加载；station 的 units 索引负责转入对应单元根，station 的 children 索引只包含该根内的公共设备，不重复收录单元子树。Redis 键本身不是目录，前缀不会自动产生父子索引。业务请求不使用 `KEYS` 或全库 `SCAN` 拼资产树；运维遍历允许限速 SCAN，处理重复项，不能把遍历视为一致性快照。见 [Redis SCAN 说明](https://redis.io/docs/latest/commands/scan/)。
+树形配置查询通过 MySQL 的版本化目录完成。Redis 键本身不是配置目录，前缀不会自动产生父子索引。业务请求不使用 `KEYS` 或全库 `SCAN` 拼资产树；运维遍历允许限速 SCAN，处理重复项，不能把遍历视为一致性快照。见 [Redis SCAN 说明](https://redis.io/docs/latest/commands/scan/)。
 
 station 通道只记录一份权威通道汇总状态；服务端的一条通道可以有多个运行 session，不能用一个 connected 布尔值代替全部会话状态。首期 session 明细由有界运行诊断接口提供，不临时发明未版本化的 Redis 键目录。归属不同单元的测点仍各自使用 `ems:rt:point:{<unit_code>}:...`，上送映射只引用标准点，不复制权威采样。设备/通道/profile/会话的关系见 [设备、通道与协议](../../architecture/channel-protocol.md)。
 
@@ -123,35 +117,11 @@ station 通道只记录一份权威通道汇总状态；服务端的一条通道
 
 ### 4.2 配置
 
-| 键模板 | 类型 | 语义 |
-| --- | --- | --- |
-| `R:config:<version>` | String（JSON） | 不可变完整配置，含 schema_version、checksum、稳定 ID、code 路径及通道引用 |
-| `R:config:active` | String | 当前已发布版本，必须在快照与该版本索引完整写入后更新 |
-| `R:config:applied:<role>:<instance_id>` | Hash | 该实例实际应用版本、状态、失败原因、时间和进程启动代次；实例自行写入 |
-| `R:stream:config` | Stream | outbox 发布的版本变更事件，用于触发加载与对账 |
-
-各 C++ 进程的公共 ormpp API 在 MySQL 同事务保存配置、版本和 outbox，存储发布器重试构建 Redis 快照、索引与事件。发布按版本前进，迟到任务不能把 active 回退。大配置先分批构建并校验，再用有界操作切换指针，避免用长脚本构建整棵树。通知遗漏时实例通过 active 与持久配置对账恢复。
-
-station 配置快照包含各单元的目标版本清单。跨根发布可能部分成功，不能把 station 的版本指针当作所有单元同时生效；页面显示保存、发布、各实例应用状态，策略核对所需的完整版本组合后才允许依赖它的控制。applied 必须结合实例心跳/启动代次判断，遗留 ACK 不代表当前进程已应用。
+Redis 不保存配置快照、active/applied 版本或配置事件。各 C++ 进程通过公共 ormpp API 从 MySQL 读取指定版本；配置发布和实例应用状态也保存在 MySQL。ZeroMQ 只提示实例重读，提示遗漏后按 MySQL 版本定期对账。各实例的本地配置缓存必须按版本整体替换，不能混用不同版本的点位与路由。
 
 ### 4.3 事件与控制
 
-| 键模板 | 类型 | 发布/消费 |
-| --- | --- | --- |
-| `R:stream:telemetry` | Stream | 采集/派生点生产者发布该作用域原始样本，存储历史组消费 |
-| `R:stream:control-intent` | Stream | 旧链路兼容键；新意图由 MySQL/outbox 持久保存并用 ZeroMQ 提示策略查询 |
-| `R:stream:command:<owner_shard>` | Stream | 旧链路兼容键；新命令由 MySQL/outbox 经 ZeroMQ REQ/REP 交给采集持久 inbox |
-| `R:stream:command-result` | Stream | 旧链路兼容键；新回执持久保存在 MySQL，ZeroMQ 只提示状态变化 |
-| `R:stream:alarm` | Stream | 旧链路兼容键；新告警先持久保存于 MySQL，再以 ZeroMQ 提示消费者查询 |
-| `R:command:<command_id>` | Hash | Redis 部署下可选状态缓存，不作为权威命令或执行入口 |
-
-单元事件使用 U，站级意图、站级派生点或公共设备事件使用 S。站级多单元调度拆成每单元的命令，保留共同 intent_id/trace_id；跨单元设备动作不承诺事务性全成或全败。command_id 全局唯一且明确目标作用域，客户端通过鉴权后的业务查询获取结果，无需全库搜索键。
-
-事件载荷包含 `schema_version、event_id、trace_id、station_id、station_code、unit_id、unit_code、asset_id、device_path、config_version、producer_id、event_time、ingest_time`；station 事件单元字段为 null，根事件 device_path 为 `[]`。采样另带 point_id/code、channel_id、来源代次、序号、类型、值、单位、质量和采样时间。可靠身份使用 event_id，Redis Stream ID 只作该流的投递游标。
-
-仍使用 Redis Streams 的历史采样消费组按职责固定，例如 `history-storage`；consumer 名包含实例和启动代次。同组多实例分担任务，需要完整历史事件的不同角色使用不同组。配置是每个实例都需要应用的变化，使用版本化快照与 ZeroMQ 提示对账，不采用单一竞争组代表广播。
-
-一个采集分片可服务多个单元，其 ZeroMQ 命令端点按 owner_shard 路由；不再为新命令订阅多条 Redis Stream。owner_shard 是执行路由，不进入单元 hash tag，扩缩容后仍需校验 owner_epoch、有效期与设备所有权。旧 Stream 在迁移期保留到未决命令对账完成，避免双通道重复执行。
+Redis 不作为消息传输或命令执行入口。原始遥测经独立 ZeroMQ PUB/SUB 送存储进程，允许丢样；命令与告警的业务事实由 MySQL/outbox 保存，命令通过 ZeroMQ REQ/REP 交接，变化提示通过 PUB/SUB 发出。一个采集分片可服务多个单元，其命令端点按 `owner_shard` 路由；扩缩容后仍需校验 `owner_epoch`、有效期与设备所有权。
 
 ## 5. 实时数据字段与更新
 
@@ -163,28 +133,26 @@ Redis 派生类采用同槽临时 Hash 构建完整替换数据，再经脚本�
 
 同一完整样本中的值、质量、时间、代次和序号必须一起更新，不能让读者看到一半新、一半旧。写入方根据已批准的来源代次及配置版本校验所有权；同一代次比较 sequence，重复忽略，旧事件只补历史。来源切换必须先更新权威来源代次，不能直接按随机进程 ID 或不同来源的 sequence 排序。
 
-采样进入有界内存队列，再安排同根最新值和 telemetry Stream 写入，不设置本地文件缓冲。可使用有界 Lua 完成检查与更新；脚本预校验类型/输入，仍需按 event_id 修复运行时失败留下的部分结果。数据库落库确认后才 ACK；Streams 接受后释放采集发布缓冲。进程重启或缓冲超限时尚未投递的采样可能丢失，不承诺完整补传。具体恢复和 outbox 规则沿用整体架构第 5.3 节。
+采样进入有界内存队列，再分别更新 Redis 最新值和通过 ZeroMQ 发布原始事件，不设置本地文件缓冲。实时更新可以使用受限脚本保证单条完整记录的条件替换；遥测发布与实时写入不是同一事务。发布端、网络或存储端故障可能丢样，不能用 Redis 最新值补造历史。具体恢复和 outbox 规则沿用整体架构第 5.3 节。
 
 ## 6. Cluster 与容量边界
 
-花括号只包住 unit_code，设备 code 放在其后。测点的 `rt:point:` 位于花括号之前，`ems:rt:point:{ess000001}:pcs01:active_power` 与 `ems:{ess000001}:stream:telemetry` 仍使用相同 tag。同单元所有键因此位于同一 hash slot，可为最新值与该单元 Stream 的操作提供同槽条件；层级更深不会自动分散到其他节点。同槽多键限制与 hash tag 规则见 [Redis Cluster 规范](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/)。
+花括号只包住 unit_code，设备 code 放在其后。测点的 `rt:point:` 位于花括号之前；同单元实时状态键因此位于同一 hash slot，层级更深不会自动分散到其他节点。同槽多键限制与 hash tag 规则见 [Redis Cluster 规范](https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/)。
 
-工程上的代价是一个大单元的热点不能靠增加 Cluster 节点自动拆开；不同单元还可能散列到同一槽，不能理解为一个单元独占一槽或一个节点。station 公共根同样需要容量限制。验收按单元/站级根分别统计键数量、内存、样本率、Stream 积压和脚本时延。
+工程上的代价是一个大单元的热点不能靠增加 Cluster 节点自动拆开；不同单元还可能散列到同一槽，不能理解为一个单元独占一槽或一个节点。station 公共根同样需要容量限制。验收按单元/站级根分别统计键数量、内存、实时更新率和脚本时延。
 
-跨单元、单元与 station 之间分别读写，通过 config_version、采样时间和业务校验组合结果。pipeline 可减少往返，但不提供跨根事务快照。若最大单元的负载超过单槽预算，再设计明确版本的单元内分片方案，连同 Stream 路由、同槽更新和迁移一起调整，变更必须更新键契约版本。
+跨单元、单元与 station 之间分别读写，通过 config_version、采样时间和业务校验组合结果。pipeline 可减少往返，但不提供跨根事务快照。若最大单元的负载超过单槽预算，再设计明确版本的单元内分片方案，连同实时状态迁移一起调整，变更必须更新键契约版本。
 
 ## 7. 生命周期与恢复
 
 | 数据 | 保留规则 |
 | --- | --- |
-| 活跃资产 meta、当前配置和索引 | 不设短 TTL；可由 MySQL 持久配置重建，旧版本需等实例退出引用和回放窗口结束再清理 |
 | 最新测点与设备状态 | 默认保留最后值，用质量、采样时间和 stale_after 判陈旧；不因离线直接删除最后值 |
 | 心跳与租约 | 按心跳间隔/容错预算配置 TTL；租约续期和释放必须核对持有者身份 |
-| Stream | 按所有必需消费者确认进度与回放窗口裁剪；不能对可靠流统一 EXPIRE 或仅用近似 MAXLEN 强制截断 |
-| 命令状态缓存 | 未终结命令保持；终结且已持久审计后按查询窗口过期，幂等记录仍以MySQL 持久执行状态为准 |
+| 命令状态投影 | 可按查询窗口过期，权威状态和幂等记录始终以 MySQL 为准 |
 | 退役设备路径 | 经版本切换、消费确认和保留期后按清单清理；不复用旧 code 接收新资产数据 |
 
-Redis 缺失或故障后从配置数据库、MySQL 业务记录/outbox 及重新采集的设备状态恢复；状态缓存不能替代可靠事件。生产内存策略须避免静默淘汰尚未归档的 Stream/控制数据，容量不足触发显式告警和背压；若共享 Redis 无法同时满足缓存与可靠数据预算，再隔离部署。保留期、TTL、容量和最长中断目标在部署配置中量化，不在键中编码。
+Redis 缺失或故障后从 MySQL 配置与业务记录、重新采集的设备状态恢复实时投影；不能用恢复后的最新值补造历史。实时容量不足触发显式告警和背压。保留期、TTL、容量和最长中断目标在部署配置中量化，不在键中编码。
 
 ## 8. 实施与迁移
 
@@ -193,17 +161,17 @@ Redis 缺失或故障后从配置数据库、MySQL 业务记录/outbox 及重新
 1. 盘点旧键和旧命名字段、实际消费组及积压；建立稳定 ID → station/unit code → device_path 映射，修复重名、非法 code 和设备保留字冲突，落实统一数据库迁移和唯一索引。已有带设备类型前缀或测点类型后缀的键按新语法重建并核对，不能仅修改读取端的拼接方式。
 2. 在 `contracts/` 维护键语法、字段和样例；C++ 公共 Redis 模块实现统一 KeyBuilder，各进程复用，共享契约样例。接口接收已解析的根、code 数组和资源类型，业务代码不手工拼键，访问前按 station/资产授权。
 3. 站表、字段、JSON、Protobuf 映射、API、SQL 示例和日志统一采用 station 命名；若已有旧客户端，提供明确的兼容窗口和契约版本，保留已有 Protobuf 字段编号，不直接破坏持久表或历史标签。TDengine 已有历史表不因文档改名就自动迁移。
-4. 从同一配置版本构建新索引/快照，重建最新值并校验 ID、点数、质量和时间；影子写入只用于验证，新旧路径只允许一套权威控制执行消费者。
-5. 选定切换水位，切换生产者、查询和订阅配置；旧 Stream 的未消费记录和 PEL 要排空或按 event_id 转移并核对持久结果，不能仅复制键名或直接删除旧流。跨新旧键/槽操作分步执行，验证后再清理。
-6. code 改名或移动设备时列出整棵子树受影响路径及相关流，暂停受影响的新控制，核对在途命令，按上述版本/水位切换。拒绝旧版本控制与旧路径实时写入；迟到旧事件仍按稳定 ID 归档，不恢复旧路径为权威值。回退也要先核对命令执行记录，避免重复设备动作。
+4. 从同一 MySQL 配置版本重建实时最新值投影，并校验 ID、点数、质量和时间；影子写入只用于验证，新旧路径只允许一套权威控制执行消费者。
+5. 选定切换水位，切换生产者、查询和订阅配置；迁移前对旧 Stream 未消费记录和 PEL 做一次性对账，再停用旧消息入口。跨新旧键/槽操作分步执行，验证后再清理。
+6. code 改名或移动设备时列出整棵子树受影响路径和遥测主题，暂停受影响的新控制，核对在途命令，按上述版本/水位切换。拒绝旧版本控制与旧路径实时写入；已收到的迟到旧事件仍按稳定 ID 归档，不恢复旧路径为权威值。回退也要先核对命令执行记录，避免重复设备动作。
 
 ## 9. 验收要求
 
 - 不同 station 并发创建同一 unit_code 必须失败；离线导入重名、同父节点重名、非法分隔符、编号前连字符、设备保留字和大小写冲突都被拒绝；编号前导零在读写和键生成时保持一致。
 - 不同单元同名设备、不同父节点同名子设备不冲突；支持多层路径，拒绝环、超深层级和越权访问。
-- 各 C++ 进程对同一输入生成一致的键和字段；前端只使用逻辑身份与 JSON 字段，不生成物理 Redis 键。单元级、各层设备级和 station 测点都以 `ems:rt:point:` 开头，解析后的作用域、设备路径与 point_code 正确；同单元样本/Stream 同槽，station 与单元交互不依赖跨槽原子性。
+- 各 C++ 进程对同一输入生成一致的实时键和字段；前端只使用逻辑身份与 JSON 字段，不生成物理 Redis 键。单元级、各层设备级和 station 测点都以 `ems:rt:point:` 开头，解析后的作用域、设备路径与 point_code 正确；station 与单元交互不依赖跨槽原子性。
 - 共享通道和公共电表只有一份权威状态；按关系查到正确设备，跨单元策略不重复计量。
-- 乱序、重复、来源切换、Redis 中断、本地补传和存储重启后可对账；积压裁剪不会丢失尚需归档的事件。
+- 乱序、重复、来源切换、Redis 中断和存储重启后可对账实时状态；ZeroMQ 遥测丢样可观测，不能由 Redis 最新值推断缺失事件。
 - 配置部分发布、改名、换父节点、单元迁移、旧命令迟到与回退不会导致重复执行或历史身份变化；观察到的应用版本与实例心跳一致。
 
 官方规则核对日期为 2026-09-13；项目命名、深度、保留和迁移约定由本文定义，实际客户端版本与目标部署仍需集成验收。

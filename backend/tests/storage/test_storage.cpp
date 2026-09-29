@@ -1,6 +1,4 @@
 #include <common/core/identity.h>
-#include <storage/outbox_publisher.h>
-#include <storage/storage.h>
 
 #include <cassert>
 #include <chrono>
@@ -9,6 +7,9 @@
 #include <string>
 #include <utility>
 #include <vector>
+
+#include "outbox_publisher.h"
+#include "storage.h"
 
 namespace {
 
@@ -19,9 +20,7 @@ using ems::core::Status;
 using ems::core::WriteEffect;
 using ems::messaging::Delivery;
 using ems::messaging::EventEnvelope;
-using ems::messaging::IEventBus;
-using ems::messaging::PublishReceipt;
-using ems::messaging::Subscription;
+using ems::storage::IHistoryFeed;
 using ems::storage::IHistoryRepository;
 using ems::storage::ITimeSeriesReader;
 using ems::storage::ITimeSeriesStore;
@@ -30,31 +29,18 @@ using ems::storage::QuarantineRecord;
 using ems::storage::Sample;
 using ems::storage::ValueType;
 
-struct FakeBus final : IEventBus {
+struct FakeFeed final : IHistoryFeed {
     std::vector<Delivery> deliveries;
-    std::vector<std::string> acked;
 
-    Result<PublishReceipt> publish(const std::string&, const std::string&, const EventEnvelope&,
-                                   const CallContext&) override {
-        return PublishReceipt{};
+    Result<std::vector<Delivery>> read(std::uint64_t, std::uint64_t, const CallContext&) override {
+        auto received = std::move(deliveries);
+        deliveries.clear();
+        return received;
     }
 
-    Result<std::vector<Delivery>> read(const Subscription&, std::uint64_t, std::uint64_t,
-                                       const CallContext&) override {
-        return deliveries;
-    }
+    ems::storage::FeedStatistics stats() const override { return {}; }
 
-    Status ack(const Subscription&, const std::string& token, const CallContext&) override {
-        acked.push_back(token);
-        return ems::core::ok_status();
-    }
-
-    Result<std::uint64_t> reclaim(const Subscription&, std::chrono::milliseconds, std::uint64_t,
-                                  const CallContext&) override {
-        return std::uint64_t{0};
-    }
-
-    Status close(const CallContext&) override { return ems::core::ok_status(); }
+    void close() noexcept override {}
 };
 
 struct FakeRepository final : IHistoryRepository {
@@ -213,72 +199,75 @@ Delivery make_delivery(std::string id, std::string value = "9223372036854775807"
     return Delivery{event, {event.event_id.value()}, event.event_id.value(), 1};
 }
 
-ems::storage::HistoryConsumer make_consumer(FakeBus& bus, FakeRepository& repository,
+ems::storage::HistoryConsumer make_consumer(FakeFeed& feed, FakeRepository& repository,
                                             FakeSeries& series) {
-    Subscription subscription;
-    subscription.group = "history-storage";
-    subscription.consumer = "node-1";
-    subscription.scope = "station-1";
-    subscription.topic = "telemetry";
-    return {bus, repository, series, subscription};
+    ems::storage::ConsumerOptions options;
+    options.scope_kind = "station";
+    return {feed, repository, series, "station-1", options};
 }
 
 }  // namespace
 
 int main() {
-    FakeBus bus;
+    FakeFeed feed;
     FakeRepository repository;
     FakeSeries series;
-    auto consumer = make_consumer(bus, repository, series);
+    auto consumer = make_consumer(feed, repository, series);
     const auto ctx = ems::core::make_call_context(std::chrono::seconds(10));
 
-    bus.deliveries = {make_delivery("event-1")};
+    const auto original = make_delivery("event-1");
+    feed.deliveries = {original};
     series.available = false;
     auto first = consumer.consume_batch(ctx);
     assert(ems::core::is_ok(first));
-    assert(ems::core::value_of(first).deferred == 1);
-    assert(bus.acked.empty());
+    assert(ems::core::value_of(first).dropped == 1);
     assert(repository.identities.size() == 1);
 
     series.available = true;
+    feed.deliveries = {original};
     auto retry = consumer.consume_batch(ctx);
     assert(ems::core::is_ok(retry));
     assert(ems::core::value_of(retry).written == 1);
     assert(series.written.size() == 1);
     assert(std::get<std::int64_t>(series.written.front().value) == INT64_MAX);
-    assert(bus.acked.size() == 1);
 
-    bus.deliveries = {make_delivery("event-1", "1")};
+    feed.deliveries = {make_delivery("event-1", "1")};
     auto conflict = consumer.consume_batch(ctx);
     assert(ems::core::is_ok(conflict));
     assert(ems::core::value_of(conflict).quarantined == 1);
     assert(series.written.size() == 1);
     assert(repository.quarantined.size() == 1);
 
-    bus.deliveries = {make_delivery("event-2")};
+    feed.deliveries = {make_delivery("event-2")};
     repository.ready = false;
     auto pending = consumer.consume_batch(ctx);
     assert(ems::core::is_ok(pending));
-    assert(ems::core::value_of(pending).deferred == 1);
-    assert(bus.acked.size() == 2);
+    assert(ems::core::value_of(pending).dropped == 1);
 
     repository.ready = true;
     repository.quarantine_available = false;
-    bus.deliveries = {make_delivery("event-3", "not-an-integer")};
+    feed.deliveries = {make_delivery("event-3", "not-an-integer")};
     auto failed_quarantine = consumer.consume_batch(ctx);
     assert(ems::core::is_ok(failed_quarantine));
-    assert(ems::core::value_of(failed_quarantine).deferred == 1);
-    assert(bus.acked.size() == 2);
+    assert(ems::core::value_of(failed_quarantine).dropped == 1);
 
     repository.quarantine_available = true;
     auto malformed = make_delivery("event-malformed");
     malformed.event.schema_version = "invalid";
     malformed.raw_payload = "{malformed original event";
-    bus.deliveries = {malformed};
+    feed.deliveries = {malformed};
     auto isolated = consumer.consume_batch(ctx);
     assert(ems::core::is_ok(isolated));
     assert(ems::core::value_of(isolated).quarantined == 1);
     assert(repository.quarantined.back().payload == malformed.raw_payload);
+
+    auto wrong_scope_kind = make_delivery("event-unit");
+    wrong_scope_kind.event.unit_id = ems::core::EssUnitId("station-1");
+    feed.deliveries = {wrong_scope_kind};
+    auto rejected_scope = consumer.consume_batch(ctx);
+    assert(ems::core::is_ok(rejected_scope));
+    assert(ems::core::value_of(rejected_scope).quarantined == 1);
+    assert(series.written.size() == 1);
 
     FakeReader reader;
     auto first_row = series.written.front();

@@ -1,15 +1,17 @@
-#include <storage/native_adapters.h>
-#include <storage/storage.h>
-
 #include <atomic>
 #include <chrono>
 #include <csignal>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
 #include <utility>
+
+#include "native_adapters.h"
+#include "storage.h"
+#include "telemetry_feed.h"
 
 namespace {
 
@@ -46,73 +48,89 @@ int main() {
     mysql.password = environment("EMS_MYSQL_PASSWORD");
     mysql.database = environment("EMS_MYSQL_DATABASE");
 
-    ems::storage::TaosConnectionOptions taos;
+    ems::storage::TimeSeriesConnectionOptions time_series;
+    const auto backend_name = environment("EMS_STORAGE_SERIES_BACKEND", "taos");
+    auto backend = ems::storage::parse_time_series_backend(backend_name);
+    if (!ems::core::is_ok(backend)) {
+        std::cerr << "ems-storage: unknown time-series backend\n";
+        return 2;
+    }
+    time_series.backend = ems::core::value_of(backend);
+    auto& taos = time_series.taos;
     taos.host = environment("EMS_TAOS_HOST", taos.host);
     taos.port = port("EMS_TAOS_PORT", taos.port);
     taos.user = environment("EMS_TAOS_USER");
     taos.password = environment("EMS_TAOS_PASSWORD");
 
-    ems::storage::RedisStreamOptions redis;
-    redis.host = environment("EMS_REDIS_HOST", redis.host);
-    redis.port = port("EMS_REDIS_PORT", redis.port);
-    redis.user = environment("EMS_REDIS_USER");
-    redis.password = environment("EMS_REDIS_PASSWORD");
-    redis.stream_key = environment("EMS_STORAGE_STREAM_KEY");
+    const auto scope_kind = environment("EMS_STORAGE_SCOPE_KIND");
     const auto scope_id = environment("EMS_STORAGE_SCOPE_ID");
-    const auto consumer_id = environment("EMS_STORAGE_CONSUMER_ID");
+    ems::storage::ZmqTelemetryOptions telemetry;
+    telemetry.endpoint = environment("EMS_STORAGE_ZMQ_ENDPOINT", telemetry.endpoint);
+    telemetry.topic =
+        environment("EMS_STORAGE_ZMQ_TOPIC", "ems:telemetry:" + scope_kind + ":" + scope_id);
 
-    if (mysql.port == 0 || taos.port == 0 || redis.port == 0 || mysql.user.empty() ||
-        mysql.database.empty() || taos.user.empty() || redis.stream_key.empty() ||
-        scope_id.empty() || consumer_id.empty()) {
-        std::cerr << "ems-storage: required connection or stream setting is missing\n";
+    if (mysql.port == 0 || mysql.user.empty() || mysql.database.empty() || scope_id.empty() ||
+        (scope_kind != "station" && scope_kind != "unit") || telemetry.endpoint.empty() ||
+        telemetry.topic.empty() ||
+        (time_series.backend == ems::storage::TimeSeriesBackend::Tdengine &&
+         (taos.port == 0 || taos.user.empty()))) {
+        std::cerr << "ems-storage: required connection or telemetry setting is missing\n";
         return 2;
     }
 
+    auto series_result = ems::storage::connect_time_series(time_series);
+    if (!ems::core::is_ok(series_result)) {
+        std::cerr << "ems-storage: time-series backend: "
+                  << ems::core::error_of(series_result).message << '\n';
+        return 1;
+    }
     auto repository_result = ems::storage::connect_mysql_history(mysql);
-    auto series_result = ems::storage::connect_taos_series(taos);
-    auto bus_result = ems::storage::connect_redis_stream(redis);
-    if (!ems::core::is_ok(repository_result) || !ems::core::is_ok(series_result) ||
-        !ems::core::is_ok(bus_result)) {
-        std::cerr << "ems-storage: failed to connect to MySQL, TDengine or Redis\n";
+    if (!ems::core::is_ok(repository_result)) {
+        std::cerr << "ems-storage: MySQL history repository: "
+                  << ems::core::error_of(repository_result).message << '\n';
+        return 1;
+    }
+    auto feed_result = ems::storage::connect_zmq_telemetry(telemetry);
+    if (!ems::core::is_ok(feed_result)) {
+        std::cerr << "ems-storage: failed to subscribe to ZeroMQ telemetry\n";
         return 1;
     }
     auto repository =
         std::move(std::get<std::unique_ptr<ems::storage::IHistoryRepository>>(repository_result));
     auto series =
         std::move(std::get<std::unique_ptr<ems::storage::ITimeSeriesDatabase>>(series_result));
-    auto bus = std::move(std::get<std::unique_ptr<ems::messaging::IEventBus>>(bus_result));
+    auto feed = std::move(std::get<std::unique_ptr<ems::storage::IHistoryFeed>>(feed_result));
 
-    ems::messaging::Subscription subscription;
-    subscription.group = redis.group;
-    subscription.consumer = consumer_id;
-    subscription.scope = scope_id;
-    subscription.topic = "telemetry";
-    subscription.start = ems::messaging::StartFrom::RetainedBegin;
-    ems::storage::HistoryConsumer consumer(*bus, *repository, *series, subscription);
-    auto last_reclaim = std::chrono::steady_clock::now() - std::chrono::seconds(30);
+    ems::storage::ConsumerOptions consumer_options;
+    consumer_options.scope_kind = scope_kind;
+    ems::storage::HistoryConsumer consumer(*feed, *repository, *series, scope_id, consumer_options);
+    std::uint64_t last_local_drop_count = 0;
     while (running.load()) {
         auto ctx = ems::core::make_call_context(std::chrono::seconds(10));
-        if (std::chrono::steady_clock::now() - last_reclaim >= std::chrono::seconds(30)) {
-            auto reclaimed = bus->reclaim(subscription, std::chrono::seconds(60), 128, ctx);
-            if (!ems::core::is_ok(reclaimed)) {
-                std::cerr << "ems-storage: pending reclaim failed\n";
-            }
-            last_reclaim = std::chrono::steady_clock::now();
-        }
         auto batch = consumer.consume_batch(ctx);
         if (!ems::core::is_ok(batch)) {
-            std::cerr << "ems-storage: history read failed\n";
+            std::cerr << "ems-storage: telemetry read failed\n";
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
         const auto& report = ems::core::value_of(batch);
-        if (report.quarantined || report.deferred) {
+        const auto stats = feed->stats();
+        if (stats.dropped_local != last_local_drop_count) {
+            std::cerr << "ems-storage: local telemetry queue dropped "
+                      << stats.dropped_local - last_local_drop_count << " samples\n";
+            last_local_drop_count = stats.dropped_local;
+        }
+        if (report.quarantined || report.dropped) {
             std::cerr << "ems-storage: received=" << report.received
                       << " written=" << report.written << " quarantined=" << report.quarantined
-                      << " deferred=" << report.deferred << '\n';
+                      << " dropped=" << report.dropped << '\n';
         }
-        if (report.deferred) std::this_thread::sleep_for(std::chrono::milliseconds(250));
     }
-    bus->close(ems::core::make_call_context(std::chrono::seconds(2)));
+    feed->close();
+    const auto final_stats = feed->stats();
+    if (final_stats.dropped_local != last_local_drop_count) {
+        std::cerr << "ems-storage: local telemetry queue dropped "
+                  << final_stats.dropped_local - last_local_drop_count << " samples on shutdown\n";
+    }
     return 0;
 }

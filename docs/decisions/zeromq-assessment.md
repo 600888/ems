@@ -7,7 +7,9 @@
 
 ## 1. 结论与适用条件
 
-**当前没有足够理由将 ZeroMQ 加入 EMS 的必需依赖。** 共享状态经 [统一实时接口](../common/realtime/access-design.md) 使用 Redis、共享内存或其他合格后端；Redis Streams 传递可靠事件，gRPC 提供内部业务接口，进程内有界队列协调工作线程。以下涉及 Redis 共享状态的比较为默认部署方案，不排除共享内存后端。
+> 历史评估记录：此处对 ZeroMQ 和 Redis Streams 的结论已由 [ZeroMQ 消息与命令设计](../common/realtime/zeromq-messaging-design.md) 取代。当前方案用 ZeroMQ 传递原始遥测和变化提示，Redis 只保存实时状态。
+
+**原评估结论（已废止）：当前没有足够理由将 ZeroMQ 加入 EMS 的必需依赖。** 共享状态经 [统一实时接口](../common/realtime/access-design.md) 使用 Redis、共享内存或其他合格后端；Redis Streams 传递可靠事件，gRPC 提供内部业务接口，进程内有界队列协调工作线程。以下涉及 Redis 共享状态的比较为当时的默认部署方案。
 
 判断依据是现有需求已经有明确承载方式，而仓库文档尚未提供设备规模、峰值采样率、通信耗时占比及延迟目标的实测数据。此时引入 ZeroMQ 会增加一套连接管理、消息语义、故障恢复和部署验证工作，收益尚无法量化。
 

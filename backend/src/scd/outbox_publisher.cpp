@@ -1,4 +1,4 @@
-#include <storage/outbox_publisher.h>
+#include "outbox_publisher.h"
 
 #include <memory>
 #include <utility>

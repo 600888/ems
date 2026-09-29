@@ -21,11 +21,11 @@ Redis 继续作为默认部署后端；共享内存成为同机部署的可选�
 | 设备、单元、station、通道运行状态 | 是 | 使用不同记录种类，明确各自写角色 |
 | 命令执行状态的查询投影 | 是 | 仅为持久事件的状态投影；写投影不能触发设备动作 |
 | 配置版本及点表的权威管理 | 否 | 继续由 MySQL/公共 ormpp API 管理；版本快照由独立配置仓储提供 |
-| 历史采样、告警、命令和回执传递 | 否 | 历史样本当前使用 `IEventBus`/Redis Streams；命令由 MySQL outbox/inbox 与 ZeroMQ REQ/REP 交接，状态提示使用 PUB/SUB，见 [消息与命令设计](zeromq-messaging-design.md) |
+| 历史采样、告警、命令和回执传递 | 否 | 原始历史样本经独立 ZeroMQ PUB/SUB，允许丢样；命令由 MySQL outbox/inbox 与 ZeroMQ REQ/REP 交接，状态提示使用 PUB/SUB，见 [消息与命令设计](zeromq-messaging-design.md) |
 | 历史查询及审计 | 否 | TDengine/MySQL 和既有服务 API |
 | 分布式租约、设备控制权仲裁 | 否 | 由现有控制权协调职责负责；实时库校验已安装的来源授权，不代替选主 |
 
-“共享内存模式”指实时状态访问方式改变，不表示整套 EMS 已经无 Redis 依赖。消息订阅和命令下发可独立走 ZeroMQ；若还要替换历史采样 Streams 或 Redis 配置快照，需要分别实现满足其契约的事件后端、配置仓储，不能用一个共享内存环形队列代替可靠消息系统。
+“共享内存模式”指实时状态访问方式改变。配置权威源仍是 MySQL，原始遥测和状态提示走 ZeroMQ；共享内存环形队列不能替代跨进程遥测通道或 MySQL 命令事实。
 
 ## 2. 设计依据与约束
 
@@ -59,7 +59,7 @@ flowchart TB
     Redis --> Server[Redis 主节点 / Cluster]
     Other --> Engine[目标数据库客户端]
     Collector --> Buffer[有界内存采样队列]
-    Buffer --> Bus[IEventBus / 首期 Redis Streams]
+    Buffer --> Bus[ZeroMQ 原始遥测 PUB/SUB]
     Bus --> Storage
     Web[Drogon Web] --> Gateway[存储进程内实时查询 gRPC]
     Gateway --> Service
@@ -505,13 +505,13 @@ C++17 标准本身不提供可移植的跨进程原子提交保证。本实现�
 
 回调在独立有界执行队列运行，不持共享段锁或连接池锁调用用户代码。同一订阅回调串行，允许重复和合并；队列溢出或重连必须发出 ResyncRequired。取消订阅后禁止启动新回调，外部线程取消等待在途回调结束；回调自身取消只标记取消、不可等待自己。关闭先停订阅，再排空回调，最后关闭存储。通知异常隔离并记录，不能让读写线程终止。
 
-v1 可以完全不实现推送扩展，业务按配置周期批量读取即可满足正确性；推送是降低查询开销的优化。所有页面和缓存重连后先取快照，可靠消息继续走 `IEventBus`。
+v1 可以完全不实现推送扩展，业务按配置周期批量读取即可满足正确性；推送是降低查询开销的优化。所有页面和缓存重连后先取快照，命令事实继续通过 MySQL/outbox 与 ZeroMQ 交接。
 
-### 9.3 可靠事件与本地缓存
+### 9.3 遥测丢样与本地缓存
 
-采样按“有界内存缓冲 → 分别更新最新值/投递事件 → 存储落库后 ACK”处理，不提供本地文件缓冲。切换共享内存后，最新值与 Redis Stream 不构成同一事务；缓冲存续期间按稳定 event_id 分别重试两条路径，目标端去重。不能因实时 CAS 判为重复就跳过尚未完成的事件发布。进程重启、缓冲耗尽或 Redis 持久化丢失窗口内的样本可能无法恢复，缺口不得以最新值伪造。
+采样按“有界内存缓冲 → 分别更新最新值/通过 ZeroMQ 发布原始事件 → 存储处理已收到事件”处理，不提供本地文件缓冲。实时状态更新与 PUB/SUB 发布不构成同一事务；不能因实时 CAS 判为重复就跳过原始事件发布。进程重启、缓冲耗尽、订阅离线或写库失败可能形成历史缺口，不得以最新值伪造。
 
-已经进入 Streams 或仍保留在内存中的旧来源样本可继续归档历史，但不能覆盖新来源实时值。Redis 后端也默认遵循这套统一恢复流程；特有的状态与 Stream 同槽优化不能改变上层可靠性承诺。
+已被存储订阅器收到的旧来源样本可继续归档历史，但不能覆盖新来源实时值。Redis 后端只负责实时状态，不能改变遥测 PUB/SUB 的丢样边界。
 
 v1 仅配置进程本地配置缓存，不默认叠加实时读缓存。未来 `CachedRealtimeStore` 如作为装饰器，只适合明确容忍陈旧的查询：必须返回缓存来源、新鲜度、过期信息，并有重同步机制。策略校验和 CAS 的前置读取不能使用未经验证的陈旧缓存。写失败不得仅更新本地缓存后返回成功。
 
@@ -532,10 +532,10 @@ realtime:
     segment_bytes: 268435456
     layout_version: 1
     create_if_missing: false
-events:
-  backend: redis_streams
-config_snapshots:
-  backend: redis
+telemetry:
+  backend: zeromq_pubsub
+config:
+  backend: mysql
 web_realtime:
   mode: storage_grpc
 ```
@@ -552,10 +552,10 @@ realtime:
     pool_size: 8
     credentials_ref: "secret/ems/realtime"
     tls_profile_ref: "tls/ems-internal"
-events:
-  backend: redis_streams
-config_snapshots:
-  backend: redis
+telemetry:
+  backend: zeromq_pubsub
+config:
+  backend: mysql
 web_realtime:
   mode: redis_contract
 ```
@@ -596,7 +596,7 @@ contracts/realtime/            # 字段 schema、逻辑键、C++/TypeScript 黄�
 main / composition root
   读取部署与配置版本 -> 注册已编译的后端 -> 冻结工厂
   创建 IRealtimeStore -> 检查容量/作用域部署/版本/能力
-  初始化独立配置仓储与 IEventBus -> 恢复授权与必要状态
+  初始化 MySQL 配置缓存与 ZeroMQ 通道 -> 恢复授权与必要状态
   构造 RealtimeService(store, config_provider, caller_role)
   注入 DataDispatcher / 策略 / 查询服务 -> 标记就绪
 ```
@@ -663,7 +663,7 @@ Redis → 共享内存（反向同理）的切换步骤：
 | 共享内存故障 | 在初始化、非活动映像写入、提交前后、索引修改/删除时杀进程；恢复只返回已提交完整记录或明确损坏 |
 | Redis 故障 | 响应丢失、断网、NOSCRIPT、池耗尽、主从切换、Cluster 跨槽拒绝、临时键残留，不能误报未应用 |
 | 生命周期 | 多线程共享、停止入口/在途等待/close 顺序、普通进程退出不删除段；订阅退出无悬空回调 |
-| 可靠链路 | 缓冲存续期间分别重试实时更新与事件发布；重复实时值不跳过未发布事件；退出/超限的丢失边界可验证 |
+| 遥测链路 | 实时更新与 ZeroMQ 原始事件发布分别记录；重复实时值不跳过事件发布；退出/超限的丢样边界可验证 |
 | 前后端与切换 | Web 查询随部署切换，C++/TypeScript 样例一致；切换与回滚不产生两个权威写源或重复设备动作 |
 | 性能与容量 | 在目标负载下达到冻结的 P99/陈旧率/内存/恢复目标；容量满时显式失败，无无界线程或队列 |
 

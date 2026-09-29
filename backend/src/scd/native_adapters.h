@@ -1,11 +1,12 @@
 #pragma once
 
 #include <common/core/result.h>
-#include <storage/storage.h>
 
 #include <cstdint>
 #include <memory>
 #include <string>
+
+#include "storage.h"
 
 namespace ems::storage {
 
@@ -25,13 +26,11 @@ struct TaosConnectionOptions {
     std::string database{"ems_history"};
 };
 
-struct RedisStreamOptions {
-    std::string host{"127.0.0.1"};
-    std::uint16_t port{6379};
-    std::string user;
-    std::string password;
-    std::string stream_key;
-    std::string group{"history-storage"};
+enum class TimeSeriesBackend { Tdengine, InfluxDb };
+
+struct TimeSeriesConnectionOptions {
+    TimeSeriesBackend backend{TimeSeriesBackend::Tdengine};
+    TaosConnectionOptions taos;
 };
 
 /**
@@ -51,11 +50,18 @@ core::Result<std::unique_ptr<ITimeSeriesDatabase>> connect_taos_series(
     const TaosConnectionOptions& options);
 
 /**
- * @brief 建立单作用域 Redis telemetry Stream 消费连接并确保消费组存在。
- * @param[in] options Redis 地址、完整 Stream 键及消费组。
- * @return 成功返回事件总线所有权；失败返回脱敏连接错误。
+ * @brief 解析进程配置中的时序后端名称。
+ * @param[in] name 后端名称，支持 taos、tdengine 和 influxdb。
+ * @return 对应后端类型；未知名称返回 InvalidArgument。
  */
-core::Result<std::unique_ptr<messaging::IEventBus>> connect_redis_stream(
-    const RedisStreamOptions& options);
+core::Result<TimeSeriesBackend> parse_time_series_backend(const std::string& name);
+
+/**
+ * @brief 根据配置创建统一的时序读写后端。
+ * @param[in] options 后端类型及对应连接配置。
+ * @return 成功返回后端所有权；未实现的后端返回 Unsupported。
+ */
+core::Result<std::unique_ptr<ITimeSeriesDatabase>> connect_time_series(
+    const TimeSeriesConnectionOptions& options);
 
 }  // namespace ems::storage

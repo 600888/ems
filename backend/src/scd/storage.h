@@ -3,13 +3,14 @@
 #include <common/core/call_context.h>
 #include <common/core/result.h>
 #include <common/messaging/delivery.h>
-#include <common/messaging/i_event_bus.h>
 
 #include <cstdint>
 #include <optional>
 #include <string>
 #include <variant>
 #include <vector>
+
+#include "telemetry_feed.h"
 
 namespace ems::storage {
 
@@ -26,14 +27,14 @@ struct PointSnapshot {
     std::string display_name;
     std::string unit;
     ValueType value_type{ValueType::Numeric};
-    std::string series_table;
+    std::string series_key;
     bool enabled{false};
 };
 
 struct SeriesMapping {
     std::string point_id;
     ValueType value_type{ValueType::Numeric};
-    std::string series_table;
+    std::string series_key;
 };
 
 struct Sample {
@@ -42,7 +43,7 @@ struct Sample {
     std::string scope_kind;
     std::string scope_id;
     std::string config_version;
-    std::string series_table;
+    std::string series_key;
     std::string source_id;
     std::string source_epoch;
     std::string sequence;
@@ -71,7 +72,7 @@ class IHistoryRepository {
     virtual ~IHistoryRepository() = default;
 
     /**
-     * @brief 按事件版本读取已就绪的点位快照和受控子表映射。
+     * @brief 按事件版本读取已就绪的点位快照和稳定序列映射。
      * @param[in] scope_kind 作用域类型。
      * @param[in] scope_id 作用域 ID。
      * @param[in] version 配置版本。
@@ -86,7 +87,7 @@ class IHistoryRepository {
                                                    const core::CallContext& ctx) = 0;
 
     /**
-     * @brief 读取稳定点位对应的类型和受控 TAOS 子表名。
+     * @brief 读取稳定点位对应的值类型和后端无关的序列键。
      * @param[in] point_id 稳定点位 ID。
      * @param[in] ctx 调用截止时间。
      * @return 映射；未知点位返回 NotFound。
@@ -98,15 +99,15 @@ class IHistoryRepository {
      * @brief 原子登记或核对全局事件身份；同 ID 不同内容返回 Conflict。
      * @param[in] sample 包含事件 ID、点位、原时间和完整事件摘要的样本。
      * @param[in] ctx 调用截止时间。
-     * @return 成功表示已提交登记或确认相同登记；失败保留 Stream pending。
+     * @return 成功表示已提交登记或确认相同登记；失败不触发 PUB/SUB 重投。
      */
     virtual core::Status register_event(const Sample& sample, const core::CallContext& ctx) = 0;
 
     /**
-     * @brief 持久化隔离记录；相同 Stream ID 重试必须幂等。
+     * @brief 持久化隔离记录；相同投递身份重试必须幂等。
      * @param[in] record 隔离记录及受限原始载荷。
      * @param[in] ctx 调用截止时间。
-     * @return 提交成功才允许确认原消息。
+     * @return 持久化结果；ZeroMQ 投递本身不提供确认或重放。
      */
     virtual core::Status quarantine(const QuarantineRecord& record,
                                     const core::CallContext& ctx) = 0;
@@ -118,15 +119,16 @@ class ITimeSeriesStore {
     virtual ~ITimeSeriesStore() = default;
 
     /**
-     * @brief 以原始微秒时间和事件 ID 写入类型化 TAOS 子表。
+     * @brief 写入类型化样本，行身份为点位、原始微秒时间和事件 ID。
      * @param[in] sample 经目录及账本核验的样本。
      * @param[in] ctx 调用截止时间。
-     * @return 仅在已确认提交后成功；超时或未知结果返回错误并保留 pending。
+     * @return 同身份同载荷重投须幂等；确认提交后成功，未知结果返回错误。
      */
     virtual core::Status write(const Sample& sample, const core::CallContext& ctx) = 0;
 };
 
 struct ConsumerOptions {
+    std::string scope_kind;
     std::uint64_t max_items{128};
     std::uint64_t max_bytes{1024 * 1024};
     std::uint64_t max_payload_bytes{64 * 1024};
@@ -138,25 +140,24 @@ struct BatchReport {
     std::uint64_t received{0};
     std::uint64_t written{0};
     std::uint64_t quarantined{0};
-    std::uint64_t deferred{0};
+    std::uint64_t dropped{0};
 };
 
 class HistoryConsumer {
    public:
     /**
      * @brief 创建历史消费者，依赖由调用方持有并保持存活。
-     * @param[in,out] bus Redis Stream 事件总线。
+     * @param[in,out] feed ZeroMQ 原始遥测接收接口。
      * @param[in,out] repository MySQL 历史目录、账本和隔离仓库。
-     * @param[in,out] series TAOS 时序存储。
-     * @param[in] subscription 消费组与实例身份。
-     * @param[in] options 单批及载荷限制。
+     * @param[in,out] series 时序存储后端。
+     * @param[in] scope 接收端所属稳定站或单元 ID。
+     * @param[in] options 作用域类型、单批及载荷限制。
      */
-    HistoryConsumer(messaging::IEventBus& bus, IHistoryRepository& repository,
-                    ITimeSeriesStore& series, messaging::Subscription subscription,
-                    ConsumerOptions options = {});
+    HistoryConsumer(IHistoryFeed& feed, IHistoryRepository& repository, ITimeSeriesStore& series,
+                    std::string scope, ConsumerOptions options = {});
 
     /**
-     * @brief 处理一个有界批次，只有 TAOS 成功或隔离提交后才 ACK。
+     * @brief 处理一个有界批次；失败事件计入丢样，不假装可重放。
      * @param[in] ctx 调用截止时间。
      * @return 批次计数；读取错误作为失败返回。
      */
@@ -168,14 +169,14 @@ class HistoryConsumer {
      * @param[in] delivery 原始投递。
      * @param[in] ctx 调用截止时间。
      * @param[in,out] report 批次计数。
-     * @return 成功表示已确认，失败表示消息仍待处理。
+     * @return 成功表示已写入或隔离；失败事件无法由 PUB/SUB 自动重投。
      */
     core::Status process(const messaging::Delivery& delivery, const core::CallContext& ctx,
                          BatchReport& report);
-    messaging::IEventBus& bus_;
+    IHistoryFeed& feed_;
     IHistoryRepository& repository_;
     ITimeSeriesStore& series_;
-    messaging::Subscription subscription_;
+    std::string scope_;
     ConsumerOptions options_;
 };
 
@@ -222,9 +223,9 @@ class ITimeSeriesReader {
     virtual ~ITimeSeriesReader() = default;
 
     /**
-     * @brief 有界读取按 (ts, point_id, event_id) 排序的原始样本。
+     * @brief 有界读取按 (ts, point_id, event_id) 严格排序的原始样本。
      * @param[in] query 已校验的查询条件。
-     * @param[in] mappings 查询点位对应的类型化子表。
+     * @param[in] mappings 查询点位对应的逻辑序列键及值类型。
      * @param[in] limit 最多返回行数，包含用于判断下一页的额外一行。
      * @param[in] ctx 调用截止时间。
      * @return 样本列表，失败时不返回局部成功页。
@@ -246,7 +247,7 @@ class HistoryQueryService {
     /**
      * @brief 创建应用层双库历史查询服务，依赖由调用方持有。
      * @param[in,out] repository MySQL 版本目录。
-     * @param[in,out] reader TAOS 原始样本读取器。
+     * @param[in,out] reader 时序后端的原始样本读取器。
      */
     HistoryQueryService(IHistoryRepository& repository, ITimeSeriesReader& reader);
 

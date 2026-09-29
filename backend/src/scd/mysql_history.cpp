@@ -1,5 +1,3 @@
-#include <storage/native_adapters.h>
-
 #include <cstdint>
 #include <iguana/ylt/reflection/user_reflect_macro.hpp>
 #include <memory>
@@ -11,6 +9,8 @@
 #include <tuple>
 #include <utility>
 #include <vector>
+
+#include "native_adapters.h"
 
 namespace ems::storage {
 
@@ -72,7 +72,7 @@ class OrmppHistoryRepository final : public IHistoryRepository {
         constexpr const char* kSelect =
             "SELECT s.scope_kind,s.scope_id,CAST(s.config_version AS CHAR),s.point_id,"
             "s.asset_id,s.point_code,s.display_name,COALESCE(s.unit,''),s.value_type,"
-            "m.series_table,m.value_type,CAST(s.enabled AS CHAR) "
+            "m.series_table AS series_key,m.value_type,CAST(s.enabled AS CHAR) "
             "FROM history_point_snapshot s "
             "JOIN history_point_version v ON v.scope_kind=s.scope_kind AND "
             "v.scope_id=s.scope_id AND v.config_version=s.config_version "
@@ -150,7 +150,8 @@ class OrmppHistoryRepository final : public IHistoryRepository {
         }
         std::lock_guard<std::mutex> lock(mutex_);
         constexpr const char* kSelect =
-            "SELECT value_type,series_table FROM history_point_series WHERE point_id=?";
+            "SELECT value_type,series_table AS series_key FROM history_point_series "
+            "WHERE point_id=?";
         const auto rows =
             database_.query_s<std::tuple<std::string, std::string>>(kSelect, point_id);
         if (database_.has_error()) {
