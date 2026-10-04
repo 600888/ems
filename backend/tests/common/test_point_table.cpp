@@ -3,7 +3,9 @@
 #include <gtest/gtest.h>
 
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
+#include <util/excel.hpp>
 
 namespace ems::config {
 namespace {
@@ -15,6 +17,38 @@ constexpr const char* kHeader =
 std::string power_row(const char* key = "power") {
     return std::string(key) +
            ",active_power,厂家功率,holding_register,0,read,f32,CDAB,-0.001,0,kW\n";
+}
+
+TEST(PointTableImport, ReadsNewFormatExcelAndRejectsFormulaWithoutChangingSource) {
+    const auto path = std::filesystem::temp_directory_path() / "ems_point_table_v1.xlsx";
+    util::Excel excel;
+    excel.create(path, true);
+    excel.renameSheet("Sheet1", "点表");
+    excel.writeRange(
+        "点表", 1, 1,
+        {{std::string("template_key"), std::string("standard_code"), std::string("vendor_name"),
+          std::string("address_space"), std::string("address_offset"), std::string("access"),
+          std::string("wire_type"), std::string("byte_order"), std::string("scale"),
+          std::string("offset"), std::string("unit")},
+         {std::string("power"), std::string("active_power"), std::string("厂家,功率"),
+          std::string("holding_register"), int64_t{0}, std::string("read"), std::string("f32"),
+          std::string("CDAB"), -0.001, 0.0, std::string("kW")}});
+    excel.save();
+    excel.close();
+    auto result = import_point_table_file(path.u8string(), core::DeviceId("pcs-1"), "binding-1");
+    ASSERT_TRUE(result.ok());
+    ASSERT_EQ(result.rows.size(), 1u);
+    EXPECT_EQ(result.rows[0].vendor_name, "厂家,功率");
+    EXPECT_EQ(result.rows[0].line, 2u);
+    excel.open(path);
+    excel.writeFormula("点表", "I2", "1+1");
+    excel.save();
+    excel.close();
+    result = import_point_table_file(path.u8string(), core::DeviceId("pcs-1"), "binding-1");
+    EXPECT_FALSE(result.ok());
+    EXPECT_EQ(result.issues[0].line, 2u);
+    EXPECT_EQ(result.issues[0].column, "I2");
+    std::filesystem::remove(path);
 }
 
 struct Fixture {

@@ -2,6 +2,9 @@
 #include <algorithm>
 #include <cctype>
 #include <cmath>
+#include <map>
+#include <pugixml.hpp>
+#include <sstream>
 #include <stdexcept>
 #include <type_traits>
 #include <util/excel.hpp>
@@ -11,6 +14,117 @@ namespace {
 
 constexpr std::uint32_t kMaxRows = 1048576;
 constexpr std::uint16_t kMaxColumns = 16384;
+
+// 在内存中适配合法的 OOXML 前缀和非数字关系 ID，不改写源文件。
+class CompatibleArchive {
+   public:
+    bool isValid() const { return archive_.isValid(); }
+
+    bool isOpen() const { return archive_.isOpen(); }
+
+    void open(const std::string& path) { archive_.open(path); }
+
+    void close() { archive_.close(); }
+
+    void save(const std::string& path) { archive_.save(path); }
+
+    void addEntry(const std::string& name, const std::string& data) {
+        archive_.addEntry(name, data);
+    }
+
+    void addEntryAndCommit(const std::string& name, const std::string& data) {
+        archive_.addEntryAndCommit(name, data);
+    }
+
+    void deleteEntry(const std::string& name) { archive_.deleteEntry(name); }
+
+    bool hasEntry(const std::string& name) const { return archive_.hasEntry(name); }
+
+    std::string getEntry(const std::string& name) {
+        auto data = archive_.getEntry(name);
+        if (data.empty()) return data;  // OpenXLSX 为缺失的属性部件先创建空条目。
+        const bool xml = name.size() >= 4 && name.substr(name.size() - 4) == ".xml";
+        const bool rels = name.size() >= 5 && name.substr(name.size() - 5) == ".rels";
+        if (!xml && !rels) return data;
+        pugi::xml_document document;
+        const auto parsed = document.load_buffer(data.data(), data.size());
+        if (!parsed) {
+            if (parsed.status == pugi::status_no_document_element &&
+                name.compare(0, 9, "docProps/") == 0)
+                return data;
+            throw std::runtime_error("Invalid XLSX XML part: " + name);
+        }
+        std::map<std::string, std::string> relations;
+        if (rels) {
+            std::size_t index = 0;
+            for (auto child : document.document_element().children()) {
+                if (child.type() == pugi::node_element)
+                    relations[child.attribute("Id").value()] = "rId" + std::to_string(++index);
+            }
+        } else {
+            const auto slash = name.find_last_of('/');
+            const auto relname = (slash == std::string::npos ? "" : name.substr(0, slash + 1)) +
+                                 "_rels/" +
+                                 name.substr(slash == std::string::npos ? 0 : slash + 1) + ".rels";
+            if (archive_.hasEntry(relname)) {
+                const auto raw = archive_.getEntry(relname);
+                pugi::xml_document rel;
+                if (!rel.load_buffer(raw.data(), raw.size()))
+                    throw std::runtime_error("Invalid XLSX relationships");
+                std::size_t index = 0;
+                for (auto child : rel.document_element().children()) {
+                    if (child.type() == pugi::node_element)
+                        relations[child.attribute("Id").value()] = "rId" + std::to_string(++index);
+                }
+            }
+        }
+        normalize(document.document_element(), {}, relations, rels);
+        std::ostringstream output;
+        document.save(output, "", pugi::format_raw, pugi::encoding_utf8);
+        return output.str();
+    }
+
+   private:
+    static void normalize(pugi::xml_node node, std::map<std::string, std::string> namespaces,
+                          const std::map<std::string, std::string>& relations, bool rels) {
+        if (node.type() != pugi::node_element) return;
+        for (auto attr : node.attributes()) {
+            const auto name = std::string(attr.name());
+            if (name == "xmlns")
+                namespaces[""] = attr.value();
+            else if (name.compare(0, 6, "xmlns:") == 0)
+                namespaces[name.substr(6)] = attr.value();
+        }
+        const auto name = std::string(node.name());
+        const auto colon = name.find(':');
+        const auto prefix = colon == std::string::npos ? "" : name.substr(0, colon);
+        const auto uri = namespaces[prefix];
+        if (colon != std::string::npos &&
+            (uri == "http://schemas.openxmlformats.org/spreadsheetml/2006/main" ||
+             uri == "http://schemas.openxmlformats.org/package/2006/relationships" ||
+             uri == "http://schemas.openxmlformats.org/package/2006/content-types" ||
+             uri == "http://schemas.openxmlformats.org/officeDocument/2006/extended-properties")) {
+            node.set_name(name.substr(colon + 1).c_str());
+            auto ns = node.attribute("xmlns");
+            if (!ns) ns = node.append_attribute("xmlns");
+            ns.set_value(uri.c_str());
+        }
+        for (auto attr : node.attributes()) {
+            const auto attribute = std::string(attr.name());
+            const auto split = attribute.find(':');
+            const bool reference =
+                split != std::string::npos &&
+                namespaces[attribute.substr(0, split)] ==
+                    "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+            const auto found = relations.find(attr.value());
+            if (found != relations.end() && ((rels && attribute == "Id") || reference))
+                attr.set_value(found->second.c_str());
+        }
+        for (auto child : node.children()) normalize(child, namespaces, relations, rels);
+    }
+
+    OpenXLSX::XLZipArchive archive_;
+};
 
 void validatePosition(std::uint32_t row, std::uint16_t column) {
     if (row == 0 || row > kMaxRows || column == 0 || column > kMaxColumns) {
@@ -114,7 +228,7 @@ void writeValue(OpenXLSX::XLCell cell, const ExcelValue& value) {
 }  // namespace
 
 struct Excel::Impl {
-    OpenXLSX::XLDocument document;
+    OpenXLSX::XLDocument document{CompatibleArchive{}};
 };
 
 Excel::Excel() noexcept = default;
@@ -187,7 +301,11 @@ void Excel::removeSheet(const std::string& sheet) {
 }
 
 void Excel::renameSheet(const std::string& sheet, const std::string& newName) {
-    requireOpen().document.workbook().worksheet(sheet).setName(newName);
+    auto workbook = requireOpen().document.workbook();
+    if (sheet != newName && workbook.sheetExists(newName)) {
+        throw std::invalid_argument("Excel sheet name already exists");
+    }
+    workbook.worksheet(sheet).setName(newName);
 }
 
 std::pair<std::uint32_t, std::uint16_t> Excel::usedSize(const std::string& sheet) const {
@@ -277,6 +395,7 @@ void Excel::writeFormula(const std::string& sheet, const std::string& address,
     auto cell = worksheet.cell(ref);
     cell.value().clear();
     cell.formula() = expression;
+    cell.value().clear();  // 底层公式赋值会填入缓存零值；工具不计算公式。
 }
 
 std::string Excel::readFormula(const std::string& sheet, const std::string& address) const {

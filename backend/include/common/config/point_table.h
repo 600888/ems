@@ -1,6 +1,6 @@
 /**
  * @file point_table.h
- * @brief 设备点表 CSV 导入与内存配置加载。
+ * @brief 设备点表 CSV/XLSX 导入与内存配置加载。
  */
 #pragma once
 
@@ -36,7 +36,7 @@ struct PointTableIssue {
     std::string reason;
 };
 
-/// CSV 解析结果；解析只生成草稿，不修改配置或发起设备操作。
+/// CSV/XLSX 解析结果；解析只生成草稿，不修改配置或发起设备操作。
 struct PointTableImportResult {
     core::DeviceId device_id;
     std::string binding_id;
@@ -80,11 +80,12 @@ PointTableImportResult parse_point_table_csv(const std::string& csv_text,
                                              const std::string& binding_id);
 
 /**
- * @brief 从文件读取并解析新格式 UTF-8 CSV 点表。
- * @param[in] path CSV 文件路径。
+ * @brief 读取新格式 CSV 或 XLSX 点表；XLSX 沿用 CSV 列名，不计算公式。
+ * @param[in] path UTF-8 文件路径；XLSX 使用单工作表或名为“点表”的工作表，不支持 XLS。
  * @param[in] device_id 已选定的实际设备 ID。
  * @param[in] binding_id 已选定的设备通道绑定 ID。
  * @return 解析后的厂家点草稿或文件、逐行错误；无配置写入。
+ * @note 四遥中文模板及数据库写入使用 db::DbManager::import_point_table。
  */
 PointTableImportResult import_point_table_file(const std::string& path,
                                                const core::DeviceId& device_id,

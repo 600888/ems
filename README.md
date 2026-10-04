@@ -3,6 +3,10 @@
 
 设计文档入口：[EMS 设计文档](docs/index.md)。目标架构包含采集与上送、存储、策略及 C++17 + Drogon Web 四类进程，前端为 Vue 3；下面的构建说明与现有实现状态分开维护。
 
+设备点表使用 `ems_simulate` 的四遥 XLSX 格式，空白模板、协议示例和事务入库说明统一放在根目录 [data/](data/README.md)。公共模型的 Modbus CSV/XLSX 格式见 [点表导入说明](docs/architecture/point-table-import.md)。
+
+设备点表参考 `ems_simulate` 的 XLSX 格式，空白模板和协议示例统一放在根目录 [data/](data/README.md)。当前公共模块支持的 Modbus CSV 格式见 [点表导入说明](docs/architecture/point-table-import.md)。
+
 ## 依赖安装
 
 项目使用 redis-plus-plus 作为 Redis 客户端库，已集成在 `backend/3rd/` 目录下。

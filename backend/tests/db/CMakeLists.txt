@@ -1,0 +1,12 @@
+include(GoogleTest)
+find_package(SQLite3 QUIET)
+
+add_executable(test_point_table_db test_point_table_db.cpp)
+target_link_libraries(test_point_table_db PRIVATE ems_db ems_excel gtest_main)
+target_compile_definitions(test_point_table_db PRIVATE EMS_POINT_DATA_DIR="${CMAKE_SOURCE_DIR}/../data")
+set_target_properties(test_point_table_db PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+if(SQLite3_FOUND)
+    target_link_libraries(test_point_table_db PRIVATE SQLite::SQLite3)
+    target_compile_definitions(test_point_table_db PRIVATE EMS_TEST_SQLITE)
+endif()
+gtest_discover_tests(test_point_table_db)

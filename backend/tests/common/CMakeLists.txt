@@ -29,6 +29,7 @@ target_link_libraries(
             ems_messaging_api
             ems_realtime_core
             ems_config_core
+            ems_excel
 )
 
 # 公共模块目标要求 C++17（design.md 第 4 节）

@@ -36,6 +36,10 @@ CREATE TABLE point_yc (
     -- IEC61850
     object_ref        VARCHAR(256),            -- 对象引用路径
 
+    func_code         INT          DEFAULT 3,
+    endian            TINYINT      DEFAULT 0,
+    iec104_type       VARCHAR(32)  DEFAULT '',
+
     -- 解析码
     decode_code       TINYINT      DEFAULT 0,  -- 见 DecodeCode 枚举: 0=UINT16, ... 6=FLOAT...
 
@@ -79,6 +83,10 @@ CREATE TABLE point_yx (
     ioa               INT UNSIGNED DEFAULT 0,
     object_ref        VARCHAR(256),
 
+    func_code         INT          DEFAULT 1,
+    endian            TINYINT      DEFAULT 0,
+    iec104_type       VARCHAR(32)  DEFAULT '',
+
     -- 解析码
     decode_code       TINYINT      DEFAULT 0,
 
@@ -118,6 +126,10 @@ CREATE TABLE point_yk (
     casdu             SMALLINT     DEFAULT 0,
     ioa               INT UNSIGNED DEFAULT 0,
     object_ref        VARCHAR(256),
+
+    func_code         INT          DEFAULT 5,
+    endian            TINYINT      DEFAULT 0,
+    iec104_type       VARCHAR(32)  DEFAULT '',
 
     -- 解析码
     decode_code       TINYINT      DEFAULT 0,
@@ -160,8 +172,14 @@ CREATE TABLE point_yt (
     ioa               INT UNSIGNED DEFAULT 0,
     object_ref        VARCHAR(256),
 
+    func_code         INT          DEFAULT 6,
+    endian            TINYINT      DEFAULT 0,
+    iec104_type       VARCHAR(32)  DEFAULT '',
+
     -- 解析码
     decode_code       TINYINT      DEFAULT 0,
+
+    related_yc_id     BIGINT       DEFAULT 0,
 
     -- 遥调属性
     mul_coe           DOUBLE       DEFAULT 1.0,

@@ -3,6 +3,7 @@
 > 版本：1.4｜更新日期：2026-09-26｜状态：公共 C++ 设备核心与 Modbus CSV 导入草稿已实现；持久化及运行闭环待实现。
 > 本文定义设备类型、固有点位、厂家点表、设备实例绑定及导入配置流程。整体架构见 [EMS 系统架构设计](system-design.md)，键格式见 [Redis 键设计](../common/realtime/redis-key-design.md)，协议执行见 [数据采集架构](../processes/collector/design.md)。文中的设备目录是 EMS 项目抽象，厂家 A/B 的地址与编码均为示例，不是现场设备参数或行业强制标准。
 > 首期新格式 Modbus CSV 的列和加载行为见 [点表 CSV 导入与内存加载](point-table-import.md)。
+> 设备点表的 XLSX 模板沿用 `ems_simulate`，统一放在根目录 [data/](../../data/README.md)。四遥中文模板支持事务写入现有数据库配置表；公共模型导入接口另支持与 CSV 相同英文列名的 XLSX。数据库配置入库与标准绑定的运行发布分别处理。
 
 ## 1. 目标与核心约定
 

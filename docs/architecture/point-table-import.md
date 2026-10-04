@@ -1,6 +1,10 @@
-# 点表 CSV 导入与内存加载（v1）
+# 点表 CSV/XLSX 导入与内存加载（v1）
 
 本格式用于公共 C++ 模块中的 Modbus 厂家点表草稿。实现入口是 `parse_point_table_csv()`、`import_point_table_file()` 和 `load_point_table()`，示例见 [`point_table_v1_example.csv`](../../backend/data/point_table_v1_example.csv)。导入前由调用方明确选定 `device_id` 与设备通道 `binding_id`；文件不含实际 IP、串口、从站地址或设备 ID。参考了 `ems_simulate`“设备先选定、点表再导入”的流程，但使用带列名的新格式。
+
+设备点表的 Excel 格式沿用 `ems_simulate` 的遥测、遥信、遥控、遥调四个工作表，空白模板放在 [`data/point_template.xlsx`](../../data/point_template.xlsx)，各协议示例和数据库导入说明见 [`data/README.md`](../../data/README.md)。四遥中文模板通过 `ems::db::DbManager::import_point_table()` 校验并以事务写入现有配置表，支持 Modbus RTU/TCP、IEC 104 和 DLT645 遥测。
+
+本节的 `import_point_table_file()` 也支持 XLSX，但使用下面列出的英文列名，读取单工作表或名为“点表”的工作表，再复用 CSV 字段校验与内存加载逻辑。两种格式均拒绝公式和旧版 `.xls`；读取不修改源文件。
 
 | 列 | 规则 |
 | --- | --- |
@@ -29,4 +33,4 @@ if (!loaded.ok()) return loaded.issues;
 // loaded.catalog 与 loaded.draft 是新的内存候选配置。
 ```
 
-当前实现只生成**内存配置草稿**。`write` 行可生成待审核的可写路由，但固定写入值、数值编码、反馈、互斥资源和执行授权仍须由命令配置补齐后才能投运。历史配置数据库、导入任务幂等、文件 SHA-256、XLSX、BMS 子节点展开及 IEC 104 点表也尚未接入。
+本节公共模型接口生成**内存配置草稿**。`write` 行可生成待审核的可写路由，但固定写入值、数值编码、反馈、互斥资源和执行授权仍须由命令配置补齐后才能投运。四遥 XLSX 的数据库入库接口不自动发布该公共模型草稿；标准点绑定的版本化持久化、导入任务幂等、文件 SHA-256、BMS 子节点展开仍未接入。

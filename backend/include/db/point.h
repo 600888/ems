@@ -29,6 +29,7 @@ struct point_yc {
 
     int decode_code = 0;
     int endian = 0;  // 端序: 0=BIG_ENDIAN, 1=LITTLE_ENDIAN, ...
+    std::string iec104_type;
     double mul_coe = 1.0;
     double add_coe = 0.0;
     double min_limit = -9999999.0;
@@ -60,6 +61,7 @@ struct point_yx {
 
     int decode_code = 0;
     int endian = 0;
+    std::string iec104_type;
     int bit = 0;
     int reverse_flag = 0;
 
@@ -88,6 +90,7 @@ struct point_yk {
 
     int decode_code = 0;
     int endian = 0;
+    std::string iec104_type;
     int bit = 0;
     int command_type = 0;
     int64_t related_yx_id = 0;
@@ -117,6 +120,8 @@ struct point_yt {
 
     int decode_code = 0;
     int endian = 0;
+    std::string iec104_type;
+    int64_t related_yc_id = 0;
     double mul_coe = 1.0;
     double add_coe = 0.0;
     double min_limit = -9999999.0;

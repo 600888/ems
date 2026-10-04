@@ -5,13 +5,20 @@
 #include <common/config/point_table.h>
 
 #include <algorithm>
+#include <cctype>
 #include <cmath>
+#include <filesystem>
 #include <fstream>
+#include <iomanip>
 #include <iterator>
 #include <limits>
+#include <sstream>
+#include <type_traits>
 #include <unordered_map>
 #include <unordered_set>
 #include <utility>
+
+#include "util/excel.hpp"
 
 namespace ems::config {
 namespace {
@@ -313,6 +320,90 @@ PointTableImportResult parse_point_table_csv(const std::string& csv_text,
 PointTableImportResult import_point_table_file(const std::string& path,
                                                const core::DeviceId& device_id,
                                                const std::string& binding_id) {
+    // 扩展名不涉及路径编码；CSV 兼容原有调用方的本地编码路径。
+    auto extension = path.substr(
+        path.find_last_of('.') == std::string::npos ? path.size() : path.find_last_of('.'));
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (extension == ".xlsx") {
+        PointTableImportResult result;
+        result.device_id = device_id;
+        result.binding_id = binding_id;
+        std::size_t line = 0;
+        std::string column = "file";
+        try {
+            if (std::filesystem::file_size(std::filesystem::u8path(path)) > kMaxFileBytes) {
+                throw std::invalid_argument("点表文件超过 2 MiB");
+            }
+            util::Excel excel;
+            excel.open(std::filesystem::u8path(path));
+            const auto names = excel.sheetNames();
+            const auto sheet = excel.hasSheet("点表")
+                                   ? "点表"
+                                   : (names.size() == 1 ? names.front() : std::string{});
+            if (sheet.empty())
+                throw std::invalid_argument(
+                    "新格式 XLSX 需单工作表或名为点表的工作表；四遥模板请使用 "
+                    "DbManager::import_point_table");
+            const auto [rows, columns] = excel.usedSize(sheet);
+            if (rows > kMaxRows + 1 || columns > 64)
+                throw std::invalid_argument("工作表超过 10000 数据行或 64 列");
+            std::string csv;
+            for (std::uint32_t r = 1; r <= rows; ++r) {
+                line = r;
+                for (std::uint16_t c = 1; c <= columns; ++c) {
+                    std::string address;
+                    for (auto n = c; n > 0; n /= 26) {
+                        --n;
+                        address.insert(address.begin(), static_cast<char>('A' + n % 26));
+                    }
+                    column = address + std::to_string(r);
+                    if (!excel.readFormula(sheet, column).empty())
+                        throw std::invalid_argument("点表不允许公式，请填入确定值");
+                    auto value = excel.readCell(sheet, r, c);
+                    auto text = std::visit(
+                        [](const auto& v) -> std::string {
+                            using T = std::decay_t<decltype(v)>;
+                            if constexpr (std::is_same_v<T, std::monostate>)
+                                return {};
+                            else if constexpr (std::is_same_v<T, std::string>) {
+                                if (v.find_first_of("\r\n") != std::string::npos)
+                                    throw std::invalid_argument("单元格不允许换行");
+                                return v;
+                            } else if constexpr (std::is_same_v<T, bool>)
+                                return v ? "1" : "0";
+                            else {
+                                std::ostringstream s;
+                                s << std::setprecision(17) << v;
+                                return s.str();
+                            }
+                        },
+                        value);
+                    if (c > 1) csv += ',';
+                    csv += '"';
+                    for (auto ch : text) {
+                        if (ch == '"') csv += '"';
+                        csv += ch;
+                    }
+                    csv += '"';
+                }
+                csv += '\n';
+                if (csv.size() > kMaxFileBytes)
+                    throw std::invalid_argument("展开后的点表超过 2 MiB");
+            }
+            return parse_point_table_csv(csv, device_id, binding_id);
+        } catch (const std::exception& e) {
+            issue(result.issues, line, column, e.what());
+            return result;
+        }
+    }
+    if (extension == ".xls") {
+        PointTableImportResult result;
+        result.device_id = device_id;
+        result.binding_id = binding_id;
+        issue(result.issues, 0, "file", "旧版 .xls 不受支持，请另存为 .xlsx");
+        return result;
+    }
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         PointTableImportResult result;

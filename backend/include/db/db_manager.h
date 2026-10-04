@@ -15,6 +15,7 @@
 #include "channel.h"
 #include "device.h"
 #include "point.h"
+#include "point_table.h"
 
 namespace ems {
 namespace db {
@@ -52,7 +53,7 @@ struct CollectImportData {
  * 封装 ormpp 的 dbng<mysql> 操作，提供便捷的 CRUD 和批量导入接口。
  * 线程安全：每个线程应持有独立实例或外部同步。
  */
-class DbManager {
+class EMS_DB_API DbManager {
    public:
     /** @brief 构造尚未连接的数据库管理器。 */
     DbManager();
@@ -240,6 +241,19 @@ class DbManager {
      */
     int batch_import_collect_data(const std::vector<CollectImportData>& data_list);
 
+    /**
+     * @brief 将四遥 Excel 点表校验后原子写入数据库配置表。
+     * @param[in] path UTF-8 XLSX 文件路径，格式见 data/point_template.xlsx。
+     * @param[in] channel_id 已选定的通道 ID，协议从数据库通道读取。
+     * @param[in] device_id 已选定的设备 ID，必须与通道所属设备一致。
+     * @param[in] mode 追加或替换，仅作用于选定设备和通道。
+     * @return 导入结果；committed 为 true 表示已提交，失败时整批回滚并返回错误。
+     * @note 仅写入配置，不发布运行配置或发送命令；实例需由调用方同步访问。
+     */
+    PointTableImportResult import_point_table(
+        const std::string& path, int64_t channel_id, int64_t device_id,
+        PointTableImportMode mode = PointTableImportMode::Append);
+
    private:
     class Impl;
     std::unique_ptr<Impl> impl_;
@@ -271,7 +285,7 @@ class DbManager {
  * @endcode
  * @return 得到的数据库配置。
  */
-DbConfig get_default_db_config();
+EMS_DB_API DbConfig get_default_db_config();
 
 /**
  * @brief 初始化数据库（自动建库建表）
@@ -284,7 +298,7 @@ DbConfig get_default_db_config();
  * @param[in] config 数据库连接参数（使用其中的 host/port/user/password，dbname 为目标库名）
  * @return true 成功（数据库和表已就绪）
  */
-bool ensure_database(const DbConfig& config);
+EMS_DB_API bool ensure_database(const DbConfig& config);
 
 /**
  * @brief 初始化数据库并写入示例测点
@@ -295,7 +309,7 @@ bool ensure_database(const DbConfig& config);
  * @return true 成功
  * @param[in] config 配置数据。
  */
-bool ensure_database_with_seed(const DbConfig& config);
+EMS_DB_API bool ensure_database_with_seed(const DbConfig& config);
 
 }  // namespace db
 }  // namespace ems

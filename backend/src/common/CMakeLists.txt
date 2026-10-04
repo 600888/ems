@@ -164,7 +164,7 @@ target_include_directories(ems_config_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 target_include_directories(ems_config_core PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
-target_link_libraries(ems_config_core PUBLIC ems_config_api)
+target_link_libraries(ems_config_core PUBLIC ems_config_api PRIVATE ems_excel)
 
 set_target_properties(
     ems_config_core
@@ -176,7 +176,7 @@ set_target_properties(
 
 # ===========================================================================
 
-add_library(ems_db SHARED db/db_manager.cpp)
+add_library(ems_db SHARED db/db_manager.cpp db/point_table.cpp)
 
 target_include_directories(
     ems_db
@@ -185,7 +185,7 @@ target_include_directories(
            ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )
 
-target_link_libraries(ems_db PRIVATE Threads::Threads)
+target_link_libraries(ems_db PRIVATE Threads::Threads ems_excel)
 
 # 检测 MySQL 开发库
 find_package(PkgConfig QUIET)
@@ -213,18 +213,12 @@ else()
     message(STATUS "ems_db: MySQL support disabled (libmysqlclient not found)")
 endif()
 
-# Optional SQLite3
-find_package(PkgConfig QUIET)
-
-if(PkgConfig_FOUND)
-    pkg_check_modules(SQLITE3 sqlite3)
-
-    if(SQLITE3_FOUND)
-        target_link_libraries(ems_db PRIVATE ${SQLITE3_LIBRARIES})
-
-        target_include_directories(ems_db PRIVATE ${SQLITE3_INCLUDE_DIRS})
-        message(STATUS "ems_db: SQLite support enabled")
-    endif()
+# Optional SQLite3，只有头文件和链接库同时可用才启用。
+find_package(SQLite3 QUIET)
+if(SQLite3_FOUND)
+    target_link_libraries(ems_db PRIVATE SQLite::SQLite3)
+    target_compile_definitions(ems_db PRIVATE EMS_DB_HAS_SQLITE ORMPP_ENABLE_SQLITE3)
+    message(STATUS "ems_db: SQLite support enabled")
 endif()
 
 target_compile_definitions(ems_db PRIVATE EMS_DB_BUILD)
@@ -235,7 +229,7 @@ set_target_properties(
                CXX_STANDARD_REQUIRED YES
                POSITION_INDEPENDENT_CODE ON
                LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib"
-               WINDOWS_EXPORT_ALL_SYMBOLS ON
+               WINDOWS_EXPORT_ALL_SYMBOLS OFF
 )
 
 message(STATUS "EMS DB shared library configured")
