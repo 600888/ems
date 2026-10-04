@@ -149,13 +149,8 @@ int CollectEngine::start_all(ParaLoader& para_loader,
         channelThread->set_error_callback(
             [this](int64_t chId, const std::string& err) { on_channel_error(chId, err); });
 
-        // 加载协议插件
-        std::string protocolName = ems::rtdb::protocolTypeToString(chConfig.protocol_);
-        void* pluginInstance = plugin_manager_.load(protocolName);
-        if (!pluginInstance) {
-            LOG_ERROR(
-                fmt::format("通道[{}] 加载插件失败: 协议={}", chConfig.id_, protocolName).c_str());
-            on_channel_error(chConfig.id_, "Failed to load plugin for protocol: " + protocolName);
+        if (!channelThread->start(plugin_manager_)) {
+            on_channel_error(chConfig.id_, channelThread->last_error());
             continue;
         }
 
@@ -165,9 +160,6 @@ int CollectEngine::start_all(ParaLoader& para_loader,
             channels_[chConfig.id_] = channelThread;
         }
 
-        // 获取函数指针并启动通道线程
-        auto fns = plugin_manager_.get_instance_functions(pluginInstance);
-        channelThread->start(plugin_manager_, pluginInstance, fns);
         started++;
     }
 
@@ -208,18 +200,13 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
 
     channels_[channelConfig.id_] = channelThread;
 
-    // 加载插件并启动（简化版，实际应通过 start_all 完整初始化）
-    std::string protocolName = ems::rtdb::protocolTypeToString(channelConfig.protocol_);
-    void* pluginInstance = plugin_manager_.load(protocolName);
-    if (!pluginInstance) {
-        LOG_ERROR(
-            fmt::format("通道[{}] 加载插件失败: 协议={}", channelConfig.id_, protocolName).c_str());
+    if (!channelThread->start(plugin_manager_)) {
+        LOG_ERROR(fmt::format("通道[{}] 处理器初始化失败: {}", channelConfig.id_,
+                              channelThread->last_error())
+                      .c_str());
         channels_.erase(channelConfig.id_);
         return false;
     }
-
-    channelThread->start(plugin_manager_, pluginInstance,
-                         plugin_manager_.get_instance_functions(pluginInstance));
     return true;
 }
 

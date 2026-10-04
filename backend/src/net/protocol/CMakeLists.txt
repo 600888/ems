@@ -32,6 +32,7 @@ set_target_properties(
 
 option(EMS_BUILD_MODBUS "Build Modbus protocol package" ON)
 option(EMS_BUILD_IEC104 "Build IEC104 protocol package" ON)
+option(EMS_BUILD_DLT645 "Build DL/T 645-2007 protocol package" ON)
 set(EMS_PROTOCOL_RUNTIME_DEPENDENCIES
     ""
     CACHE STRING "Runtime dependency files to deploy with protocol modules"
@@ -45,8 +46,8 @@ if(EMS_BUILD_IEC104)
     add_subdirectory(iec104)
 endif()
 
-if(TARGET modbus_protocol)
-    add_subdirectory(handler)
+if(EMS_BUILD_DLT645)
+    add_subdirectory(dlt645)
 endif()
 
 if(BUILD_TESTS)

@@ -1,6 +1,6 @@
 /**
  * @file data_dispatcher.cpp
- * @brief 采集数据分发器实现
+ * @brief 将 handler 的统一采集结果分发到实时库。
  */
 #include "data_dispatcher.h"
 

@@ -1,12 +1,12 @@
 # net/collect - 采集引擎模块
 #
-# 包含采集引擎主类、通道线程、数据分发器和插件管理器。
+# 包含采集引擎主类、通道线程、数据分发器。
 # 编译为 STATIC 库，由采集进程主程序链接。
 #
 # 依赖:
 #   - rtdb (RTDB 实时库)
 #   - Threads::Threads (平台线程)
-#   - ems_protocol_runtime (平台动态库加载)
+#   - net_handler (统一处理器与平台动态库加载)
 #   - nlohmann_json (JSON 解析)
 
 add_library(net_collect STATIC collect_engine.cpp channel_thread.cpp data_dispatcher.cpp)
@@ -17,7 +17,7 @@ target_include_directories(
            ${CMAKE_SOURCE_DIR}/3rd ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )
 
-target_link_libraries(net_collect PUBLIC rtdb Threads::Threads ems_protocol_runtime)
+target_link_libraries(net_collect PUBLIC rtdb Threads::Threads net_handler)
 
 if(EMS_WITH_ZEROMQ)
     target_link_libraries(net_collect PUBLIC ems_zmq_messaging)

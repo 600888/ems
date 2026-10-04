@@ -4,11 +4,7 @@ endif()
 
 include(GoogleTest)
 
-add_executable(
-    test_modbus_handler
-    modbus_handler_test.cpp ${CMAKE_SOURCE_DIR}/src/net/protocol/handler/base_handler.cpp
-    ${CMAKE_SOURCE_DIR}/src/net/protocol/modbus/modbus_handler.cpp
-)
+add_executable(test_modbus_handler modbus_handler_test.cpp)
 
 target_include_directories(
     test_modbus_handler
@@ -19,9 +15,7 @@ target_include_directories(
             ${CMAKE_SOURCE_DIR}/3rd/googletest/googlemock/include
 )
 
-target_link_libraries(
-    test_modbus_handler PRIVATE gtest gmock Threads::Threads modbus_protocol ${LIBMODBUS_LIBRARIES}
-)
+target_link_libraries(test_modbus_handler PRIVATE gtest gmock Threads::Threads net_proto_handler)
 
 gtest_discover_tests(test_modbus_handler)
 

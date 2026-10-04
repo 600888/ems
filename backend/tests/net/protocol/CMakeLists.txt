@@ -141,3 +141,39 @@ if(TARGET proto_iec104)
         )
     endif()
 endif()
+
+# DL/T645 动态 ABI 集成测试；用本地回环验证真实协议帧与实例隔离。
+if(TARGET proto_dlt645)
+    add_executable(test_dlt645_runtime dlt645_runtime_test.cpp)
+    target_include_directories(
+        test_dlt645_runtime SYSTEM
+        PRIVATE "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+    )
+    target_link_libraries(test_dlt645_runtime PRIVATE ems_protocol_runtime ems_dlt645_stack)
+    target_compile_definitions(
+        test_dlt645_runtime PRIVATE EMS_DLT645_PLUGIN="$<TARGET_FILE:proto_dlt645>"
+    )
+    set_target_properties(
+        test_dlt645_runtime
+        PROPERTIES CXX_STANDARD 17
+                   CXX_STANDARD_REQUIRED YES
+                   CXX_EXTENSIONS NO
+    )
+    add_dependencies(test_dlt645_runtime proto_dlt645)
+    foreach(
+        scenario IN
+        ITEMS lazy_load
+              invalid_config
+              client_classes
+              multi_meter
+              client_writes
+              server_readonly
+              buffer_retry
+              reconnect
+              legacy_rtu
+              concurrent_instances
+    )
+        add_test(NAME dlt645_${scenario} COMMAND test_dlt645_runtime ${scenario})
+        set_tests_properties(dlt645_${scenario} PROPERTIES TIMEOUT 30)
+    endforeach()
+endif()

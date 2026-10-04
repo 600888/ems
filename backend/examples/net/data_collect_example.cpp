@@ -246,6 +246,7 @@ int main(int argc, char* argv[]) {
     auto& pluginMgr = g_engine->plugin_manager();
     auto dispatcher = g_engine->data_dispatcher();
     int startedCount = 0;
+    std::vector<std::shared_ptr<ems::net::collect::ChannelThread>> startedThreads;
 
     // 命令行 Modbus 参数覆盖数据库配置
     for (auto& chCfg : channelConfigs) {
@@ -266,12 +267,6 @@ int main(int argc, char* argv[]) {
 
         std::string protoName = ems::rtdb::protocolTypeToString(chCfg.protocol_);
         std::cout << "  加载协议 [" << chCfg.id_ << "]: " << protoName << std::endl;
-
-        void* pluginInst = pluginMgr.load(protoName);
-        if (!pluginInst) {
-            std::cerr << "  ❌ 插件加载失败: " << pluginMgr.last_error() << std::endl;
-            continue;
-        }
 
         // 构建设备上下文
         std::map<int64_t, ems::net::collect::DeviceContext> devMap;
@@ -309,8 +304,11 @@ int main(int argc, char* argv[]) {
             std::cerr << "  ⚠ 通道 [" << chId << "] " << connection << " - " << err << std::endl;
         });
 
-        auto fns = pluginMgr.get_instance_functions(pluginInst);
-        chThread->start(pluginMgr, pluginInst, fns);
+        if (!chThread->start(pluginMgr)) {
+            std::cerr << "  处理器初始化失败: " << chThread->last_error() << std::endl;
+            continue;
+        }
+        startedThreads.push_back(chThread);
         startedCount++;
 
         std::cout << "  ✅ 通道 [" << chCfg.id_ << "] " << chCfg.name_
@@ -354,6 +352,11 @@ int main(int argc, char* argv[]) {
     auto statsFinal = g_engine && g_engine->data_dispatcher()
                           ? g_engine->data_dispatcher()->stats()
                           : ems::net::collect::DataDispatcher::Stats{};
+
+    // 示例直接创建的通道须先退出，随后才能销毁其借用的插件管理器。
+    for (const auto& channel : startedThreads) channel->stop();
+    for (const auto& channel : startedThreads) channel->join();
+    startedThreads.clear();
 
     if (g_engine) {
         g_engine->stop_all();

@@ -19,7 +19,7 @@
 #include <vector>
 
 #include "models/point_runtime.hpp"
-#include "net/protocol/common/protocol_handler.h"
+#include "net/handler/protocol_handler.h"
 
 namespace ems {
 namespace rtdb {
@@ -33,7 +33,7 @@ class ZmqChangePublisher;
 namespace net {
 namespace collect {
 
-using protocol::PointValue;
+using handler::PointValue;
 
 /**
  * @brief 数据分发配置

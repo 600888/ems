@@ -6,6 +6,9 @@
 ## 依赖安装
 
 项目使用 redis-plus-plus 作为 Redis 客户端库，已集成在 `backend/3rd/` 目录下。
+DLT645 默认启用，需要 **Boost 1.83+ 头文件**；协议栈源码已集成在 `backend/3rd/dlt645/`。
+可通过 `-DBOOST_ROOT=<Boost 根目录>` 指定头文件，或用 `-DEMS_BUILD_DLT645=OFF` 关闭该插件。
+发行版提供的 Boost 版本较旧时，需要单独准备 1.83+；仅使用头文件，无需编译 Boost 库。
 
 ### Ubuntu/Debian
 
@@ -39,6 +42,7 @@ make
 
 准备 CMake 3.21+、支持 C++20 的编译器，以及同架构、同工具链编译的
 `hiredis >= 1.0` 和 `libmodbus >= 3.1.6`。`redis-plus-plus`、GoogleTest 和 IEC104 C 栈使用仓库内版本。
+DLT645 还需要 Boost 1.83+；其头文件可跨 MSVC / MinGW 使用。
 MSVC 构建需要 Ninja，并在 **x64 Native Tools Command Prompt / Developer PowerShell** 中执行；
 MinGW 构建需要将 MinGW-w64 的 `bin` 目录加入 `PATH`。
 
@@ -48,7 +52,7 @@ MinGW 构建需要将 MinGW-w64 的 `bin` 目录加入 `PATH`。
 
 ```powershell
 cd backend
-cmake --preset windows-msvc -DCMAKE_PREFIX_PATH=C:/deps/msvc-x64
+cmake --preset windows-msvc -DCMAKE_PREFIX_PATH=C:/deps/msvc-x64 -DBOOST_ROOT=C:/deps/boost
 cmake --build --preset windows-msvc
 ctest --preset windows-msvc
 
@@ -61,7 +65,7 @@ ctest --preset windows-msvc -C Debug
 
 ```powershell
 cd backend
-cmake --preset windows-mingw -DCMAKE_PREFIX_PATH=C:/deps/mingw-x64
+cmake --preset windows-mingw -DCMAKE_PREFIX_PATH=C:/deps/mingw-x64 -DBOOST_ROOT=C:/deps/boost
 cmake --build --preset windows-mingw
 ctest --preset windows-mingw
 ```
@@ -69,8 +73,8 @@ ctest --preset windows-mingw
 也可以在仓库根目录使用 PowerShell 脚本完成配置、编译和测试：
 
 ```powershell
-./scripts/build_windows.ps1 -Toolchain msvc -PrefixPath C:/deps/msvc-x64 -Test
-./scripts/build_windows.ps1 -Toolchain mingw -PrefixPath C:/deps/mingw-x64 -Test
+./scripts/build_windows.ps1 -Toolchain msvc -PrefixPath C:/deps/msvc-x64 -CMakeArgs @('-DBOOST_ROOT=C:/deps/boost') -Test
+./scripts/build_windows.ps1 -Toolchain mingw -PrefixPath C:/deps/mingw-x64 -CMakeArgs @('-DBOOST_ROOT=C:/deps/boost') -Test
 ```
 
 依赖不在标准安装布局时，通过 `-DLIBMODBUS_INCLUDE_DIR=...`、`-DLIBMODBUS_LIBRARY=...`、
@@ -80,7 +84,9 @@ ctest --preset windows-mingw
 hiredis 的 CMake 包提供 DLL 路径时，采集示例会自动复制该 DLL。
 协议插件额外的 DLL 可通过 `-DEMS_PROTOCOL_RUNTIME_DEPENDENCIES='C:/deps/modbus.dll;...'` 部署。
 
-Windows 默认构建 Modbus / IEC104 动态插件、采集引擎、数据库和实时存储库，以及公共模块和存储测试。
+Windows 默认构建 Modbus / IEC104 / DLT645 动态插件、独立 handler 层、采集引擎、数据库和实时存储库，以及公共模块和存储测试。
+三个协议的统一处理器、目录和采集接入见 [协议处理器接入](docs/reference/protocol/handlers.md)。
+DLT645 的配置、测点编码和模拟器互通说明见 [DLT645 动态库接入](docs/reference/protocol/dlt645.md)。
 旧版 libmodbuspp 处理器、对应的四个示例和设备处理器测试由 `EMS_BUILD_LEGACY_MODBUS` 控制：
 Linux 默认开启，Windows 默认关闭；这些旧目标仍依赖上游的 pkg-config 构建入口。
 `BUILD_TESTS=OFF` 可关闭测试，`BUILD_EXAMPLES=OFF` 可关闭示例。

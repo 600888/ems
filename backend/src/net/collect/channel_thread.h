@@ -26,8 +26,8 @@
 #include <vector>
 
 #include "data_dispatcher.h"
+#include "net/handler/protocol_handler.h"
 #include "net/log.h"
-#include "net/protocol/protocol_plugin_api.h"
 #include "plugin_manager.h"
 #include "rtdb/rtdb_channel.h"
 
@@ -115,17 +115,11 @@ class ChannelThread {
     // ============================================================
 
     /**
-     * @brief 启动通道线程
-     *
-     * 创建 std::thread 并进入采集循环。
-     * 根据协议名称通过 PluginManager 加载对应插件。
-     *
-     * @param[in] plugin_manager 插件管理器
-     * @param[in] plugin_instance 协议插件实例（由 PluginManager::load 创建）
-     * @param[in] plugin_fns 插件函数指针结构
+     * @brief 创建并初始化统一处理器，然后启动通道采集线程。
+     * @param[in,out] plugin_manager 共享管理器，须在通道停止并 join 后才销毁。
+     * @return true 线程启动成功；false 状态不允许或处理器初始化失败。
      */
-    void start(PluginManager& plugin_manager, void* plugin_instance,
-               const PluginManager::PluginFunctions& plugin_fns);
+    bool start(PluginManager& plugin_manager);
 
     /**
      * @brief 请求停止通道线程（优雅退出）
@@ -255,11 +249,8 @@ class ChannelThread {
 
    private:
     // ---- 线程主循环 ----
-    /**
-     * @brief 运行通道采集循环。
-     * @param[in] plugin_manager 协议插件管理器。
-     */
-    void run(PluginManager& plugin_manager);
+    /** @brief 运行采集循环，并在全部退出路径销毁处理器。 */
+    void run();
 
     // ---- 采集步骤 ----
     /**
@@ -303,9 +294,8 @@ class ChannelThread {
     std::shared_ptr<DataDispatcher> dispatcher_;
     std::shared_ptr<std::thread> thread_;
 
-    // 插件接口（通过 C 接口操作）
-    void* plugin_instance_{nullptr};
-    PluginManager::PluginFunctions plugin_fns_;
+    // 处理器拥有插件实例；工作线程退出后才释放库租约。
+    std::unique_ptr<handler::ProtocolHandler> handler_;
 
     // 设备列表
     std::vector<DeviceContext> devices_;

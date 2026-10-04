@@ -11,4 +11,8 @@ if(TARGET modbus_protocol)
     add_subdirectory(net)
 endif()
 
+if(TARGET net_collect)
+    add_subdirectory(net/collect)
+endif()
+
 add_subdirectory(storage)

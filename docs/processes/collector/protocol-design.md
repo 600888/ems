@@ -522,8 +522,34 @@ flowchart LR
 | 生命周期 | STARTDT 确认才就绪；重连清缓存；停止等待回调退出后卸载；Windows 独占端口绑定 |
 | 点契约 | CA:IOA:ASDU，支持 16 种监视 / 12 种命令类型，保留 IEC 品质和时标来源 |
 | 控制 | 确认匹配地址、类型、OA、值、选择位和限定词；可选 SBO；默认等待 ACT_CON 与 ACT_TERM |
-| 构建 | 独立包 iec104/1.0.0；EMS_BUILD_MODBUS=OFF 可只构建 IEC104，无需 libmodbus |
+| 构建 | 独立包 iec104/1.0.0；EMS_BUILD_MODBUS=OFF、EMS_BUILD_DLT645=OFF 可只构建 IEC104，无需 libmodbus/Boost |
 | 验证 | 新增 11 项 IEC104 报文集成测试，连同原有 13 项回归在 MinGW / MSVC 验证 |
 | 后续 | ABI v2、TLS、服务器远程控制仲裁、冗余配置、可靠事件历史；Linux/macOS 与现场实机验收 |
 
 配置示例、类型列表、时区/品质约定和队列限制见 [IEC 104 动态库接入](../../reference/protocol/iec104.md)。
+
+## 12. DL/T 645 首期实施记录
+
+| 实施项 | 本次结果 |
+| --- | --- |
+| 参考实现 | ems_simulate 的 12 位表地址、00–04 类读取、需量时间与复合字段、密码写参 |
+| 动态边界 | Dlt645Protocol PIMPL + ABI v1 C 桥；静态集成仓库协议栈，Boost 类型不跨边界 |
+| 通信 | TCP / RTU 客户端；同一端点支持多个表地址；按实例串行调用 |
+| 只读出口 | 多表本地映像，仅暴露配置 DI；拒绝远端写入和管理命令 |
+| 兼容 | 通道 connection/settings/rtu_addr；bcd_endian=big 对接当前模拟器 |
+| 构建 | EMS_BUILD_DLT645 默认 ON；需 Boost 1.83+ 头文件；包 dlt645/1.0.0 |
+| 验证 | 新增 10 项集成测试；MSVC / MinGW 全后端各 131 项通过，模拟器 Python 库双向 TCP 互通通过 |
+| 待验收 | Linux/macOS 平台构建、真实 RTU 串口收发；ABI v1 不表达复合写入及管理命令 |
+
+配置、测点编码、只读映像及独立构建见 [DLT645 动态库接入](../../reference/protocol/dlt645.md)。
+
+## 13. 独立 handler 层实施记录
+
+应用处理器已统一移至 `backend/src/net/handler/`，与 `protocol/` 平级。新路径为 `CollectEngine / ChannelThread → ProtocolHandler → PluginManager → C ABI → 协议对象`；协议目录不再构建或包含 handler。
+
+- ModbusTCP / ModbusRTU、IEC104、DLT645 均有具体处理器，通过公共适配器管理实例、配置和读写结果。
+- 采集线程统一创建处理器，初始化失败同步返回；停止和异常退出均释放实例与库租约。
+- 存量 Modbus 设备处理器及其原基类迁移到 handler 目录，保留原接口。
+- 新增四项 handler 集成测试及四项真实通道测试，覆盖协议读写、重连、缓冲扩容、初始化回滚、重复启停和退出后的卸载。Windows MSVC / MinGW 全后端各 139 项测试通过；DLT645 单插件的 handler 独立子工程 12 项测试通过。
+
+目录、调用示例及构建方式见 [协议处理器接入](../../reference/protocol/handlers.md)。
