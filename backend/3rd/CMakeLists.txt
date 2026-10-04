@@ -1,4 +1,7 @@
 # 第三方库入口：仅调整集成选项，不修改第三方源码及其格式。
+include(OpenXLSX)
+ems_add_openxlsx()
+
 if(EMS_BUILD_LEGACY_MODBUS)
     add_subdirectory(libmodbuspp)
 endif()
