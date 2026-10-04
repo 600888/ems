@@ -166,7 +166,7 @@ int CollectEngine::start_all(ParaLoader& para_loader,
         }
 
         // 获取函数指针并启动通道线程
-        auto fns = plugin_manager_.get_functions(protocolName);
+        auto fns = plugin_manager_.get_instance_functions(pluginInstance);
         channelThread->start(plugin_manager_, pluginInstance, fns);
         started++;
     }
@@ -181,6 +181,7 @@ int CollectEngine::start_all(ParaLoader& para_loader,
 // ============================================================
 
 bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig) {
+    if (channelConfig.status_ == 0) return false;
     std::lock_guard lock(channels_mutex_);
 
     if (channels_.size() >= static_cast<size_t>(config_.maxChannels_)) {
@@ -217,7 +218,8 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
         return false;
     }
 
-    channelThread->start(plugin_manager_, pluginInstance, PluginManager::PluginFunctions{});
+    channelThread->start(plugin_manager_, pluginInstance,
+                         plugin_manager_.get_instance_functions(pluginInstance));
     return true;
 }
 
@@ -236,10 +238,6 @@ bool CollectEngine::stop_channel(int64_t channel_id) {
 
     channel->stop();
     channel->join();
-
-    // 卸载协议
-    std::string protocolName = ems::rtdb::protocolTypeToString(channel->channel_config().protocol_);
-    plugin_manager_.unload(protocolName);
 
     {
         std::lock_guard lock(channels_mutex_);
@@ -275,12 +273,7 @@ void CollectEngine::stop_all() {
         ch->join();
     }
 
-    // 卸载所有插件
-    for (auto& name : plugin_manager_.loaded_protocols()) {
-        LOG_DEBUG(fmt::format("卸载插件: {}", name).c_str());
-        plugin_manager_.unload(name);
-    }
-
+    // 各通道工作线程退出时已按实例释放租约，不按协议名重复卸载。
     {
         std::lock_guard lock(channels_mutex_);
         channels_.clear();

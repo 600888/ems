@@ -3,5 +3,10 @@
     "type": "file",
     "name": "index",
     "label": "策略进程设计"
+  },
+  {
+    "type": "file",
+    "name": "design",
+    "label": "策略进程详细设计"
   }
 ]

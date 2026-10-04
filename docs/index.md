@@ -21,6 +21,8 @@
 | 策略 / C++17 | [策略进程](processes/strategy/index.md) | 聚合、告警、优化调度与控制仲裁 |
 | Web / C++17 + Drogon | [Web 后端与前端](processes/web/index.md) | 权限、配置页面、API 与实时展示编排 |
 
+[策略进程详细设计](processes/strategy/design.md)给出防逆流、需量保护、计划曲线、手动模式与光伏协同的具体规则。
+
 ## 技术选型评估
 
 - [Web 后端采用 Drogon](decisions/drogon-web.md)：C++17 Web 技术栈、公共 MySQL Repository 与实施验收门槛。

@@ -4,40 +4,32 @@
 # 编译为 STATIC 库，由采集进程主程序链接。
 #
 # 依赖:
-#   - ems_rtdb  (RTDB 实时库)
-#   - pthread   (线程)
-#   - dl        (dlopen/dlsym)
+#   - rtdb (RTDB 实时库)
+#   - Threads::Threads (平台线程)
+#   - ems_protocol_runtime (平台动态库加载)
 #   - nlohmann_json (JSON 解析)
 
-add_library(net_collect STATIC
-    collect_engine.cpp
-    channel_thread.cpp
-    data_dispatcher.cpp
-    plugin_manager.cpp
+add_library(net_collect STATIC collect_engine.cpp channel_thread.cpp data_dispatcher.cpp)
+
+target_include_directories(
+    net_collect
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/include
+           ${CMAKE_SOURCE_DIR}/3rd ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )
 
-target_include_directories(net_collect PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/3rd
-    ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
-)
+target_link_libraries(net_collect PUBLIC rtdb Threads::Threads ems_protocol_runtime)
 
-target_link_libraries(net_collect PUBLIC
-    rtdb
-    pthread
-    dl
-)
 if(EMS_WITH_ZEROMQ)
     target_link_libraries(net_collect PUBLIC ems_zmq_messaging)
+
     target_compile_definitions(net_collect PRIVATE EMS_WITH_ZEROMQ)
 endif()
 
-set_target_properties(net_collect PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED YES
-    POSITION_INDEPENDENT_CODE ON
+set_target_properties(
+    net_collect
+    PROPERTIES CXX_STANDARD 20
+               CXX_STANDARD_REQUIRED YES
+               POSITION_INDEPENDENT_CODE ON
 )
 
 message(STATUS "EMS net_collect module configured (STATIC)")

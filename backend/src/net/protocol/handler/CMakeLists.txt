@@ -6,25 +6,21 @@
 #
 # 以 OBJECT 库形式供采集进程和协议插件共享。
 
-add_library(net_proto_handler OBJECT
-    base_handler.cpp
+add_library(net_proto_handler OBJECT base_handler.cpp)
+
+target_include_directories(
+    net_proto_handler
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/include
+           ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )
 
-target_include_directories(net_proto_handler PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
-)
+target_link_libraries(net_proto_handler PUBLIC Threads::Threads)
 
-target_link_libraries(net_proto_handler PUBLIC
-    Threads::Threads
-)
-
-set_target_properties(net_proto_handler PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED YES
-    POSITION_INDEPENDENT_CODE ON
+set_target_properties(
+    net_proto_handler
+    PROPERTIES CXX_STANDARD 20
+               CXX_STANDARD_REQUIRED YES
+               POSITION_INDEPENDENT_CODE ON
 )
 
 message(STATUS "EMS net_proto_handler configured (OBJECT)")

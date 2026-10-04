@@ -6,7 +6,7 @@
 
 ## 1. 目标与核心约定
 
-EMS 面对 PCS、BMS、电表、消防、空调、环控、保护装置和其他设备，使用统一的设备业务模型。用户导入点表前必须选定实际设备，导入后把厂家点位绑定到该设备的固有点位；同厂家、同型号、同协议版本的设备可以复用已验证模板。
+EMS 面对 PCS、BMS、电表、光伏逆变器、消防、空调、环控、保护装置和其他设备，使用统一的设备业务模型。光伏逆变器类型及能力属于待实现的目标扩展，现有公共 C++ 目录尚未包含它。用户导入点表前必须选定实际设备，导入后把厂家点位绑定到该设备的固有点位；同厂家、同型号、同协议版本的设备可以复用已验证模板。
 
 例如，PCS 类型预置开机、关机、故障复位、有功设定、无功设定和功率反馈等固有点位。型号不支持某项时允许显式禁用，并记录原因。预置目录表示 EMS 能表达的业务含义，不表示每台 PCS 必然支持全部功能。
 
@@ -40,6 +40,7 @@ flowchart LR
 | `pcs` | 储能变流器 | 运行与控制权状态、有功/无功、交流/直流侧量、启停与设定 |
 | `bms` | 电池管理系统 | SOC/SOH、电池电压电流、温度、电芯极值、充放电许可和限值、告警 |
 | `meter` | 电表 | 功率、电量、电压、电流、频率、功率因数和质量 |
+| `pv_inverter` | 光伏逆变器（目标扩展） | 实际交流净功率、可选的厂家可用功率、并网/故障/控制状态，以及经能力验收的有功限发与回读 |
 | `fire` | 消防设备 | 火警、故障、探测状态、介质/压力等型号支持的监视量 |
 | `hvac` | 空调/温控设备 | 运行模式、温度、设定值、故障和启停 |
 | `environment` | 环控设备 | 温湿度、水浸、门禁、烟感及环境联动状态 |
@@ -123,13 +124,14 @@ BMS 管理的 Rack、Pack、Cell 可以只有资产节点，没有独立通信�
 | --- | --- | --- |
 | BMS | `soc`（%）、`soh`（%）、`pack_voltage`（V）、`pack_current`（A）、`max_charge_current`、`max_discharge_current`（A）、`charge_allowed`、`discharge_allowed`、`cell_voltage_min/max`（V）、`cell_temperature_min/max`（℃）、极值所在节点、`contactor_state`、`fault_active` | 厂家与现场明确支持时配置 `fault_reset`、接触器控制等独立能力；默认不启用 |
 | 电表 | `active_power`（kW）、`reactive_power`（kvar）、`energy_import`、`energy_export`（kWh）、各相电压电流、`frequency`（Hz）、`power_factor` | 无默认控制；校时、清零等仅作为显式扩展，不混入普通读取 |
+| 光伏逆变器（目标扩展） | `active_power`（kW，向交流侧发电为正，夜间从交流侧取电为负）、`available_power`（kW，仅厂家提供且语义可校验时作为可选读取点）、`run_state`、`control_mode`、`fault_active`、`active_power_limit_setpoint`（kW，若可回读） | `limit_active_power`（kW 非负允许输出上限）仅在型号支持、启用绑定、反馈和失联行为均已验收时开放；作为防逆流可用资源时须可靠限值回显，不得复用 PCS 的充放电命令 |
 | 消防 | `fire_alarm`、`fault_active`、`smoke_alarm`、`temperature_alarm`、`discharge_state`，压力/浓度等型号支持量 | 不预置通用可执行灭火启动；确有远控要求时单独定义授权、联锁、反馈和验收配置 |
 | 空调 | `run_state`、`mode`、`return_air_temperature`、`supply_air_temperature`、`temperature_setpoint`、`fault_active` | `start`、`stop`、`set_mode`、`set_temperature` |
 | 环控 | `ambient_temperature`、`humidity`、`water_leak`、`door_open`、`smoke_alarm`、`fault_active` | 按实际执行器扩展风机/除湿等能力，不把传感器事件自动转成控制 |
 | 保护装置 | `trip_active`、`lockout_active`、`breaker_position`、`fault_active`、带时标动作事件 | 复归或分合闸仅在实际支持且单独配置控制条件时启用；快速保护仍由装置执行 |
 | 通用其他设备 | `run_state`、`fault_active` 可选，加自定义 telemetry/status/event 定义 | 自定义命令需声明参数、写路由、条件及反馈 |
 
-没有设备通信点支持的“在线状态”由采集连接和数据新鲜度计算，作为 EMS 运行状态，不要求用户导入一个厂家在线寄存器。不同设备的电流、无功、电量方向必须在定义及绑定中写明；PCC 电表和 PCS 的物理参考方向不同，不能只因单位相同就直接相加。
+没有设备通信点支持的“在线状态”由采集连接和数据新鲜度计算，作为 EMS 运行状态，不要求用户导入一个厂家在线寄存器。光伏可用功率若由预测模型计算，应另设 `derived_available_power` 派生点，不冒充厂家 `available_power` 读取值；限值回显、实际发电变化和 PCC 约束达成分别验证。不同设备的电流、无功、电量方向必须在定义及绑定中写明；PCC 电表和 PCS 的物理参考方向不同，不能只因单位相同就直接相加。策略设计采用 PCC 购电为正、上网为负的标准化方向，投运前须验证现场电表接线和倍率；详见[策略进程详细设计](../processes/strategy/design.md#11-功率方向与计量边界)。
 
 ### 3.4 点位启用与功能可用性
 

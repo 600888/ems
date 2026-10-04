@@ -33,7 +33,8 @@
 ## 详细设计与验收
 
 - [设备、通道与协议](../../architecture/channel-protocol.md)：模型、角色矩阵、采集/上送映射、北向控制与例子。
-- [采集执行与协议插件](design.md)：采集任务、调度、事务边界插队、插件和数据分发。
+- [采集执行与协议插件](design.md)：采集任务、调度、事务边界插队和数据分发。
+- [通讯协议动态库](protocol-design.md)：PIMPL API、按需加载、C ABI、安全卸载与跨平台部署。
 - [公共实时访问接口](../../common/realtime/access-design.md)：后端注入、版本并发与恢复。
 - [libmodbuspp 开发参考](../../reference/protocol/libmodbuspp-guide.md)：第三方 API 示例。
 

@@ -1,5 +1,5 @@
 {
-  "version": 6,
+  "version": 3,
   "cmakeMinimumRequired": {
     "major": 3,
     "minor": 21,
@@ -15,6 +15,11 @@
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "ON",
         "EMS_ENABLE_ARCH_TUNING": "ON"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
       }
     },
     {
@@ -27,6 +32,11 @@
         "BUILD_TESTS": "OFF",
         "EMS_ENABLE_ARCH_TUNING": "ON",
         "EMS_TARGET_LINUX_ARM": "ON"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
       }
     },
     {
@@ -40,6 +50,48 @@
         "BUILD_TESTS": "OFF",
         "EMS_ENABLE_ARCH_TUNING": "ON",
         "Python_EXECUTABLE": "/usr/bin/python3"
+      },
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Linux"
+      }
+    },
+    {
+      "name": "windows-msvc",
+      "displayName": "Windows MSVC (x64 developer terminal)",
+      "generator": "Ninja Multi-Config",
+      "binaryDir": "${sourceDir}/build/windows-msvc",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "cl",
+        "CMAKE_CXX_COMPILER": "cl",
+        "BUILD_TESTS": "ON",
+        "EMS_ENABLE_ARCH_TUNING": "OFF",
+        "EMS_BUILD_LEGACY_MODBUS": "OFF"
+      }
+    },
+    {
+      "name": "windows-mingw",
+      "displayName": "Windows MinGW-w64",
+      "generator": "MinGW Makefiles",
+      "binaryDir": "${sourceDir}/build/windows-mingw",
+      "condition": {
+        "type": "equals",
+        "lhs": "${hostSystemName}",
+        "rhs": "Windows"
+      },
+      "cacheVariables": {
+        "CMAKE_C_COMPILER": "gcc",
+        "CMAKE_CXX_COMPILER": "g++",
+        "CMAKE_BUILD_TYPE": "Release",
+        "BUILD_TESTS": "ON",
+        "EMS_ENABLE_ARCH_TUNING": "OFF",
+        "EMS_BUILD_LEGACY_MODBUS": "OFF"
       }
     }
   ],
@@ -58,6 +110,50 @@
       "name": "linux-arm-cross",
       "configurePreset": "linux-arm-cross",
       "jobs": 2
+    },
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc",
+      "configuration": "Release",
+      "jobs": 2
+    },
+    {
+      "name": "windows-mingw",
+      "configurePreset": "windows-mingw",
+      "jobs": 2
+    }
+  ],
+  "testPresets": [
+    {
+      "name": "linux-native",
+      "configurePreset": "linux-native",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
+    },
+    {
+      "name": "windows-msvc",
+      "configurePreset": "windows-msvc",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      },
+      "configuration": "Release"
+    },
+    {
+      "name": "windows-mingw",
+      "configurePreset": "windows-mingw",
+      "output": {
+        "outputOnFailure": true
+      },
+      "execution": {
+        "noTestsAction": "error"
+      }
     }
   ]
 }

@@ -1,0 +1,11 @@
+# 自有 CMake 文件统一 4 空格缩进、100 列，保留参数顺序和手写注释。
+format:
+  line_width: 100
+  tab_size: 4
+  line_ending: unix
+  dangle_parens: true
+  command_case: lower
+  keyword_case: upper
+  enable_sort: false
+markup:
+  enable_markup: false

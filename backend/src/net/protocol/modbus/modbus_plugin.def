@@ -1,0 +1,11 @@
+EXPORTS
+    ems_plugin_info
+    ems_plugin_create
+    ems_plugin_destroy
+    ems_plugin_init
+    ems_plugin_connect
+    ems_plugin_disconnect
+    ems_plugin_read_batch
+    ems_plugin_write
+    ems_plugin_is_connected
+    ems_plugin_last_error

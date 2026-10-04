@@ -9,28 +9,21 @@
 #   2. 按通道创建协议处理器开始采集
 #   3. PointImportCaller 定时将采集数据写入关系库
 
-add_library(net_para_loader OBJECT
-    para_loader.cpp
-    point_import_caller.cpp
+add_library(net_para_loader OBJECT para_loader.cpp point_import_caller.cpp)
+
+target_include_directories(
+    net_para_loader
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src
+           ${CMAKE_SOURCE_DIR}/3rd ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )
 
-target_include_directories(net_para_loader PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/3rd
-    ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
-)
+target_link_libraries(net_para_loader PUBLIC ems_db Threads::Threads)
 
-target_link_libraries(net_para_loader PUBLIC
-    ems_db
-    Threads::Threads
-)
-
-set_target_properties(net_para_loader PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED YES
-    POSITION_INDEPENDENT_CODE ON
+set_target_properties(
+    net_para_loader
+    PROPERTIES CXX_STANDARD 20
+               CXX_STANDARD_REQUIRED YES
+               POSITION_INDEPENDENT_CODE ON
 )
 
 message(STATUS "EMS net_para_loader module configured (OBJECT)")

@@ -35,6 +35,58 @@ cmake ..
 make
 ```
 
+## Windows 构建
+
+准备 CMake 3.21+、支持 C++20 的编译器，以及同架构、同工具链编译的
+`hiredis >= 1.0` 和 `libmodbus >= 3.1.6`。`redis-plus-plus`、GoogleTest 和 IEC104 C 栈使用仓库内版本。
+MSVC 构建需要 Ninja，并在 **x64 Native Tools Command Prompt / Developer PowerShell** 中执行；
+MinGW 构建需要将 MinGW-w64 的 `bin` 目录加入 `PATH`。
+
+### MSVC
+
+假设依赖安装在 `C:/deps/msvc-x64`，其下包含 `include`、`lib` 和运行时 DLL：
+
+```powershell
+cd backend
+cmake --preset windows-msvc -DCMAKE_PREFIX_PATH=C:/deps/msvc-x64
+cmake --build --preset windows-msvc
+ctest --preset windows-msvc
+
+# 同一构建目录也支持 Debug；依赖应提供匹配的调试运行库。
+cmake --build --preset windows-msvc --config Debug
+ctest --preset windows-msvc -C Debug
+```
+
+### MinGW-w64
+
+```powershell
+cd backend
+cmake --preset windows-mingw -DCMAKE_PREFIX_PATH=C:/deps/mingw-x64
+cmake --build --preset windows-mingw
+ctest --preset windows-mingw
+```
+
+也可以在仓库根目录使用 PowerShell 脚本完成配置、编译和测试：
+
+```powershell
+./scripts/build_windows.ps1 -Toolchain msvc -PrefixPath C:/deps/msvc-x64 -Test
+./scripts/build_windows.ps1 -Toolchain mingw -PrefixPath C:/deps/mingw-x64 -Test
+```
+
+依赖不在标准安装布局时，通过 `-DLIBMODBUS_INCLUDE_DIR=...`、`-DLIBMODBUS_LIBRARY=...`、
+`-DHIREDIS_HEADER=...`（包含 `hiredis/` 的父目录）、`-DHIREDIS_LIB=...` 显式指定。
+脚本通过 `-CMakeArgs @('-DLIBMODBUS_INCLUDE_DIR=...', '-DLIBMODBUS_LIBRARY=...')` 传入这些参数。
+使用动态依赖时，将依赖 DLL 放入程序/插件目录或加入 `PATH`；
+hiredis 的 CMake 包提供 DLL 路径时，采集示例会自动复制该 DLL。
+协议插件额外的 DLL 可通过 `-DEMS_PROTOCOL_RUNTIME_DEPENDENCIES='C:/deps/modbus.dll;...'` 部署。
+
+Windows 默认构建 Modbus / IEC104 动态插件、采集引擎、数据库和实时存储库，以及公共模块和存储测试。
+旧版 libmodbuspp 处理器、对应的四个示例和设备处理器测试由 `EMS_BUILD_LEGACY_MODBUS` 控制：
+Linux 默认开启，Windows 默认关闭；这些旧目标仍依赖上游的 pkg-config 构建入口。
+`BUILD_TESTS=OFF` 可关闭测试，`BUILD_EXAMPLES=OFF` 可关闭示例。
+MSVC 可执行文件和通用 DLL 位于 `backend/build/windows-msvc/bin/<配置>/`，
+协议插件位于 `lib/<配置>/`，配置文件位于构建根目录的 `conf/`。
+
 ## Linux ARM (ARM64) 构建
 
 ### 1) 板端原生构建（推荐）
@@ -103,6 +155,10 @@ python -m pip install clang-format==22.1.8
 也可以在 `backend/build` 下使用 CMake 目标：`make format`、`make format-check`。
 
 `backend/3rd/` 下的第三方代码不参与格式化。
+
+CMake 文件按功能块分隔空行，统一 4 空格缩进和 100 列，规则见 `.cmake-format.yaml`。
+可使用 `cmake-format -i -c .cmake-format.yaml -- <自有 CMake 文件>` 格式化；
+不要对 `backend/3rd/` 内的第三方子项目执行格式整改。
 
 ## 头文件目录
 

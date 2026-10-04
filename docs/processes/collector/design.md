@@ -18,7 +18,7 @@ Redis 地址遵循 [Redis 键设计](../../common/realtime/redis-key-design.md)�
 
 - **资源单一所有者**：独立通道使用一个 C++17 工作线程；共享同一物理串口/总线的设备绑定由同一线程调度，禁止重复打开同一资源
 - **设备与通道多对多**：支持采集专用、控制专用和采控共用，控制在事务边界插队，并保证采集新鲜度
-- **规约动态库按需加载**：每种协议编译为独立的 `.so` 动态库，运行时按需 `dlopen` 加载，未使用的协议不占用内存
+- **规约动态库按需加载**：各协议包独立动态库；公开 C++ API 使用 PIMPL，按平台加载 `.dll` / `.so`，不用到的协议不加载
 - **统一接口抽象**：所有协议插件实现统一的 C 接口，采集引擎不依赖任何具体协议实现
 
 ### 1.2 目标协议与采集能力
@@ -90,8 +90,8 @@ GOOSE/SV 不包含在 MMS 的 TCP 接口中，须独立 profile、发布/订阅�
 |------|------|
 | **CollectEngine** | 采集引擎主类，管理所有通道线程的创建/销毁/启停，协调插件加载与数据分发 |
 | **ChannelThread** | 每个通道对应一个独立线程，持有该通道的协议插件实例，执行轮询采集循环 |
-| **PluginManager** | 管理动态库的加载/卸载，维护协议名称到 `.so` 的映射，提供插件工厂方法 |
-| **ProtocolPlugin** | 协议插件抽象接口，所有 `.so` 必须实现此接口的 C 导出函数 |
+| **PluginManager** | 通过 PIMPL 跨平台加载器管理库租约、协议别名与工厂；具体契约见通讯协议专题 |
+| **ProtocolPlugin** | 动态库内 PIMPL 协议实现，经版本化 C ABI 与主程序交互 |
 | **DataDispatcher** | 有界内存缓冲、经统一接口更新最新值、经独立事件接口发布采样；发布失败在预算内重试，超限报告缺口；默认使用 Redis/Streams，变更通知仅作刷新提示 |
 | **ParaLoader** | 从存储发布的 Redis 快照或公共 ormpp API 加载指定版本的资产、通道绑定和测点配置，维护实际应用版本；数据库连接由采集进程独立管理 |
 
@@ -157,8 +157,7 @@ struct ChannelContext {
     std::unique_ptr<std::thread> thread;
     std::atomic<bool> running{false};
 
-    ProtocolPlugin* plugin{nullptr};       // 由 PluginManager 创建
-    void* plugin_handle{nullptr};          // dlopen 返回的句柄
+    std::unique_ptr<ProtocolChannel> protocol;  // PIMPL API，内部持有库租约
 
     std::vector<DeviceContext> devices;    // 由 device_channel_binding_version 构建的运行时设备视图
     int poll_interval_ms{1000};            // 采集周期
@@ -183,320 +182,23 @@ struct ChannelContext {
 
 ## 4. 动态库插件机制
 
-### 4.1 设计思路
+统一契约见 [通讯协议动态库设计](protocol-design.md)：公开 API、PIMPL、按需加载、C ABI、引用与安全卸载、Windows/Linux/macOS 加载和部署。
 
-协议插件内部使用 C++17 纯虚类封装实现，通过版本化 C 导出函数提供接口。驱动工厂匹配 protocol_id + local_role + transport + plugin_abi_version；后续图中的单协议工厂为采集路径简化示意。每种协议编译为独立的 `.so` 文件，采集引擎通过 `dlopen`/`dlsym` 在运行时按需加载。
-
-**关键原则：用到时才加载，不用不加载。**
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                    插件加载流程                                │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  1. ParaLoader 加载通道配置，发现通道使用 ModbusTCP 协议       │
-│                     │                                        │
-│  2. CollectEngine 查询 PluginManager: "ModbusTCP" 是否已加载  │
-│                     │                                        │
-│         ┌───────────┴───────────┐                            │
-│         │ 已加载                 │ 未加载                      │
-│         ▼                       ▼                            │
-│  返回已缓存的           3. dlopen("libproto_modbus.so")       │
-│  插件工厂函数                │                                │
-│                    4. dlsym("ems_plugin_create")              │
-│                              │                                │
-│                    5. 调用 create() 获取插件实例               │
-│                              │                                │
-│                    6. 缓存 {协议名 -> dlopen句柄, 工厂函数}    │
-│                              │                                │
-│                    7. 返回插件实例给通道线程                    │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    Channel[活动通道配置] --> API[公开 PIMPL API]
+    API --> Lease[按包路径取得库租约]
+    Lease --> Loader[跨平台动态加载器]
+    Loader --> Plugin[协议动态库 / PIMPL 实例]
+    Plugin --> Data[采集样本 / 上送映像 / 协议事件]
+    Stop[停止通道并等待静默] --> Destroy[在模块内销毁实例]
+    Destroy --> Release[释放租约]
+    Release --> Last{最后使用者?}
+    Last -->|是| Unload[关闭库句柄]
+    Last -->|否| Reuse[其他通道继续使用]
 ```
 
-### 4.2 插件 C 接口契约
-
-插件通过 C 导出符号和不透明句柄提供服务。接口属于目标设计，具体头文件及 ABI 版本在实现阶段按以下契约定义，并进行主程序与插件的兼容验证。
-
-| 接口 | 契约 |
-| --- | --- |
-| `ems_plugin_info` | 返回 API 版本、协议名称、实现版本和能力；加载前检查版本及必需能力 |
-| `ems_plugin_create / ems_plugin_destroy` | 按 protocol_id、local_role、transport 与 ABI 创建/释放通道实例；实例及插件资源在插件内释放 |
-| `ems_plugin_init` | 接收通道连接配置、设备绑定、协议地址、测点路由及配置版本，拒绝歧义或冲突映射 |
-| `ems_plugin_connect / ems_plugin_disconnect` | 采集客户端能力：管理主动连接，操作具有有界期限；服务端另提供 listener/session 生命周期能力 |
-| `ems_plugin_read_batch` | 请求携带绑定/从站地址、测点路由和事务期限；返回类型化值、质量、时间和逐点结果，单次调用受事务预算限制 |
-| `ems_plugin_write` | 请求携带 `command_id`、设备/绑定/测点标识、类型化值、配置版本、控制权代次和期限；返回执行阶段、协议确认及结构化错误 |
-| `ems_plugin_is_connected / ems_plugin_last_error` | 查询连接状态和结构化错误信息，供通道状态与恢复逻辑使用 |
-
-跨动态库边界使用固定宽度标量、指针/长度、不透明句柄或约定编码的缓冲区；字符串编码、缓冲区容量、实际长度、所有权和有效期须明确。STL 容器与 C++ 异常仅在插件内部使用。插件信息与工厂函数分别由 `ems_plugin_info_fn`、`ems_plugin_create_fn`、`ems_plugin_destroy_fn` 等函数指针类型承载。
-
-### 4.3 插件内部 C++ 抽象
-
-采集客户端角色可在 `.so` 内使用 `ProtocolHandler` 抽象类封装初始化、连接、批量读取、写入和错误查询。异步报告按事件接口实现；服务端角色独立实现 listener/session、读请求响应和上送映像，不强制继承轮询接口。内部请求与结果承载第 4.2 节的完整字段，值按布尔、整数、浮点、字符串等类型处理，并保留精度与质量信息。
-
-阻塞采集实例由所属资源线程独占，异步实例由所属事件执行上下文串行管理；读取与写入通过绑定定位设备。每次调用在有界协议事务完成或超时后返回调度器；控制回读使用发送后的新样本，协议确认和设备反馈分别记录。C 导出适配层负责参数校验、编码转换、异常隔离与结果缓冲区管理。
-
-### 4.4 各协议动态库实现概要
-
-#### 4.4.1 libproto_modbus.so
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                  libproto_modbus.so                       │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  导出符号:                                                    │
-│    ems_plugin_info()     → {"ModbusTCP/RTU", API版本}           │
-│    ems_plugin_create()   → ModbusHandler 实例                │
-│    ems_plugin_destroy()  → 释放实例                          │
-│    ems_plugin_init()     → 初始化连接参数                     │
-│    ems_plugin_connect()  → 建立 TCP/串口 连接                │
-│    ems_plugin_read_batch() → 批量读寄存器                    │
-│    ems_plugin_write()    → 写单个寄存器/线圈                 │
-│                                                              │
-│  内部实现:                                                    │
-│    ModbusTcpHandler  - Modbus TCP 客户端/服务端              │
-│    ModbusRtuHandler  - Modbus RTU 串口客户端/服务端          │
-│                                                              │
-│  依赖: libmodbus / libmodbuspp                               │
-│                                                              │
-│  配置参数 (JSON):                                             │
-│    {                                                         │
-│      "mode": "client|server",                                │
-│      "transport": "tcp|rtu|rtu_over_tcp",                    │
-│      "ip": "192.168.1.10",                                   │
-│      "port": 502,                                            │
-│      "serial_port": "/dev/ttyS0",                            │
-│      "baudrate": 9600,                                       │
-│      "parity": "N",                                          │
-│      "databits": 8,                                          │
-│      "stopbits": 1,                                          │
-│      "timeout_ms": 1000,                                     │
-│      "slave_id": 1                                           │
-│    }                                                         │
-│                                                              │
-│  采集优化:                                                    │
-│    - 连续地址合并：将相邻寄存器合并为一次读请求                │
-│    - 按功能码分组：线圈(01/02)与寄存器(03/04)分开读取         │
-│    - 按 slave_id 分组：同一从站的请求合并                     │
-│                                                              │
-│  测点地址格式: "slave_id:func_code:address[:decode]"          │
-│    示例: "1:3:0:FLOAT_BE"  (从站1, 功能码3, 地址0, 32位浮点)  │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-#### 4.4.2 libproto_dlt645.so
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                  libproto_dlt645.so                       │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  导出符号:                                                    │
-│    ems_plugin_info()     → {"DLT645", API版本}                  │
-│    ems_plugin_create()   → DLT645Handler 实例                │
-│    ems_plugin_destroy()  → 释放实例                          │
-│    ems_plugin_init()     → 初始化连接参数                     │
-│    ems_plugin_connect()  → 建立 TCP/串口 连接                │
-│    ems_plugin_read_batch() → 按 DI 标识批量读取              │
-│    ems_plugin_write()    → 写参变量 (DI 前缀 04)             │
-│                                                              │
-│  内部实现:                                                    │
-│    DLT645TcpHandler   - TCP 透传模式                         │
-│    DLT645RtuHandler   - RS485 串口直连                       │
-│                                                              │
-│  依赖: 自研 dlt645 协议库                                    │
-│                                                              │
-│  配置参数 (JSON):                                             │
-│    {                                                         │
-│      "mode": "client|server",                                │
-│      "transport": "tcp|rtu",                                 │
-│      "ip": "192.168.1.20",                                   │
-│      "port": 8899,                                           │
-│      "serial_port": "/dev/ttyUSB0",                          │
-│      "baudrate": 9600,                                       │
-│      "parity": "E",                                          │
-│      "databits": 8,                                          │
-│      "stopbits": 1,                                          │
-│      "meter_address": "000000001234",                        │
-│      "timeout_ms": 3000                                      │
-│    }                                                         │
-│                                                              │
-│  采集特点:                                                    │
-│    - 按 DI 数据标识读取，DI 前缀决定读取方法                  │
-│      00: 电能, 01: 最大需量, 02: 变量, 03: 事件, 04: 参变量  │
-│    - 大多数数据只读，仅 DI 前缀 04 的参变量支持写入           │
-│    - 值需通过乘法系数/加法系数换算                            │
-│                                                              │
-│  测点地址格式: "meter_address:DI_hex"                         │
-│    示例: "000000001234:02010000"  (电表地址 + 数据标识)       │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-#### 4.4.3 libproto_iec104.so
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                  libproto_iec104.so                       │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  导出符号:                                                    │
-│    ems_plugin_info()     → {"IEC104", API版本}                  │
-│    ems_plugin_create()   → IEC104Handler 实例                │
-│    ems_plugin_destroy()  → 释放实例                          │
-│    ems_plugin_init()     → 初始化连接参数                     │
-│    ems_plugin_connect()  → 建立 TCP 连接，启动总召唤          │
-│    ems_plugin_read_batch() → 读取缓存测点值                  │
-│    ems_plugin_write()    → 发送遥控/遥调命令                  │
-│                                                              │
-│  内部实现:                                                    │
-│    IEC104ClientHandler - 作为控制站连接远动设备               │
-│    IEC104ServerHandler - 作为被控站模拟设备                   │
-│                                                              │
-│  依赖: lib60870 (开源 IEC 60870-5-104 库)                    │
-│                                                              │
-│  配置参数 (JSON):                                             │
-│    {                                                         │
-│      "mode": "client|server",                                │
-│      "ip": "192.168.1.30",                                   │
-│      "port": 2404,                                           │
-│      "common_address": 1,                                    │
-│      "asdu_size": 0,                                         │
-│      "timeout_ms": 5000,                                     │
-│      "t1": 15, "t2": 10, "t3": 20,                          │
-│      "k": 12, "w": 8                                        │
-│    }                                                         │
-│                                                              │
-│  采集特点:                                                    │
-│    - 事件驱动为主：设备主动上报遥测/遥信变化                   │
-│    - 总召唤启动时全量同步，后续仅接收变化量                    │
-│    - 遥控支持：单点/双点命令，选择-执行-撤销流程               │
-│    - 品质描述符：OV/BL/SB/NT/IV 等品质位同步                 │
-│    - ASDU 类型映射：M_ME_NC_1(短浮点)、M_SP_NA_1(单点)等    │
-│                                                              │
-│  测点地址格式: "common_address:io_address[:asdu_type]"        │
-│    示例: "1:1001:M_ME_NC_1"  (公共地址1, IO地址1001, 短浮点) │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-#### 4.4.4 libproto_iec61850.so
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                  libproto_iec61850.so                     │
-├──────────────────────────────────────────────────────────────┤
-│                                                              │
-│  导出符号:                                                    │
-│    ems_plugin_info()     → {"IEC61850", API版本}                │
-│    ems_plugin_create()   → IEC61850Handler 实例              │
-│    ems_plugin_destroy()  → 释放实例                          │
-│    ems_plugin_init()     → 初始化连接参数                     │
-│    ems_plugin_connect()  → 建立 MMS 连接，发现数据模型        │
-│    ems_plugin_read_batch() → 批量读取测点值                  │
-│    ems_plugin_write()    → 写入控制命令                       │
-│                                                              │
-│  内部实现:                                                    │
-│    IEC61850ClientHandler - MMS 客户端，连接 IED              │
-│    IEC61850ServerHandler - MMS 服务端，模拟 IED              │
-│    GooseManager         - GOOSE 订阅管理                     │
-│                                                              │
-│  依赖: libIEC61850 (开源 IEC 61850 MMS/GOOSE 库)             │
-│                                                              │
-│  配置参数 (JSON):                                             │
-│    {                                                         │
-│      "mode": "client|server",                                │
-│      "ip": "192.168.1.40",                                   │
-│      "port": 102,                                            │
-│      "ied_name": "PCS001G",                                  │
-│      "ld_name": "GenericLD",                                 │
-│      "model_file": "",                                       │
-│      "timeout_ms": 10000                                     │
-│    }                                                         │
-│                                                              │
-│  采集特点:                                                    │
-│    - 连接时自动发现数据模型（LN/DO/DA/FC）                    │
-│    - 支持 DataSet 批量读取优化                                │
-│    - 支持 GOOSE 组播订阅（二层报文）                          │
-│    - 支持 ICD/SCL 模型文件加载                               │
-│    - 连接过程分阶段：连接 → 发现模型 → 注册测点               │
-│                                                              │
-│  测点地址格式: "LD/LN.DO.DA" + FC                            │
-│    示例: "MEAS/M0GGIO1.AnIn1.mag.f" (FC=MX)                 │
-│                                                              │
-└──────────────────────────────────────────────────────────────┘
-```
-
-### 4.5 PluginManager 实现
-
-```cpp
-class PluginManager {
-public:
-    // 协议名 -> 动态库文件名映射
-    static const std::unordered_map<std::string, std::string> PROTOCOL_LIB_MAP;
-
-    // 按需加载协议插件
-    ProtocolPlugin* load(const std::string& protocol_name);
-
-    // 卸载指定协议（引用计数为0时真正 dlclose）
-    void unload(const std::string& protocol_name);
-
-    // 检查协议是否已加载
-    bool is_loaded(const std::string& protocol_name) const;
-
-private:
-    struct PluginEntry {
-        void* dl_handle{nullptr};              // dlopen 句柄
-        ems_plugin_create_fn create_fn{nullptr};
-        ems_plugin_destroy_fn destroy_fn{nullptr};
-        ems_plugin_info_fn info_fn{nullptr};
-        int ref_count{0};                      // 引用计数
-    };
-
-    std::unordered_map<std::string, PluginEntry> loaded_plugins_;
-    std::string plugin_dir_{"./plugins"};      // 动态库搜索目录
-};
-
-// 协议名 -> 动态库文件名
-const std::unordered_map<std::string, std::string>
-PluginManager::PROTOCOL_LIB_MAP = {
-    {"ModbusTCP",      "libproto_modbus.so"},
-    {"ModbusRTU",      "libproto_modbus.so"},
-    {"DLT645",         "libproto_dlt645.so"},
-    {"IEC104",         "libproto_iec104.so"},
-    {"IEC61850",       "libproto_iec61850.so"},
-};
-```
-
-### 4.6 加载时序
-
-```
-时间 ──────────────────────────────────────────────────────────▶
-
-ParaLoader          CollectEngine           PluginManager         .so 文件
-    │                    │                       │                   │
-    │ load_channels()    │                       │                   │
-    │─── 通道列表 ──────▶│                       │                   │
-    │                    │                       │                   │
-    │                    │ for ch in channels:   │                   │
-    │                    │  load(ch.protocol)    │                   │
-    │                    │──────────────────────▶│                   │
-    │                    │                       │                   │
-    │                    │                       │ 已加载? ──No──▶ dlopen()
-    │                    │                       │              dlsym()
-    │                    │                       │◀─── 缓存 ───────│
-    │                    │                       │                   │
-    │                    │◀─── 插件实例 ─────────│                   │
-    │                    │                       │                   │
-    │                    │ 创建 ChannelThread    │                   │
-    │                    │ 绑定插件实例          │                   │
-    │                    │ 启动线程              │                   │
-    │                    │                       │                   │
-```
-
----
+同一 Modbus 包可服务 TCP/RTU 多通道，库句柄复用，通道实例与会话分别隔离。未启用通道、配置浏览和草稿编辑不触发加载。
 
 ## 5. 采集流程
 
@@ -589,125 +291,11 @@ Drogon Web 读取快照并推送前端；变化提示与原始遥测使用独立
 
 ## 6. 目录结构
 
-```
-backend/
-├── src/
-│   ├── net/                              # 网络采集模块
-│   │   ├── collect/                      # 采集引擎
-│   │   │   ├── CMakeLists.txt
-│   │   │   ├── collect_engine.h/cpp      # 采集引擎主类
-│   │   │   ├── channel_thread.h/cpp      # 通道线程
-│   │   │   ├── data_dispatcher.h/cpp     # 数据分发
-│   │   │   └── plugin_manager.h/cpp      # 插件管理器
-│   │   │
-│   │   ├── protocol/                     # 协议插件（各自编译为 .so）
-│   │   │   ├── common/
-│   │   │   │   ├── CMakeLists.txt
-│   │   │   │   ├── protocol_plugin_api.h # 插件标准 C 接口定义
-│   │   │   │   └── protocol_handler.h    # 插件内部 C++ 抽象基类
-│   │   │   │
-│   │   │   ├── modbus/
-│   │   │   │   ├── CMakeLists.txt        # → libproto_modbus.so
-│   │   │   │   ├── modbus_handler.h/cpp  # Modbus 协议处理器
-│   │   │   │   ├── modbus_client.h/cpp   # 客户端（TCP/RTU 统一）
-│   │   │   │   └── modbus_server.h/cpp   # 服务端（TCP/RTU 统一）
-│   │   │   │
-│   │   │   ├── dlt645/
-│   │   │   │   ├── CMakeLists.txt        # → libproto_dlt645.so
-│   │   │   │   ├── dlt645_handler.h/cpp  # DLT645 协议处理器
-│   │   │   │   ├── dlt645_client.h/cpp   # 客户端（TCP/RTU 统一）
-│   │   │   │   ├── dlt645_server.h/cpp   # 服务端（TCP/RTU 统一）
-│   │   │   │   └── dlt645_codec.h/cpp    # 编解码
-│   │   │   │
-│   │   │   ├── iec104/
-│   │   │   │   ├── CMakeLists.txt        # → libproto_iec104.so
-│   │   │   │   ├── iec104_handler.h/cpp  # IEC104 协议处理器
-│   │   │   │   ├── iec104_client.h/cpp   # 客户端
-│   │   │   │   ├── iec104_server.h/cpp   # 服务端
-│   │   │   │   └── iec104_asdu_types.h/cpp # ASDU 类型编解码
-│   │   │   │
-│   │   │   └── iec61850/
-│   │   │       ├── CMakeLists.txt        # → libproto_iec61850.so
-│   │   │       ├── iec61850_handler.h/cpp
-│   │   │       ├── iec61850_client.h/cpp # MMS 客户端
-│   │   │       ├── iec61850_server.h/cpp # MMS 服务端
-│   │   │       └── iec61850_goose.h/cpp  # GOOSE 管理
-│   │   │
-│   │   └── para_loader/                  # 参数加载模块
-│   │
-│   └── rtdb/                             # 实时数据库模块
-│
-├── plugins/                              # 运行时 .so 部署目录
-│   ├── libproto_modbus.so
-│   ├── libproto_dlt645.so
-│   ├── libproto_iec104.so
-│   └── libproto_iec61850.so
-│
-└── tests/
-    └── net/
-        └── protocol/
-            ├── modbus_handler_test.cpp
-            └── plugin_manager_test.cpp
-```
-
----
+协议 API、实现、平台适配及安装目录见 [通讯协议工程结构](protocol-design.md#8-工程与构建)。采集调度和分发仍位于 `backend/src/net/collect/`，协议实现位于 `backend/src/net/protocol/`，公开头位于 `backend/include/net/protocol/`。
 
 ## 7. CMake 构建配置
 
-自研主工程统一 C++17：`CMAKE_CXX_STANDARD 17`、`CMAKE_CXX_STANDARD_REQUIRED ON`、`CMAKE_CXX_EXTENSIONS OFF`。以下为目标构建设计，实施时按选定工具链和第三方依赖版本验证，不以旧工程设置作为设计约束。
-
-### 7.1 协议插件编译
-
-每个协议插件编译为独立的共享库，使用 `MODULE` 类型（不被其他目标链接，仅运行时加载）：
-
-```cmake
-# net/protocol/modbus/CMakeLists.txt
-add_library(proto_modbus MODULE
-    modbus_handler.cpp
-    modbus_client.cpp
-    modbus_server.cpp
-)
-
-target_include_directories(proto_modbus PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/net/protocol/common
-    ${CMAKE_SOURCE_DIR}/inc
-)
-
-target_link_libraries(proto_modbus PRIVATE
-    libmodbus
-)
-
-set_target_properties(proto_modbus PROPERTIES
-    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/plugins"
-    PREFIX "lib"
-)
-```
-
-### 7.2 采集引擎编译
-
-```cmake
-# net/collect/CMakeLists.txt
-add_library(net_collect STATIC
-    collect_engine.cpp
-    channel_thread.cpp
-    data_dispatcher.cpp
-    plugin_manager.cpp
-)
-
-target_include_directories(net_collect PUBLIC
-    ${CMAKE_SOURCE_DIR}/src/net/protocol/common
-    ${CMAKE_SOURCE_DIR}/inc
-)
-
-target_link_libraries(net_collect PUBLIC
-    ems_rtdb
-    ems_net
-    pthread
-    dl
-)
-```
-
----
+自研目标采用 C++17。主程序静态链接轻量 SDK，具体协议构建为 `MODULE`，仅在运行时加载；系统依赖使用 `Threads::Threads` 与 `${CMAKE_DL_LIBS}`。符号导出、三平台产物命名和部署规则由 [通讯协议构建契约](protocol-design.md#8-工程与构建)统一维护。
 
 ## 8. 关键设计决策
 
@@ -735,8 +323,8 @@ target_link_libraries(net_collect PUBLIC
 
 - **ABI 约束**：C 导出避免名称修饰，但仍需统一结构体布局、版本、调用约定和内存所有权；不跨边界传递 STL 或异常
 - **兼容验证**：不同编译器/运行库组合需实测，不能仅凭 extern C 保证二进制兼容
-- **简单可靠**：`dlopen`/`dlsym` 是 POSIX 标准，行为确定
-- **内部仍用 C++**：插件内部使用 C++ 抽象类实现逻辑，仅边界使用 C 函数桥接
+- **平台封装**：Windows 使用 `LoadLibraryExW/GetProcAddress`，Linux/macOS 使用 `dlopen/dlsym`，均隐藏在加载器 PIMPL 中
+- **内部仍用 C++**：SDK 和各协议实现采用 PIMPL；C ABI 桥在模块内调用协议对象
 
 ---
 

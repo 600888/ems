@@ -8,11 +8,16 @@
  */
 #include "db/db_manager.h"
 
+#ifdef _WIN32
+#include <process.h>
+#else
 #include <unistd.h>
+#endif
 
 #include <array>  // for YLT_REFL macro (std::array)
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <sstream>
@@ -684,16 +689,31 @@ CREATE TABLE IF NOT EXISTS point_yt (
 
 static bool exec_sql(const DbConfig& config, const std::string& db, const std::string& sql) {
     // 写入临时文件执行，避免 shell 转义和命令行长度限制
-    std::string tmpfile = "/tmp/ems_db_init_" + std::to_string(getpid()) + ".sql";
+#ifdef _WIN32
+    const auto pid = _getpid();
+#else
+    const auto pid = getpid();
+#endif
+    std::error_code error;
+    const auto temp_dir = std::filesystem::temp_directory_path(error);
+    if (error) return false;
+    const auto tmpfile = (temp_dir / ("ems_db_init_" + std::to_string(pid) + ".sql")).string();
     {
         std::ofstream ofs(tmpfile);
         if (!ofs) return false;
         ofs << sql;
     }
 
+#ifdef _WIN32
+    const std::string password_arg = " -p\"" + config.password + "\"";
+    const std::string null_output = " 2>NUL";
+#else
+    const std::string password_arg = " -p'" + config.password + "'";
+    const std::string null_output = " 2>/dev/null";
+#endif
     std::string cmd = "mysql -h" + config.host + " -P" + std::to_string(config.port) + " -u" +
-                      config.user + " -p'" + config.password + "'" + " " + db + " < " + tmpfile +
-                      " 2>/dev/null";
+                      config.user + password_arg + " " + db + " < \"" + tmpfile + "\"" +
+                      null_output;
     int rc = system(cmd.c_str());
     std::remove(tmpfile.c_str());
     return rc == 0;

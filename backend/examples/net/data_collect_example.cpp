@@ -37,6 +37,10 @@
 #include "net/para_loader/para_loader.h"
 #include "rtdb/rtdb_channel.h"
 
+#ifndef EMS_EXAMPLE_PLUGIN_RELATIVE_DIR
+#define EMS_EXAMPLE_PLUGIN_RELATIVE_DIR "../../lib"
+#endif
+
 namespace fs = std::filesystem;
 using ems::net::device::ParaLoader;
 using ems::rtdb::ChannelConfig;
@@ -108,8 +112,9 @@ struct AppConfig {
 static AppConfig parse_args(int argc, char* argv[]) {
     AppConfig cfg;
     // 插件目录: 相对于可执行文件路径的绝对路径
-    cfg.pluginDir =
-        fs::absolute(fs::path(argv[0]).parent_path() / "../../lib").lexically_normal().string();
+    cfg.pluginDir = fs::absolute(fs::path(argv[0]).parent_path() / EMS_EXAMPLE_PLUGIN_RELATIVE_DIR)
+                        .lexically_normal()
+                        .string();
 
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
@@ -304,7 +309,7 @@ int main(int argc, char* argv[]) {
             std::cerr << "  ⚠ 通道 [" << chId << "] " << connection << " - " << err << std::endl;
         });
 
-        auto fns = pluginMgr.get_functions(protoName);
+        auto fns = pluginMgr.get_instance_functions(pluginInst);
         chThread->start(pluginMgr, pluginInst, fns);
         startedCount++;
 

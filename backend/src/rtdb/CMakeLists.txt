@@ -1,37 +1,18 @@
-file(GLOB_RECURSE RTDB_SOURCES
-    *.cpp
-)
-
-set(RTDB_SOURCES
-    ${RTDB_SOURCES}
-)
+# Redis 实时数据库封装；依赖通过平台无关目标传递。
+file(GLOB_RECURSE RTDB_SOURCES CONFIGURE_DEPENDS *.cpp)
 
 add_library(rtdb STATIC ${RTDB_SOURCES})
 
-target_include_directories(rtdb PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
+target_include_directories(
+    rtdb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include
+                ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )
 
-find_package(PkgConfig REQUIRED)
-pkg_check_modules(HIREDIS REQUIRED hiredis)
+target_link_libraries(rtdb PUBLIC ems_hiredis redis++ Threads::Threads ems_models)
 
-target_include_directories(rtdb PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${CMAKE_SOURCE_DIR}/include
-    ${HIREDIS_INCLUDE_DIRS}
-)
-
-target_link_libraries(rtdb PUBLIC
-    ${HIREDIS_LIBRARIES}
-    redis++
-    pthread
-    ems_models
-)
-
-set_target_properties(rtdb PROPERTIES
-    CXX_STANDARD 20
-    CXX_STANDARD_REQUIRED YES
-    POSITION_INDEPENDENT_CODE ON
+set_target_properties(
+    rtdb
+    PROPERTIES CXX_STANDARD 20
+               CXX_STANDARD_REQUIRED YES
+               POSITION_INDEPENDENT_CODE ON
 )

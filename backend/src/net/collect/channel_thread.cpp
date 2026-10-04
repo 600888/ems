@@ -65,6 +65,8 @@ void ChannelThread::start(PluginManager& plugin_manager, void* plugin_instance,
         return;
     }
 
+    join();
+
     CHANNEL_LOG_INFO(this,
                      fmt::format("启动线程, 状态={}", static_cast<int>(state_.load())).c_str());
 
@@ -72,7 +74,25 @@ void ChannelThread::start(PluginManager& plugin_manager, void* plugin_instance,
     plugin_fns_ = plugin_fns;
     set_state(ChannelState::Starting);
 
-    thread_ = std::make_shared<std::thread>([this, &plugin_manager]() { run(plugin_manager); });
+    try {
+        thread_ = std::make_shared<std::thread>([this, &plugin_manager]() {
+            try {
+                run(plugin_manager);
+            } catch (const std::exception& error) {
+                last_err_ = error.what();
+                set_state(ChannelState::Error);
+            } catch (...) {
+                last_err_ = "Unknown channel worker exception";
+                set_state(ChannelState::Error);
+            }
+        });
+    } catch (...) {
+        plugin_manager.release(plugin_instance_);
+        plugin_instance_ = nullptr;
+        plugin_fns_ = {};
+        set_state(ChannelState::Error);
+        throw;
+    }
 }
 
 void ChannelThread::stop() {
@@ -142,13 +162,23 @@ std::future<bool> ChannelThread::post_command(const std::string& pointCode, doub
 // ============================================================
 
 void ChannelThread::run(PluginManager& plugin_manager) {
+    // 每个退出分支都在最后一次 C 调用后销毁实例，最后实例才释放动态库。
+    auto release_plugin = [this, &plugin_manager](void* instance) {
+        plugin_manager.release(instance);
+        plugin_instance_ = nullptr;
+        plugin_fns_ = {};
+    };
+    std::unique_ptr<void, decltype(release_plugin)> lease(plugin_instance_, release_plugin);
+    auto expected = ChannelState::Starting;
+    if (!state_.compare_exchange_strong(expected, ChannelState::Running)) {
+        set_state(ChannelState::Stopped);
+        return;
+    }
     CHANNEL_LOG_INFO(
         this, fmt::format("开始运行, 名称={}, 协议={}, 连接={}, 周期={}ms", channel_config_.name_,
                           ems::rtdb::protocolTypeToString(channel_config_.protocol_),
                           channel_config_.connection_, poll_interval_ms_.load())
                   .c_str());
-    set_state(ChannelState::Running);
-
     // 1. 初始化插件（传入 JSON 配置）
     json initConfig;
     initConfig["channel_id"] = channel_config_.id_;
@@ -170,7 +200,6 @@ void ChannelThread::run(PluginManager& plugin_manager) {
             CHANNEL_LOG_ERROR(this, fmt::format("插件初始化失败: {}", last_err_).c_str());
             set_state(ChannelState::Error);
             if (error_cb_) error_cb_(channel_config_.id_, last_err_);
-            plugin_manager.unload(channel_config_.name_);
             return;
         }
     }
@@ -184,7 +213,6 @@ void ChannelThread::run(PluginManager& plugin_manager) {
             CHANNEL_LOG_ERROR(this, fmt::format("连接最终失败: {}", last_err_).c_str());
             set_state(ChannelState::Error);
             if (error_cb_) error_cb_(channel_config_.id_, last_err_);
-            plugin_manager.unload(channel_config_.name_);
             return;
         }
     }
@@ -267,7 +295,12 @@ bool ChannelThread::reconnect() {
         int delay = backoff_delay();
 
         CHANNEL_LOG_DEBUG(this, fmt::format("重连第{}次, 等待{}ms...", retries + 1, delay).c_str());
-        std::this_thread::sleep_for(std::chrono::milliseconds(delay));
+        {
+            std::unique_lock<std::mutex> lock(cmd_mutex_);
+            if (cmd_cv_.wait_for(lock, std::chrono::milliseconds(delay),
+                                 [this] { return state_.load() != ChannelState::Running; }))
+                return false;
+        }
 
         int ret = plugin_fns_.connect_fn(plugin_instance_);
         if (ret == 0) {
@@ -357,11 +390,18 @@ void ChannelThread::collect_points(const std::vector<std::string>& pointCodes) {
     }
 
     // 分配结果缓冲区
-    char resultBuf[EMS_PLUGIN_RESULT_BUF_SIZE] = {0};
+    std::vector<char> resultBuf(EMS_PLUGIN_RESULT_BUF_SIZE, 0);
 
     int readCount =
         plugin_fns_.read_batch_fn(plugin_instance_, cCodes.data(), static_cast<int>(cCodes.size()),
-                                  resultBuf, sizeof(resultBuf));
+                                  resultBuf.data(), static_cast<int>(resultBuf.size()));
+    constexpr std::size_t maxResultBytes = 8 * 1024 * 1024;
+    while (readCount == EMS_PLUGIN_BUFFER_TOO_SMALL && resultBuf.size() < maxResultBytes) {
+        resultBuf.resize(std::min(resultBuf.size() * 2, maxResultBytes));
+        readCount = plugin_fns_.read_batch_fn(plugin_instance_, cCodes.data(),
+                                              static_cast<int>(cCodes.size()), resultBuf.data(),
+                                              static_cast<int>(resultBuf.size()));
+    }
 
     if (readCount < 0) {
         // 读取失败
@@ -375,21 +415,28 @@ void ChannelThread::collect_points(const std::vector<std::string>& pointCodes) {
 
     if (readCount == 0) {
         CHANNEL_LOG_DEBUG(this,
-                          fmt::format("批量读取返回空, 测点数={}", pointCodes.size()).c_str());
-        return;
+                          fmt::format("本次没有有效点, 测点数={}", pointCodes.size()).c_str());
     }
 
     // 解析 JSON 结果并分发
     try {
-        auto results = json::parse(resultBuf);
+        auto results = json::parse(resultBuf.data());
         std::vector<PointValue> pointValues;
         pointValues.reserve(results.size());
 
         for (const auto& item : results) {
             PointValue pv;
             pv.code = item.value("code", std::string());
-            pv.value = item.value("value", 0.0);
             pv.quality = item.value("quality", 1);
+            const auto value = item.find("value");
+            if (value != item.end() && value->is_number()) {
+                pv.value = value->get<double>();
+            } else if (value != item.end() && value->is_boolean()) {
+                pv.value = value->get<bool>() ? 1.0 : 0.0;
+            } else {
+                pv.value = 0;
+                if (pv.quality == 0) pv.quality = 3;
+            }
             pv.timestamp = item.value("timestamp", now_ms());
             pointValues.push_back(std::move(pv));
         }

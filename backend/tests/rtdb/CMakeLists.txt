@@ -1,13 +1,7 @@
-add_executable(rtdb_example
-    example.cpp
-)
+# Redis 实时数据库使用示例。
 
-target_link_libraries(rtdb_example
-    rtdb
-    ${HIREDIS_LIBRARIES}
-    pthread
-)
+add_executable(rtdb_example example.cpp)
 
-target_include_directories(rtdb_example PRIVATE
-    ${CMAKE_SOURCE_DIR}/src/rtdb
-)
+target_link_libraries(rtdb_example PRIVATE rtdb Threads::Threads)
+
+target_include_directories(rtdb_example PRIVATE ${CMAKE_SOURCE_DIR}/src/rtdb)

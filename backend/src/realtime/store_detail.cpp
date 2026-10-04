@@ -7,8 +7,11 @@
 #ifndef NOMINMAX
 #define NOMINMAX
 #endif
-#include <bcrypt.h>
+// BCrypt 声明依赖 Windows 基础类型，必须保持包含顺序。
+// clang-format off
 #include <windows.h>
+#include <bcrypt.h>
+// clang-format on
 #else
 #include <sys/random.h>
 
