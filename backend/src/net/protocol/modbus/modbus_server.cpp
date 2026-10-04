@@ -10,6 +10,7 @@
 #include <iostream>
 
 #include "net/log.h"
+#include "net/protocol/modbus/modbus_limits.h"
 
 namespace ems {
 namespace net {
@@ -470,7 +471,7 @@ ModbusServer::ErrorCode ModbusServer::readDiscreteInputs(int slaveId, int addr, 
 
 void ModbusServer::runLoop() {
     while (running_.load()) {
-        server_.poll(100);
+        server_.poll(enum_value(Defaults::ServerPollMs));
     }
 }
 

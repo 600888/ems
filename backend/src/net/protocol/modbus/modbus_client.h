@@ -18,23 +18,20 @@
 #include <memory>
 #include <string>
 
+#include "net/protocol/modbus/modbus_limits.h"
+#include "net/protocol/modbus/modbus_types.h"
+
 namespace ems {
 namespace net {
 namespace modbus {
 
 class ModbusClient {
    public:
-    enum class NetType { RTU = 0, TCP = 1 };
+    /** @brief 兼容原有类限定的传输类型名称。 */
+    using NetType = modbus::NetType;
 
-    enum class ErrorCode {
-        Success = 0,
-        ConnectionFailed = -1,
-        Timeout = -2,
-        InvalidAddress = -3,
-        InvalidData = -4,
-        SlaveError = -5,
-        Unknown = -99
-    };
+    /** @brief 兼容原有类限定的操作错误码名称。 */
+    using ErrorCode = ClientError;
 
     using ReadCallback = std::function<void(const uint16_t* data, int count)>;
     using ErrorCallback = std::function<void(ErrorCode, const std::string&)>;
@@ -191,7 +188,7 @@ class ModbusClient {
      */
     template <typename T, Modbus::Endian E = Modbus::EndianBig>
     ErrorCode readData(int slaveId, int addr, Modbus::Data<T, E>& data) {
-        int regCount = sizeof(T) / 2;
+        int regCount = sizeof(T) / enum_value(Layout::BytesPerRegister);
         auto ret = readHoldingRegisters(slaveId, addr, data.registers().data(), regCount);
         if (ret == ErrorCode::Success) {
             data.updateValue();
@@ -208,7 +205,7 @@ class ModbusClient {
      */
     template <typename T, Modbus::Endian E = Modbus::EndianBig>
     ErrorCode writeData(int slaveId, int addr, const Modbus::Data<T, E>& data) {
-        int regCount = sizeof(T) / 2;
+        int regCount = sizeof(T) / enum_value(Layout::BytesPerRegister);
         return writeMultipleRegisters(slaveId, addr, data.registers().data(), regCount);
     }
 

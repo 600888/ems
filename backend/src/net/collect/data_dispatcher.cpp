@@ -13,6 +13,7 @@
 #include <unordered_map>
 
 #include "net/log.h"
+#include "net/protocol/protocol_types.h"
 #include "rtdb/rtdb_manager.h"
 
 namespace ems {
@@ -217,7 +218,7 @@ bool DataDispatcher::update_yt(const std::string& pointCode, double value, int q
 int DataDispatcher::batch_update(const std::vector<PointValue>& results) {
     if (!initialized_.load() || !rtdb_mgr_) {
         LOG_ERROR("数据分发器未初始化, 无法批量更新");
-        return -1;
+        return enum_value(protocol::OperationResult::Failure);
     }
 
     std::map<std::string, model::YcPoint> ycBatch;
@@ -345,7 +346,7 @@ int DataDispatcher::batch_update_yx(const std::map<std::string, model::YxPoint>&
 int DataDispatcher::batch_update_yk(const std::map<std::string, model::YkPoint>& points) {
     if (!initialized_.load() || !rtdb_mgr_ || points.empty()) return 0;
 
-    if (!rtdb_mgr_->batchUpdateYk(points)) return -1;
+    if (!rtdb_mgr_->batchUpdateYk(points)) return enum_value(protocol::OperationResult::Failure);
     for (const auto& [code, point] : points) {
         publish_change("YK", point.to_json().dump());
         notify_callback("YK", code, true);
@@ -356,7 +357,7 @@ int DataDispatcher::batch_update_yk(const std::map<std::string, model::YkPoint>&
 int DataDispatcher::batch_update_yt(const std::map<std::string, model::YtPoint>& points) {
     if (!initialized_.load() || !rtdb_mgr_ || points.empty()) return 0;
 
-    if (!rtdb_mgr_->batchUpdateYt(points)) return -1;
+    if (!rtdb_mgr_->batchUpdateYt(points)) return enum_value(protocol::OperationResult::Failure);
     for (const auto& [code, point] : points) {
         publish_change("YT", point.to_json().dump());
         notify_callback("YT", code, true);

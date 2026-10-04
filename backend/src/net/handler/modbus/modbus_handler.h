@@ -29,11 +29,20 @@
 #include "models/base.h"
 #include "net/handler/base_handler.h"
 #include "net/protocol/modbus/modbus_client.h"
+#include "net/protocol/modbus/modbus_limits.h"
 #include "net/protocol/modbus/modbus_server.h"
+#include "net/protocol/serial_types.h"
+#include "net/protocol/time_units.h"
 
 namespace ems {
 namespace net {
 namespace device {
+using modbus::Defaults;
+using modbus::FunctionCode;
+using modbus::Layout;
+using modbus::Limits;
+using protocol::SerialDefaults;
+using protocol::TimeUnits;
 
 using json = nlohmann::json;
 using model::DecodeCode;
@@ -52,7 +61,11 @@ class CoilBits {
      * @brief 构造 CoilBits 实例。
      * @param[in] count 数据项数量。
      */
-    explicit CoilBits(size_t count) : data_(count > 0 ? (count + 7) / 8 : 0), count_(count) {}
+    explicit CoilBits(size_t count)
+        : data_(count > 0 ? (count + enum_value(Layout::BitsPerByte) - 1) /
+                                enum_value(Layout::BitsPerByte)
+                          : 0),
+          count_(count) {}
 
     /**
      * @brief 调整线圈位数组长度。
@@ -60,7 +73,9 @@ class CoilBits {
      */
     void resize(size_t count) {
         count_ = count;
-        data_.resize(count > 0 ? (count + 7) / 8 : 0);
+        data_.resize(count > 0 ? (count + enum_value(Layout::BitsPerByte) - 1) /
+                                     enum_value(Layout::BitsPerByte)
+                               : 0);
     }
 
     /**
@@ -75,7 +90,8 @@ class CoilBits {
      * @return true 表示操作成功；false 表示失败。
      */
     bool operator[](size_t index) const {
-        return (index < count_) && ((data_[index / 8] & (1 << (index % 8))) != 0);
+        return (index < count_) && ((data_[index / enum_value(Layout::BitsPerByte)] &
+                                     (1 << (index % enum_value(Layout::BitsPerByte)))) != 0);
     }
 
     /**
@@ -86,9 +102,11 @@ class CoilBits {
     void set(size_t index, bool value) {
         if (index >= count_) return;
         if (value)
-            data_[index / 8] |= (1 << (index % 8));
+            data_[index / enum_value(Layout::BitsPerByte)] |=
+                (1 << (index % enum_value(Layout::BitsPerByte)));
         else
-            data_[index / 8] &= ~(1 << (index % 8));
+            data_[index / enum_value(Layout::BitsPerByte)] &=
+                ~(1 << (index % enum_value(Layout::BitsPerByte)));
     }
 
     /**
@@ -129,7 +147,7 @@ class ModbusWriteCallback {
 
 struct ParsedPoint {
     int slaveId{1};
-    int funcCode{3};
+    int funcCode{enum_value(FunctionCode::ReadHoldingRegisters)};
     int address{0};
     int regCount{1};
     int bitOffset{-1};
@@ -139,7 +157,8 @@ struct ParsedPoint {
 };
 
 struct MergedRange {
-    int slaveId{1}, funcCode{3}, startAddr{0}, count{0}, pointStartIdx{0}, pointCount{0};
+    int slaveId{1}, funcCode{enum_value(FunctionCode::ReadHoldingRegisters)}, startAddr{0},
+        count{0}, pointStartIdx{0}, pointCount{0};
 };
 
 // ============================================================
@@ -240,7 +259,8 @@ class ModbusServerHandler : public ServerHandler {
      * @param[in] limit 结果数量上限。
      * @return 匹配条件的数据集合。
      */
-    std::vector<CapturedMessage> getCapturedMessages(int limit = 100) const override;
+    std::vector<CapturedMessage> getCapturedMessages(
+        int limit = enum_value(Defaults::CaptureMessageLimit)) const override;
     /** @brief 清空已捕获的协议报文。 */
     void clearCapturedMessages() override;
     /**
@@ -299,7 +319,7 @@ class ModbusServerHandler : public ServerHandler {
     std::atomic<bool> serverStarted_{false};
     modbus::ModbusServer::NetType netType_;
     std::string connection_, settings_;
-    int port_{502};
+    int port_{enum_value(Defaults::TcpPort)};
 };
 
 // ============================================================
@@ -370,7 +390,8 @@ class ModbusClientHandler : public ClientHandler {
      * @param[in] limit 结果数量上限。
      * @return 匹配条件的数据集合。
      */
-    std::vector<CapturedMessage> getCapturedMessages(int limit = 100) const override;
+    std::vector<CapturedMessage> getCapturedMessages(
+        int limit = enum_value(Defaults::CaptureMessageLimit)) const override;
     /** @brief 清空已捕获的协议报文。 */
     void clearCapturedMessages() override;
     /**
@@ -587,7 +608,8 @@ class ModbusClientHandler : public ClientHandler {
     std::atomic<bool> connected_{false}, clientInitialized_{false};
     modbus::ModbusClient::NetType netType_;
     std::string connection_, settings_;
-    int defaultSlaveId_{1}, responseTimeoutMs_{1000}, byteTimeoutMs_{1000};
+    int defaultSlaveId_{1}, responseTimeoutMs_{enum_value(Defaults::ResponseTimeoutMs)},
+        byteTimeoutMs_{enum_value(Defaults::ByteTimeoutMs)};
     mutable std::string last_err_;
 };
 

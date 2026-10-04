@@ -16,6 +16,8 @@
 #include <variant>
 #include <vector>
 
+#include "net/protocol/modbus/modbus_types.h"
+
 namespace ems {
 namespace model {
 
@@ -185,43 +187,9 @@ enum class PointType : int { YC = 0, YX = 1, YK = 2, YT = 3 };
 
 enum class YKCommandType : int { Pulse = 0, Latch = 1, Step = 2 };
 
-/**
- * @brief 解码方式枚举
- */
-enum class DecodeCode : int {
-    UINT16 = 0,
-    INT16 = 1,
-    UINT32 = 2,
-    INT32 = 3,
-    FLOAT = 4,
-    DOUBLE = 5,
-    UINT8 = 6,
-    INT8 = 7,
-    BOOL = 8,
-    BIT = 9
-};
-
-/**
- * @brief 端序枚举
- *
- * 定义多寄存器数据类型（UINT32/INT32/FLOAT/DOUBLE）中
- * 16 位寄存器的排列顺序。
- *
- * 以 4 字节 (2 寄存器) FLOAT [R0][R1] 为例:
- *
- *     BigEndian              (0): R0高字节 R0低字节 R1高字节 R1低字节  (AB CD — Modbus标准)
- *     LittleEndian           (1): R1高字节 R1低字节 R0高字节 R0低字节  (CD AB — 字交换)
- *     BigEndianByteSwap      (2): R0低字节 R0高字节 R1低字节 R1高字节  (BA DC — 字节交换)
- *     LittleEndianByteSwap   (3): R1低字节 R1高字节 R0低字节 R0高字节(DC BA — 字+字节交换)
- *
- * @note 避免使用 UPPER_SNAKE_CASE 命名，防止与系统宏 (BIG_ENDIAN/LITTLE_ENDIAN) 冲突
- */
-enum class EndianCode : int {
-    BigEndian = 0,            // AB CD — Modbus 默认大端
-    LittleEndian = 1,         // CD AB — 字交换
-    BigEndianByteSwap = 2,    // BA DC — 字节交换
-    LittleEndianByteSwap = 3  // DC BA — 字交换 + 字节交换
-};
+/** @brief 存量模型沿用 Modbus 解码与端序类型，保持调用接口兼容。 */
+using DecodeCode = net::modbus::DecodeCode;
+using EndianCode = net::modbus::EndianCode;
 
 /**
  * @brief 获取单寄存器类型的对应字节数

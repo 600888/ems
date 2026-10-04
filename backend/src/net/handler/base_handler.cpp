@@ -4,6 +4,8 @@
  */
 #include "base_handler.h"
 
+#include "net/protocol/protocol_types.h"
+
 namespace ems {
 namespace net {
 namespace device {
@@ -47,7 +49,7 @@ AvgTimeStats ProtocolHandler::getAvgTime() const {
 }
 
 int ProtocolHandler::read_batch(const std::vector<std::string>&, std::vector<PointValue>&) {
-    return -1;  // 子类实现
+    return enum_value(protocol::OperationResult::Failure);  // 子类实现
 }
 
 }  // namespace device

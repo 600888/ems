@@ -22,9 +22,6 @@ namespace collect {
 using json = nlohmann::json;
 
 namespace {
-constexpr int BASE_DELAY_MS = 1000;  // 重连基础延迟 1s
-constexpr int MAX_DELAY_MS = 60000;  // 最大重连延迟 60s
-constexpr int RECONNECT_BACKOFF_FACTOR = 2;
 
 uint64_t now_ms() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -111,7 +108,9 @@ void ChannelThread::join() {
 // 配置
 // ============================================================
 
-void ChannelThread::set_poll_interval(int ms) { poll_interval_ms_.store(std::max(100, ms)); }
+void ChannelThread::set_poll_interval(int ms) {
+    poll_interval_ms_.store(std::max(enum_value(CollectDefaults::MinPollIntervalMs), ms));
+}
 
 void ChannelThread::add_device(DeviceContext device) {
     std::lock_guard lock(device_mutex_);
@@ -355,8 +354,12 @@ void ChannelThread::set_state(ChannelState new_state) { state_.store(new_state);
 
 int ChannelThread::backoff_delay() const {
     int count = reconnect_count_.load();
-    int delay = BASE_DELAY_MS * (1 << std::min(count, 6));  // 指数退避，最多 2^6=64 倍
-    return std::min(delay, MAX_DELAY_MS);
+    int delay =
+        enum_value(CollectDefaults::ReconnectBaseDelayMs) *
+        (1 << std::min(
+             count,
+             enum_value(CollectDefaults::ReconnectMaxExponent)));  // 指数退避，最多 2^6=64 倍
+    return std::min(delay, enum_value(CollectDefaults::ReconnectMaxDelayMs));
 }
 
 }  // namespace collect

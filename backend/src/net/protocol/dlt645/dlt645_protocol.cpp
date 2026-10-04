@@ -18,19 +18,33 @@
 #include <sstream>
 #include <stdexcept>
 
+#include "net/protocol/dlt645/dlt645_limits.h"
+#include "net/protocol/dlt645/dlt645_types.h"
+#include "net/protocol/encoding_types.h"
+#include "net/protocol/protocol_types.h"
+#include "net/protocol/serial_types.h"
+#include "net/protocol/time_units.h"
+
 namespace ems::net::protocol {
+using ems::net::dlt645::ControlCode;
+using ems::net::dlt645::DataClass;
+using ems::net::dlt645::Defaults;
+using ems::net::dlt645::ErrorCode;
+using ems::net::dlt645::Layout;
+using ems::net::dlt645::Limits;
+
 namespace {
 using Json = nlohmann::json;
-using Item = dlt645::model::DataItem;
-using Meter = dlt645::service::ServerService;
-using Frame = dlt645::protocol::Frame;
-namespace client = dlt645::transport::client;
-namespace server = dlt645::transport::server;
+using Item = ::dlt645::model::DataItem;
+using Meter = ::dlt645::service::ServerService;
+using Frame = ::dlt645::protocol::Frame;
+namespace client = ::dlt645::transport::client;
+namespace server = ::dlt645::transport::server;
 using Clock = std::chrono::system_clock;
 
 // 上游单例用裸 new 保存定义；插件承担其生命周期，在库卸载时释放只读注册表。
-dlt645::model::DataItemManager& definitions() {
-    static const std::unique_ptr<dlt645::model::DataItemManager> registry(DIManager::inst());
+::dlt645::model::DataItemManager& definitions() {
+    static const std::unique_ptr<::dlt645::model::DataItemManager> registry(DIManager::inst());
     return *registry;
 }
 
@@ -40,9 +54,12 @@ std::int64_t millis(Clock::time_point time = Clock::now()) {
 
 std::uint32_t number(const std::string& text) {
     std::uint32_t value = 0;
-    const bool hex = text.size() > 2 && text[0] == '0' && (text[1] == 'x' || text[1] == 'X');
-    const auto begin = text.data() + (hex ? 2 : 0);
-    const auto parsed = std::from_chars(begin, text.data() + text.size(), value, hex ? 16 : 10);
+    const bool hex = text.size() > enum_value(NumericText::HexPrefixLength) && text[0] == '0' &&
+                     (text[1] == 'x' || text[1] == 'X');
+    const auto begin = text.data() + (hex ? enum_value(NumericText::HexPrefixLength) : 0);
+    const auto parsed = std::from_chars(
+        begin, text.data() + text.size(), value,
+        hex ? enum_value(NumberBase::Hexadecimal) : enum_value(NumberBase::Decimal));
     if (begin == text.data() + text.size() || parsed.ec != std::errc{} ||
         parsed.ptr != text.data() + text.size())
         throw std::invalid_argument("Invalid unsigned address: " + text);
@@ -52,7 +69,7 @@ std::uint32_t number(const std::string& text) {
 std::uint32_t di_value(const Json& value) {
     if (value.is_string()) return number(value.get<std::string>());
     if ((!value.is_number_integer() && !value.is_number_unsigned()) || value.get<double>() < 0 ||
-        value.get<double>() > 4294967295.0)
+        value.get<double>() > std::numeric_limits<std::uint32_t>::max())
         throw std::invalid_argument("DI must be uint32 or decimal/0x text");
     return value.get<std::uint32_t>();
 }
@@ -66,21 +83,22 @@ int integer(const Json& config, const char* name, int fallback, int low, int hig
 }
 
 std::string meter_text(std::string text) {
-    if (text.empty() || text.size() > 12 ||
+    if (text.empty() || text.size() > enum_value(Layout::MeterDigits) ||
         !std::all_of(text.begin(), text.end(), [](char c) { return c >= '0' && c <= '9'; }))
         throw std::invalid_argument("Meter address must contain 1..12 decimal digits");
-    return std::string(12 - text.size(), '0') + text;
+    return std::string(enum_value(Layout::MeterDigits) - text.size(), '0') + text;
 }
 
 template <std::size_t N>
 std::array<std::uint8_t, N> bcd(const std::string& text, bool little_endian = true) {
-    if (text.size() != N * 2 ||
+    if (text.size() != N * enum_value(Layout::BcdDigitsPerByte) ||
         !std::all_of(text.begin(), text.end(), [](char c) { return c >= '0' && c <= '9'; }))
         throw std::invalid_argument("Invalid packed BCD address/password");
     std::array<std::uint8_t, N> result{};
     for (std::size_t i = 0; i < N; ++i) {
-        const auto pos = text.size() - (i + 1) * 2;
-        result[i] = static_cast<std::uint8_t>(((text[pos] - '0') << 4) | (text[pos + 1] - '0'));
+        const auto pos = text.size() - (i + 1) * enum_value(Layout::BcdDigitsPerByte);
+        result[i] = static_cast<std::uint8_t>(
+            ((text[pos] - '0') << enum_value(Layout::BcdNibbleBits)) | (text[pos + 1] - '0'));
     }
     if (!little_endian) std::reverse(result.begin(), result.end());
     return result;
@@ -96,19 +114,21 @@ Point parse_point(const std::string& code, const std::string& default_meter) {
     Point point{default_meter, 0, -1};
     std::string address = code;
     const auto colon = address.find(':');
-    if (colon != std::string::npos && colon == 12) {
+    if (colon != std::string::npos && colon == enum_value(Layout::MeterDigits)) {
         point.meter = meter_text(address.substr(0, colon));
         address.erase(0, colon + 1);
     }
     const auto field = address.find(':');
     if (field != std::string::npos) {
         const auto index = number(address.substr(field + 1));
-        if (index > 65535) throw std::invalid_argument("Field index out of range");
+        if (index > enum_value(Limits::MaxFieldIndex))
+            throw std::invalid_argument("Field index out of range");
         point.field = static_cast<int>(index);
         address.resize(field);
     }
     point.di = number(address);
-    if ((point.di >> 24) > 4) throw std::invalid_argument("Only DI classes 00..04 are supported");
+    if ((point.di >> enum_value(Layout::DiClassShift)) > enum_value(DataClass::Parameter))
+        throw std::invalid_argument("Only DI classes 00..04 are supported");
     return point;
 }
 
@@ -122,15 +142,19 @@ std::string numeric_field(const std::string& format, double value) {
     const auto precision = dot == std::string::npos ? 0u : format.size() - dot - 1;
     const auto width =
         format.size() - static_cast<std::size_t>(std::count(format.begin(), format.end(), '.'));
-    const double scaled = value * std::pow(10.0, static_cast<double>(precision));
-    if (width == 0 || scaled >= std::pow(10.0, static_cast<double>(width)) ||
-        std::abs(scaled - std::round(scaled)) > 1e-6 || width > 15)
+    const double scaled = value * std::pow(static_cast<double>(enum_value(NumberBase::Decimal)),
+                                           static_cast<double>(precision));
+    if (width == 0 ||
+        scaled >= std::pow(static_cast<double>(enum_value(NumberBase::Decimal)),
+                           static_cast<double>(width)) ||
+        std::abs(scaled - std::round(scaled)) > ems::net::dlt645::kDecimalTolerance ||
+        width > enum_value(Limits::MaxNumericDigits))
         throw std::invalid_argument("Value exceeds parameter range or precision");
     auto result = std::to_string(static_cast<std::uint64_t>(std::llround(scaled)));
     return std::string(width - result.size(), '0') + result;
 }
 
-double field_value(const dlt645::model::DataField& field) {
+double field_value(const ::dlt645::model::DataField& field) {
     if (field.dataFormat.empty() ||
         field.dataFormat.find_first_not_of("XN.") != std::string::npos || field.value.empty() ||
         field.value.find(',') != std::string::npos ||
@@ -139,16 +163,20 @@ double field_value(const dlt645::model::DataField& field) {
         throw std::invalid_argument("Field has no scalar numeric value");
     std::size_t used = 0;
     double value = std::stod(field.value, &used);
-    if (used != field.value.size() || field.value.size() > 15)
+    if (used != field.value.size() || field.value.size() > enum_value(Limits::MaxNumericDigits))
         throw std::invalid_argument("Field exceeds numeric precision");
     const auto dot = field.dataFormat.find('.');
     if (dot != std::string::npos)
-        value /= std::pow(10.0, static_cast<double>(field.dataFormat.size() - dot - 1));
+        value /= std::pow(static_cast<double>(enum_value(NumberBase::Decimal)),
+                          static_cast<double>(field.dataFormat.size() - dot - 1));
     return value;
 }
 
 Json result_item(const std::string& code, const std::shared_ptr<Item>& item, int field) {
-    Json result = {{"code", code}, {"value", nullptr}, {"quality", 1}, {"timestamp", millis()}};
+    Json result = {{"code", code},
+                   {"value", nullptr},
+                   {"quality", enum_value(SampleQuality::Invalid)},
+                   {"timestamp", millis()}};
     if (!item) return result;
     result["di"] = item->di;
     result["unit"] = item->unit;
@@ -167,7 +195,7 @@ Json result_item(const std::string& code, const std::shared_ptr<Item>& item, int
             if (static_cast<std::size_t>(field) >= item->fields.size())
                 throw std::invalid_argument("Field index out of bounds");
             value = field_value(item->fields[static_cast<std::size_t>(field)]);
-        } else if (const auto demand = std::get_if<dlt645::model::Demand>(&item->value)) {
+        } else if (const auto demand = std::get_if<::dlt645::model::Demand>(&item->value)) {
             value = demand->value;
             result["occur_time"] = millis(demand->occurTime);
         } else if (const auto real = std::get_if<float>(&item->value))
@@ -182,7 +210,7 @@ Json result_item(const std::string& code, const std::shared_ptr<Item>& item, int
             throw std::invalid_argument("Item has no numeric value");
         if (!std::isfinite(value)) throw std::invalid_argument("Non-finite value");
         result["value"] = value;
-        result["quality"] = 0;
+        result["quality"] = enum_value(SampleQuality::Good);
     } catch (const std::exception& error) {
         result["error"] = error.what();
     }
@@ -201,20 +229,31 @@ struct ReadOnlyHandler final : server::ConnectionHandler {
 
     std::vector<std::uint8_t> handleRequest(const Frame& frame) override {
         std::lock_guard<std::mutex> lock(mutex);
-        const bool discovery =
-            std::all_of(frame.addr.begin(), frame.addr.end(), [](auto b) { return b == 0xAA; });
+        const bool discovery = std::all_of(frame.addr.begin(), frame.addr.end(), [](auto b) {
+            return b == enum_value(Layout::DiscoveryAddressByte);
+        });
         for (auto& [address, image] : meters) {
-            if (frame.addr != bcd<6>(address, little_endian) && !(discovery && meters.size() == 1))
+            if (frame.addr != bcd<enum_value(Layout::MeterBytes)>(address, little_endian) &&
+                !(discovery && meters.size() == 1))
                 continue;
             // 上送出口拒绝全部远端写和管理命令，广播请求不应答也不改变映像。
-            if (frame.ctrlCode != 0x11 && frame.ctrlCode != 0x13)
-                return Frame::buildFrame(frame.addr,
-                                         static_cast<std::uint8_t>(frame.ctrlCode | 0xC0), {0x04});
-            if (frame.ctrlCode == 0x11) {
-                if (frame.data.size() != 4) return Frame::buildFrame(frame.addr, 0xD1, {0x02});
+            if (frame.ctrlCode != enum_value(ControlCode::ReadData) &&
+                frame.ctrlCode != enum_value(ControlCode::ReadAddress))
+                return Frame::buildFrame(
+                    frame.addr,
+                    static_cast<std::uint8_t>(frame.ctrlCode |
+                                              enum_value(ControlCode::ErrorResponseMask)),
+                    {enum_value(ErrorCode::AccessDenied)});
+            if (frame.ctrlCode == enum_value(ControlCode::ReadData)) {
+                if (frame.data.size() != enum_value(Layout::DiBytes))
+                    return Frame::buildFrame(frame.addr, enum_value(ControlCode::ReadDataError),
+                                             {enum_value(ErrorCode::NoRequestedData)});
                 std::uint32_t di = 0;
-                for (unsigned i = 0; i < 4; ++i) di |= std::uint32_t(frame.data[i]) << (i * 8);
-                if (!image.exposed.count(di)) return Frame::buildFrame(frame.addr, 0xD1, {0x02});
+                for (unsigned i = 0; i < enum_value(Layout::DiBytes); ++i)
+                    di |= std::uint32_t(frame.data[i]) << (i * enum_value(Layout::BitsPerByte));
+                if (!image.exposed.count(di))
+                    return Frame::buildFrame(frame.addr, enum_value(ControlCode::ReadDataError),
+                                             {enum_value(ErrorCode::NoRequestedData)});
             }
             return image.service->handleRequest(frame);
         }
@@ -226,25 +265,25 @@ struct ReadOnlyHandler final : server::ConnectionHandler {
 
 void set_numeric(MeterImage& image, std::uint32_t di, double value) {
     if (!std::isfinite(value)) throw std::invalid_argument("Non-finite value");
-    const auto category = di >> 24;
+    const auto category = static_cast<DataClass>(di >> enum_value(Layout::DiClassShift));
     const auto item = image.service->getDataItem(di);
     if (!item) throw std::invalid_argument("Unknown standard DI");
     bool success = false;
-    if (category <= 2) {
+    if (category <= DataClass::Variable) {
         // 先验证调用方的十进制精度，再交给协议栈处理有符号范围与 BCD 编码。
         (void)numeric_field(item->dataFormat, std::abs(value));
         const auto raw = static_cast<float>(value);
         if (!std::isfinite(raw)) throw std::invalid_argument("Value exceeds float range");
         // 需量发生时间在本地更新时记录；配置可单独覆盖。
-        if (category == 0) success = image.service->set00(di, raw);
-        if (category == 1)
-            success = image.service->set01(di, dlt645::model::Demand(raw, Clock::now()));
-        if (category == 2) success = image.service->set02(di, raw);
+        if (category == DataClass::Energy) success = image.service->set00(di, raw);
+        if (category == DataClass::Demand)
+            success = image.service->set01(di, ::dlt645::model::Demand(raw, Clock::now()));
+        if (category == DataClass::Variable) success = image.service->set02(di, raw);
     } else if (item->fields.size() == 1) {
         const std::vector<std::string> values{
             numeric_field(item->fields.front().dataFormat, value)};
-        success =
-            category == 3 ? image.service->set03(di, values) : image.service->set04(di, values);
+        success = category == DataClass::Event ? image.service->set03(di, values)
+                                               : image.service->set04(di, values);
     }
     if (!success)
         throw std::invalid_argument("Cannot represent DI value; use fields for compound items");
@@ -263,7 +302,7 @@ class Dlt645Protocol::Impl {
     bool tcp{true};
     bool little_endian{true};
     std::shared_ptr<client::Connection> connection;
-    std::shared_ptr<dlt645::service::ClientService> service;
+    std::shared_ptr<::dlt645::service::ClientService> service;
     std::shared_ptr<server::Server> listener;
     std::shared_ptr<ReadOnlyHandler> image;
 
@@ -277,7 +316,8 @@ class Dlt645Protocol::Impl {
         image->little_endian = little_endian;
         auto add_meter = [&](const std::string& address) {
             if (image->meters.count(address)) return;
-            auto service = std::make_shared<Meter>(nullptr, bcd<6>(address, little_endian));
+            auto service = std::make_shared<Meter>(
+                nullptr, bcd<enum_value(Layout::MeterBytes)>(address, little_endian));
             image->meters.emplace(address, MeterImage{std::move(service), {}});
         };
         add_meter(meter);
@@ -286,23 +326,28 @@ class Dlt645Protocol::Impl {
             add_meter(address);
             auto& target = image->meters.at(address);
             const auto di = di_value(entry.at("di"));
-            if ((di >> 24) > 4) throw std::invalid_argument("Unsupported DI class");
+            if ((di >> enum_value(Layout::DiClassShift)) > enum_value(DataClass::Parameter))
+                throw std::invalid_argument("Unsupported DI class");
             if (entry.contains("fields")) {
                 const auto values = entry.at("fields").get<std::vector<std::string>>();
-                const bool ok = (di >> 24) == 3
-                                    ? target.service->set03(di, values)
-                                    : (di >> 24) == 4 && target.service->set04(di, values);
+                const bool ok =
+                    (di >> enum_value(Layout::DiClassShift)) == enum_value(DataClass::Event)
+                        ? target.service->set03(di, values)
+                        : (di >> enum_value(Layout::DiClassShift)) ==
+                                  enum_value(DataClass::Parameter) &&
+                              target.service->set04(di, values);
                 if (!ok) throw std::invalid_argument("Invalid compound DI fields");
                 target.exposed.insert(di);
             } else {
                 set_numeric(target, di, entry.at("value").get<double>());
-                if ((di >> 24) == 1 && entry.contains("occur_time")) {
+                if ((di >> enum_value(Layout::DiClassShift)) == enum_value(DataClass::Demand) &&
+                    entry.contains("occur_time")) {
                     if (!entry.at("occur_time").is_number_integer())
                         throw std::invalid_argument("Invalid occur_time");
                     const auto time = Clock::time_point(
                         std::chrono::milliseconds(entry.at("occur_time").get<std::int64_t>()));
                     if (!target.service->set01(
-                            di, dlt645::model::Demand(
+                            di, ::dlt645::model::Demand(
                                     static_cast<float>(entry.at("value").get<double>()), time)))
                         throw std::invalid_argument("Invalid demand");
                 }
@@ -335,7 +380,7 @@ int Dlt645Protocol::initialize(const std::string& text) {
         next->meter = meter_text(
             config.value("meter_address", config.value("rtu_addr", std::string("000000000000"))));
         const auto password = config.value("password", std::string("00000000"));
-        (void)bcd<4>(password);
+        (void)bcd<enum_value(Layout::PasswordBytes)>(password);
         // ems_simulate 的 Python 库直接使用大端 BCD；标准表地址默认低字节在前。
         const auto endian = config.value("bcd_endian", std::string("little"));
         if (endian != "little" && endian != "big")
@@ -367,24 +412,41 @@ int Dlt645Protocol::initialize(const std::string& text) {
             throw std::invalid_argument("transport must be tcp or rtu");
         next->tcp = transport == "tcp";
         // 与现有通道及模拟器一致：旧 timeout 为秒，显式 timeout_ms 优先。
-        config["timeout_ms"] = config.contains("timeout_ms")
-                                   ? integer(config, "timeout_ms", 3000, 1, 60000)
-                                   : integer(config, "timeout", 3, 1, 60) * 1000;
+        config["timeout_ms"] =
+            config.contains("timeout_ms")
+                ? integer(config, "timeout_ms", enum_value(Defaults::TimeoutMs), 1,
+                          enum_value(Limits::MaxTimeoutMs))
+                : integer(config, "timeout", enum_value(Defaults::LegacyTimeoutSeconds), 1,
+                          enum_value(Limits::MaxTimeoutSeconds)) *
+                      enum_value(TimeUnits::MillisecondsPerSecond);
         if (next->tcp) {
             const auto ip =
                 config.value("ip", std::string(next->server_role ? "0.0.0.0" : "127.0.0.1"));
             (void)boost::asio::ip::make_address(ip);
             config["ip"] = ip;
-            config["port"] = integer(config, "port", 8899, 1, 65535);
+            config["port"] = integer(config, "port", enum_value(Defaults::TcpPort), 1,
+                                     enum_value(Limits::MaxTcpPort));
         } else {
             const auto port = config.value("serial_port", std::string());
             if (port.empty()) throw std::invalid_argument("serial_port is required");
             config["baud_rate"] = integer(
-                config, "baud_rate", integer(config, "baudrate", 9600, 300, 115200), 300, 115200);
-            config["data_bits"] =
-                integer(config, "data_bits", integer(config, "databits", 8, 5, 8), 5, 8);
-            config["stop_bits"] =
-                integer(config, "stop_bits", integer(config, "stopbits", 1, 1, 2), 1, 2);
+                config, "baud_rate",
+                integer(config, "baudrate", enum_value(SerialDefaults::BaudRate),
+                        enum_value(SerialLimits::MinBaudRate),
+                        enum_value(SerialLimits::MaxBaudRate)),
+                enum_value(SerialLimits::MinBaudRate), enum_value(SerialLimits::MaxBaudRate));
+            config["data_bits"] = integer(
+                config, "data_bits",
+                integer(config, "databits", enum_value(SerialDefaults::DataBits),
+                        enum_value(SerialLimits::MinDataBits),
+                        enum_value(SerialLimits::MaxDataBits)),
+                enum_value(SerialLimits::MinDataBits), enum_value(SerialLimits::MaxDataBits));
+            config["stop_bits"] = integer(
+                config, "stop_bits",
+                integer(config, "stopbits", enum_value(SerialDefaults::StopBits),
+                        enum_value(SerialLimits::MinStopBits),
+                        enum_value(SerialLimits::MaxStopBits)),
+                enum_value(SerialLimits::MinStopBits), enum_value(SerialLimits::MaxStopBits));
             auto parity = config.value("parity", std::string("even"));
             if (parity == "E" || parity == "e") parity = "even";
             if (parity == "O" || parity == "o") parity = "odd";
@@ -396,18 +458,21 @@ int Dlt645Protocol::initialize(const std::string& text) {
         if (config.contains("allow_writes") && !config.at("allow_writes").is_boolean())
             throw std::invalid_argument("allow_writes must be boolean");
         const auto points = config.value("points", Json::array());
-        if (!points.is_array() || points.size() > 65536)
+        if (!points.is_array() || points.size() > enum_value(PluginLimits::MaxBatchPoints))
             throw std::invalid_argument("Invalid points array");
         for (const auto& entry : points) {
             if (!entry.is_object()) throw std::invalid_argument("Point must be object");
             const auto address = meter_text(entry.value("meter_address", next->meter));
             const auto di = di_value(entry.at("di"));
-            if ((di >> 24) > 4) throw std::invalid_argument("Unsupported DI class");
+            if ((di >> enum_value(Layout::DiClassShift)) > enum_value(DataClass::Parameter))
+                throw std::invalid_argument("Unsupported DI class");
             if (entry.contains("code")) {
                 const auto code = entry.at("code").get<std::string>();
                 if (code.empty() ||
                     !next->aliases
-                         .emplace(code, Point{address, di, integer(entry, "field", -1, 0, 65535)})
+                         .emplace(code, Point{address, di,
+                                              integer(entry, "field", -1, 0,
+                                                      enum_value(Limits::MaxFieldIndex))})
                          .second)
                     throw std::invalid_argument("Empty or duplicate point alias");
             }
@@ -415,20 +480,22 @@ int Dlt645Protocol::initialize(const std::string& text) {
         next->config = std::move(config);
         next->configured = true;
         if (next->server_role) next->build_image();
-        if (disconnect() != 0) return -1;
+        if (disconnect() != enum_value(OperationResult::Success))
+            return enum_value(OperationResult::Failure);
         impl_ = std::move(next);
-        return 0;
+        return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {
         impl_->error = error.what();
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
 }
 
 int Dlt645Protocol::connect() {
     try {
-        if (is_connected()) return 0;
+        if (is_connected()) return enum_value(OperationResult::Success);
         if (!impl_->configured) throw std::invalid_argument("Instance has not been initialized");
-        if (disconnect() != 0) return -1;
+        if (disconnect() != enum_value(OperationResult::Success))
+            return enum_value(OperationResult::Failure);
         auto& cfg = impl_->config;
         const auto timeout = std::chrono::milliseconds(cfg.at("timeout_ms").get<int>());
         if (impl_->server_role) {
@@ -481,20 +548,21 @@ int Dlt645Protocol::connect() {
             }
             // 在首次使用上游单例前注册卸载清理，所有实例销毁后才卸载库。
             (void)definitions();
-            impl_->service = std::make_shared<dlt645::service::ClientService>(impl_->connection);
-            impl_->service->setAddress(bcd<6>(impl_->meter, impl_->little_endian));
-            impl_->service->setPassword(
-                bcd<4>(cfg.value("password", std::string("00000000")), impl_->little_endian));
+            impl_->service = std::make_shared<::dlt645::service::ClientService>(impl_->connection);
+            impl_->service->setAddress(
+                bcd<enum_value(Layout::MeterBytes)>(impl_->meter, impl_->little_endian));
+            impl_->service->setPassword(bcd<enum_value(Layout::PasswordBytes)>(
+                cfg.value("password", std::string("00000000")), impl_->little_endian));
             if (!impl_->connection->connect())
                 throw std::runtime_error("Cannot connect to DLT645 endpoint");
         }
         impl_->error.clear();
-        return 0;
+        return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {
         const std::string message = error.what();
         disconnect();
         impl_->error = message;
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
 }
 
@@ -509,10 +577,10 @@ int Dlt645Protocol::disconnect() {
         impl_->service.reset();
         impl_->connection.reset();
         impl_->error.clear();
-        return 0;
+        return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {
         impl_->error = error.what();
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
 }
 
@@ -524,12 +592,15 @@ bool Dlt645Protocol::is_connected() const {
 int Dlt645Protocol::read_batch(const std::vector<std::string>& codes, std::string& output) {
     try {
         if (!is_connected()) throw std::runtime_error("DLT645 is not connected");
-        if (codes.size() > 65536) throw std::invalid_argument("Batch too large");
+        if (codes.size() > enum_value(PluginLimits::MaxBatchPoints))
+            throw std::invalid_argument("Batch too large");
         Json results = Json::array();
         int valid = 0;
         for (const auto& code : codes) {
-            Json result = {
-                {"code", code}, {"value", nullptr}, {"quality", 1}, {"timestamp", millis()}};
+            Json result = {{"code", code},
+                           {"value", nullptr},
+                           {"quality", enum_value(SampleQuality::Invalid)},
+                           {"timestamp", millis()}};
             try {
                 const auto point = impl_->point(code);
                 std::shared_ptr<Item> item;
@@ -540,21 +611,22 @@ int Dlt645Protocol::read_batch(const std::vector<std::string>& codes, std::strin
                         meter->second.exposed.count(point.di))
                         item = meter->second.service->getDataItem(point.di);
                 } else {
-                    impl_->service->setAddress(bcd<6>(point.meter, impl_->little_endian));
-                    switch (point.di >> 24) {
-                        case 0:
+                    impl_->service->setAddress(
+                        bcd<enum_value(Layout::MeterBytes)>(point.meter, impl_->little_endian));
+                    switch (static_cast<DataClass>(point.di >> enum_value(Layout::DiClassShift))) {
+                        case DataClass::Energy:
                             item = impl_->service->read00(point.di);
                             break;
-                        case 1:
+                        case DataClass::Demand:
                             item = impl_->service->read01(point.di);
                             break;
-                        case 2:
+                        case DataClass::Variable:
                             item = impl_->service->read02(point.di);
                             break;
-                        case 3:
+                        case DataClass::Event:
                             item = impl_->service->read03(point.di);
                             break;
-                        case 4:
+                        case DataClass::Parameter:
                             item = impl_->service->read04(point.di);
                             break;
                     }
@@ -564,7 +636,7 @@ int Dlt645Protocol::read_batch(const std::vector<std::string>& codes, std::strin
             } catch (const std::exception& error) {
                 result["error"] = error.what();
             }
-            if (result.at("quality") == 0) ++valid;
+            if (result.at("quality") == enum_value(SampleQuality::Good)) ++valid;
             results.push_back(std::move(result));
         }
         output = results.dump();
@@ -572,7 +644,7 @@ int Dlt645Protocol::read_batch(const std::vector<std::string>& codes, std::strin
         return valid;
     } catch (const std::exception& error) {
         impl_->error = error.what();
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
 }
 
@@ -591,21 +663,23 @@ int Dlt645Protocol::write(const std::string& code, double value) {
                 throw std::invalid_argument("DI is not exposed by this server");
             set_numeric(meter->second, point.di, value);
         } else {
-            if (!impl_->config.value("allow_writes", false) || (point.di >> 24) != 4)
+            if (!impl_->config.value("allow_writes", false) ||
+                (point.di >> enum_value(Layout::DiClassShift)) != enum_value(DataClass::Parameter))
                 throw std::invalid_argument("Client writes require allow_writes and a class-04 DI");
             const auto item = definitions().getDataItem(point.di);
             if (!item || item->fields.size() != 1)
                 throw std::invalid_argument("Write requires a scalar parameter DI");
             const auto encoded = numeric_field(item->fields.front().dataFormat, value);
-            impl_->service->setAddress(bcd<6>(point.meter, impl_->little_endian));
+            impl_->service->setAddress(
+                bcd<enum_value(Layout::MeterBytes)>(point.meter, impl_->little_endian));
             if (!impl_->service->write04(point.di, encoded))
                 throw std::runtime_error("DLT645 parameter write failed");
         }
         impl_->error.clear();
-        return 0;
+        return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {
         impl_->error = error.what();
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
 }
 

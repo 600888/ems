@@ -7,6 +7,12 @@
 
 #include "net/protocol/iec104_protocol.h"
 #include "net/protocol/protocol_plugin_api.h"
+#include "net/protocol/protocol_types.h"
+
+using ems::net::enum_value;
+using ems::net::protocol::ConnectionState;
+using ems::net::protocol::OperationResult;
+using ems::net::protocol::PluginLimits;
 
 namespace {
 using ems::net::protocol::Iec104Protocol;
@@ -17,7 +23,7 @@ const EmPluginInfo kInfo = {EMS_PLUGIN_API_VERSION, "IEC104",
 struct Instance {
     Iec104Protocol protocol;
     std::mutex mutex;
-    std::array<char, 1024> error{};
+    std::array<char, enum_value(PluginLimits::ErrorBytes)> error{};
     std::string pending;
     std::vector<std::string> pending_codes;
     int pending_count{0};
@@ -29,7 +35,7 @@ struct Instance {
 
 template <typename Operation>
 int invoke(void* opaque, Operation operation) noexcept {
-    if (!opaque) return -1;
+    if (!opaque) return enum_value(OperationResult::Failure);
     auto* instance = static_cast<Instance*>(opaque);
     try {
         std::lock_guard<std::mutex> lock(instance->mutex);
@@ -43,7 +49,7 @@ int invoke(void* opaque, Operation operation) noexcept {
     } catch (...) {
         instance->set_error("Unknown exception at plugin boundary");
     }
-    return -1;
+    return enum_value(OperationResult::Failure);
 }
 }  // namespace
 
@@ -70,7 +76,7 @@ EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_init(void* opaque, const char* 
     return invoke(opaque, [&](Instance& instance) {
         if (!config) {
             instance.set_error("Config is null");
-            return -1;
+            return enum_value(OperationResult::Failure);
         }
         instance.pending.clear();
         return instance.protocol.initialize(config);
@@ -92,29 +98,30 @@ EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_read_batch(void* opaque, const 
                                                             int count, char* output, int capacity) {
     if (output && capacity > 0) output[0] = '\0';
     return invoke(opaque, [&](Instance& instance) {
-        if (count < 0 || count > 65536 || (!codes && count) || !output || capacity <= 0) {
+        if (count < 0 || count > enum_value(PluginLimits::MaxBatchPoints) || (!codes && count) ||
+            !output || capacity <= 0) {
             instance.set_error("Invalid batch arguments");
-            return -1;
+            return enum_value(OperationResult::Failure);
         }
         std::vector<std::string> points;
         points.reserve(static_cast<std::size_t>(count));
         for (int i = 0; i < count; ++i) {
             if (!codes[i]) {
                 instance.set_error("Point code is null");
-                return -1;
+                return enum_value(OperationResult::Failure);
             }
             points.emplace_back(codes[i]);
         }
         if (instance.pending.empty() || instance.pending_codes != points) {
             instance.pending.clear();
             instance.pending_count = instance.protocol.read_batch(points, instance.pending);
-            if (instance.pending_count < 0) return -1;
+            if (instance.pending_count < 0) return enum_value(OperationResult::Failure);
             instance.pending_codes = points;
         }
         if (instance.pending.size() + 1 > static_cast<std::size_t>(capacity)) {
             std::snprintf(instance.error.data(), instance.error.size(),
                           "Result buffer too small; required=%zu", instance.pending.size() + 1);
-            return EMS_PLUGIN_BUFFER_TOO_SMALL;
+            return enum_value(OperationResult::BufferTooSmall);
         }
         std::memcpy(output, instance.pending.c_str(), instance.pending.size() + 1);
         instance.pending.clear();
@@ -127,7 +134,7 @@ EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_write(void* opaque, const char*
     return invoke(opaque, [&](Instance& instance) {
         if (!code) {
             instance.set_error("Point code is null");
-            return -1;
+            return enum_value(OperationResult::Failure);
         }
         instance.pending.clear();
         return instance.protocol.write(code, value);
@@ -135,8 +142,10 @@ EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_write(void* opaque, const char*
 }
 
 EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_is_connected(void* opaque) {
-    return invoke(opaque,
-                  [](Instance& instance) { return instance.protocol.is_connected() ? 1 : 0; });
+    return invoke(opaque, [](Instance& instance) {
+        return instance.protocol.is_connected() ? enum_value(ConnectionState::Connected)
+                                                : enum_value(ConnectionState::Disconnected);
+    });
 }
 
 EMS_PLUGIN_EXPORT const char* EMS_PLUGIN_CALL ems_plugin_last_error(void* opaque) {

@@ -11,6 +11,9 @@
 #include <cstring>
 
 #include "net/log.h"
+#include "net/protocol/modbus/modbus_limits.h"
+#include "net/protocol/serial_types.h"
+#include "net/protocol/time_units.h"
 
 namespace ems {
 namespace net {
@@ -61,9 +64,15 @@ void ModbusClient::disconnect() {
 
 bool ModbusClient::isConnected() const { return connected_ && master_.isOpen(); }
 
-void ModbusClient::setResponseTimeout(int ms) { master_.setResponseTimeout(ms / 1000.0); }
+void ModbusClient::setResponseTimeout(int ms) {
+    master_.setResponseTimeout(
+        ms / static_cast<double>(enum_value(protocol::TimeUnits::MillisecondsPerSecond)));
+}
 
-void ModbusClient::setByteTimeout(int ms) { master_.setByteTimeout(ms / 1000.0); }
+void ModbusClient::setByteTimeout(int ms) {
+    master_.setByteTimeout(
+        ms / static_cast<double>(enum_value(protocol::TimeUnits::MillisecondsPerSecond)));
+}
 
 void ModbusClient::setDebug(bool enable) { master_.setDebug(enable); }
 

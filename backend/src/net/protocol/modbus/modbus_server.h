@@ -18,21 +18,20 @@
 #include <string>
 #include <thread>
 
+#include "net/protocol/modbus/modbus_limits.h"
+#include "net/protocol/modbus/modbus_types.h"
+
 namespace ems {
 namespace net {
 namespace modbus {
 
 class ModbusServer {
    public:
-    enum class NetType { RTU = 0, TCP = 1 };
+    /** @brief 兼容原有类限定的传输类型名称。 */
+    using NetType = modbus::NetType;
 
-    enum class ErrorCode {
-        Success = 0,
-        BindFailed = -1,
-        StartFailed = -2,
-        AlreadyRunning = -3,
-        Unknown = -99
-    };
+    /** @brief 兼容原有类限定的操作错误码名称。 */
+    using ErrorCode = ServerError;
 
     using DataChangeCallback =
         std::function<void(int slaveId, Modbus::Table table, int addr, int nb)>;
@@ -244,7 +243,7 @@ class ModbusServer {
      */
     template <typename T, Modbus::Endian E = Modbus::EndianBig>
     ErrorCode writeHoldingData(int slaveId, int addr, const Modbus::Data<T, E>& data) {
-        int regCount = sizeof(T) / 2;
+        int regCount = sizeof(T) / enum_value(Layout::BytesPerRegister);
         return writeHoldingRegisters(slaveId, addr, data.registers().data(), regCount);
     }
 
@@ -257,7 +256,7 @@ class ModbusServer {
      */
     template <typename T, Modbus::Endian E = Modbus::EndianBig>
     ErrorCode readHoldingData(int slaveId, int addr, Modbus::Data<T, E>& data) {
-        int regCount = sizeof(T) / 2;
+        int regCount = sizeof(T) / enum_value(Layout::BytesPerRegister);
         auto ret = readHoldingRegisters(slaveId, addr, data.registers().data(), regCount);
         if (ret == ErrorCode::Success) {
             data.updateValue();

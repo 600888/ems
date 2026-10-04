@@ -16,7 +16,21 @@
 #include <stdexcept>
 #include <tuple>
 
+#include "net/protocol/iec104/iec104_limits.h"
+#include "net/protocol/iec104/iec104_types.h"
+#include "net/protocol/protocol_types.h"
+#include "net/protocol/serial_types.h"
+#include "net/protocol/time_units.h"
+
 namespace ems::net::protocol {
+using iec104::AsduType;
+using iec104::Defaults;
+using iec104::DoublePointState;
+using iec104::Limits;
+using iec104::QualityMask;
+using iec104::TimeEncoding;
+using iec104::ValueFamily;
+
 namespace {
 using Json = nlohmann::json;
 using Clock = std::chrono::steady_clock;
@@ -28,12 +42,20 @@ std::int64_t now_ms() {
 }
 
 const std::map<std::string, int> kTypes = {
-    {"M_SP_NA_1", 1},  {"M_SP_TA_1", 2},  {"M_DP_NA_1", 3},  {"M_DP_TA_1", 4},  {"M_ME_NA_1", 9},
-    {"M_ME_TA_1", 10}, {"M_ME_NB_1", 11}, {"M_ME_TB_1", 12}, {"M_ME_NC_1", 13}, {"M_ME_TC_1", 14},
-    {"M_ME_ND_1", 21}, {"M_SP_TB_1", 30}, {"M_DP_TB_1", 31}, {"M_ME_TD_1", 34}, {"M_ME_TE_1", 35},
-    {"M_ME_TF_1", 36}, {"C_SC_NA_1", 45}, {"C_DC_NA_1", 46}, {"C_RC_NA_1", 47}, {"C_SE_NA_1", 48},
-    {"C_SE_NB_1", 49}, {"C_SE_NC_1", 50}, {"C_SC_TA_1", 58}, {"C_DC_TA_1", 59}, {"C_RC_TA_1", 60},
-    {"C_SE_TA_1", 61}, {"C_SE_TB_1", 62}, {"C_SE_TC_1", 63}};
+    {"M_SP_NA_1", enum_value(AsduType::M_SP_NA_1)}, {"M_SP_TA_1", enum_value(AsduType::M_SP_TA_1)},
+    {"M_DP_NA_1", enum_value(AsduType::M_DP_NA_1)}, {"M_DP_TA_1", enum_value(AsduType::M_DP_TA_1)},
+    {"M_ME_NA_1", enum_value(AsduType::M_ME_NA_1)}, {"M_ME_TA_1", enum_value(AsduType::M_ME_TA_1)},
+    {"M_ME_NB_1", enum_value(AsduType::M_ME_NB_1)}, {"M_ME_TB_1", enum_value(AsduType::M_ME_TB_1)},
+    {"M_ME_NC_1", enum_value(AsduType::M_ME_NC_1)}, {"M_ME_TC_1", enum_value(AsduType::M_ME_TC_1)},
+    {"M_ME_ND_1", enum_value(AsduType::M_ME_ND_1)}, {"M_SP_TB_1", enum_value(AsduType::M_SP_TB_1)},
+    {"M_DP_TB_1", enum_value(AsduType::M_DP_TB_1)}, {"M_ME_TD_1", enum_value(AsduType::M_ME_TD_1)},
+    {"M_ME_TE_1", enum_value(AsduType::M_ME_TE_1)}, {"M_ME_TF_1", enum_value(AsduType::M_ME_TF_1)},
+    {"C_SC_NA_1", enum_value(AsduType::C_SC_NA_1)}, {"C_DC_NA_1", enum_value(AsduType::C_DC_NA_1)},
+    {"C_RC_NA_1", enum_value(AsduType::C_RC_NA_1)}, {"C_SE_NA_1", enum_value(AsduType::C_SE_NA_1)},
+    {"C_SE_NB_1", enum_value(AsduType::C_SE_NB_1)}, {"C_SE_NC_1", enum_value(AsduType::C_SE_NC_1)},
+    {"C_SC_TA_1", enum_value(AsduType::C_SC_TA_1)}, {"C_DC_TA_1", enum_value(AsduType::C_DC_TA_1)},
+    {"C_RC_TA_1", enum_value(AsduType::C_RC_TA_1)}, {"C_SE_TA_1", enum_value(AsduType::C_SE_TA_1)},
+    {"C_SE_TB_1", enum_value(AsduType::C_SE_TB_1)}, {"C_SE_TC_1", enum_value(AsduType::C_SE_TC_1)}};
 
 int number(const std::string& text, int low, int high) {
     if (text.empty() || text.find_first_not_of("0123456789") != std::string::npos)
@@ -57,61 +79,77 @@ Address parse(const std::string& code) {
         throw std::invalid_argument("IEC104 point code must be CA:IOA:ASDU");
     const auto name = code.substr(second + 1);
     const auto entry = kTypes.find(name);
-    const int type = entry == kTypes.end() ? number(name, 1, 255) : entry->second;
+    const int type =
+        entry == kTypes.end() ? number(name, 1, enum_value(Limits::MaxTypeId)) : entry->second;
     if (std::none_of(kTypes.begin(), kTypes.end(),
                      [&](const auto& item) { return item.second == type; }))
         throw std::invalid_argument("Unsupported IEC104 ASDU type");
-    return {number(code.substr(0, first), 1, 65534),
-            number(code.substr(first + 1, second - first - 1), 0, 0xffffff), type};
+    return {number(code.substr(0, first), 1, enum_value(Limits::MaxCommonAddress)),
+            number(code.substr(first + 1, second - first - 1), 0,
+                   enum_value(Limits::MaxInformationAddress)),
+            type};
 }
 
-bool control(int type) { return (type >= 45 && type <= 50) || (type >= 58 && type <= 63); }
+bool control(int type) {
+    return (type >= enum_value(AsduType::C_SC_NA_1) && type <= enum_value(AsduType::C_SE_NC_1)) ||
+           (type >= enum_value(AsduType::C_SC_TA_1) && type <= enum_value(AsduType::C_SE_TC_1));
+}
 
-int family(int type) {
-    switch (type) {
-        case 1:
-        case 2:
-        case 30:
-        case 45:
-        case 58:
-            return 1;
-        case 3:
-        case 4:
-        case 31:
-        case 46:
-        case 59:
-            return 2;
-        case 47:
-        case 60:
-            return 3;
-        case 9:
-        case 10:
-        case 21:
-        case 34:
-        case 48:
-        case 61:
-            return 4;
-        case 11:
-        case 12:
-        case 35:
-        case 49:
-        case 62:
-            return 5;
+ValueFamily family(int type) {
+    switch (static_cast<AsduType>(type)) {
+        case AsduType::M_SP_NA_1:
+        case AsduType::M_SP_TA_1:
+        case AsduType::M_SP_TB_1:
+        case AsduType::C_SC_NA_1:
+        case AsduType::C_SC_TA_1:
+            return ValueFamily::SinglePoint;
+        case AsduType::M_DP_NA_1:
+        case AsduType::M_DP_TA_1:
+        case AsduType::M_DP_TB_1:
+        case AsduType::C_DC_NA_1:
+        case AsduType::C_DC_TA_1:
+            return ValueFamily::DoublePoint;
+        case AsduType::C_RC_NA_1:
+        case AsduType::C_RC_TA_1:
+            return ValueFamily::Step;
+        case AsduType::M_ME_NA_1:
+        case AsduType::M_ME_TA_1:
+        case AsduType::M_ME_ND_1:
+        case AsduType::M_ME_TD_1:
+        case AsduType::C_SE_NA_1:
+        case AsduType::C_SE_TA_1:
+            return ValueFamily::Normalized;
+        case AsduType::M_ME_NB_1:
+        case AsduType::M_ME_TB_1:
+        case AsduType::M_ME_TE_1:
+        case AsduType::C_SE_NB_1:
+        case AsduType::C_SE_TB_1:
+            return ValueFamily::Scaled;
         default:
-            return 6;
+            return ValueFamily::ShortFloat;
     }
 }
 
 void validate_value(int type, double value) {
     if (!std::isfinite(value)) throw std::invalid_argument("Value must be finite");
-    const int kind = family(type);
-    if (kind <= 3 || kind == 5) {
-        const double low = kind == 1 ? 0 : kind <= 3 ? (control(type) ? 1 : 0) : -32768;
-        const double high = kind == 1 ? 1 : kind <= 3 ? (control(type) ? 2 : 3) : 32767;
+    const auto kind = family(type);
+    if (kind <= ValueFamily::Step || kind == ValueFamily::Scaled) {
+        const double low = kind == ValueFamily::SinglePoint ? 0
+                           : kind <= ValueFamily::Step
+                               ? (control(type) ? enum_value(DoublePointState::Off)
+                                                : enum_value(DoublePointState::Indeterminate))
+                               : std::numeric_limits<std::int16_t>::min();
+        const double high = kind == ValueFamily::SinglePoint ? 1
+                            : kind <= ValueFamily::Step
+                                ? (control(type) ? enum_value(DoublePointState::On)
+                                                 : enum_value(DoublePointState::Invalid))
+                                : std::numeric_limits<std::int16_t>::max();
         if (std::trunc(value) != value || value < low || value > high)
             throw std::invalid_argument("Integer/state value outside ASDU range");
-    } else if (kind == 4) {
-        if (value < -1 || value > 32767.0 / 32768.0)
+    } else if (kind == ValueFamily::Normalized) {
+        if (value < -1 ||
+            value > static_cast<double>(std::numeric_limits<std::int16_t>::max()) /
+                        (static_cast<double>(std::numeric_limits<std::int16_t>::max()) + 1))
             throw std::invalid_argument("Normalized value outside [-1,32767/32768]");
     } else if (std::abs(value) > std::numeric_limits<float>::max()) {
         throw std::invalid_argument("Short float overflow");
@@ -120,7 +158,7 @@ void validate_value(int type, double value) {
 
 struct Sample {
     double value{0};
-    int quality{0};
+    int quality{enum_value(SampleQuality::Good)};
     std::int64_t timestamp{0};
     Clock::time_point received{Clock::now()};
     bool device_time{false};
@@ -134,12 +172,20 @@ bool valid_cp56(CP56Time2a timestamp) {
     const int month = CP56Time2a_getMonth(timestamp);
     const int year = CP56Time2a_getYear(timestamp);
     static const int days[] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-    if (month < 1 || month > 12 || year > 99) return false;
+    if (month < 1 || month > enum_value(TimeEncoding::MonthsPerYear) ||
+        year > enum_value(TimeEncoding::LastYear))
+        return false;
     const int day = CP56Time2a_getDayOfMonth(timestamp);
-    const int maximum = days[month - 1] + (month == 2 && year % 4 == 0 ? 1 : 0);
-    return day >= 1 && day <= maximum && CP56Time2a_getHour(timestamp) < 24 &&
-           CP56Time2a_getMinute(timestamp) < 60 && CP56Time2a_getSecond(timestamp) < 60 &&
-           CP56Time2a_getMillisecond(timestamp) < 1000;
+    const int maximum =
+        days[month - 1] + (month == enum_value(TimeEncoding::February) &&
+                                   year % enum_value(TimeEncoding::LeapYearCycle) == 0
+                               ? 1
+                               : 0);
+    return day >= 1 && day <= maximum &&
+           CP56Time2a_getHour(timestamp) < enum_value(TimeUnits::HoursPerDay) &&
+           CP56Time2a_getMinute(timestamp) < enum_value(TimeUnits::SecondsPerMinute) &&
+           CP56Time2a_getSecond(timestamp) < enum_value(TimeUnits::SecondsPerMinute) &&
+           CP56Time2a_getMillisecond(timestamp) < enum_value(TimeUnits::MillisecondsPerSecond);
 }
 
 InformationObject monitoring_object(const Address& address, const Sample& sample, int time_offset) {
@@ -147,7 +193,9 @@ InformationObject monitoring_object(const Address& address, const Sample& sample
     sCP56Time2a time56{};
     sCP24Time2a time24{};
     CP56Time2a_createFromMsTimestamp(
-        &time56, static_cast<std::uint64_t>(sample.timestamp + time_offset * 60000LL));
+        &time56, static_cast<std::uint64_t>(sample.timestamp +
+                                            time_offset * static_cast<long long>(enum_value(
+                                                              TimeUnits::MillisecondsPerMinute))));
     CP56Time2a_setInvalid(&time56, sample.invalid_time);
     CP24Time2a_setMinute(&time24, CP56Time2a_getMinute(&time56));
     CP24Time2a_setSecond(&time24, CP56Time2a_getSecond(&time56));
@@ -155,51 +203,52 @@ InformationObject monitoring_object(const Address& address, const Sample& sample
     CP24Time2a_setInvalid(&time24, sample.invalid_time);
     const int ioa = address.ioa;
     const float value = static_cast<float>(sample.value);
-    const int integer = family(address.type) <= 5 ? static_cast<int>(sample.value) : 0;
-    switch (address.type) {
-        case 1:
+    const int integer =
+        family(address.type) <= ValueFamily::Scaled ? static_cast<int>(sample.value) : 0;
+    switch (static_cast<AsduType>(address.type)) {
+        case AsduType::M_SP_NA_1:
             return (InformationObject)SinglePointInformation_create(nullptr, ioa, integer != 0,
                                                                     quality);
-        case 2:
+        case AsduType::M_SP_TA_1:
             return (InformationObject)SinglePointWithCP24Time2a_create(nullptr, ioa, integer != 0,
                                                                        quality, &time24);
-        case 30:
+        case AsduType::M_SP_TB_1:
             return (InformationObject)SinglePointWithCP56Time2a_create(nullptr, ioa, integer != 0,
                                                                        quality, &time56);
-        case 3:
+        case AsduType::M_DP_NA_1:
             return (InformationObject)DoublePointInformation_create(
                 nullptr, ioa, (DoublePointValue)integer, quality);
-        case 4:
+        case AsduType::M_DP_TA_1:
             return (InformationObject)DoublePointWithCP24Time2a_create(
                 nullptr, ioa, (DoublePointValue)integer, quality, &time24);
-        case 31:
+        case AsduType::M_DP_TB_1:
             return (InformationObject)DoublePointWithCP56Time2a_create(
                 nullptr, ioa, (DoublePointValue)integer, quality, &time56);
-        case 9:
+        case AsduType::M_ME_NA_1:
             return (InformationObject)MeasuredValueNormalized_create(nullptr, ioa, value, quality);
-        case 10:
+        case AsduType::M_ME_TA_1:
             return (InformationObject)MeasuredValueNormalizedWithCP24Time2a_create(
                 nullptr, ioa, value, quality, &time24);
-        case 21:
+        case AsduType::M_ME_ND_1:
             return (InformationObject)MeasuredValueNormalizedWithoutQuality_create(nullptr, ioa,
                                                                                    value);
-        case 34:
+        case AsduType::M_ME_TD_1:
             return (InformationObject)MeasuredValueNormalizedWithCP56Time2a_create(
                 nullptr, ioa, value, quality, &time56);
-        case 11:
+        case AsduType::M_ME_NB_1:
             return (InformationObject)MeasuredValueScaled_create(nullptr, ioa, integer, quality);
-        case 12:
+        case AsduType::M_ME_TB_1:
             return (InformationObject)MeasuredValueScaledWithCP24Time2a_create(
                 nullptr, ioa, integer, quality, &time24);
-        case 35:
+        case AsduType::M_ME_TE_1:
             return (InformationObject)MeasuredValueScaledWithCP56Time2a_create(
                 nullptr, ioa, integer, quality, &time56);
-        case 13:
+        case AsduType::M_ME_NC_1:
             return (InformationObject)MeasuredValueShort_create(nullptr, ioa, value, quality);
-        case 14:
+        case AsduType::M_ME_TC_1:
             return (InformationObject)MeasuredValueShortWithCP24Time2a_create(nullptr, ioa, value,
                                                                               quality, &time24);
-        case 36:
+        case AsduType::M_ME_TF_1:
             return (InformationObject)MeasuredValueShortWithCP56Time2a_create(nullptr, ioa, value,
                                                                               quality, &time56);
         default:
@@ -213,21 +262,22 @@ Sample decode_monitoring(int type, InformationObject object, int time_offset) {
     CP56Time2a timestamp = nullptr;
     CP24Time2a short_time = nullptr;
     switch (family(type)) {
-        case 1:
+        case ValueFamily::SinglePoint:
             sample.value = SinglePointInformation_getValue((SinglePointInformation)object) ? 1 : 0;
             sample.quality = SinglePointInformation_getQuality((SinglePointInformation)object);
             break;
-        case 2:
+        case ValueFamily::DoublePoint:
             sample.value = DoublePointInformation_getValue((DoublePointInformation)object);
             sample.quality = DoublePointInformation_getQuality((DoublePointInformation)object);
             break;
-        case 4:
+        case ValueFamily::Normalized:
             sample.value = MeasuredValueNormalized_getValue((MeasuredValueNormalized)object);
             sample.quality =
-                type == 21 ? 0
-                           : MeasuredValueNormalized_getQuality((MeasuredValueNormalized)object);
+                type == enum_value(AsduType::M_ME_ND_1)
+                    ? 0
+                    : MeasuredValueNormalized_getQuality((MeasuredValueNormalized)object);
             break;
-        case 5:
+        case ValueFamily::Scaled:
             sample.value = MeasuredValueScaled_getValue((MeasuredValueScaled)object);
             sample.quality = MeasuredValueScaled_getQuality((MeasuredValueScaled)object);
             break;
@@ -236,40 +286,40 @@ Sample decode_monitoring(int type, InformationObject object, int time_offset) {
             sample.quality = MeasuredValueShort_getQuality((MeasuredValueShort)object);
             break;
     }
-    switch (type) {
-        case 30:
+    switch (static_cast<AsduType>(type)) {
+        case AsduType::M_SP_TB_1:
             timestamp = SinglePointWithCP56Time2a_getTimestamp((SinglePointWithCP56Time2a)object);
             break;
-        case 31:
+        case AsduType::M_DP_TB_1:
             timestamp = DoublePointWithCP56Time2a_getTimestamp((DoublePointWithCP56Time2a)object);
             break;
-        case 34:
+        case AsduType::M_ME_TD_1:
             timestamp = MeasuredValueNormalizedWithCP56Time2a_getTimestamp(
                 (MeasuredValueNormalizedWithCP56Time2a)object);
             break;
-        case 35:
+        case AsduType::M_ME_TE_1:
             timestamp = MeasuredValueScaledWithCP56Time2a_getTimestamp(
                 (MeasuredValueScaledWithCP56Time2a)object);
             break;
-        case 36:
+        case AsduType::M_ME_TF_1:
             timestamp = MeasuredValueShortWithCP56Time2a_getTimestamp(
                 (MeasuredValueShortWithCP56Time2a)object);
             break;
-        case 2:
+        case AsduType::M_SP_TA_1:
             short_time = SinglePointWithCP24Time2a_getTimestamp((SinglePointWithCP24Time2a)object);
             break;
-        case 4:
+        case AsduType::M_DP_TA_1:
             short_time = DoublePointWithCP24Time2a_getTimestamp((DoublePointWithCP24Time2a)object);
             break;
-        case 10:
+        case AsduType::M_ME_TA_1:
             short_time = MeasuredValueNormalizedWithCP24Time2a_getTimestamp(
                 (MeasuredValueNormalizedWithCP24Time2a)object);
             break;
-        case 12:
+        case AsduType::M_ME_TB_1:
             short_time = MeasuredValueScaledWithCP24Time2a_getTimestamp(
                 (MeasuredValueScaledWithCP24Time2a)object);
             break;
-        case 14:
+        case AsduType::M_ME_TC_1:
             short_time = MeasuredValueShortWithCP24Time2a_getTimestamp(
                 (MeasuredValueShortWithCP24Time2a)object);
             break;
@@ -277,62 +327,67 @@ Sample decode_monitoring(int type, InformationObject object, int time_offset) {
     if (timestamp) {
         sample.invalid_time = CP56Time2a_isInvalid(timestamp) || !valid_cp56(timestamp);
         if (!sample.invalid_time) {
-            sample.timestamp = static_cast<std::int64_t>(CP56Time2a_toMsTimestamp(timestamp)) -
-                               time_offset * 60000LL;
+            sample.timestamp =
+                static_cast<std::int64_t>(CP56Time2a_toMsTimestamp(timestamp)) -
+                time_offset * static_cast<long long>(enum_value(TimeUnits::MillisecondsPerMinute));
             sample.device_time = true;
         }
     }
     // CP24 缺少日期/小时，保留接收时刻，不猜测设备时间。
     if (short_time)
         sample.invalid_time =
-            CP24Time2a_isInvalid(short_time) || CP24Time2a_getMinute(short_time) >= 60 ||
-            CP24Time2a_getSecond(short_time) >= 60 || CP24Time2a_getMillisecond(short_time) >= 1000;
+            CP24Time2a_isInvalid(short_time) ||
+            CP24Time2a_getMinute(short_time) >= enum_value(TimeUnits::SecondsPerMinute) ||
+            CP24Time2a_getSecond(short_time) >= enum_value(TimeUnits::SecondsPerMinute) ||
+            CP24Time2a_getMillisecond(short_time) >= enum_value(TimeUnits::MillisecondsPerSecond);
     return sample;
 }
 
 InformationObject command_object(const Address& address, double value, bool select, int qualifier,
                                  int time_offset) {
     sCP56Time2a timestamp{};
-    CP56Time2a_createFromMsTimestamp(&timestamp,
-                                     static_cast<std::uint64_t>(now_ms() + time_offset * 60000LL));
+    CP56Time2a_createFromMsTimestamp(
+        &timestamp, static_cast<std::uint64_t>(
+                        now_ms() + time_offset * static_cast<long long>(enum_value(
+                                                     TimeUnits::MillisecondsPerMinute))));
     const int ioa = address.ioa;
-    const int integer = family(address.type) <= 5 ? static_cast<int>(value) : 0;
+    const int integer = family(address.type) <= ValueFamily::Scaled ? static_cast<int>(value) : 0;
     const float floating = static_cast<float>(value);
-    switch (address.type) {
-        case 45:
+    switch (static_cast<AsduType>(address.type)) {
+        case AsduType::C_SC_NA_1:
             return (InformationObject)SingleCommand_create(nullptr, ioa, integer != 0, select,
                                                            qualifier);
-        case 46:
+        case AsduType::C_DC_NA_1:
             return (InformationObject)DoubleCommand_create(nullptr, ioa, integer, select,
                                                            qualifier);
-        case 47:
+        case AsduType::C_RC_NA_1:
             return (InformationObject)StepCommand_create(nullptr, ioa, (StepCommandValue)integer,
                                                          select, qualifier);
-        case 48:
+        case AsduType::C_SE_NA_1:
             return (InformationObject)SetpointCommandNormalized_create(nullptr, ioa, floating,
                                                                        select, qualifier);
-        case 49:
+        case AsduType::C_SE_NB_1:
             return (InformationObject)SetpointCommandScaled_create(nullptr, ioa, integer, select,
                                                                    qualifier);
-        case 50:
+        case AsduType::C_SE_NC_1:
             return (InformationObject)SetpointCommandShort_create(nullptr, ioa, floating, select,
                                                                   qualifier);
-        case 58:
+        case AsduType::C_SC_TA_1:
             return (InformationObject)SingleCommandWithCP56Time2a_create(
                 nullptr, ioa, integer != 0, select, qualifier, &timestamp);
-        case 59:
+        case AsduType::C_DC_TA_1:
             return (InformationObject)DoubleCommandWithCP56Time2a_create(
                 nullptr, ioa, integer, select, qualifier, &timestamp);
-        case 60:
+        case AsduType::C_RC_TA_1:
             return (InformationObject)StepCommandWithCP56Time2a_create(
                 nullptr, ioa, (StepCommandValue)integer, select, qualifier, &timestamp);
-        case 61:
+        case AsduType::C_SE_TA_1:
             return (InformationObject)SetpointCommandNormalizedWithCP56Time2a_create(
                 nullptr, ioa, floating, select, qualifier, &timestamp);
-        case 62:
+        case AsduType::C_SE_TB_1:
             return (InformationObject)SetpointCommandScaledWithCP56Time2a_create(
                 nullptr, ioa, integer, select, qualifier, &timestamp);
-        case 63:
+        case AsduType::C_SE_TC_1:
             return (InformationObject)SetpointCommandShortWithCP56Time2a_create(
                 nullptr, ioa, floating, select, qualifier, &timestamp);
         default:
@@ -342,23 +397,23 @@ InformationObject command_object(const Address& address, double value, bool sele
 
 std::tuple<double, bool, int> command_value(int type, InformationObject object) {
     switch (family(type)) {
-        case 1:
+        case ValueFamily::SinglePoint:
             return {SingleCommand_getState((SingleCommand)object) ? 1.0 : 0.0,
                     SingleCommand_isSelect((SingleCommand)object),
                     SingleCommand_getQU((SingleCommand)object)};
-        case 2:
+        case ValueFamily::DoublePoint:
             return {DoubleCommand_getState((DoubleCommand)object),
                     DoubleCommand_isSelect((DoubleCommand)object),
                     DoubleCommand_getQU((DoubleCommand)object)};
-        case 3:
+        case ValueFamily::Step:
             return {StepCommand_getState((StepCommand)object),
                     StepCommand_isSelect((StepCommand)object),
                     StepCommand_getQU((StepCommand)object)};
-        case 4:
+        case ValueFamily::Normalized:
             return {SetpointCommandNormalized_getValue((SetpointCommandNormalized)object),
                     SetpointCommandNormalized_isSelect((SetpointCommandNormalized)object),
                     SetpointCommandNormalized_getQL((SetpointCommandNormalized)object)};
-        case 5:
+        case ValueFamily::Scaled:
             return {SetpointCommandScaled_getValue((SetpointCommandScaled)object),
                     SetpointCommandScaled_isSelect((SetpointCommandScaled)object),
                     SetpointCommandScaled_getQL((SetpointCommandScaled)object)};
@@ -392,10 +447,19 @@ class Iec104Protocol::Impl {
     bool configured{false}, server_role{false}, ready{false}, opened{false}, closed{true};
     bool initial_gi{true}, select_execute{false}, require_termination{true};
     std::string host, error;
-    int port{2404}, timeout_ms{3000}, command_timeout_ms{3000}, stale_ms{30000};
-    int originator{0}, max_points{65536}, max_sessions{8}, queue_size{1024}, qualifier{0};
+    int port{enum_value(Defaults::Port)}, timeout_ms{enum_value(Defaults::TimeoutMs)},
+        command_timeout_ms{enum_value(Defaults::CommandTimeoutMs)},
+        stale_ms{enum_value(Defaults::StaleMs)};
+    int originator{0}, max_points{enum_value(Defaults::MaxPoints)},
+        max_sessions{enum_value(Defaults::MaxSessions)},
+        queue_size{enum_value(Defaults::QueueSize)}, qualifier{0};
     int time_offset{0};
-    sCS104_APCIParameters apci{12, 8, 10, 15, 10, 20};
+    sCS104_APCIParameters apci{enum_value(Defaults::SendWindow),
+                               enum_value(Defaults::ReceiveWindow),
+                               enum_value(Defaults::ConnectionTimeoutSeconds),
+                               enum_value(Defaults::MessageTimeoutSeconds),
+                               enum_value(Defaults::ConfirmIntervalSeconds),
+                               enum_value(Defaults::KeepAliveSeconds)};
     std::set<int> stations;
     std::map<std::tuple<int, int, int>, Sample> samples;
 
@@ -622,14 +686,17 @@ int Iec104Protocol::initialize(const std::string& text) {
             throw std::invalid_argument("TLS is not supported by this IEC104 package");
         if (config.value("protocol", std::string("IEC104")) != "IEC104")
             throw std::invalid_argument("Expected protocol IEC104");
-        const int time_offset = option_int(config, "cp56_timezone_offset_minutes", 0, -840, 840);
+        const int time_offset = option_int(config, "cp56_timezone_offset_minutes", 0,
+                                           enum_value(Limits::MinTimezoneMinutes),
+                                           enum_value(Limits::MaxTimezoneMinutes));
         const auto role = config.value("local_role", config.value("role", std::string("client")));
         if (role != "client" && role != "server" && role != "server_readonly")
             throw std::invalid_argument("Invalid local_role");
         const bool server_role = role != "client";
         std::string host = config.value(
             "host", config.value("ip", std::string(server_role ? "0.0.0.0" : "127.0.0.1")));
-        int port = option_int(config, "port", 2404, 1, 65535);
+        int port =
+            option_int(config, "port", enum_value(Defaults::Port), 1, enum_value(Limits::MaxPort));
         if (config.contains("connection") && !config.contains("host") && !config.contains("ip")) {
             const auto endpoint = config.at("connection").get<std::string>();
             const auto colon = endpoint.rfind(':');
@@ -637,27 +704,32 @@ int Iec104Protocol::initialize(const std::string& text) {
                 host = endpoint;
             else {
                 host = endpoint.substr(0, colon);
-                if (!config.contains("port")) port = number(endpoint.substr(colon + 1), 1, 65535);
+                if (!config.contains("port"))
+                    port = number(endpoint.substr(colon + 1), 1, enum_value(Limits::MaxPort));
             }
         }
-        if (host.empty() || host.size() > 255 || host.find('\0') != std::string::npos ||
-            host.find(':') != std::string::npos)
+        if (host.empty() || host.size() > enum_value(Limits::MaxHostBytes) ||
+            host.find('\0') != std::string::npos || host.find(':') != std::string::npos)
             throw std::invalid_argument("Endpoint must be IPv4 or hostname supported by lib60870");
         std::set<int> stations;
         auto addresses = config.value(
             "common_addresses",
             config.value("slaves",
-                         Json::array({option_int(config, "common_address", 1, 1, 65534)})));
-        if (!addresses.is_array() || addresses.empty() || addresses.size() > 256)
+                         Json::array({option_int(config, "common_address", 1, 1,
+                                                 enum_value(Limits::MaxCommonAddress))})));
+        if (!addresses.is_array() || addresses.empty() ||
+            addresses.size() > enum_value(Limits::MaxStations))
             throw std::invalid_argument("common_addresses requires 1..256 stations");
         for (const auto& ca : addresses) {
             if (!ca.is_number_integer())
                 throw std::invalid_argument("Common address must be integer");
             const auto value = ca.get<std::int64_t>();
-            if (value < 1 || value > 65534 || !stations.insert(static_cast<int>(value)).second)
+            if (value < 1 || value > enum_value(Limits::MaxCommonAddress) ||
+                !stations.insert(static_cast<int>(value)).second)
                 throw std::invalid_argument("Invalid/duplicate common address");
         }
-        const int max_points = option_int(config, "max_points", 65536, 1, 65536);
+        const int max_points = option_int(config, "max_points", enum_value(Defaults::MaxPoints), 1,
+                                          enum_value(Limits::MaxPoints));
         std::map<std::tuple<int, int, int>, Sample> samples;
         const auto points = config.value("points", Json::array());
         if (!points.is_array() || points.size() > static_cast<std::size_t>(max_points))
@@ -670,35 +742,60 @@ int Iec104Protocol::initialize(const std::string& text) {
             Sample sample;
             sample.value = point.value("value", 0.0);
             validate_value(address.type, sample.value);
-            sample.quality = option_int(point, "quality", 0, 0, 255);
-            if ((sample.quality & ~0xf1) || (family(address.type) <= 2 && (sample.quality & 1)) ||
-                (address.type == 21 && sample.quality))
+            sample.quality = option_int(point, "quality", enum_value(SampleQuality::Good), 0,
+                                        enum_value(Limits::MaxQualityByte));
+            if ((sample.quality & ~enum_value(QualityMask::Supported)) ||
+                (family(address.type) <= ValueFamily::DoublePoint &&
+                 (sample.quality & enum_value(QualityMask::Overflow))) ||
+                (address.type == enum_value(AsduType::M_ME_ND_1) && sample.quality))
                 throw std::invalid_argument("Invalid IEC quality bits for ASDU");
             if (point.contains("timestamp") && !point.at("timestamp").is_number_integer())
                 throw std::invalid_argument("Point timestamp must be integer milliseconds");
             sample.timestamp = point.value("timestamp", now_ms());
-            if (sample.timestamp < 946684800000LL - time_offset * 60000LL ||
-                sample.timestamp >= 4102444800000LL - time_offset * 60000LL)
+            if (sample.timestamp < enum_value(TimeEncoding::Epoch2000Ms) -
+                                       time_offset * static_cast<long long>(enum_value(
+                                                         TimeUnits::MillisecondsPerMinute)) ||
+                sample.timestamp >= enum_value(TimeEncoding::Epoch2100Ms) -
+                                        time_offset * static_cast<long long>(enum_value(
+                                                          TimeUnits::MillisecondsPerMinute)))
                 throw std::invalid_argument("Point timestamp must encode within years 2000..2099");
             if (!samples.emplace(address.key(), sample).second)
                 throw std::invalid_argument("Duplicate image point");
         }
         sCS104_APCIParameters apci{};
-        apci.k = option_int(config, "send_window_size", 12, 1, 32767);
-        apci.w = option_int(config, "receive_window_size", 8, 1, apci.k);
-        apci.t0 = option_int(config, "connection_timeout", 10, 1, 60);
-        apci.t1 = option_int(config, "message_timeout", 15, 1, 120);
-        apci.t2 = option_int(config, "confirm_interval", 10, 1, 120);
-        apci.t3 = option_int(config, "keep_alive_interval", 20, 1, 3600);
+        apci.k = option_int(config, "send_window_size", enum_value(Defaults::SendWindow), 1,
+                            enum_value(Limits::MaxWindow));
+        apci.w = option_int(config, "receive_window_size", enum_value(Defaults::ReceiveWindow), 1,
+                            apci.k);
+        apci.t0 =
+            option_int(config, "connection_timeout", enum_value(Defaults::ConnectionTimeoutSeconds),
+                       1, enum_value(Limits::MaxConnectionTimeoutSeconds));
+        apci.t1 = option_int(config, "message_timeout", enum_value(Defaults::MessageTimeoutSeconds),
+                             1, enum_value(Limits::MaxMessageTimeoutSeconds));
+        apci.t2 =
+            option_int(config, "confirm_interval", enum_value(Defaults::ConfirmIntervalSeconds), 1,
+                       enum_value(Limits::MaxMessageTimeoutSeconds));
+        apci.t3 = option_int(config, "keep_alive_interval", enum_value(Defaults::KeepAliveSeconds),
+                             1, enum_value(Limits::MaxKeepAliveSeconds));
         if (apci.t2 >= apci.t1)
             throw std::invalid_argument("confirm_interval must be less than message_timeout");
-        const int timeout = option_int(config, "timeout_ms", 3000, 1, 60000);
-        const int command_timeout = option_int(config, "command_timeout_ms", 3000, 1, 60000);
-        const int stale = option_int(config, "stale_ms", 30000, 0, 86400000);
-        const int oa = option_int(config, "originator_address", 0, 0, 255);
-        const int sessions = option_int(config, "max_connections", 8, 1, 100);
-        const int queue = option_int(config, "queue_size", 1024, 16, 65536);
-        const int qualifier = option_int(config, "command_qualifier", 0, 0, 3);
+        const int timeout = option_int(config, "timeout_ms", enum_value(Defaults::TimeoutMs), 1,
+                                       enum_value(Limits::MaxTimeoutMs));
+        const int command_timeout =
+            option_int(config, "command_timeout_ms", enum_value(Defaults::CommandTimeoutMs), 1,
+                       enum_value(Limits::MaxTimeoutMs));
+        const int stale = option_int(config, "stale_ms", enum_value(Defaults::StaleMs), 0,
+                                     enum_value(Limits::MaxStaleMs));
+        const int oa =
+            option_int(config, "originator_address", 0, 0, enum_value(Limits::MaxOriginator));
+        const int sessions =
+            option_int(config, "max_connections", enum_value(Defaults::MaxSessions), 1,
+                       enum_value(Limits::MaxSessions));
+        const int queue =
+            option_int(config, "queue_size", enum_value(Defaults::QueueSize),
+                       enum_value(Limits::MinQueueSize), enum_value(Limits::MaxQueueSize));
+        const int qualifier =
+            option_int(config, "command_qualifier", 0, 0, enum_value(Limits::MaxQualifier));
         const bool initial_gi = config.value("general_interrogation_on_connect", true);
         const bool select_execute = config.value("select_execute", false);
         const bool termination = config.value("command_require_termination", true);
@@ -723,15 +820,15 @@ int Iec104Protocol::initialize(const std::string& text) {
         impl_->require_termination = termination;
         impl_->configured = true;
         impl_->error.clear();
-        return 0;
+        return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {
         impl_->set_error(error.what());
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
 }
 
 int Iec104Protocol::connect() {
-    if (is_connected()) return 0;
+    if (is_connected()) return enum_value(OperationResult::Success);
     impl_->stop();
     try {
         if (!impl_->configured) throw std::invalid_argument("IEC104 is not initialized");
@@ -753,7 +850,7 @@ int Iec104Protocol::connect() {
             impl_->ready = true;
             impl_->closed = false;
             impl_->error.clear();
-            return 0;
+            return enum_value(OperationResult::Success);
         }
         impl_->connection = CS104_Connection_create(impl_->host.c_str(), impl_->port);
         if (!impl_->connection) throw std::runtime_error("Cannot create IEC104 connection");
@@ -784,17 +881,17 @@ int Iec104Protocol::connect() {
         }
         if (impl_->initial_gi && interrogate() != 0)
             throw std::runtime_error("Initial interrogation submission failed");
-        return 0;
+        return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {
         impl_->stop();
         impl_->set_error(error.what());
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
 }
 
 int Iec104Protocol::disconnect() {
     impl_->stop();
-    return 0;
+    return enum_value(OperationResult::Success);
 }
 
 bool Iec104Protocol::is_connected() const {
@@ -810,7 +907,7 @@ std::string Iec104Protocol::last_error() const {
 int Iec104Protocol::interrogate(int ca) {
     if (impl_->server_role || !is_connected() || (ca && !impl_->stations.count(ca))) {
         impl_->set_error("Interrogation requires a ready client and configured station");
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
     const auto deadline = Clock::now() + std::chrono::milliseconds(impl_->timeout_ms);
     for (const auto station : impl_->stations) {
@@ -818,32 +915,36 @@ int Iec104Protocol::interrogate(int ca) {
         while (CS104_Connection_isTransmitBufferFull(impl_->connection) && is_connected() &&
                Clock::now() < deadline) {
             std::unique_lock<std::mutex> lock(impl_->mutex);
-            impl_->cv.wait_for(lock, std::chrono::milliseconds(5));
+            impl_->cv.wait_for(lock,
+                               std::chrono::milliseconds(enum_value(Defaults::ConnectPollMs)));
         }
         if (!is_connected() ||
             !CS104_Connection_sendInterrogationCommand(impl_->connection, CS101_COT_ACTIVATION,
                                                        station, IEC60870_QOI_STATION)) {
             impl_->set_error("IEC104 send window full or interrogation send failed");
-            return -1;
+            return enum_value(OperationResult::Failure);
         }
     }
-    return 0;
+    return enum_value(OperationResult::Success);
 }
 
 int Iec104Protocol::read_batch(const std::vector<std::string>& codes, std::string& result) {
     if (!is_connected()) {
         impl_->set_error("IEC104 is not ready");
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
-    if (codes.size() > 65536) {
+    if (codes.size() > enum_value(PluginLimits::MaxBatchPoints)) {
         impl_->set_error("Batch too large");
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
     Json rows = Json::array();
     int count = 0;
     std::lock_guard<std::mutex> lock(impl_->mutex);
     for (const auto& code : codes) {
-        Json row = {{"code", code}, {"value", nullptr}, {"quality", 1}, {"timestamp", now_ms()}};
+        Json row = {{"code", code},
+                    {"value", nullptr},
+                    {"quality", enum_value(SampleQuality::Invalid)},
+                    {"timestamp", now_ms()}};
         try {
             const auto address = parse(code);
             if (control(address.type))
@@ -855,9 +956,11 @@ int Iec104Protocol::read_batch(const std::vector<std::string>& codes, std::strin
             const bool stale =
                 !impl_->server_role && impl_->stale_ms &&
                 Clock::now() - sample.received > std::chrono::milliseconds(impl_->stale_ms);
-            const bool valid =
-                !stale && !sample.quality && !sample.invalid_time && std::isfinite(sample.value) &&
-                (family(address.type) != 2 || sample.value == 1 || sample.value == 2);
+            const bool valid = !stale && !sample.quality && !sample.invalid_time &&
+                               std::isfinite(sample.value) &&
+                               (family(address.type) != ValueFamily::DoublePoint ||
+                                sample.value == enum_value(DoublePointState::Off) ||
+                                sample.value == enum_value(DoublePointState::On));
             row["timestamp"] = sample.timestamp;
             row["iec_quality"] = sample.quality;
             row["timestamp_source"] = impl_->server_role   ? "local_image"
@@ -866,7 +969,7 @@ int Iec104Protocol::read_batch(const std::vector<std::string>& codes, std::strin
             row["stale"] = stale;
             if (valid) {
                 row["value"] = sample.value;
-                row["quality"] = 0;
+                row["quality"] = enum_value(SampleQuality::Good);
                 ++count;
             }
         } catch (const std::exception& error) {
@@ -902,7 +1005,7 @@ int Iec104Protocol::write(const std::string& code, double value) {
             }
             auto asdu = impl_->make_asdu(address, sample, CS101_COT_SPONTANEOUS, impl_->originator);
             CS104_Slave_enqueueASDU(impl_->server, asdu.get());
-            return 0;
+            return enum_value(OperationResult::Success);
         }
         if (!control(address.type))
             throw std::invalid_argument("Client write requires command ASDU");
@@ -956,10 +1059,10 @@ int Iec104Protocol::write(const std::string& code, double value) {
             }
             if (rejected) throw std::runtime_error("IEC104 command negatively confirmed");
         }
-        return 0;
+        return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {
         impl_->set_error(error.what());
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
 }
 

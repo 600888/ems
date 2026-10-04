@@ -11,6 +11,7 @@
 #include <sstream>
 
 #include "net/para_loader/para_loader.h"
+#include "net/protocol/protocol_types.h"
 
 namespace ems {
 namespace net {
@@ -90,7 +91,7 @@ int CollectEngine::start_all(ParaLoader& para_loader,
 
     if (!para_loader.is_initialized()) {
         LOG_ERROR("参数加载器未初始化");
-        return -1;
+        return enum_value(protocol::OperationResult::Failure);
     }
 
     // 1. 加载所有启用的通道配置

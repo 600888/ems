@@ -26,6 +26,8 @@
 #include <vector>
 
 #include "data_dispatcher.h"
+#include "net/collect/collect_defaults.h"
+#include "net/collect/collect_types.h"
 #include "net/handler/protocol_handler.h"
 #include "net/log.h"
 #include "plugin_manager.h"
@@ -56,20 +58,8 @@ struct CommandTask {
     int64_t taskId_{0};
     std::string pointCode_;
     double value_{0.0};
-    int timeoutMs_{5000};
+    int timeoutMs_{enum_value(CollectDefaults::CommandTimeoutMs)};
     std::function<void(bool)> callback_;
-};
-
-/**
- * @brief 通道状态
- */
-enum class ChannelState : int {
-    Created = 0,
-    Starting = 1,
-    Running = 2,
-    Stopping = 3,
-    Stopped = 4,
-    Error = 5
 };
 
 /**
@@ -181,7 +171,7 @@ class ChannelThread {
      * @return 异步结果
      */
     std::future<bool> post_command(const std::string& pointCode, double value,
-                                   int timeoutMs = 5000);
+                                   int timeoutMs = enum_value(CollectDefaults::CommandTimeoutMs));
 
     // ============================================================
     // 查询
@@ -308,9 +298,9 @@ class ChannelThread {
 
     // 状态控制
     std::atomic<ChannelState> state_{ChannelState::Created};
-    std::atomic<int> poll_interval_ms_{1000};
+    std::atomic<int> poll_interval_ms_{enum_value(CollectDefaults::PollIntervalMs)};
     std::atomic<int> reconnect_count_{0};
-    int max_retries_{5};
+    int max_retries_{enum_value(CollectDefaults::MaxRetries)};
 
     // 错误处理
     mutable std::string last_err_;

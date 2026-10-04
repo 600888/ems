@@ -7,8 +7,14 @@
 #include <stdexcept>
 
 #include "net/protocol/plugin_manager.h"
+#include "net/protocol/protocol_types.h"
 
 namespace ems::net::handler {
+using protocol::ConnectionState;
+using protocol::OperationResult;
+using protocol::PluginLimits;
+using protocol::SampleQuality;
+
 namespace {
 std::uint64_t now_ms() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -79,7 +85,8 @@ PluginHandler::~PluginHandler() = default;
 bool PluginHandler::initialize(const json& config) {
     std::lock_guard<std::mutex> lock(impl_->mutex);
     try {
-        if (impl_->instance && impl_->functions.is_connected_fn(impl_->instance) == 1)
+        if (impl_->instance && impl_->functions.is_connected_fn(impl_->instance) ==
+                                   enum_value(ConnectionState::Connected))
             throw std::invalid_argument("Disconnect before reconfiguring handler");
         const auto text = normalized_config(config, impl_->protocol).dump();
         // 新配置使用临时实例验证；失败不破坏之前已校验的配置。
@@ -88,7 +95,8 @@ bool PluginHandler::initialize(const json& config) {
                                                            release);
         if (!candidate) throw std::runtime_error(impl_->manager.last_error());
         const auto functions = impl_->manager.get_instance_functions(candidate.get());
-        if (functions.init_fn(candidate.get(), text.c_str()) != 0) {
+        if (functions.init_fn(candidate.get(), text.c_str()) !=
+            enum_value(OperationResult::Success)) {
             const char* error = functions.last_error_fn(candidate.get());
             throw std::runtime_error(error ? error : "Plugin initialization failed");
         }
@@ -110,7 +118,7 @@ bool PluginHandler::connect() {
         impl_->error = "Initialize handler before connecting";
         return false;
     }
-    if (impl_->functions.connect_fn(impl_->instance) != 0) {
+    if (impl_->functions.connect_fn(impl_->instance) != enum_value(OperationResult::Success)) {
         impl_->plugin_error();
         return false;
     }
@@ -120,7 +128,8 @@ bool PluginHandler::connect() {
 
 bool PluginHandler::disconnect() {
     std::lock_guard<std::mutex> lock(impl_->mutex);
-    if (impl_->instance && impl_->functions.disconnect_fn(impl_->instance) != 0) {
+    if (impl_->instance &&
+        impl_->functions.disconnect_fn(impl_->instance) != enum_value(OperationResult::Success)) {
         impl_->plugin_error();
         return false;
     }
@@ -130,7 +139,8 @@ bool PluginHandler::disconnect() {
 
 bool PluginHandler::is_connected() const {
     std::lock_guard<std::mutex> lock(impl_->mutex);
-    return impl_->instance && impl_->functions.is_connected_fn(impl_->instance) == 1;
+    return impl_->instance && impl_->functions.is_connected_fn(impl_->instance) ==
+                                  enum_value(ConnectionState::Connected);
 }
 
 int PluginHandler::read_batch(const std::vector<std::string>& codes,
@@ -139,23 +149,26 @@ int PluginHandler::read_batch(const std::vector<std::string>& codes,
     results.clear();
     try {
         if (!impl_->instance) throw std::runtime_error("Handler has not been initialized");
-        if (codes.size() > 65536) throw std::invalid_argument("Batch too large");
+        if (codes.size() > enum_value(PluginLimits::MaxBatchPoints))
+            throw std::invalid_argument("Batch too large");
         std::vector<const char*> pointers;
         pointers.reserve(codes.size());
         for (const auto& code : codes) pointers.push_back(code.c_str());
-        std::vector<char> output(EMS_PLUGIN_RESULT_BUF_SIZE);
-        constexpr std::size_t max_bytes = 8 * 1024 * 1024;
+        std::vector<char> output(enum_value(PluginLimits::InitialResultBytes));
+        constexpr std::size_t max_bytes = enum_value(PluginLimits::MaxResultBytes);
         int count;
         do {
             count = impl_->functions.read_batch_fn(impl_->instance, pointers.data(),
                                                    static_cast<int>(pointers.size()), output.data(),
                                                    static_cast<int>(output.size()));
-            if (count != EMS_PLUGIN_BUFFER_TOO_SMALL || output.size() == max_bytes) break;
-            output.resize(std::min(output.size() * 2, max_bytes));
+            if (count != enum_value(OperationResult::BufferTooSmall) || output.size() == max_bytes)
+                break;
+            output.resize(
+                std::min(output.size() * enum_value(PluginLimits::BufferGrowthFactor), max_bytes));
         } while (true);
         if (count < 0) {
             impl_->plugin_error();
-            return -1;
+            return enum_value(OperationResult::Failure);
         }
         const auto terminator = std::find(output.begin(), output.end(), '\0');
         if (terminator == output.end())
@@ -172,23 +185,23 @@ int PluginHandler::read_batch(const std::vector<std::string>& codes,
                 throw std::runtime_error("Plugin result order does not match batch");
             PointValue point;
             point.code = codes[i];
-            point.quality = item.value("quality", 1);
+            point.quality = item.value("quality", enum_value(SampleQuality::Invalid));
             const auto value = item.find("value");
             if (value != item.end() && value->is_number())
                 point.value = value->get<double>();
             else if (value != item.end() && value->is_boolean())
                 point.value = value->get<bool>() ? 1 : 0;
-            else if (point.quality == 0)
-                point.quality = 3;
+            else if (point.quality == enum_value(SampleQuality::Good))
+                point.quality = enum_value(SampleQuality::Error);
             if (!std::isfinite(point.value)) {
                 point.value = 0;
-                point.quality = 3;
+                point.quality = enum_value(SampleQuality::Error);
             }
-            if (point.quality < 0) point.quality = 1;
+            if (point.quality < 0) point.quality = enum_value(SampleQuality::Invalid);
             point.timestamp = item.value("timestamp", now_ms());
             point.rawValue = item.value("rawValue", std::int64_t{0});
             point.details = item;
-            if (point.quality == 0) ++valid;
+            if (point.quality == enum_value(SampleQuality::Good)) ++valid;
             parsed.push_back(std::move(point));
         }
         if (valid != count) throw std::runtime_error("Plugin result count does not match quality");
@@ -197,7 +210,7 @@ int PluginHandler::read_batch(const std::vector<std::string>& codes,
         return valid;
     } catch (const std::exception& error) {
         impl_->error = error.what();
-        return -1;
+        return enum_value(OperationResult::Failure);
     }
 }
 
@@ -207,7 +220,8 @@ bool PluginHandler::write_value(const std::string& code, double value) {
         impl_->error = "Handler has not been initialized";
         return false;
     }
-    if (impl_->functions.write_fn(impl_->instance, code.c_str(), value) != 0) {
+    if (impl_->functions.write_fn(impl_->instance, code.c_str(), value) !=
+        enum_value(OperationResult::Success)) {
         impl_->plugin_error();
         return false;
     }

@@ -10,11 +10,14 @@
 #include <string>
 #include <vector>
 
+#include "net/protocol/protocol_types.h"
+
 namespace ems::net::collect {
 class PluginManager;
 }
 
 namespace ems::net::handler {
+using protocol::SampleQuality;
 using json = nlohmann::json;
 
 /** @brief 按输入顺序返回的采集样本；无效值以 quality 标识。 */
@@ -22,7 +25,7 @@ struct PointValue {
     std::string code;
     double value{0};
     std::int64_t rawValue{0};
-    int quality{1};
+    int quality{enum_value(SampleQuality::Invalid)};
     std::uint64_t timestamp{0};
     json details;  ///< 原始插件结果，保留需量时间、复合字段与协议品质。
 };

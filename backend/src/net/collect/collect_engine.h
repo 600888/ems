@@ -34,6 +34,8 @@
 #include "db/channel.h"
 #include "db/device.h"
 #include "db/point.h"
+#include "net/collect/collect_defaults.h"
+#include "net/collect/collect_types.h"
 #include "plugin_manager.h"
 #include "rtdb/rtdb_device.h"
 
@@ -53,32 +55,27 @@ struct EngineConfig {
 
     // Redis/RTDB 配置
     std::string redisHost_{"127.0.0.1"};
-    int redisPort_{6379};
+    int redisPort_{enum_value(DispatchDefaults::RedisPort)};
     std::string redisPassword_;
     int redisDb_{0};
-    int redisPoolSize_{4};
-    int redisTimeoutMs_{3000};
+    int redisPoolSize_{enum_value(DispatchDefaults::RedisPoolSize)};
+    int redisTimeoutMs_{enum_value(DispatchDefaults::RedisTimeoutMs)};
     std::string redisPrefix_{"ems:"};
 
     // 变更提示通道独立于 RTDB 存储选择。
     DataDispatcherConfig::NotificationBackend notificationBackend_{
         DataDispatcherConfig::NotificationBackend::Redis};
     std::string zmqEndpoint_{"tcp://127.0.0.1:5557"};
-    std::size_t zmqQueueItems_{1024};
-    std::size_t zmqMaxMessageBytes_{65536};
-    int zmqHighWaterMark_{1024};
+    std::size_t zmqQueueItems_{enum_value(DispatchDefaults::ZmqQueueItems)};
+    std::size_t zmqMaxMessageBytes_{enum_value(DispatchDefaults::ZmqMaxMessageBytes)};
+    int zmqHighWaterMark_{enum_value(DispatchDefaults::ZmqHighWaterMark)};
 
     // 默认采集周期
-    int defaultPollIntervalMs_{1000};
+    int defaultPollIntervalMs_{enum_value(CollectDefaults::PollIntervalMs)};
 
     // 最大通道数
-    int maxChannels_{128};
+    int maxChannels_{enum_value(CollectDefaults::MaxChannels)};
 };
-
-/**
- * @brief 采集引擎状态
- */
-enum class EngineState : int { Idle = 0, Running = 1, Stopped = 2, Error = 3 };
 
 /**
  * @brief 采集引擎主类

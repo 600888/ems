@@ -19,6 +19,8 @@
 #include <vector>
 
 #include "models/point_runtime.hpp"
+#include "net/collect/collect_defaults.h"
+#include "net/collect/collect_types.h"
 #include "net/handler/protocol_handler.h"
 
 namespace ems {
@@ -39,14 +41,14 @@ using handler::PointValue;
  * @brief 数据分发配置
  */
 struct DataDispatcherConfig {
-    enum class NotificationBackend { Redis, ZeroMQ };
+    using NotificationBackend = collect::NotificationBackend;
 
     std::string redisHost_{"127.0.0.1"};
-    int redisPort_{6379};
+    int redisPort_{enum_value(DispatchDefaults::RedisPort)};
     std::string redisPassword_;
     int redisDb_{0};
-    int poolSize_{4};
-    int timeoutMs_{3000};
+    int poolSize_{enum_value(DispatchDefaults::RedisPoolSize)};
+    int timeoutMs_{enum_value(DispatchDefaults::RedisTimeoutMs)};
     std::string keyPrefix_{"ems:"};
 
     // Pub/Sub 通知通道
@@ -56,13 +58,13 @@ struct DataDispatcherConfig {
     std::string pubsubChannelYt_{"rtdb:yt:update"};
     NotificationBackend notificationBackend_{NotificationBackend::Redis};
     std::string zmqEndpoint_{"tcp://127.0.0.1:5557"};
-    std::size_t zmqQueueItems_{1024};
-    std::size_t zmqMaxMessageBytes_{65536};
-    int zmqHighWaterMark_{1024};
+    std::size_t zmqQueueItems_{enum_value(DispatchDefaults::ZmqQueueItems)};
+    std::size_t zmqMaxMessageBytes_{enum_value(DispatchDefaults::ZmqMaxMessageBytes)};
+    int zmqHighWaterMark_{enum_value(DispatchDefaults::ZmqHighWaterMark)};
 
     // 批量写入配置
-    int batchMaxSize_{500};     // 单次批量最大点数
-    int batchIntervalMs_{100};  // 批量写入最大间隔(ms)
+    int batchMaxSize_{enum_value(DispatchDefaults::BatchMaxSize)};        // 单次批量最大点数
+    int batchIntervalMs_{enum_value(DispatchDefaults::BatchIntervalMs)};  // 批量写入最大间隔(ms)
 };
 
 /**

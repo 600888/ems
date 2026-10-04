@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include "config_types.h"
 #include "net/log.h"
 
 namespace ems {
@@ -149,7 +150,7 @@ ems::rtdb::ChannelConfig ParaLoader::to_channel_config(const ems::db::channel& c
     cfg.protocol_ = static_cast<ems::model::ProtocolType>(ch.protocol_type);
 
     // 根据连接类型生成连接串
-    if (ch.conn_type == 2) {
+    if (ch.conn_type == enum_value(DatabaseConnectionType::Tcp)) {
         // TCP
         cfg.connection_ = ch.ip + ":" + std::to_string(ch.port);
         cfg.baudRate_ = 0;

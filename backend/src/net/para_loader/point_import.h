@@ -11,6 +11,8 @@
 #include <vector>
 
 #include "db/db_manager.h"
+#include "models/base.h"
+#include "net/protocol/enum_value.h"
 
 namespace ems {
 namespace db {
@@ -52,7 +54,10 @@ class PointImporter {
     static CollectImportData make_yc_data(const std::string& point_code, int64_t channel_id,
                                           int64_t device_id, int64_t raw_value, double eng_value,
                                           int quality, const std::string& collect_time) {
-        return {point_code, 0, channel_id, device_id, raw_value, eng_value, quality, collect_time};
+        return {point_code, net::enum_value(model::PointType::YC),
+                channel_id, device_id,
+                raw_value,  eng_value,
+                quality,    collect_time};
     }
 
     /**
@@ -68,12 +73,12 @@ class PointImporter {
                                           int64_t device_id, int value,
                                           const std::string& collect_time) {
         return {point_code,
-                1,
+                net::enum_value(model::PointType::YX),
                 channel_id,
                 device_id,
                 static_cast<int64_t>(value),
                 static_cast<double>(value),
-                0,
+                net::enum_value(model::PointQuality::Good),
                 collect_time};
     }
 
@@ -90,12 +95,12 @@ class PointImporter {
                                           int64_t device_id, int value,
                                           const std::string& collect_time) {
         return {point_code,
-                2,
+                net::enum_value(model::PointType::YK),
                 channel_id,
                 device_id,
                 static_cast<int64_t>(value),
                 static_cast<double>(value),
-                0,
+                net::enum_value(model::PointQuality::Good),
                 collect_time};
     }
 
@@ -112,7 +117,14 @@ class PointImporter {
     static CollectImportData make_yt_data(const std::string& point_code, int64_t channel_id,
                                           int64_t device_id, int64_t raw_value, double eng_value,
                                           const std::string& collect_time) {
-        return {point_code, 3, channel_id, device_id, raw_value, eng_value, 0, collect_time};
+        return {point_code,
+                net::enum_value(model::PointType::YT),
+                channel_id,
+                device_id,
+                raw_value,
+                eng_value,
+                net::enum_value(model::PointQuality::Good),
+                collect_time};
     }
 
    private:

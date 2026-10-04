@@ -21,10 +21,19 @@
 #include <vector>
 
 #include "models/base.h"
+#include "net/protocol/modbus/modbus_limits.h"
+#include "net/protocol/serial_types.h"
+#include "net/protocol/time_units.h"
 
 namespace ems {
 namespace net {
 namespace device {
+using modbus::Defaults;
+using modbus::FunctionCode;
+using modbus::Layout;
+using modbus::Limits;
+using protocol::SerialDefaults;
+using protocol::TimeUnits;
 
 using ValueType = std::variant<int, int64_t, double, bool, std::string>;
 
@@ -34,7 +43,7 @@ using ValueType = std::variant<int, int64_t, double, bool, std::string>;
 struct ProtocolPoint {
     int rtu_addr = 1;
     int address = 0;
-    int func_code = 3;
+    int func_code = enum_value(FunctionCode::ReadHoldingRegisters);
     std::string decode = "0x41";
     int bit = -1;
     int register_cnt = 1;
@@ -82,7 +91,8 @@ class MessageCapture {
      * @param[in] limit 结果数量上限。
      * @return 匹配条件的数据集合。
      */
-    virtual std::vector<CapturedMessage> getMessages(int limit = 100) const = 0;
+    virtual std::vector<CapturedMessage> getMessages(
+        int limit = enum_value(Defaults::CaptureMessageLimit)) const = 0;
 
     /** @brief 清空已捕获报文。 */
     virtual void clear() = 0;
@@ -228,7 +238,8 @@ class ProtocolHandler {
      * @param[in] limit 结果数量上限。
      * @return 匹配条件的数据集合。
      */
-    virtual std::vector<CapturedMessage> getCapturedMessages(int limit = 100) const;
+    virtual std::vector<CapturedMessage> getCapturedMessages(
+        int limit = enum_value(Defaults::CaptureMessageLimit)) const;
 
     /** @brief 清空已捕获报文。 */
     virtual void clearCapturedMessages();

@@ -12,6 +12,8 @@
 #include <array>
 #include <cstdint>
 
+#include "net/protocol/modbus/modbus_limits.h"
+
 namespace ems {
 namespace net {
 namespace modbus {
@@ -55,7 +57,7 @@ class ModbusDataInt16 {
      * @brief 获取该数据类型占用的寄存器数量。
      * @return 该数据类型占用的 16 位寄存器数量。
      */
-    static constexpr size_t registerCount() { return 1; }
+    static constexpr size_t registerCount() { return enum_value(Layout::SingleRegisters); }
 
     /** @brief 根据寄存器内容更新解码值。 */
     void updateValue() {}
@@ -106,7 +108,7 @@ class ModbusDataUInt16 {
      * @brief 获取该数据类型占用的寄存器数量。
      * @return 该数据类型占用的 16 位寄存器数量。
      */
-    static constexpr size_t registerCount() { return 1; }
+    static constexpr size_t registerCount() { return enum_value(Layout::SingleRegisters); }
 
     /** @brief 根据寄存器内容更新解码值。 */
     void updateValue() {}
@@ -158,7 +160,9 @@ class ModbusDataWrapper {
      * @brief 获取该数据类型占用的寄存器数量。
      * @return 该数据类型占用的 16 位寄存器数量。
      */
-    static constexpr size_t registerCount() { return sizeof(T) / 2; }
+    static constexpr size_t registerCount() {
+        return sizeof(T) / enum_value(Layout::BytesPerRegister);
+    }
 
     /** @brief 根据寄存器内容更新解码值。 */
     void updateValue() { data_.updateValue(); }
@@ -283,7 +287,7 @@ class ModbusRegister {
      * @brief 获取该数据类型占用的寄存器数量。
      * @return 该数据类型占用的 16 位寄存器数量。
      */
-    static constexpr size_t registerCount() { return 1; }
+    static constexpr size_t registerCount() { return enum_value(Layout::SingleRegisters); }
 
    private:
     uint16_t value_;
@@ -292,7 +296,7 @@ class ModbusRegister {
 class ModbusRegister32 {
    public:
     /** @brief 构造 ModbusRegister32 实例。 */
-    ModbusRegister32() { value_[0] = value_[1] = 0; }
+    ModbusRegister32() : value_{} {}
 
     /**
      * @brief 按指定字节序读取 U32 数值。
@@ -348,16 +352,16 @@ class ModbusRegister32 {
      * @brief 获取该数据类型占用的寄存器数量。
      * @return 该数据类型占用的 16 位寄存器数量。
      */
-    static constexpr size_t registerCount() { return 2; }
+    static constexpr size_t registerCount() { return enum_value(Layout::DoubleRegisters); }
 
    private:
-    uint16_t value_[2];
+    uint16_t value_[enum_value(Layout::DoubleRegisters)];
 };
 
 class ModbusRegister64 {
    public:
     /** @brief 构造 ModbusRegister64 实例。 */
-    ModbusRegister64() { value_[0] = value_[1] = value_[2] = value_[3] = 0; }
+    ModbusRegister64() : value_{} {}
 
     /**
      * @brief 按指定字节序读取 U64 数值。
@@ -413,10 +417,10 @@ class ModbusRegister64 {
      * @brief 获取该数据类型占用的寄存器数量。
      * @return 该数据类型占用的 16 位寄存器数量。
      */
-    static constexpr size_t registerCount() { return 4; }
+    static constexpr size_t registerCount() { return enum_value(Layout::QuadRegisters); }
 
    private:
-    uint16_t value_[4];
+    uint16_t value_[enum_value(Layout::QuadRegisters)];
 };
 
 }  // namespace modbus
