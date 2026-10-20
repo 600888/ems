@@ -1288,6 +1288,8 @@ const char* protocolTypeToString(model::ProtocolType t) {
             return "IEC104";
         case model::ProtocolType::DLT645:
             return "DLT645";
+        case model::ProtocolType::DLT698:
+            return "DLT698";
         case model::ProtocolType::IEC61850:
             return "IEC61850";
         case model::ProtocolType::OPCUA:
@@ -1307,6 +1309,7 @@ std::optional<model::ProtocolType> stringToProtocolType(const std::string& s) {
     if (s == "ModbusTCP") return model::ProtocolType::ModbusTCP;
     if (s == "IEC104") return model::ProtocolType::IEC104;
     if (s == "DLT645") return model::ProtocolType::DLT645;
+    if (s == "DLT698") return model::ProtocolType::DLT698;
     if (s == "IEC61850") return model::ProtocolType::IEC61850;
     if (s == "OPCUA") return model::ProtocolType::OPCUA;
     if (s == "MQTT") return model::ProtocolType::MQTT;

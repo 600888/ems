@@ -14,6 +14,7 @@
 #include <thread>
 
 #include "net/handler/dlt645/dlt645_handler.h"
+#include "net/handler/dlt698/dlt698_handler.h"
 #include "net/handler/iec104/iec104_handler.h"
 #include "net/handler/modbus/modbus_proto_handler.h"
 #include "net/protocol/plugin_manager.h"
@@ -92,9 +93,11 @@ void factory() {
     auto modbus = h::create_handler(manager, "ModbusRTU");
     auto iec = h::create_handler(manager, "IEC104");
     auto dlt = h::create_handler(manager, "DLT645");
+    auto dlt698 = h::create_handler(manager, "DLT698");
     CHECK(dynamic_cast<h::ModbusProtoHandler*>(modbus.get()));
     CHECK(dynamic_cast<h::Iec104Handler*>(iec.get()));
     CHECK(dynamic_cast<h::Dlt645Handler*>(dlt.get()));
+    CHECK(dynamic_cast<h::Dlt698Handler*>(dlt698.get()));
     CHECK(manager.loaded_library_count() == 0);
     CHECK(!dlt->connect());
     CHECK(!dlt->last_error().empty());
@@ -242,6 +245,45 @@ void dlt645() {
 }
 #endif
 
+#ifdef EMS_HANDLER_dlt698_PLUGIN
+void dlt698() {
+    PluginManager manager;
+    manager.set_plugin_dir(fs::path(EMS_HANDLER_dlt698_PLUGIN).parent_path().string());
+    {
+        h::Dlt698Handler server(manager), client(manager);
+        Json cfg = {{"ip", "127.0.0.1"},
+                    {"port", unused_port()},
+                    {"meter_address", "123456789012"},
+                    {"timeout_ms", 1000}};
+        const Json points = Json::array(
+            {{{"code", "power"}, {"oad", "F001/2/0"}, {"type", "float64"}, {"value", 12.5}}});
+        auto server_cfg = cfg;
+        server_cfg["role"] = "server_readonly";
+        server_cfg["points"] = points;
+        init(server, server_cfg);
+        connect(server);
+        cfg["points"] = points;
+        cfg["allow_writes"] = true;
+        init(client, Json{{"settings", cfg.dump()}});
+        connect(client);
+        auto values = read(client, {"power", "F0010200", "F002/2/0", "invalid"}, 2);
+        CHECK(values[0].value == 12.5);
+        CHECK(values[1].details["data_type"] == 24);
+        CHECK(values[2].details["dar"] == 4);
+        CHECK(!client.write_value("power", 100));
+        CHECK(client.last_error().find("DAR=3") != std::string::npos);
+        CHECK(server.write_value("power", 23.5));
+        CHECK(read(client, {"power"}, 1)[0].value == 23.5);
+        CHECK(client.disconnect());
+        connect(client);
+        CHECK(read(client, {"power"}, 1)[0].value == 23.5);
+        CHECK(client.disconnect());
+        CHECK(server.disconnect());
+    }
+    CHECK(manager.loaded_library_count() == 0);
+}
+#endif
+
 #ifdef EMS_CHANNEL_TESTS
 void channel(const std::string& protocol, const char* plugin_path,
              ems::model::ProtocolType protocol_type, const std::string& code, Json settings) {
@@ -318,6 +360,10 @@ int main(int argc, char** argv) {
         else if (scenario == "dlt645")
             dlt645();
 #endif
+#ifdef EMS_HANDLER_dlt698_PLUGIN
+        else if (scenario == "dlt698")
+            dlt698();
+#endif
 #ifdef EMS_CHANNEL_TESTS
 #ifdef EMS_HANDLER_modbus_PLUGIN
         else if (scenario == "channel_modbus")
@@ -335,6 +381,13 @@ int main(int argc, char** argv) {
             channel("DLT645", EMS_HANDLER_dlt645_PLUGIN, ems::model::ProtocolType::DLT645,
                     "0x02010100",
                     Json{{"points", Json::array({{{"di", "0x02010100"}, {"value", 0}}})}});
+#endif
+#ifdef EMS_HANDLER_dlt698_PLUGIN
+        else if (scenario == "channel_dlt698")
+            channel(
+                "DLT698", EMS_HANDLER_dlt698_PLUGIN, ems::model::ProtocolType::DLT698, "F0010200",
+                Json{{"points",
+                      Json::array({{{"oad", "F0010200"}, {"type", "float64"}, {"value", 0}}})}});
 #endif
         else if (scenario == "channel_failure")
             channel_failure();

@@ -1,4 +1,4 @@
-# 公共模块单元测试（docs/common/design.md 第 15/16 节 P1 完成门槛：
+# 公共模块单元测试（website/docs/common/design.md 第 15/16 节 P1 完成门槛：
 # 多对多、树/引用/类型校验、无效值和 64 位整数往返通过）
 if(NOT BUILD_TESTS)
     return()

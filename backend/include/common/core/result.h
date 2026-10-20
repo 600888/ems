@@ -1,6 +1,6 @@
 /**
  * @file result.h
- * @brief 公共结果类型：Error/Result/WriteEffect（docs/common/design.md 第 5.1 节）
+ * @brief 公共结果类型：Error/Result/WriteEffect（website/docs/common/design.md 第 5.1 节）
  *
  * 成功只通过返回值/Receipt 表达；WriteEffect 是失败时的写入确定性：
  *   - NotApplicable：读取类失败，不涉及任何写入；

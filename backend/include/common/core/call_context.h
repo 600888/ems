@@ -1,6 +1,6 @@
 /**
  * @file call_context.h
- * @brief 调用上下文：期限预算与链路标识（docs/common/design.md 第 5.1 节）
+ * @brief 调用上下文：期限预算与链路标识（website/docs/common/design.md 第 5.1 节）
  *
  * 所有 I/O 方法接收 CallContext；deadline 必须显式设置（包括获取
  * 池连接/锁的等待时间）。进程内超时使用 steady clock；序列化只传

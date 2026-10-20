@@ -12,7 +12,7 @@ endif()
 # 所有协议共用 ABI 适配、结果转换和实例管理，不链接任一协议栈。
 add_library(
     net_handler STATIC plugin_handler.cpp handler_factory.cpp modbus/modbus_proto_handler.cpp
-                       iec104/iec104_handler.cpp dlt645/dlt645_handler.cpp
+                       iec104/iec104_handler.cpp dlt645/dlt645_handler.cpp dlt698/dlt698_handler.cpp
 )
 
 target_include_directories(net_handler PUBLIC "${EMS_BACKEND_ROOT}/src")

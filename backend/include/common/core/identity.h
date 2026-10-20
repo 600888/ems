@@ -1,6 +1,6 @@
 /**
  * @file identity.h
- * @brief 稳定身份基础类型（docs/common/design.md 第 5.2 节）
+ * @brief 稳定身份基础类型（website/docs/common/design.md 第 5.2 节）
  *
  * - StationId/AssetId/DeviceId/PointId 等为强类型包装的稳定 ID 文本；
  *   旧数字 ID 转十进制文本，迁移不重新编号。

@@ -86,6 +86,7 @@ const std::unordered_map<std::string, std::string>& PluginManager::default_lib_m
         {"ModbusTCP", std::string(prefix) + "proto_modbus" + suffix},
         {"ModbusRTU", std::string(prefix) + "proto_modbus" + suffix},
         {"DLT645", std::string(prefix) + "proto_dlt645" + suffix},
+        {"DLT698", std::string(prefix) + "proto_dlt698" + suffix},
         {"IEC104", std::string(prefix) + "proto_iec104" + suffix},
         {"IEC61850", std::string(prefix) + "proto_iec61850" + suffix}};
     return map;

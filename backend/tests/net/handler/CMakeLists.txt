@@ -25,7 +25,7 @@ if(WIN32)
     target_link_libraries(test_protocol_handlers PRIVATE ws2_32)
 endif()
 
-foreach(protocol IN ITEMS modbus iec104 dlt645)
+foreach(protocol IN ITEMS modbus iec104 dlt645 dlt698)
     if(TARGET proto_${protocol})
         add_dependencies(test_protocol_handlers proto_${protocol})
         target_compile_definitions(

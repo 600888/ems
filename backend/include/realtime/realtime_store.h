@@ -1,6 +1,6 @@
 /**
  * @file realtime_store.h
- * @brief 公共实时数据访问抽象接口（docs/common/realtime/access-design.md 第 4/5 节）
+ * @brief 公共实时数据访问抽象接口（website/docs/common/realtime/access-design.md 第 4/5 节）
  *
  * 两层接口中的抽象存储层：面向逻辑记录，提供单记录完整读取、条件
  * 替换（CAS）、条件删除与逐项批量结果。SharedMemoryStore、RedisStore

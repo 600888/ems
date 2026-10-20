@@ -40,7 +40,7 @@ if(NOT CLANG_FORMAT_EXECUTABLE)
     return()
 endif()
 
-# 项目固定的 clang-format 版本（见 docs/reference/code-format.md）。
+# 项目固定的 clang-format 版本（见 website/docs/reference/code-format.md）。
 # 对齐细节跨版本存在差异，非固定版本可能让 format-check 产生假告警。
 set(EMS_CLANG_FORMAT_VERSION "22.1.8")
 

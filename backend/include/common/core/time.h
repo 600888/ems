@@ -1,6 +1,6 @@
 /**
  * @file time.h
- * @brief 业务时间基础类型（docs/common/design.md 第 5.3 节）
+ * @brief 业务时间基础类型（website/docs/common/design.md 第 5.3 节）
  *
  * 业务时间统一为 UTC Unix 微秒 int64。持久事件分别保存源时间与
  * 接收时间；源时间缺失时采用接收时间并保留缺失原因。进程内超时

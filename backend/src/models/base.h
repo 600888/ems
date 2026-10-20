@@ -157,6 +157,7 @@ enum class ProtocolType : int {
     OPCUA = 5,
     MQTT = 6,
     CAN = 7,
+    DLT698 = 8,
     Other = 99
 };
 

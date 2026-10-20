@@ -138,6 +138,8 @@ class channel : public BaseModelWithId, public TimestampMixin, public StatusMixi
                 return "IEC104";
             case ProtocolType::DLT645:
                 return "DLT645";
+            case ProtocolType::DLT698:
+                return "DLT698";
             case ProtocolType::IEC61850:
                 return "IEC61850";
             case ProtocolType::OPCUA:
