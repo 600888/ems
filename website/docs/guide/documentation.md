@@ -91,6 +91,11 @@ npm run preview
 
 Linux/macOS 示例：`DOCS_BASE=/ems/ npm run build`。构建产物需要在同名子路径下提供服务。
 
+EMS 的 GitHub Pages 站点地址为 <https://600888.github.io/ems/>，工作流以 `/ems/` 为构建基路径，
+并将 `website/doc_build/` 发布到 `gh-pages` 分支。合并到 `main` 的 `website/` 变更会自动触发发布；
+Pull Request 会执行构建检查但不会发布。首次启用仓库 Pages 时，在 GitHub 仓库的 **Settings → Pages** 中
+将构建来源设为 `Deploy from a branch`，分支选择 `gh-pages`、目录选择 `/(root)`。
+
 文件到路由的规则和相对文件链接参考 [Rspress 路由](https://www.rspress.dev/guide/basic/conventional-route)、[Rspress 链接](https://www.rspress.dev/guide/use-mdx/link)。本文的 Markdown 链接同时便于仓库内阅读。
 
 ## 4. Mermaid 与实际渲染

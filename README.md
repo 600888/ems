@@ -3,6 +3,8 @@
 
 设计文档入口：[EMS 设计文档](website/docs/index.mdx)。目标架构包含采集与上送、存储、策略及 C++17 + Drogon Web 四类进程，前端为 Vue 3；下面的构建说明与现有实现状态分开维护。
 
+在线文档：[EMS 设计文档](https://600888.github.io/ems/)。合并到 `main` 的文档变更会由 GitHub Actions 自动构建并发布到 GitHub Pages。
+
 文档站点独立放在 `website/`，使用相同的 Rspress 2 主题，需要 Node.js 22.12+：
 
 ```bash
