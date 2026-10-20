@@ -3,7 +3,7 @@
 > 版本：1.4｜更新日期：2026-09-26｜状态：公共 C++ 设备核心与 Modbus CSV 导入草稿已实现；持久化及运行闭环待实现。
 > 本文定义设备类型、固有点位、厂家点表、设备实例绑定及导入配置流程。整体架构见 [EMS 系统架构设计](system-design.md)，键格式见 [Redis 键设计](../common/realtime/redis-key-design.md)，协议执行见 [数据采集架构](../processes/collector/design.md)。文中的设备目录是 EMS 项目抽象，厂家 A/B 的地址与编码均为示例，不是现场设备参数或行业强制标准。
 > 首期新格式 Modbus CSV 的列和加载行为见 [点表 CSV 导入与内存加载](point-table-import.md)。
-> 设备点表的 XLSX 模板沿用 `ems_simulate`，统一放在根目录 [data/](../../data/README.md)。四遥中文模板支持事务写入现有数据库配置表；公共模型导入接口另支持与 CSV 相同英文列名的 XLSX。数据库配置入库与标准绑定的运行发布分别处理。
+> 设备点表的 XLSX 模板沿用 `ems_simulate`，统一放在根目录 [data/](https://github.com/600888/ems/blob/main/data/README.md)。四遥中文模板支持事务写入现有数据库配置表；公共模型导入接口另支持与 CSV 相同英文列名的 XLSX。数据库配置入库与标准绑定的运行发布分别处理。
 
 ## 1. 目标与核心约定
 
@@ -346,4 +346,4 @@ Drogon Web 负责导入流程编排、编辑、类型目录、模板管理、校
 5. **跨资产与功能条件**：Rack/Pack/Cell 的目标资产授权关系、批量展开身份规则，以及能力对实时质量、控制权和调度约束的可验证条件。当前纯模型校验只接受设备自身资产节点，不覆盖子设备映射。
 6. **跨进程及验收样例**：各 C++ 进程与前端共享的 schema、错误码、配置快照样例和命令编码黄金样例；至少覆盖文中两厂家 +50 kW、禁用项、重复导入、旧版本命令和反馈陈旧场景。
 
-仓库根目录 `docs/EMS设备模型与点表绑定设计.md` 是 1.0 旧稿；本文件是后续实现的权威版本。标准点的 `point.code` 为资产内的 `standard_code`（如 `active_power`），设备路径由资产层级组成，不能在 `point.code` 内再拼 `pcs01.`。
+仓库内 `website/docs/EMS设备模型与点表绑定设计.md` 是 1.0 旧稿；本文件是后续实现的权威版本。标准点的 `point.code` 为资产内的 `standard_code`（如 `active_power`），设备路径由资产层级组成，不能在 `point.code` 内再拼 `pcs01.`。

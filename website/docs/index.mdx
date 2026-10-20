@@ -1,4 +1,16 @@
+import { ModuleCards } from '../theme/ModuleCards';
+
+<p className="doc-eyebrow">EMS / ENERGY MANAGEMENT SYSTEM</p>
+
 # EMS 设计文档
+
+<p className="doc-lead">从系统架构到协议接入，理解储能 EMS 的设计与实现。<br />按模块查阅设计契约，沿进程边界开展开发与联调。</p>
+
+<div className="doc-meta"><span className="doc-dot" /> 储能能量管理系统 <span className="doc-meta-divider">/</span> 设计与开发参考 <span className="doc-meta-divider">/</span> 持续更新中</div>
+
+## 文档模块
+
+<ModuleCards />
 
 本目录面向 EMS 重新设计，按系统架构、业务进程、公共模块、技术决策和开发参考组织。自研 C++ 使用 C++17；文中未完成实现与验收的部分均为目标设计。
 
@@ -37,8 +49,8 @@
 ## 目录组织
 
 ```text
-docs/
-  index.md                         文档首页
+website/docs/
+  index.mdx                        文档首页（模块卡片）
   architecture/                    系统架构、设备模型、通道与协议
   processes/
     collector/                     采集与上送，C++17
@@ -52,4 +64,4 @@ docs/
   guide/                           文档维护与 Rspress 接入
 ```
 
-每个目录有 index.md 和 `_meta.json`，根 `_nav.json` 指定 Rspress 导航；使用稳定英文路径与中文标题。公共契约只保存一份，由进程文档引用，库示例不覆盖业务设计。维护规则和旧路径对照见 [文档维护与 Rspress](guide/documentation.md)。
+首页为 `index.mdx`，其余目录维护 `index.md` 和 `_meta.json`，根 `_nav.json` 指定顶部导航；使用稳定英文路径与中文标题。公共契约只保存一份，由进程文档引用，库示例不覆盖业务设计。维护规则和旧路径对照见 [文档维护与 Rspress](guide/documentation.md)。

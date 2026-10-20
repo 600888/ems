@@ -1,8 +1,8 @@
 # 点表 CSV/XLSX 导入与内存加载（v1）
 
-本格式用于公共 C++ 模块中的 Modbus 厂家点表草稿。实现入口是 `parse_point_table_csv()`、`import_point_table_file()` 和 `load_point_table()`，示例见 [`point_table_v1_example.csv`](../../backend/data/point_table_v1_example.csv)。导入前由调用方明确选定 `device_id` 与设备通道 `binding_id`；文件不含实际 IP、串口、从站地址或设备 ID。参考了 `ems_simulate`“设备先选定、点表再导入”的流程，但使用带列名的新格式。
+本格式用于公共 C++ 模块中的 Modbus 厂家点表草稿。实现入口是 `parse_point_table_csv()`、`import_point_table_file()` 和 `load_point_table()`，示例见 [`point_table_v1_example.csv`](https://github.com/600888/ems/blob/main/backend/data/point_table_v1_example.csv)。导入前由调用方明确选定 `device_id` 与设备通道 `binding_id`；文件不含实际 IP、串口、从站地址或设备 ID。参考了 `ems_simulate`“设备先选定、点表再导入”的流程，但使用带列名的新格式。
 
-设备点表的 Excel 格式沿用 `ems_simulate` 的遥测、遥信、遥控、遥调四个工作表，空白模板放在 [`data/point_template.xlsx`](../../data/point_template.xlsx)，各协议示例和数据库导入说明见 [`data/README.md`](../../data/README.md)。四遥中文模板通过 `ems::db::DbManager::import_point_table()` 校验并以事务写入现有配置表，支持 Modbus RTU/TCP、IEC 104 和 DLT645 遥测。
+设备点表的 Excel 格式沿用 `ems_simulate` 的遥测、遥信、遥控、遥调四个工作表，空白模板放在 [`data/point_template.xlsx`](https://github.com/600888/ems/blob/main/data/point_template.xlsx)，各协议示例和数据库导入说明见 [`data/README.md`](https://github.com/600888/ems/blob/main/data/README.md)。四遥中文模板通过 `ems::db::DbManager::import_point_table()` 校验并以事务写入现有配置表，支持 Modbus RTU/TCP、IEC 104 和 DLT645 遥测。
 
 本节的 `import_point_table_file()` 也支持 XLSX，但使用下面列出的英文列名，读取单工作表或名为“点表”的工作表，再复用 CSV 字段校验与内存加载逻辑。两种格式均拒绝公式和旧版 `.xls`；读取不修改源文件。
 

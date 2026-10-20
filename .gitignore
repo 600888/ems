@@ -43,3 +43,8 @@
 .vscode
 build/
 .cache/
+
+# Rspress documentation
+/website/node_modules/
+/website/doc_build/
+/website/.rspress/

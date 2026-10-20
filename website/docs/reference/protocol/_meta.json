@@ -23,5 +23,10 @@
     "type": "file",
     "name": "dlt645",
     "label": "DLT645 动态库接入"
+  },
+  {
+    "type": "file",
+    "name": "dlt698",
+    "label": "DLT698 动态库接入"
   }
 ]

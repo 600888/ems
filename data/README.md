@@ -26,7 +26,7 @@
 
 本目录的四遥 XLSX 使用 `ems::db::DbManager::import_point_table()` 导入，校验后以事务写入 `point_yc`、`point_yx`、`point_yk`、`point_yt` 配置表。支持 Modbus RTU/TCP、IEC 104 和 DLT645 遥测；DNP3、OPC UA 示例暂作为参考。旧版 `.xls` 需先另存为 `.xlsx`。调用方先选择已有实际设备与所属通道，协议从数据库通道读取。
 
-公共模型的 `ems::config::import_point_table_file()` 另支持 [Modbus CSV v1](../docs/architecture/point-table-import.md) 和沿用其英文列名的 XLSX，生成内存草稿。该格式与本目录四遥中文模板分别对应公共模型和现有数据库配置接口。
+公共模型的 `ems::config::import_point_table_file()` 另支持 [Modbus CSV v1](../website/docs/architecture/point-table-import.md) 和沿用其英文列名的 XLSX，生成内存草稿。该格式与本目录四遥中文模板分别对应公共模型和现有数据库配置接口。
 
 四遥模板保存协议地址、解析类型与字节序、数值系数、限值、位偏移、反转标志、IEC 104 ASDU 类型和命令反馈关联。遥控关联遥信、遥调关联遥测；入库时在选定设备及通道内解析反馈 ID。追加模式拒绝已存在的编码，替换模式只替换选定设备及通道的配置。关联缺失、字段错误或数据库写入失败均阻止整批提交。
 
@@ -54,7 +54,7 @@ auto result = database.import_point_table(
 ./backend/build/windows-mingw/bin/ems_point_import.exe ./data/point_csv/point_sample_modbus.xlsx 1 1 append
 ```
 
-导入只保存配置；固有点绑定和运行配置发布按 [设备模型与点表绑定设计](../docs/architecture/device-model.md) 另行完成：
+导入只保存配置；固有点绑定和运行配置发布按 [设备模型与点表绑定设计](../website/docs/architecture/device-model.md) 另行完成：
 
 - 测点编码用于厂家点身份，EMS 固有点的 `standard_code` 需单独绑定。
 - `从机地址` 属于实例通道绑定；复用型号模板时应与厂家点定义分离。

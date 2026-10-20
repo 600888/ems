@@ -60,6 +60,6 @@ cmake --build build/handlers
 ctest --test-dir build/handlers --output-on-failure
 ```
 
-启用 Modbus 或 DLT645 时，分别提供同工具链 libmodbus 或 Boost 1.83+ 头文件；依赖参数见 [Windows 构建](../../../README.md#windows-构建) 和 [DLT645 文档](dlt645.md)。多配置生成器编译、测试需指定相同配置，例如 `--config Release` / `-C Release`。
+启用 Modbus 或 DLT645 时，分别提供同工具链 libmodbus 或 Boost 1.83+ 头文件；依赖参数见 [Windows 构建](https://github.com/600888/ems/blob/main/README.md#windows-构建) 和 [DLT645 文档](dlt645.md)。多配置生成器编译、测试需指定相同配置，例如 `--config Release` / `-C Release`。
 
 存量 `ems::net::device` Modbus 接口也已移到 handler 目录，保持原调用语义，由 `EMS_BUILD_LEGACY_MODBUS` 控制。其基类带有 Modbus 地址字段，新协议使用上述协议无关接口。

@@ -440,7 +440,7 @@ backend/                    # C++17
 frontend/                   # Vue 3 + TypeScript + Tailwind CSS
 contracts/                  # Protobuf、JSON Schema、契约样例
 deploy/                     # 部署配置、数据库迁移、环境模板
-docs/                       # 架构与运维
+website/                    # 文档站点（内容位于 website/docs/）
 ```
 
 自研 C++ 统一 `CMAKE_CXX_STANDARD 17`、`CMAKE_CXX_STANDARD_REQUIRED ON`、`CMAKE_CXX_EXTENSIONS OFF`；第三方锁定兼容版本并验证目标平台，不把标准迁移理解为只改数字。

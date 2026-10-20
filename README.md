@@ -1,11 +1,23 @@
 # ems
 储能EMS能量管理系统
 
-设计文档入口：[EMS 设计文档](docs/index.md)。目标架构包含采集与上送、存储、策略及 C++17 + Drogon Web 四类进程，前端为 Vue 3；下面的构建说明与现有实现状态分开维护。
+设计文档入口：[EMS 设计文档](website/docs/index.mdx)。目标架构包含采集与上送、存储、策略及 C++17 + Drogon Web 四类进程，前端为 Vue 3；下面的构建说明与现有实现状态分开维护。
 
-设备点表使用 `ems_simulate` 的四遥 XLSX 格式，空白模板、协议示例和事务入库说明统一放在根目录 [data/](data/README.md)。公共模型的 Modbus CSV/XLSX 格式见 [点表导入说明](docs/architecture/point-table-import.md)。
+文档站点独立放在 `website/`，使用相同的 Rspress 2 主题，需要 Node.js 22.12+：
 
-设备点表参考 `ems_simulate` 的 XLSX 格式，空白模板和协议示例统一放在根目录 [data/](data/README.md)。当前公共模块支持的 Modbus CSV 格式见 [点表导入说明](docs/architecture/point-table-import.md)。
+```bash
+cd website
+npm ci
+npm run dev
+```
+
+打开终端显示的本地地址即可阅读，修改 `website/docs/` 后自动刷新。在 `website/` 内运行
+`npm run build` 生成 `website/doc_build/`，`npm run preview` 预览构建产物。导航、主题和部署路径说明见
+[文档维护与 Rspress](website/docs/guide/documentation.md)。
+
+设备点表使用 `ems_simulate` 的四遥 XLSX 格式，空白模板、协议示例和事务入库说明统一放在根目录 [data/](data/README.md)。公共模型的 Modbus CSV/XLSX 格式见 [点表导入说明](website/docs/architecture/point-table-import.md)。
+
+设备点表参考 `ems_simulate` 的 XLSX 格式，空白模板和协议示例统一放在根目录 [data/](data/README.md)。当前公共模块支持的 Modbus CSV 格式见 [点表导入说明](website/docs/architecture/point-table-import.md)。
 
 ## 依赖安装
 
@@ -89,8 +101,12 @@ hiredis 的 CMake 包提供 DLL 路径时，采集示例会自动复制该 DLL�
 协议插件额外的 DLL 可通过 `-DEMS_PROTOCOL_RUNTIME_DEPENDENCIES='C:/deps/modbus.dll;...'` 部署。
 
 Windows 默认构建 Modbus / IEC104 / DLT645 动态插件、独立 handler 层、采集引擎、数据库和实时存储库，以及公共模块和存储测试。
-三个协议的统一处理器、目录和采集接入见 [协议处理器接入](docs/reference/protocol/handlers.md)。
-DLT645 的配置、测点编码和模拟器互通说明见 [DLT645 动态库接入](docs/reference/protocol/dlt645.md)。
+三个协议的统一处理器、目录和采集接入见 [协议处理器接入](website/docs/reference/protocol/handlers.md)。
+DLT645 的配置、测点编码和模拟器互通说明见 [DLT645 动态库接入](website/docs/reference/protocol/dlt645.md)。
+
+DLT698 默认启用，复用统一插件 ABI、Handler 和采集通道，支持 TCP/串口采集及只读上送。
+配置和 OAD 测点编码见 [DLT698 动态库接入](website/docs/reference/protocol/dlt698.md)，
+可通过 `-DEMS_BUILD_DLT698=OFF` 关闭。协议栈及 Asio 均使用仓库源码，无需额外安装。
 旧版 libmodbuspp 处理器、对应的四个示例和设备处理器测试由 `EMS_BUILD_LEGACY_MODBUS` 控制：
 Linux 默认开启，Windows 默认关闭；这些旧目标仍依赖上游的 pkg-config 构建入口。
 `BUILD_TESTS=OFF` 可关闭测试，`BUILD_EXAMPLES=OFF` 可关闭示例。
@@ -151,7 +167,7 @@ cmake --build --preset linux-arm-native
 
 ## 代码格式化
 
-`backend/` 下的 C/C++ 代码统一使用 clang-format（基于 Google 风格，缩进 4 空格、列宽 100）。规则见根目录 `.clang-format`，详细说明见 [代码格式化规范](docs/reference/code-format.md)。
+`backend/` 下的 C/C++ 代码统一使用 clang-format（基于 Google 风格，缩进 4 空格、列宽 100）。规则见根目录 `.clang-format`，详细说明见 [代码格式化规范](website/docs/reference/code-format.md)。
 
 ```bash
 # 安装固定版本（Windows / macOS / Linux 通用）
