@@ -1,0 +1,674 @@
+<!doctype html>
+<html lang="zh">
+  <head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设备、通道与协议设计 - EMS 设计文档</title>
+<script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
+<link href="/ems/static/css/styles.3c463aa6ae.css" rel="stylesheet">
+<link rel="preload" href="/ems/static/js/async/route-2f16dfaad3a5.ebb4751f95.js" as="script">
+<script defer src="/ems/static/js/styles.560b9eab4d.js"></script>
+<script defer src="/ems/static/js/lib-react.0685ac4d75.js"></script>
+<script defer src="/ems/static/js/lib-router.de7486675c.js"></script>
+<script defer src="/ems/static/js/m3.da04ef77ed.js"></script>
+<script defer src="/ems/static/js/index.1377de6962.js"></script>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Rspress v2.0.21">
+<link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="设备、通道与协议设计 - EMS 设计文档">
+<meta name="description" content="版本：1.0｜日期：2026-09-19｜状态：目标设计，面向重新实现。 本文是设备通信关联、采集/上送通道、协议角色、点位路由和运行会话的统一契约。实现语言为 C++17，不以旧代码接口为约束。">
+<meta property="og:description" content="版本：1.0｜日期：2026-09-19｜状态：目标设计，面向重新实现。 本文是设备通信关联、采集/上送通道、协议角色、点位路由和运行会话的统一契约。实现语言为 C++17，不以旧代码接口为约束。"></head>
+
+  <body>
+    <div id="__rspress_root"><link rel="preload" as="image" href="/ems/logo.svg"/><header class="rp-nav"><div class="rp-nav__left"><div class="rp-nav__title"><a href="/ems/" class="rp-nav__title__link rp-link"><div class="rp-nav__title__logo"><img src="/ems/logo.svg" alt="logo" id="logo" class="rspress-logo rp-nav__title__logo-image"/></div><span>EMS</span></a></div><ul class="rp-nav-menu rp-nav-menu--left"><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/" class="rp-nav-menu__item__container rp-link">首页</a></li><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/architecture/" class="rp-nav-menu__item__container rp-link">架构</a></li><li class="rp-nav-menu__item"><a href="/ems/processes/" class="rp-nav-menu__item__container rp-link">进程</a></li><li class="rp-nav-menu__item"><a href="/ems/common/" class="rp-nav-menu__item__container rp-link">公共模块</a></li><li class="rp-nav-menu__item"><a href="/ems/decisions/" class="rp-nav-menu__item__container rp-link">技术决策</a></li><li class="rp-nav-menu__item"><a href="/ems/reference/" class="rp-nav-menu__item__container rp-link">开发参考</a></li><li class="rp-nav-menu__item"><a href="/ems/guide/" class="rp-nav-menu__item__container rp-link">文档维护</a></li></ul></div><div class="rp-nav__right"><button class="rp-search-button"><div class="rp-search-button__content"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21" class="rp-search-button__icon"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg><span class="rp-search-button__word">搜索</span></div><div class="rp-search-button__hotkey" style="opacity:0"><span></span><span>K</span></div></button><div class="rp-search-button--mobile"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg></div><div class="rp-nav__others"><div class="rp-nav-menu__divider"></div><div class="rp-switch-appearance"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="rp-switch-appearance__icon rp-switch-appearance__icon--sun"><path fill="currentColor" d="m7.001 15.848-1.226 1.226a.58.58 0 0 0 0 .818.58.58 0 0 0 .818 0l1.226-1.226a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0m-.352-8.735a.584.584 0 0 0 .825-.825L6.237 5.051a.584.584 0 0 0-.825.825zM5.011 11.07h-1.75a.584.584 0 0 0 0 1.167h1.75c.324 0 .584-.26.584-.583a.585.585 0 0 0-.584-.584m7.003-5.835c.324 0 .584-.26.584-.584V2.9a.58.58 0 0 0-.584-.584.58.58 0 0 0-.583.583V4.65c0 .323.262.584.583.584m5.616 1.621 1.226-1.225a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0l-1.226 1.225a.58.58 0 0 0 0 .818.576.576 0 0 0 .818 0m3.138 4.214h-1.75a.58.58 0 0 0-.584.584c0 .324.26.584.583.584h1.751a.584.584 0 1 0 0-1.167m-3.389 5.124a.584.584 0 0 0-.825.825l1.238 1.238a.584.584 0 0 0 .825-.826zm-5.365-9.795a5.256 5.256 0 0 0-5.257 5.258 5.256 5.256 0 0 0 5.257 5.257 5.256 5.256 0 0 0 5.257-5.257 5.256 5.256 0 0 0-5.257-5.258m0 11.675a.58.58 0 0 0-.583.583v1.751a.582.582 0 1 0 1.167 0v-1.75a.584.584 0 0 0-.584-.584"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="currentColor" viewBox="0 0 19 19" class="rp-switch-appearance__icon rp-switch-appearance__icon--moon"><path fill="currentColor" d="M9.166 0a9.2 9.2 0 0 1 1.857.188.834.834 0 0 1 .042 1.623 4.47 4.47 0 1 0 5.457 5.457l.048-.135a.834.834 0 0 1 1.575.177q.186.902.188 1.856A9.168 9.168 0 1 1 9.166 0"></path></svg></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__sm"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg></button><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__md"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"><div class="rp-nav-menu__others-mobile__container"><div class="rp-nav-hamburger__md__hover-group"><div class="rp-nav-screen-appearance"><div class="rp-nav-screen-appearance__left">主题</div><div class="rp-nav-screen-appearance__right"></div></div><div class="rp-nav-screen-divider"></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div></div></ul></button></div></header><div class="rp-doc-layout__menu"><div class="rp-sidebar-menu"><button type="button" class="rp-sidebar-menu__left"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M4 6h24v2H4zm0 18h24v2H4zm0-12h24v2H4zm0 6h24v2H4z"></path></svg><span>菜单</span></button><button type="button" class="rp-sidebar-menu__right"><span class="rp-sidebar-menu__right__text">目录</span><svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-sidebar-menu__right__icon" style="transform:rotate(0deg);transition:transform 0.2s ease-out"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button></div></div><div class="rp-doc-layout__container"><aside class="rp-doc-layout__sidebar rp-scrollbar"><a href="/ems/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">返回文档首页</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-divider" style="padding-left:12px"></div><div class="rp-sidebar-section-header"><div class="rp-sidebar-section-header__left"><span>架构与业务模型</span></div><div class="rp-sidebar-section-header__right"></div></div><a href="/ems/architecture/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">架构概览</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/architecture/system-design" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">系统架构</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/architecture/device-model" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">设备模型与点表绑定</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/architecture/point-table-import" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">点表 CSV 导入</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/architecture/channel-protocol" class="rp-sidebar-item rp-sidebar-item--active rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">设备、通道与协议</span></div><div class="rp-sidebar-item__right"></div></a></aside><div class="rp-doc-layout__doc"><main class="rp-doc-layout__doc-container"><div class="rp-doc rspress-doc"><!--$--><h1 class="rp-toc-include" id="设备通道与协议设计"><a href="#设备通道与协议设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>设备、通道与协议设计<!-- --> </h1>
+<blockquote>
+<p>版本：1.0｜日期：2026-09-19｜状态：目标设计，面向重新实现。
+本文是设备通信关联、采集/上送通道、协议角色、点位路由和运行会话的统一契约。实现语言为 C++17，不以旧代码接口为约束。</p>
+</blockquote>
+<h2 class="rp-toc-include" id="1-核心结论"><a href="#1-核心结论" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1. 核心结论</h2>
+<p><strong>设备表示业务对象，通道表示 EMS 管理的通信配置，协议定义报文与交互规则。设备通过绑定关联通道，通道固定引用一个协议配置版本，运行时创建相应协议角色的实例与会话。</strong></p>
+<p>一个 PCS 可以经 Modbus 客户端通道被采集，同时经 IEC 104 服务端通道上送给调度中心。它仍是同一个设备，不因为多了一条上送路径就复制设备、测点或历史身份。</p>
+<div></div>
+<p>这里的“采集”与“上送”描述<strong>主要业务用途</strong>；客户端/服务端描述<strong>本端协议角色</strong>，两者必须分别建模。IEC 104 服务端可以主动上送遥测，Modbus 服务端通常等待客户端读取；两者都可以实现上送业务。不能把“主动发数据”统一判定为客户端。</p>
+<p>本文与其他设计的边界：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>文档</th><th>唯一负责的内容</th></tr></thead><tbody><tr><td><a href="/ems/architecture/device-model" class="rp-link">设备模型与点表绑定</a></td><td>设备类型、固有点位、厂家点表、业务能力和标准转换</td></tr><tr><td>本文</td><td>通道用途/协议角色、设备绑定、资源与会话、采集/上送地址、控制入口</td></tr><tr><td><a href="/ems/processes/collector/" class="rp-link">采集与上送进程</a></td><td>进程内模块、线程、队列、生命周期和故障隔离</td></tr><tr><td><a href="/ems/common/realtime/access-design" class="rp-link">公共实时访问接口</a></td><td>共享内存/Redis 等状态访问，与工业协议传输解耦</td></tr><tr><td><a href="/ems/processes/strategy/" class="rp-link">策略进程</a></td><td>所有控制来源的统一仲裁，不由服务端回调直接操作现场设备</td></tr></tbody></table></div>
+<h2 class="rp-toc-include" id="2-四个维度必须分开"><a href="#2-四个维度必须分开" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2. 四个维度必须分开</h2>
+<h3 class="rp-toc-include" id="21-用途角色连接模式和操作权限"><a href="#21-用途角色连接模式和操作权限" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.1 用途、角色、连接模式和操作权限</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>维度</th><th>字段与取值</th><th>解决的问题</th></tr></thead><tbody><tr><td>通道用途</td><td><code>purpose = acquisition / forwarding</code></td><td>主要用于接入现场状态，还是向外部系统提供 EMS 状态</td></tr><tr><td>EMS 协议角色</td><td><code>local_role = client / server / publisher / subscriber</code></td><td>EMS 在该协议中承担哪个角色；不是对端角色</td></tr><tr><td>连接模式</td><td><code>connection_mode = connect / listen / serial / link_layer</code></td><td>主动建 TCP 连接、监听连接、独占串口或使用链路层通信</td></tr><tr><td>绑定操作</td><td><code>operations</code> 集合</td><td>该设备在此通道上允许接收遥测、执行已仲裁控制、上送遥测、接收外部控制等哪些操作</td></tr></tbody></table></div>
+<p><code>telemetry/control/both</code> 是采集绑定的操作组合，<strong>不再使用含糊的 role 同时表达采控用途和客户端/服务端</strong>。新契约明确为：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>展示选项</th><th>purpose</th><th>operations</th></tr></thead><tbody><tr><td>采集专用</td><td>acquisition</td><td><code>telemetry_in</code></td></tr><tr><td>控制专用</td><td>acquisition</td><td><code>control_out</code>，可配置控制验证所需读取</td></tr><tr><td>采控共用</td><td>acquisition</td><td><code>telemetry_in + control_out</code></td></tr><tr><td>只读上送</td><td>forwarding</td><td><code>telemetry_out</code></td></tr><tr><td>上送并接受控制</td><td>forwarding</td><td><code>telemetry_out + control_in</code>，控制需经策略仲裁</td></tr></tbody></table></div>
+<p>一个通道配置在一个版本内只承担一种 purpose 和一种 local_role。需要南向采集与北向上送时建两条通道，通过标准点关联，不把一条连接自动变成双向协议代理。各维度独立定义不表示所有组合合法，必须通过协议能力矩阵校验。</p>
+<h3 class="rp-toc-include" id="22-协议角色矩阵"><a href="#22-协议角色矩阵" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.2 协议角色矩阵</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>协议配置标识</th><th>EMS 采集的常见配置</th><th>EMS 上送的常见配置</th><th>首期边界</th></tr></thead><tbody><tr><td><code>modbus_tcp</code></td><td>acquisition + client + connect</td><td>forwarding + server + listen</td><td>读/写功能码和数据类型按驱动能力开放</td></tr><tr><td><code>modbus_rtu</code></td><td>acquisition + client + serial</td><td>forwarding + server + serial</td><td>RTU client 对应总线主站，server 对应从站；从站上送由外部主站轮询取得</td></tr><tr><td><code>iec104</code></td><td>acquisition + client + connect</td><td>forwarding + server + listen</td><td>明确 ASDU 类型、总召、时标、遥控/遥调及冗余范围</td></tr><tr><td><code>iec61850_mms</code></td><td>acquisition + client + connect</td><td>forwarding + server + listen</td><td>明确模型、读服务、报告和控制模型；能力以完成验收的实现为准</td></tr><tr><td><code>iec61850_goose</code></td><td>acquisition + subscriber + link_layer</td><td>forwarding + publisher + link_layer</td><td>扩展预留，独立能力验收；不是 MMS client/server 的一个开关</td></tr><tr><td><code>iec61850_sv</code></td><td>acquisition + subscriber + link_layer</td><td>forwarding + publisher + link_layer</td><td>扩展预留，高频采样需单独性能与时钟设计</td></tr></tbody></table></div>
+<p>Modbus 应用的 client/server 与串行总线角色见 <a href="https://www.modbus.org/modbus-specifications" target="_blank" rel="noopener noreferrer" class="rp-link">Modbus 官方规范入口</a>。IEC 104 客户端建连、服务端接入及监视/控制报文的交互可参照 <a href="https://github.com/mz-automation/lib60870/blob/master/user_guide.adoc" target="_blank" rel="noopener noreferrer" class="rp-link">lib60870 官方开发文档</a>。IEC 61850 的 client/server 与 publisher/subscriber 接口划分见 <a href="https://support.mz-automation.de/doc/libiec61850/c/latest/" target="_blank" rel="noopener noreferrer" class="rp-link">libIEC61850 官方 API</a>。本表是 EMS 的配置和验收边界，不表示所列全部能力已经实现，也不限定将来只能使用这些协议库。</p>
+<p>例如第三方协议可能采用 acquisition + server 接收设备主动连接，未来通过能力矩阵新增该组合即可；首期不支持的组合必须拒绝发布。UI 中选择“IEC61850”后还必须选择 MMS/GOOSE/SV 配置类型，不能只保存一个没有具体服务含义的大类名称。</p>
+<h2 class="rp-toc-include" id="3-对象模型与依赖关系"><a href="#3-对象模型与依赖关系" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3. 对象模型与依赖关系</h2>
+<h3 class="rp-toc-include" id="31-对象定义"><a href="#31-对象定义" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.1 对象定义</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>对象</th><th>关键内容</th><th>不应包含的内容</th></tr></thead><tbody><tr><td><code>Device</code> 设备</td><td>业务身份、资产归属、类型/型号、能力</td><td>单一 <code>channel_id</code>、唯一 protocol 字段、服务器 socket</td></tr><tr><td><code>Channel</code> 通道</td><td>稳定 channel_id、station、code、显示名称</td><td>厂家点的每个寄存器地址、设备类型固有含义</td></tr><tr><td><code>ChannelVersion</code></td><td>指定版本的 purpose、local_role、启用/分片、协议配置、资源、连接模式、限额、对端策略</td><td>可变的运行连接句柄</td></tr><tr><td><code>ProtocolDefinition</code></td><td>协议标识、配置 schema、支持角色/传输/服务、插件 ABI 要求</td><td>某个现场设备的 IP 和凭据</td></tr><tr><td><code>ProtocolProfileVersion</code></td><td>不可变的协议参数、版本/方言、允许的服务、模型文件引用</td><td>当前在线状态、裸私钥</td></tr><tr><td><code>CommunicationResource</code></td><td>主机/网络命名空间内的串口、监听端点或逻辑连接资源</td><td>业务设备树归属</td></tr><tr><td><code>DeviceChannelBindingVersion</code></td><td>设备与通道的关联、operations、协议设备地址、启用、主备关系</td><td>另一份设备身份或测点当前值</td></tr><tr><td><code>AcquisitionRouteVersion</code></td><td>厂家点 → 采集绑定 → 协议点地址/解码</td><td>北向出口地址</td></tr><tr><td><code>ForwardingPointMapVersion</code></td><td>标准 point_id/command_point_id → 上送绑定 → 对外协议点地址/编码</td><td>直接转发南向原始地址的隐式规则</td></tr><tr><td><code>ChannelSession</code></td><td>运行时连接、peer、会话代次、协议状态、队列与诊断</td><td>持久设备身份、固定一设备一 session 的假设</td></tr><tr><td><code>PeerPolicy</code></td><td>对端身份、可见点范围、控制范围、最大会话数、认证引用</td><td>仅靠 UI 隐藏实现权限</td></tr></tbody></table></div>
+<p>设备型号可以引用某个厂家协议/模板版本作为兼容条件，但这不等于设备只有一个协议。最终每条通信路径的协议来自绑定所指向通道的固定 profile 版本。</p>
+<h3 class="rp-toc-include" id="32-基数关系"><a href="#32-基数关系" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.2 基数关系</h3>
+<div></div>
+<p>图中历史版本可以多次引用同一资源；不表示同一时刻允许多个 I/O 所有者。活动版本的独占约束由发布校验和运行时资源协调同时保证。</p>
+<ul>
+<li><strong>设备 : 通道 = 多对多</strong>：一台设备可绑定采集、控制和多条上送通道；一个通道可承载多设备。</li>
+<li><strong>一个活动通道版本 : 一个协议 profile 版本</strong>：Modbus 与 IEC 104 必须建不同通道；配置版本切换不能在同一会话中途替换解释规则。</li>
+<li><strong>协议定义 : 通道 = 一对多</strong>：同一驱动可实例化多个客户端/服务端，但其可变运行状态必须按通道、会话隔离。</li>
+<li><strong>通道 : 会话 = 一对多</strong>：服务端监听器可以接入多个上级连接；客户端也可能有受支持的主备会话。会话上下线不创建或删除业务设备。</li>
+<li><strong>资源 : 活动 I/O 所有者 = 一对一</strong>：一个串口或冲突的监听地址仅一个所有者。多台设备共享 RS485 应绑定同一串口通道，不创建多个通道争用同一串口。</li>
+<li><strong>逻辑点 : 上送映射 = 一对多</strong>：同一功率值可以经 IEC 104 和 Modbus 两套地址提供，采样和历史身份不变。</li>
+</ul>
+<p>设备绑定原则上 station 一致。站级上送通道可显式关联本 station 多个单元的设备、站级公共设备和聚合点，不能把上级调度系统伪造成本地 PCS 的子设备。对端系统作为 peer 管理；station/unit 聚合点允许通过显式 <code>asset_scope</code> 导出，不强制创建“虚拟设备”才能上送。</p>
+<p>客户端连接相同 remote endpoint 不必然表示同一独占资源：设备明确支持多连接时，采集和控制可以持有不同逻辑连接资源。资源判定还要包含主机/网络命名空间、传输类型、方向和物理总线；串口别名必须归一，服务端通配监听地址与具体地址的端口冲突也需检查。独立 TCP 连接不能绕开设备级控制互斥。</p>
+<h3 class="rp-toc-include" id="33-依赖方向"><a href="#33-依赖方向" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.3 依赖方向</h3>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>设备类型/标准点定义 ──&gt; 设备实例/逻辑点</span></span>
+<span class="line"><span>协议定义 ──&gt; 协议配置版本 ──&gt; 通道版本 &lt;── 通信资源</span></span>
+<span class="line"><span>设备实例 + 通道版本 ──&gt; 设备通道绑定版本</span></span>
+<span class="line"><span>厂家点 + acquisition 绑定 ──&gt; 采集路由 ──&gt; 标准点读取绑定</span></span>
+<span class="line"><span>标准点/命令点 + forwarding 绑定 ──&gt; 上送映射</span></span>
+<span class="line"><span>以上版本引用 + peer 权限 + 资源检查 ──&gt; 完整发布快照 ──&gt; 运行会话</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p><code>ForwardingPointMapVersion</code> 依赖标准逻辑点，不依赖厂家寄存器。更换 PCS 厂家只需调整南向路由与标准绑定，北向地址可保持不变。改变北向点表也不需要重新采集设备。发布时校验引用无悬空、全部版本兼容，禁止拼接几个正在编辑的草稿启动通道。</p>
+<h2 class="rp-toc-include" id="4-参数放在哪一层"><a href="#4-参数放在哪一层" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4. 参数放在哪一层</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>参数</th><th>所属位置</th><th>示例</th></tr></thead><tbody><tr><td>station/unit、PCS/BMS、电表类型</td><td>设备/资产模型</td><td>pcs01 属于 ess000001</td></tr><tr><td>主动连接地址、监听地址、串口参数</td><td>通道版本的 transport/resource 配置</td><td>远端 IP/端口、bind 地址、串口波特率</td></tr><tr><td>IEC 104 t0/t1/t2/t3、k/w、地址长度；Modbus 协议超时</td><td>协议 profile 版本</td><td>按双方约定验证，不使用无类型扩展字段代替 schema</td></tr><tr><td>MMS 模型文件、支持的报告/控制服务</td><td>协议 profile + 模型版本引用</td><td>SCL 文件摘要、模型版本、能力范围</td></tr><tr><td>Modbus Unit ID、IEC 104 CA、IED/LD 范围</td><td>设备通道绑定/对外模型的设备地址</td><td>一条连接承载多个协议逻辑设备</td></tr><tr><td>Modbus 区域/偏移/字序、104 IOA/type、61850 对象引用/FC</td><td>采集路由或上送点映射</td><td>相同设备在不同通道可有不同地址</td></tr><tr><td>倍率、单位、枚举、质量转换</td><td>对应方向的点映射</td><td>南向解码与北向编码分开定义</td></tr><tr><td>对端身份、访问范围、控制权限</td><td>PeerPolicy 和会话认证</td><td>一个客户端可只读，另一个可提交授权范围内的意图</td></tr></tbody></table></div>
+<p>协议设备地址与业务设备并非总是一一对应：一个 IEC 104 公共地址可能汇集多个设备的数据。此时多个设备绑定可以共享 CA，但其完整点地址必须不冲突。Modbus TCP 网关中 Unit ID 通常用于路由，不可假设永远等于 TCP 连接编号。</p>
+<h2 class="rp-toc-include" id="5-采集通道设计"><a href="#5-采集通道设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5. 采集通道设计</h2>
+<h3 class="rp-toc-include" id="51-建连设备绑定与点路由"><a href="#51-建连设备绑定与点路由" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.1 建连、设备绑定与点路由</h3>
+<p>采集通道启动后由协议实例建立/接入会话，按照绑定解析协议设备地址，再按照采集路由访问厂家点。读取结果经过标准映射后写入公共实时状态，并按需要进入有界内存缓冲与事件通道；未发布样本的恢复边界遵循公共模块设计，不承诺跨重启补传。</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>采集通道 modbus01：modbus_tcp / client / connect</span></span>
+<span class="line"><span>  endpoint = 192.168.1.20:502（示例网关）</span></span>
+<span class="line"><span>  ├─ pcs01 绑定：Unit ID=1，telemetry_in + control_out</span></span>
+<span class="line"><span>  │    ├─ 功率厂家点：holding / offset=100 / int32 / 字序配置</span></span>
+<span class="line"><span>  │    └─ 功率设定厂家点：holding / offset=200 / int32</span></span>
+<span class="line"><span>  └─ meter01 绑定：Unit ID=2，telemetry_in</span></span>
+<span class="line"><span>       └─ 功率厂家点：input / offset=20 / float32</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>所有地址为设计示例，不可直接作为现场配置。不同 Unit ID 不因 offset 相同而冲突。支持共享地址别名时必须显式声明为同一物理来源，并复用读取结果，不能让两个独立设备争用同一控制目标。</p>
+<p>IEC 104 接入在连接与数据传输就绪后处理总召/自发遥测；MMS 接入按 profile 执行初值读取、报告控制块配置及报告恢复。轮询、报告和自发事件是不同调度模式，禁止要求所有协议都实现同一个固定周期 <code>read_all()</code>。</p>
+<h3 class="rp-toc-include" id="52-控制与反馈"><a href="#52-控制与反馈" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.2 控制与反馈</h3>
+<p>只有声明 <code>control_out</code> 且通过当前版本校验的绑定可承接策略下发的执行命令。只读采集通道不因底层协议支持写功能码就自动开放写权限。</p>
+<p>控制与采集共享串口/会话时，在协议事务边界调度；独立控制通道可以并行建连，但设备级冲突资源仍须串行。反馈点可以经另一条采集通道读取，必须匹配目标设备、配置版本、发送后的新样本和质量，不把协议确认直接等同设备动作成功。</p>
+<h2 class="rp-toc-include" id="6-上送通道设计"><a href="#6-上送通道设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6. 上送通道设计</h2>
+<h3 class="rp-toc-include" id="61-数据出口与读请求"><a href="#61-数据出口与读请求" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.1 数据出口与读请求</h3>
+<p>上送通道读取已发布标准逻辑点，经上送映射转换为对外协议模型。它不为了响应一次上级读取而临时触发一轮现场轮询，也不绕过统一数据访问层直接读取某个 Redis 原始键。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>服务端协议</th><th>主要出口行为</th><th>映射内容</th></tr></thead><tbody><tr><td>IEC 104</td><td>就绪后的总召应答、周期/变化上送等已启用服务</td><td>CA、IOA、ASDU 类型、时标、质量与量纲</td></tr><tr><td>Modbus TCP/RTU</td><td>从已维护的寄存器/线圈映像响应主站请求</td><td>Unit ID、地址空间、偏移、宽度、符号、字节/字序</td></tr><tr><td>IEC 61850 MMS</td><td>按模型提供读取、报告及受支持控制服务</td><td>IED/LD/LN/DO/DA、FC、DataSet、报告和控制模型</td></tr></tbody></table></div>
+<p>出口通常需要一个进程内不可变版本的数据映像，用于短时间响应协议回调。映像是标准状态的投影，携带数据时间、质量与配置版本；超时必须呈现失效，不能永久返回“看起来正常”的最后值。Modbus 缺少统一测点质量/时间字段时，应在对外点表明确配置质量寄存器和时间寄存器，或定义该型号的异常响应策略，不能悄悄丢失质量信息。</p>
+<p>一次 Modbus 多寄存器响应必须从同一映像版本编码，避免一个 32/64 位值由两个不同样本拼接。IEC 104 总召过程可以冻结出口映像或明确“各点最新”策略，但必须在对外契约中约定；这不等于公共实时库支持全站原子快照。IEC 61850 模型更新涉及对象引用/数据集变化时，按协议能力重建模型与会话，不在回调执行中修改底层对象结构。</p>
+<h3 class="rp-toc-include" id="62-多设备多上级和队列"><a href="#62-多设备多上级和队列" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.2 多设备、多上级和队列</h3>
+<p>一条北向通道可映射 pcs01、bms01、meter01 等多个设备的标准点，也可映射站级聚合点。每条通道首期只有一份确定的出口地址模型；每个 peer 在模型中取得自己的可见子集。若上级要求不同地址模型，首期使用不同通道/监听端点，不按来源 IP 临时重解释同一地址。</p>
+<p>每个运行 session 有独立协议状态、发送窗口和有界队列。慢客户端不得阻塞采集或其他客户端：最新遥测可按明确策略合并中间值，需保序的事件/告警从可靠记录恢复；超出窗口时返回失效/断开/请求重新总召，不能将全部数据统一静默丢弃。是否支持跨断线事件补送由协议 profile 和持久出口事件机制声明，不能把 Pub/Sub 当作事件唯一来源。</p>
+<p>监听就绪、客户端已连接、协议数据传输就绪、某设备样本新鲜分别展示。多个上级可以同时看数据，但能提交控制的 peer 集合和当前控制权必须显式配置；socket 连接成功不能自动获得设备控制权。</p>
+<h3 class="rp-toc-include" id="63-外部控制的闭环"><a href="#63-外部控制的闭环" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.3 外部控制的闭环</h3>
+<div></div>
+<p>北向协议接入与南向采集可以同处 <code>ems-collector</code> 进程，但不能因此直接调用另一个通道的写句柄。北向协议回调只解析请求，交给独立的有界意图受理队列，数据库工作不阻塞协议事件循环；对端要求的协议时限内无法完成受理时返回协议允许的拒绝/忙状态。</p>
+<p>受理队列和持久意图都携带原请求截止时间，提交前与仲裁时再次校验，禁止排队过期后仍执行。若提交结果或响应是否到达已无法确定，则记录“受理结果未知”并按协议约定提供查询/关联结果，不能将响应失败宣称为确定未受理；已持久意图的取消也要经过显式状态转换。</p>
+<p><code>external_request_id → intent_id → command_id</code> 保留全链路关联。协议没有可跨重连使用的唯一请求 ID 时，不能声称靠连接序号实现恰好一次；需结合受支持的选择/执行状态、有限去重窗口、结果查询以及不确定状态处理。脉冲、复位等动作在不确定时不自动重试。</p>
+<p>Modbus 正常写响应通常不能表达完整异步设备执行状态。首期若需要可控上送，必须与上级约定“写入表示持久受理”的命令邮箱/状态寄存器契约，包含请求标识、结果状态和关联结果；否则该映射只开放只读，不能用普通写寄存器应答谎报现场执行完成。104/MMS 的选择、执行、确认和结束也必须分别映射其协议语义，不能统一在入队后立即回成功。</p>
+<h2 class="rp-toc-include" id="7-持久模型与地址唯一性"><a href="#7-持久模型与地址唯一性" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7. 持久模型与地址唯一性</h2>
+<h3 class="rp-toc-include" id="71-逻辑表"><a href="#71-逻辑表" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.1 逻辑表</h3>
+<p>以下是目标逻辑结构，字段类型和索引在 DDL 阶段固定；所有发布引用均带版本。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>表</th><th>关键字段</th><th>核心约束</th></tr></thead><tbody><tr><td><code>protocol_definition</code></td><td>protocol_id、schema_version、supported_roles、transports、capabilities、plugin_abi</td><td>按驱动能力注册；不能由普通配置任意宣称支持</td></tr><tr><td><code>protocol_profile_version</code></td><td>profile_id、version、protocol_id、protocol_revision、typed_parameters、model_artifact_id</td><td>不可变；凭据通过 secret_ref 引用</td></tr><tr><td><code>communication_resource</code></td><td>resource_id、station_id、host_scope、resource_type、canonical_endpoint</td><td>规范化同一物理资源；别名不能绕开独占检查</td></tr><tr><td><code>channel</code></td><td>channel_id、station_id、code、display_name</td><td><code>(station_id, code)</code> 唯一，稳定 ID</td></tr><tr><td><code>channel_version</code></td><td>channel_id、config_version、purpose、local_role、connection_mode、profile_ref、resource_id、owner_shard、limits、enabled</td><td>活动版本组合必须被协议能力矩阵支持</td></tr><tr><td><code>device_channel_binding_version</code></td><td>binding_id、config_version、device_id、channel_id、operations、device_address、source_group、priority、enabled</td><td>设备/通道同 station；采集与上送权限不可混用</td></tr><tr><td><code>vendor_point_route_version</code></td><td>vendor_point_id、config_version、binding_id、protocol_point_address、decode_spec</td><td>只引用 acquisition 绑定；沿用设备点表模型</td></tr><tr><td><code>forwarding_point_map_version</code></td><td>map_id、config_version、binding_id 或 asset_scope_ref、point_id、direction、protocol_point_address、encode_spec、quality_spec</td><td>只引用 forwarding 通道；遥测点与命令点分别校验</td></tr><tr><td><code>channel_peer_policy_version</code></td><td>channel_id、config_version、peer_id、identity_ref、visible_scope、control_scope、limits</td><td>拒绝未授权 peer，控制权限默认关闭</td></tr></tbody></table></div>
+<p>同一设备/通道可以存在多个有明确地址或用途的绑定，唯一约束以规范化绑定身份为准，不能仅依靠 <code>(device_id, channel_id)</code> 吞掉多逻辑地址需求。source_group 只用于来源选择，不意味着可并发更新一个权威标准点。</p>
+<p>配置快照固定所有 profile、模型文件摘要、通道、绑定、采集路由和上送映射。服务端跨多个 unit 使用 station 级配置清单固定各 unit 的目标版本；发布成功和各进程实际应用成功分开展示，不能把跨根引用当作数据库外的原子切换。</p>
+<h3 class="rp-toc-include" id="72-地址冲突校验"><a href="#72-地址冲突校验" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.2 地址冲突校验</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>协议</th><th>校验的地址空间</th><th>允许与禁止</th></tr></thead><tbody><tr><td>Modbus</td><td>通道出口模型 + Unit ID + 地址空间 + 覆盖区间</td><td>input/holding 属不同空间；同空间多寄存器区间检查重叠，命令写区不得与测量投影冲突</td></tr><tr><td>IEC 104</td><td>通道出口模型 + CA + IOA + 明确的数据/控制命名约定</td><td>首期同一模型内 <code>(CA, IOA)</code> 唯一，类型匹配为额外约束，不靠不同 Type ID 隐式复用地址</td></tr><tr><td>IEC 61850 MMS</td><td>通道模型 + 完整对象引用 + FC</td><td>必须存在于固定模型且类型/访问/控制模式匹配；数据集与报告引用不能悬空</td></tr><tr><td>GOOSE/SV 扩展</td><td>对应 profile 定义的完整发布/订阅身份</td><td>不能直接套用 MMS 对象或 TCP endpoint 唯一性</td></tr></tbody></table></div>
+<p>共享来源别名、位字段共享、读写重叠或协议允许的特殊复用必须显式建模并由专用规则验收；首期默认拒绝未声明冲突。点表文档的 <code>40001</code> 编号和 PDU 的零基偏移分开保存，导入要求明确地址基准。</p>
+<h2 class="rp-toc-include" id="8-配置工作流"><a href="#8-配置工作流" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8. 配置工作流</h2>
+<p>建议在设备页和通道页提供两个互通的入口，保存同一套关系。</p>
+<ol>
+<li><strong>先建协议通道</strong>：选择 station、用途、EMS 角色、协议/版本，再填写连接模式、资源和协议参数。UI 按能力矩阵过滤无效组合。</li>
+<li><strong>关联设备或资产</strong>：从设备页选择已有通道，或从通道页批量关联设备；明确 operations、协议设备地址、来源组和启用状态。</li>
+<li><strong>配置点映射</strong>：采集通道导入厂家点并绑定标准点；上送通道选择已有标准点/命令点并生成对外地址，不能把南向厂家点表直接当北向点表发布。</li>
+<li><strong>配置对端与控制</strong>：服务端设置监听/会话限额、peer 身份、可见点和 control_in；显示控制最终仍由策略仲裁。</li>
+<li><strong>完整校验与预览</strong>：展示设备—绑定—通道—协议—点地址关系图，检查地址冲突、资源冲突、缺少能力、单位/质量映射、命令反馈和模型文件。</li>
+<li><strong>发布版本</strong>：同一 MySQL 事务保存不可变引用与 outbox，由存储发布；通信进程构造完整新运行配置，反馈已应用/失败。</li>
+<li><strong>观察与回滚</strong>：展示配置已保存/已发布/实例已应用、通道监听/会话/设备质量、版本差异；失败时保留上一完整版本或进入明确停用状态。</li>
+</ol>
+<p>协议/角色/监听端点或模型结构变化需要排空受影响事务并重建会话；仅修改显示名称不重连。上送映射变更时不能在一条协议响应中混合新旧模型；南向改路由期间禁止旧配置命令迟到执行。删除被点表、命令反馈或上送引用的绑定时，拒绝删除并列出依赖，或在同一发布版本内完成明确解绑，不能级联静默删业务点。</p>
+<h2 class="rp-toc-include" id="9-c17-运行设计"><a href="#9-c17-运行设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9. C++17 运行设计</h2>
+<h3 class="rp-toc-include" id="91-分离配置驱动与会话"><a href="#91-分离配置驱动与会话" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9.1 分离配置、驱动与会话</h3>
+<p>公共模型采用强类型枚举与 <code>std::variant</code> 表达协议地址，避免一个 <code>std::string address</code> 混装所有协议。以下为可独立编译的类型草案，实际协议参数和错误类型由公共契约补齐。</p>
+<div class="rp-codeblock language-cpp"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="cpp"><code><span class="line"><span style="color:var(--shiki-token-keyword)">#include</span><span style="color:var(--shiki-token-string-expression)"> &lt;cstdint&gt;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">#include</span><span style="color:var(--shiki-token-string-expression)"> &lt;string&gt;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">#include</span><span style="color:var(--shiki-token-string-expression)"> &lt;variant&gt;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">#include</span><span style="color:var(--shiki-token-string-expression)"> &lt;vector&gt;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">namespace</span><span style="color:var(--shiki-foreground)"> ems</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-foreground)">communication {</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">enum</span><span style="color:var(--shiki-token-keyword)"> class</span><span style="color:var(--shiki-token-function)"> Purpose</span><span style="color:var(--shiki-foreground)"> { Acquisition</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Forwarding };</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">enum</span><span style="color:var(--shiki-token-keyword)"> class</span><span style="color:var(--shiki-token-function)"> ProtocolRole</span><span style="color:var(--shiki-foreground)"> { Client</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Server</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Publisher</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Subscriber };</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">enum</span><span style="color:var(--shiki-token-keyword)"> class</span><span style="color:var(--shiki-token-function)"> ConnectionMode</span><span style="color:var(--shiki-foreground)"> { Connect</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Listen</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Serial</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> LinkLayer };</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">enum</span><span style="color:var(--shiki-token-keyword)"> class</span><span style="color:var(--shiki-token-function)"> Operation</span><span style="color:var(--shiki-foreground)"> { TelemetryIn</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> ControlOut</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> TelemetryOut</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> ControlIn };</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">enum</span><span style="color:var(--shiki-token-keyword)"> class</span><span style="color:var(--shiki-token-function)"> ModbusSpace</span><span style="color:var(--shiki-foreground)"> { Coil</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> DiscreteInput</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> HoldingRegister</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> InputRegister };</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> ModbusDeviceAddress</span><span style="color:var(--shiki-foreground)"> { std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-keyword)">uint8_t</span><span style="color:var(--shiki-foreground)"> unit_id; };</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> Iec104DeviceAddress</span><span style="color:var(--shiki-foreground)"> { std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-keyword)">uint16_t</span><span style="color:var(--shiki-foreground)"> common_address; };</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> MmsDeviceAddress</span><span style="color:var(--shiki-foreground)"> { std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-foreground)">string</span><span style="color:var(--shiki-foreground)"> ied_name; std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-foreground)">string</span><span style="color:var(--shiki-foreground)"> logical_device; };</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">using</span><span style="color:var(--shiki-token-function)"> DeviceAddress</span><span style="color:var(--shiki-token-keyword)"> =</span><span style="color:var(--shiki-foreground)"> std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-foreground)">variant</span><span style="color:var(--shiki-token-keyword)">&lt;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    ModbusDeviceAddress</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Iec104DeviceAddress</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> MmsDeviceAddress</span><span style="color:var(--shiki-token-keyword)">&gt;</span><span style="color:var(--shiki-foreground)">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> ModbusPointAddress</span><span style="color:var(--shiki-foreground)"> {</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">    ModbusSpace</span><span style="color:var(--shiki-foreground)"> space;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-keyword)">uint16_t</span><span style="color:var(--shiki-foreground)"> offset;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-keyword)">uint16_t</span><span style="color:var(--shiki-foreground)"> width;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">};</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> Iec104PointAddress</span><span style="color:var(--shiki-foreground)"> {</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-keyword)">uint32_t</span><span style="color:var(--shiki-foreground)"> ioa;</span><span style="color:var(--shiki-token-comment)"> // 数值上限按 profile 校验，不代表允许 32 位线格式</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-keyword)">uint8_t</span><span style="color:var(--shiki-foreground)"> type_id;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">};</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> MmsPointAddress</span><span style="color:var(--shiki-foreground)"> {</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> object_reference;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> functional_constraint;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">};</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">using</span><span style="color:var(--shiki-token-function)"> PointAddress</span><span style="color:var(--shiki-token-keyword)"> =</span><span style="color:var(--shiki-foreground)"> std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-foreground)">variant</span><span style="color:var(--shiki-token-keyword)">&lt;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    ModbusPointAddress</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Iec104PointAddress</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> MmsPointAddress</span><span style="color:var(--shiki-token-keyword)">&gt;</span><span style="color:var(--shiki-foreground)">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> ChannelVersion</span><span style="color:var(--shiki-foreground)"> {</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> channel_id;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-keyword)">uint64_t</span><span style="color:var(--shiki-foreground)"> config_version;</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">    Purpose</span><span style="color:var(--shiki-foreground)"> purpose;</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">    ProtocolRole</span><span style="color:var(--shiki-foreground)"> local_role;</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">    ConnectionMode</span><span style="color:var(--shiki-foreground)"> connection_mode;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> protocol_profile_id;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-keyword)">uint64_t</span><span style="color:var(--shiki-foreground)"> protocol_profile_version;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> resource_id;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">};</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> DeviceChannelBindingVersion</span><span style="color:var(--shiki-foreground)"> {</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> binding_id;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> device_id;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> channel_id;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-keyword)">uint64_t</span><span style="color:var(--shiki-foreground)"> config_version;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">vector</span><span style="color:var(--shiki-foreground)">&lt;</span><span style="color:var(--shiki-token-function)">Operation</span><span style="color:var(--shiki-foreground)">&gt; operations;</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">    DeviceAddress</span><span style="color:var(--shiki-foreground)"> device_address;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">};</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">}</span><span style="color:var(--shiki-token-comment)"> // namespace ems::communication</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>variant 类型只能消除一部分误用，发布验证器还必须校验“Modbus profile 配 Modbus 地址”等组合及协议地址范围。GOOSE/SV 在专门设计与实现时新增对应类型，不能用字符串临时绕过不支持的能力。</p>
+<p>驱动工厂按 <code>protocol_id + local_role + transport + plugin_abi_version</code> 选择实现；同一个协议包可以导出多个角色工厂。<code>IProtocolDriver</code> 负责能力与配置校验，<code>IChannelRuntime</code> 负责本通道生命周期，<code>ISession</code> 负责某条连接的协议状态；采集和上送使用各自角色接口，不强迫服务端实现无意义的主动轮询函数。</p>
+<p>公开 SDK 与协议实现采用 PIMPL，第三方依赖和平台句柄隐藏在 Impl 内。动态库边界使用版本化 C ABI、不透明句柄和长度明确的缓冲区，STL/异常不跨库传递。按需加载、别名复用、安全卸载与三平台部署统一见 <a href="/ems/processes/collector/protocol-design" class="rp-link">通讯协议动态库设计</a>。采集进程内的模型对象不等于可以直接跨进程或写进共享内存的布局。</p>
+<h3 class="rp-toc-include" id="92-线程与生命周期"><a href="#92-线程与生命周期" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9.2 线程与生命周期</h3>
+<ul>
+<li>阻塞串行/轮询通道：独占资源工作线程，采集与控制按事务边界调度。</li>
+<li>IEC 104/MMS 等异步通道：事件循环驱动；客户端/服务端会话在所属执行上下文串行修改状态。</li>
+<li>北向 listener：一个监听器管理多个 session，每个 session 有独立状态和限额；不是每个设备开一个监听端口，也不要求每个连接无限新建线程。</li>
+<li>配置加载、数据库受理、历史归档和状态投影使用独立有界队列，禁止在网络回调内执行无限等待。</li>
+<li>停止顺序：拒绝新任务/新会话 → 停止订阅与定时任务 → 排空或明确终止在途事务 → 保留未决命令状态 → 销毁 session → 释放资源 → 卸载插件。</li>
+</ul>
+<p>恢复先检查生效配置、peer 身份、来源/控制权，再读取初值或完成总召/报告恢复。会话重新建立不表示数据已经新鲜；北向断线不停止南向采样，南向断线也不把北向监听状态直接标为关闭。</p>
+<h2 class="rp-toc-include" id="10-端到端示例"><a href="#10-端到端示例" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10. 端到端示例</h2>
+<p>下例展示“一台 PCS 采集一次、通过两个协议上送”，所有编号均为示意。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>层</th><th>配置</th></tr></thead><tbody><tr><td>设备</td><td><code>ess000001/pcs01</code>，标准点 active_power，命令点 set_active_power</td></tr><tr><td>南向通道</td><td><code>pcsread01</code>：acquisition / modbus_tcp / client / connect</td></tr><tr><td>南向绑定</td><td>pcs01 → pcsread01，Unit ID=1，telemetry_in + control_out</td></tr><tr><td>南向映射</td><td>holding 偏移 100 → active_power；偏移 200 ← set_active_power，分别定义倍率/字序</td></tr><tr><td>北向通道 A</td><td><code>dispatch10401</code>：forwarding / iec104 / server / listen</td></tr><tr><td>北向绑定 A</td><td>pcs01 → dispatch10401，CA=1，telemetry_out；control_in 须单独启用</td></tr><tr><td>北向映射 A</td><td>active_power → CA=1/IOA=1001；控制点采用另一 IOA 并经过仲裁</td></tr><tr><td>北向通道 B</td><td><code>monitorbus01</code>：forwarding / modbus_tcp / server / listen</td></tr><tr><td>北向绑定 B</td><td>pcs01 → monitorbus01，Unit ID=1，telemetry_out，只读</td></tr><tr><td>北向映射 B</td><td>active_power → input 偏移 0..1；另配质量/时间寄存器</td></tr></tbody></table></div>
+<p>标准 active_power 使用 <a href="/ems/common/realtime/access-design" class="rp-link">实时访问接口</a> 读取，底层选择共享内存或 Redis 对两条北向通道不可见。北向 A/B 不能再次生成同一点的权威采样；若上送需要派生量，应由明确所有者生成独立 derived 点，再映射出去。</p>
+<h2 class="rp-toc-include" id="11-故障与验收"><a href="#11-故障与验收" class="rp-header-anchor rp-link" aria-hidden="true">#</a>11. 故障与验收</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>验收场景</th><th>预期结果</th></tr></thead><tbody><tr><td>一个设备绑定多个采集/上送通道</td><td>点/设备稳定 ID 不复制，方向和权限正确</td></tr><tr><td>多设备共享 Modbus 串口或 104 连接</td><td>只有一个资源所有者，按设备/点地址正确分流</td></tr><tr><td>上送服务端接入多个 peer</td><td>每个 session 状态和队列独立，可见点与控制范围生效</td></tr><tr><td>不支持的协议/角色/连接组合</td><td>保存草稿可提示，发布必须拒绝，不能运行时猜测</td></tr><tr><td>设备/通道跨 station、悬空 profile、地址重叠、模型不匹配</td><td>校验精确指出绑定/点位，无部分配置激活</td></tr><tr><td>更换厂家或南向协议</td><td>标准点和北向地址可保持不变，转换结果与质量一致</td></tr><tr><td>北向迟缓或断线</td><td>南向采集不被阻塞，队列有界，恢复策略明确</td></tr><tr><td>南向离线但北向保持连接</td><td>输出带失效质量/状态的最后值，不伪造正常新样本</td></tr><tr><td>外部控制越权、冲突、过期或重复</td><td>持久意图/仲裁/MySQL 执行状态检查生效，不绕过策略直写</td></tr><tr><td>Modbus 写应答和实际设备动作</td><td>受理、协议确认、最终反馈可区分，不误报完成</td></tr><tr><td>配置切换与卸载</td><td>在途事务不混版本，无悬空回调/重复控制/双资源所有者</td></tr><tr><td>协议模型独立测试</td><td>104、MMS、Modbus 客户端与服务端分别验证；不以一端能连通代替全部能力通过</td></tr></tbody></table></div>
+<p>实施顺序建议为：冻结模型和验证规则 → Modbus TCP 采集与只读上送闭环 → IEC 104 双角色及控制意图接入 → MMS 模型/报告/控制能力 → 按现场需求扩展 GOOSE/SV。具体排期按项目优先级确定，未完成验证的能力不出现在可发布配置选项中。</p><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/architecture/channel-protocol.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/10/20 23:17:14</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/architecture/point-table-import" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>点表 CSV 导入</span></span></a><div class="rp-prev-next-page__placeholder"></div></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#1-核心结论" class="rp-toc-item rp-link" title="1. 核心结论" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">1. 核心结论</span></a><a href="#2-四个维度必须分开" class="rp-toc-item rp-link" title="2. 四个维度必须分开" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">2. 四个维度必须分开</span></a><a href="#21-用途角色连接模式和操作权限" class="rp-toc-item rp-link" title="2.1 用途、角色、连接模式和操作权限" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.1 用途、角色、连接模式和操作权限</span></a><a href="#22-协议角色矩阵" class="rp-toc-item rp-link" title="2.2 协议角色矩阵" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.2 协议角色矩阵</span></a><a href="#3-对象模型与依赖关系" class="rp-toc-item rp-link" title="3. 对象模型与依赖关系" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">3. 对象模型与依赖关系</span></a><a href="#31-对象定义" class="rp-toc-item rp-link" title="3.1 对象定义" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.1 对象定义</span></a><a href="#32-基数关系" class="rp-toc-item rp-link" title="3.2 基数关系" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.2 基数关系</span></a><a href="#33-依赖方向" class="rp-toc-item rp-link" title="3.3 依赖方向" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.3 依赖方向</span></a><a href="#4-参数放在哪一层" class="rp-toc-item rp-link" title="4. 参数放在哪一层" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">4. 参数放在哪一层</span></a><a href="#5-采集通道设计" class="rp-toc-item rp-link" title="5. 采集通道设计" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">5. 采集通道设计</span></a><a href="#51-建连设备绑定与点路由" class="rp-toc-item rp-link" title="5.1 建连、设备绑定与点路由" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.1 建连、设备绑定与点路由</span></a><a href="#52-控制与反馈" class="rp-toc-item rp-link" title="5.2 控制与反馈" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.2 控制与反馈</span></a><a href="#6-上送通道设计" class="rp-toc-item rp-link" title="6. 上送通道设计" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">6. 上送通道设计</span></a><a href="#61-数据出口与读请求" class="rp-toc-item rp-link" title="6.1 数据出口与读请求" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.1 数据出口与读请求</span></a><a href="#62-多设备多上级和队列" class="rp-toc-item rp-link" title="6.2 多设备、多上级和队列" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.2 多设备、多上级和队列</span></a><a href="#63-外部控制的闭环" class="rp-toc-item rp-link" title="6.3 外部控制的闭环" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.3 外部控制的闭环</span></a><a href="#7-持久模型与地址唯一性" class="rp-toc-item rp-link" title="7. 持久模型与地址唯一性" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">7. 持久模型与地址唯一性</span></a><a href="#71-逻辑表" class="rp-toc-item rp-link" title="7.1 逻辑表" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.1 逻辑表</span></a><a href="#72-地址冲突校验" class="rp-toc-item rp-link" title="7.2 地址冲突校验" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.2 地址冲突校验</span></a><a href="#8-配置工作流" class="rp-toc-item rp-link" title="8. 配置工作流" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">8. 配置工作流</span></a><a href="#9-c17-运行设计" class="rp-toc-item rp-link" title="9. C++17 运行设计" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">9. C++17 运行设计</span></a><a href="#91-分离配置驱动与会话" class="rp-toc-item rp-link" title="9.1 分离配置、驱动与会话" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">9.1 分离配置、驱动与会话</span></a><a href="#92-线程与生命周期" class="rp-toc-item rp-link" title="9.2 线程与生命周期" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">9.2 线程与生命周期</span></a><a href="#10-端到端示例" class="rp-toc-item rp-link" title="10. 端到端示例" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">10. 端到端示例</span></a><a href="#11-故障与验收" class="rp-toc-item rp-link" title="11. 故障与验收" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">11. 故障与验收</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/architecture/channel-protocol.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+    <div id="__rspress_modal_container"></div>
+  </body>
+</html>

@@ -1,0 +1,386 @@
+<!doctype html>
+<html lang="zh">
+  <head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMS 引入 ZeroMQ 的必要性评估 - EMS 设计文档</title>
+<script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
+<link href="/ems/static/css/styles.3c463aa6ae.css" rel="stylesheet">
+<link rel="preload" href="/ems/static/js/async/route-572862ad7f10.c7d1d387b1.js" as="script">
+<script defer src="/ems/static/js/styles.560b9eab4d.js"></script>
+<script defer src="/ems/static/js/lib-react.0685ac4d75.js"></script>
+<script defer src="/ems/static/js/lib-router.de7486675c.js"></script>
+<script defer src="/ems/static/js/m3.da04ef77ed.js"></script>
+<script defer src="/ems/static/js/index.1377de6962.js"></script>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Rspress v2.0.21">
+<link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="EMS 引入 ZeroMQ 的必要性评估 - EMS 设计文档">
+<meta name="description" content="历史评估（2026-09-13）。2026-09-27 已决定将 ZeroMQ 用于消息订阅与命令下发；2026-09-28 Web 后端目标方案改为 C++17 + Drogon。当前实施边界见 系统架构与ZeroMQ 消息订阅与命令下发设计。下文“首期不引入”及 Go/GORM 等表述保留为当时的评估记录，不再代表当前决策。 评估日期：2026-09-13｜范围：当前四进程目标架构｜结论：首期不引入，保留局部验证选项。 本文基于 EMS 系统架构设计、数据采集架构 和官方资料进行设计评估。尚未开展 ZeroMQ 原型或性能测试，文中的性能收益属于待验证假设。">
+<meta property="og:description" content="历史评估（2026-09-13）。2026-09-27 已决定将 ZeroMQ 用于消息订阅与命令下发；2026-09-28 Web 后端目标方案改为 C++17 + Drogon。当前实施边界见 系统架构与ZeroMQ 消息订阅与命令下发设计。下文“首期不引入”及 Go/GORM 等表述保留为当时的评估记录，不再代表当前决策。 评估日期：2026-09-13｜范围：当前四进程目标架构｜结论：首期不引入，保留局部验证选项。 本文基于 EMS 系统架构设计、数据采集架构 和官方资料进行设计评估。尚未开展 ZeroMQ 原型或性能测试，文中的性能收益属于待验证假设。"></head>
+
+  <body>
+    <div id="__rspress_root"><link rel="preload" as="image" href="/ems/logo.svg"/><header class="rp-nav"><div class="rp-nav__left"><div class="rp-nav__title"><a href="/ems/" class="rp-nav__title__link rp-link"><div class="rp-nav__title__logo"><img src="/ems/logo.svg" alt="logo" id="logo" class="rspress-logo rp-nav__title__logo-image"/></div><span>EMS</span></a></div><ul class="rp-nav-menu rp-nav-menu--left"><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/" class="rp-nav-menu__item__container rp-link">首页</a></li><li class="rp-nav-menu__item"><a href="/ems/architecture/" class="rp-nav-menu__item__container rp-link">架构</a></li><li class="rp-nav-menu__item"><a href="/ems/processes/" class="rp-nav-menu__item__container rp-link">进程</a></li><li class="rp-nav-menu__item"><a href="/ems/common/" class="rp-nav-menu__item__container rp-link">公共模块</a></li><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/decisions/" class="rp-nav-menu__item__container rp-link">技术决策</a></li><li class="rp-nav-menu__item"><a href="/ems/reference/" class="rp-nav-menu__item__container rp-link">开发参考</a></li><li class="rp-nav-menu__item"><a href="/ems/guide/" class="rp-nav-menu__item__container rp-link">文档维护</a></li></ul></div><div class="rp-nav__right"><button class="rp-search-button"><div class="rp-search-button__content"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21" class="rp-search-button__icon"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg><span class="rp-search-button__word">搜索</span></div><div class="rp-search-button__hotkey" style="opacity:0"><span></span><span>K</span></div></button><div class="rp-search-button--mobile"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg></div><div class="rp-nav__others"><div class="rp-nav-menu__divider"></div><div class="rp-switch-appearance"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="rp-switch-appearance__icon rp-switch-appearance__icon--sun"><path fill="currentColor" d="m7.001 15.848-1.226 1.226a.58.58 0 0 0 0 .818.58.58 0 0 0 .818 0l1.226-1.226a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0m-.352-8.735a.584.584 0 0 0 .825-.825L6.237 5.051a.584.584 0 0 0-.825.825zM5.011 11.07h-1.75a.584.584 0 0 0 0 1.167h1.75c.324 0 .584-.26.584-.583a.585.585 0 0 0-.584-.584m7.003-5.835c.324 0 .584-.26.584-.584V2.9a.58.58 0 0 0-.584-.584.58.58 0 0 0-.583.583V4.65c0 .323.262.584.583.584m5.616 1.621 1.226-1.225a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0l-1.226 1.225a.58.58 0 0 0 0 .818.576.576 0 0 0 .818 0m3.138 4.214h-1.75a.58.58 0 0 0-.584.584c0 .324.26.584.583.584h1.751a.584.584 0 1 0 0-1.167m-3.389 5.124a.584.584 0 0 0-.825.825l1.238 1.238a.584.584 0 0 0 .825-.826zm-5.365-9.795a5.256 5.256 0 0 0-5.257 5.258 5.256 5.256 0 0 0 5.257 5.257 5.256 5.256 0 0 0 5.257-5.257 5.256 5.256 0 0 0-5.257-5.258m0 11.675a.58.58 0 0 0-.583.583v1.751a.582.582 0 1 0 1.167 0v-1.75a.584.584 0 0 0-.584-.584"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="currentColor" viewBox="0 0 19 19" class="rp-switch-appearance__icon rp-switch-appearance__icon--moon"><path fill="currentColor" d="M9.166 0a9.2 9.2 0 0 1 1.857.188.834.834 0 0 1 .042 1.623 4.47 4.47 0 1 0 5.457 5.457l.048-.135a.834.834 0 0 1 1.575.177q.186.902.188 1.856A9.168 9.168 0 1 1 9.166 0"></path></svg></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__sm"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg></button><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__md"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"><div class="rp-nav-menu__others-mobile__container"><div class="rp-nav-hamburger__md__hover-group"><div class="rp-nav-screen-appearance"><div class="rp-nav-screen-appearance__left">主题</div><div class="rp-nav-screen-appearance__right"></div></div><div class="rp-nav-screen-divider"></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div></div></ul></button></div></header><div class="rp-doc-layout__menu"><div class="rp-sidebar-menu"><button type="button" class="rp-sidebar-menu__left"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M4 6h24v2H4zm0 18h24v2H4zm0-12h24v2H4zm0 6h24v2H4z"></path></svg><span>菜单</span></button><button type="button" class="rp-sidebar-menu__right"><span class="rp-sidebar-menu__right__text">目录</span><svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-sidebar-menu__right__icon" style="transform:rotate(0deg);transition:transform 0.2s ease-out"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button></div></div><div class="rp-doc-layout__container"><aside class="rp-doc-layout__sidebar rp-scrollbar"><a href="/ems/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">返回文档首页</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-divider" style="padding-left:12px"></div><div class="rp-sidebar-section-header"><div class="rp-sidebar-section-header__left"><span>技术决策</span></div><div class="rp-sidebar-section-header__right"></div></div><a href="/ems/decisions/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">技术决策概览</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/decisions/drogon-web" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">Web 后端采用 Drogon</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/decisions/zeromq-assessment" class="rp-sidebar-item rp-sidebar-item--active rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">ZeroMQ 引入评估</span></div><div class="rp-sidebar-item__right"></div></a></aside><div class="rp-doc-layout__doc"><main class="rp-doc-layout__doc-container"><div class="rp-doc rspress-doc"><!--$--><h1 class="rp-toc-include" id="ems-引入-zeromq-的必要性评估"><a href="#ems-引入-zeromq-的必要性评估" class="rp-header-anchor rp-link" aria-hidden="true">#</a>EMS 引入 ZeroMQ 的必要性评估<!-- --> </h1>
+<blockquote>
+<p>历史评估（2026-09-13）。2026-09-27 已决定将 ZeroMQ 用于消息订阅与命令下发；2026-09-28 Web 后端目标方案改为 C++17 + Drogon。当前实施边界见 <a href="/ems/architecture/system-design" class="rp-link">系统架构</a>与<a href="/ems/common/realtime/zeromq-messaging-design" class="rp-link">ZeroMQ 消息订阅与命令下发设计</a>。下文“首期不引入”及 Go/GORM 等表述保留为当时的评估记录，不再代表当前决策。</p>
+</blockquote>
+<blockquote>
+<p>评估日期：2026-09-13｜范围：当前四进程目标架构｜结论：首期不引入，保留局部验证选项。
+本文基于 <a href="/ems/architecture/system-design" class="rp-link">EMS 系统架构设计</a>、<a href="/ems/processes/collector/design" class="rp-link">数据采集架构</a> 和官方资料进行设计评估。尚未开展 ZeroMQ 原型或性能测试，文中的性能收益属于待验证假设。</p>
+</blockquote>
+<h2 class="rp-toc-include" id="1-结论与适用条件"><a href="#1-结论与适用条件" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1. 结论与适用条件</h2>
+<blockquote>
+<p>历史评估记录：此处对 ZeroMQ 和 Redis Streams 的结论已由 <a href="/ems/common/realtime/zeromq-messaging-design" class="rp-link">ZeroMQ 消息与命令设计</a> 取代。当前方案用 ZeroMQ 传递原始遥测和变化提示，Redis 只保存实时状态。</p>
+</blockquote>
+<p><strong>原评估结论（已废止）：当前没有足够理由将 ZeroMQ 加入 EMS 的必需依赖。</strong> 共享状态经 <a href="/ems/common/realtime/access-design" class="rp-link">统一实时接口</a> 使用 Redis、共享内存或其他合格后端；Redis Streams 传递可靠事件，gRPC 提供内部业务接口，进程内有界队列协调工作线程。以下涉及 Redis 共享状态的比较为当时的默认部署方案。</p>
+<p>判断依据是现有需求已经有明确承载方式，而仓库文档尚未提供设备规模、峰值采样率、通信耗时占比及延迟目标的实测数据。此时引入 ZeroMQ 会增加一套连接管理、消息语义、故障恢复和部署验证工作，收益尚无法量化。</p>
+<p>后续如果证实存在独立的高频数据分发需求，且允许丢失中间帧、可通过快照恢复，可以验证局部 ZeroMQ 通道。例如将采集数据副本交给诊断或可视化消费者。是否采用，以第 8 节的验证结果为准。</p>
+<p>本评估沿用整体架构的控制仲裁、告警归属和四类业务进程边界。MySQL 由 Go 使用 GORM、C++ 各进程使用公共 ormpp API 访问，每个进程独立建立连接或连接池；TDengine 由存储进程统一访问。</p>
+<h2 class="rp-toc-include" id="2-当前架构中的通信需求"><a href="#2-当前架构中的通信需求" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2. 当前架构中的通信需求</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>路径</th><th>关键需求</th><th>当前目标方案</th><th>ZeroMQ 的潜在作用</th></tr></thead><tbody><tr><td>采集 → 共享实时状态</td><td>最新值、质量、新鲜度、重启后可查询</td><td>Redis Hash/String</td><td>只能传递更新，仍需要状态存储与快照</td></tr><tr><td>采集 → 存储</td><td>原始采样、有界缓冲、去重、落库确认</td><td>内存队列 + Streams + TDengine</td><td>可作传输层，但需要另建可靠投递协议</td></tr><tr><td>策略 → 采集</td><td>定向路由、期限、幂等、审计、回读</td><td>策略通过公共 ormpp API 保存命令/outbox，存储发布 Streams</td><td>可直接传消息，不能省去持久接收和执行状态机</td></tr><tr><td>采集/策略 → 审计</td><td>完整回执、告警生命周期、恢复核对</td><td>MySQL/outbox + Streams</td><td>缺少本项目所需的完整恢复机制</td></tr><tr><td>Go → C++ 存储</td><td>分页历史等跨进程服务、明确错误</td><td>gRPC + Protobuf；普通 MySQL CRUD 由 Go 使用 GORM 完成</td><td>请求响应可实现，但要增加 RPC 层约定</td></tr><tr><td>采集线程 → 分发线程</td><td>有界队列、线程唤醒、阻塞隔离</td><td>进程内队列与条件变量</td><td>可用 inproc，暂缺替换收益依据</td></tr><tr><td>实时诊断/画面副本</td><td>低延迟、只关注近期值、可恢复</td><td>按需快照或刷新通知</td><td>是后续最适合验证的范围</td></tr></tbody></table></div>
+<p>这些是当前目标设计，不代表上述组件已经全部落地；是否新增 ZeroMQ 以本文的验证条件决定，不以旧工程依赖作为设计前提。</p>
+<h2 class="rp-toc-include" id="3-zeromq-能力与保证边界"><a href="#3-zeromq-能力与保证边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3. ZeroMQ 能力与保证边界</h2>
+<h3 class="rp-toc-include" id="31-定位与可能收益"><a href="#31-定位与可能收益" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.1 定位与可能收益</h3>
+<p>ZeroMQ 是异步消息库，支持发布订阅、请求响应等模式，可在没有专用消息代理服务的情况下运行。它允许将消息通信嵌入应用进程。<a href="https://zeromq.org/get-started/" target="_blank" rel="noopener noreferrer" class="rp-link">ZeroMQ 官方介绍</a>。</p>
+<p>对本项目的潜在收益是：部分消息可以在生产者与消费者之间直接传递，减少经过集中服务的路径，并按消费者拓扑组织分发。这是需要基准验证的工程假设，不能据此推导出固定吞吐提升或确定的毫秒级收益。当前 Redis 仍承担共享状态和可靠事件，引入 ZeroMQ 通常也不能减少现有基础设施数量。</p>
+<h3 class="rp-toc-include" id="32-发送成功与持久化"><a href="#32-发送成功与持久化" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.2 发送成功与持久化</h3>
+<p><code>zmq_send()</code> 成功表示消息已由本地 socket 接管，并不表示已经发到网络，更不表示远端处理完成。<a href="https://libzmq.readthedocs.io/en/latest/zmq_send.html" target="_blank" rel="noopener noreferrer" class="rp-link">发送接口说明</a>。</p>
+<p>需要业务确认、重试和故障恢复时，应用必须在基础通信模式上增加协议；官方可靠请求响应指南也在核心模式之上构建这类机制。<a href="https://zguide.zeromq.org/docs/chapter4/" target="_blank" rel="noopener noreferrer" class="rp-link">可靠请求响应指南</a>。</p>
+<p>因此，若将 ZeroMQ 用于需要持久恢复的事件，还需另外设计持久状态、恢复游标、确认、去重与清理。当前方案不引入独立本地文件记录：采样只有有界内存缓冲，命令/告警使用 MySQL/outbox；ZeroMQ 不能自动补齐未发布采样的丢失窗口。</p>
+<h3 class="rp-toc-include" id="33-消息模式影响丢弃与阻塞"><a href="#33-消息模式影响丢弃与阻塞" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.3 消息模式影响丢弃与阻塞</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>模式</th><th>主要语义</th><th>EMS 使用边界</th></tr></thead><tbody><tr><td>PUB/SUB</td><td>向订阅者分发；PUB 对慢订阅者达到高水位时丢弃消息</td><td>可用于可丢弃副本，不作为唯一命令/审计通道</td></tr><tr><td>PUSH/PULL</td><td>向下游轮转分配任务；无可用容量时阻塞，非阻塞发送可能返回 EAGAIN</td><td>适合可重算任务；存储和策略各需完整数据时不能用竞争消费代替广播</td></tr><tr><td>REQ/REP</td><td>按请求、响应交替通信</td><td>简单交互可用；复杂并发和恢复需额外处理</td></tr><tr><td>DEALER/ROUTER</td><td>支持异步交互和路由</td><td>路由身份不等于业务授权，可靠处理仍需确认和去重</td></tr></tbody></table></div>
+<p>各模式的具体行为见 <a href="https://libzmq.readthedocs.io/en/latest/zmq_socket.html" target="_blank" rel="noopener noreferrer" class="rp-link">socket 类型说明</a>。订阅者晚启动、离线或崩溃还可能错过消息，恢复需额外快照或重放机制。<a href="https://zguide.zeromq.org/docs/chapter5/" target="_blank" rel="noopener noreferrer" class="rp-link">发布订阅恢复说明</a>。</p>
+<h3 class="rp-toc-include" id="34-线程传输与参数"><a href="#34-线程传输与参数" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.4 线程、传输与参数</h3>
+<p>常用 PUB/SUB、PUSH/PULL、REQ/REP、DEALER/ROUTER socket 不应由多个线程并发使用。候选实现应采用 socket 所属线程独占的方式，由采集线程向分发线程提交任务。<a href="https://libzmq.readthedocs.io/en/latest/zmq_socket.html" target="_blank" rel="noopener noreferrer" class="rp-link">线程安全说明</a>。</p>
+<p><code>inproc://</code> 用于同一进程、同一 ZeroMQ context 内的线程通信；它不能连接 EMS 的四个独立进程。<a href="https://libzmq.readthedocs.io/en/latest/zmq_inproc.html" target="_blank" rel="noopener noreferrer" class="rp-link">inproc 说明</a>。同机独立进程可评估 <code>ipc://</code>，其支持依赖系统的 UNIX domain socket 能力；跨主机可评估 TCP。Linux/ARM 和开发环境应分别验证所选构建的传输支持。<a href="https://libzmq.readthedocs.io/en/latest/zmq_ipc.html" target="_blank" rel="noopener noreferrer" class="rp-link">ipc 说明</a>。</p>
+<p>高水位按每个对端的排队消息数计量，不能直接当作总字节预算；还要限制消息大小、连接数及应用队列。显式设置发送超时和关闭等待策略。<code>LINGER=0</code> 会丢弃未发送消息，无限等待可能阻塞退出。参数和实际容量必须随固定版本验证。<a href="https://libzmq.readthedocs.io/en/latest/zmq_setsockopt.html" target="_blank" rel="noopener noreferrer" class="rp-link">socket 参数说明</a>。</p>
+<h2 class="rp-toc-include" id="4-与现有技术的关系"><a href="#4-与现有技术的关系" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4. 与现有技术的关系</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>维度</th><th>Redis Hash/Streams</th><th>gRPC + Protobuf</th><th>ZeroMQ</th></tr></thead><tbody><tr><td>本项目主要职责</td><td>共享快照、事件留存与消费</td><td>类型化服务调用</td><td>可选的直接消息分发</td></tr><tr><td>查询最新状态</td><td>Hash/String 直接承载</td><td>由服务实现查询</td><td>需要另建状态服务</td></tr><tr><td>消费确认与恢复</td><td>Streams 提供消费组、ACK、待处理记录等基础</td><td>应用定义持久处理与幂等</td><td>应用补充确认、日志和重放</td></tr><tr><td>接口契约</td><td>本项目维护版本化 JSON/字段语义</td><td>IDL、生成接口和调用状态</td><td>需另选序列化并约定消息协议，可复用 Protobuf</td></tr><tr><td>运行成本</td><td>Redis 服务、持久化与容量管理</td><td>服务端及两端工具链</td><td>库、端点、应用排队和恢复逻辑；代理拓扑另计</td></tr><tr><td>当前取舍</td><td>保留</td><td>按目标设计引入</td><td>暂不增加</td></tr></tbody></table></div>
+<p>Redis Streams 的消费能力见 <a href="https://redis.io/docs/latest/develop/use-cases/streaming/" target="_blank" rel="noopener noreferrer" class="rp-link">Redis streaming</a>，gRPC 的服务定义、流式调用及 deadline 见 <a href="https://grpc.io/docs/what-is-grpc/core-concepts/" target="_blank" rel="noopener noreferrer" class="rp-link">gRPC 核心概念</a>。表中的取舍是结合本项目边界作出的判断。</p>
+<p>Streams 也不是自动“零丢失”：持久化配置、故障切换、消费者确认和事件保留策略共同决定恢复边界，继续遵守整体架构第 5.3 节。gRPC 调用超时同样不能证明写入没有发生，业务仍需稳定 ID 与结果查询。</p>
+<p>ZeroMQ 可与 Redis、gRPC 共存，但必须能解释新增通道解决的具体问题。需要长期事件保留、独立回放或跨站复制时，应围绕持久化事件系统另行选型；不能因为 ZeroMQ 名称包含 MQ 就视为现成的持久化消息服务替代品。</p>
+<h2 class="rp-toc-include" id="5-各候选方案的必要性"><a href="#5-各候选方案的必要性" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5. 各候选方案的必要性</h2>
+<h3 class="rp-toc-include" id="51-替换-redis-共享状态不建议"><a href="#51-替换-redis-共享状态不建议" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.1 替换 Redis 共享状态：不建议</h3>
+<p>各进程重启后仍需获取全量配置和最新测点。单纯推送更新无法提供完整查询视图；如果再增加快照服务和一致性协议，会复制 Redis 已承担的职责。保留 Redis 后，再向所有进程全量推送也会增加序列化和网络工作，未必能减少总负载。</p>
+<h3 class="rp-toc-include" id="52-替换-streams-历史与告警通道不建议"><a href="#52-替换-streams-历史与告警通道不建议" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.2 替换 Streams 历史与告警通道：不建议</h3>
+<p>历史和告警关注故障后可恢复、可核对。替换后即使网络发送更快，既定的业务持久记录、入库确认、独立消费者进度及裁剪仍需保留；采样的有界缓冲与丢失边界仍须明确。应先定位是 Redis 处理、消息粒度、数据库写入还是消费者积压造成瓶颈，再选择优化措施。</p>
+<h3 class="rp-toc-include" id="53-增加策略到采集的控制直连首期不建议"><a href="#53-增加策略到采集的控制直连首期不建议" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.3 增加策略到采集的控制直连：首期不建议</h3>
+<p>控制耗时包含鉴权、策略检查、MySQL 持久接收、消息分发、通道排队、设备协议事务与回读。ZeroMQ 最多改善其中的部分通信耗时，无法解决串口忙碌、设备响应慢或采集循环不能及时检查控制队列的问题。</p>
+<p>如果今后验证控制分发是主要瓶颈，必须让同一 <code>command_id</code> 在任何投递路径上进入同一个幂等执行状态机，并保留配置版本、期限、所有权代次、outbox 和审计。双路径迟到、重复及单路故障都要验证；仅仅增加一条“更快”的发送路径不足以完成设计。</p>
+<p>另外，当前新控制依赖 Go/GORM 或 C++ 公共 ormpp API 完成 MySQL 事务持久保存，并依赖策略仲裁及存储进程发布 outbox。ZeroMQ 直连无法单独实现“Redis/MySQL 不可用时仍正常远程控制”，这需要重新评估整个控制可用性和恢复设计。</p>
+<h3 class="rp-toc-include" id="54-替换-go--存储-grpc不建议"><a href="#54-替换-go--存储-grpc不建议" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.4 替换 Go → 存储 gRPC：不建议</h3>
+<p>Go 的业务 CRUD 与配置写入直接使用 GORM；分页历史等跨进程查询使用存储 gRPC，与 Go/C++ 类型契约和服务边界匹配。用 ZeroMQ 替换这些服务调用后仍需处理方法路由、请求关联、错误、期限、鉴权和版本。若有持续数据流需求，应先把 gRPC streaming 纳入同条件比较。</p>
+<h3 class="rp-toc-include" id="55-替换进程内队列暂不建议"><a href="#55-替换进程内队列暂不建议" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.5 替换进程内队列：暂不建议</h3>
+<p>现有设计使用有界队列、条件变量和独立分发线程，能够直接表达唤醒、优先级和背压。只有出现多个复杂工作流需要统一消息模式，并证明维护或性能收益时，才考虑 inproc。协议事务边界的控制优先调度仍由采集调度器负责。</p>
+<h3 class="rp-toc-include" id="56-高频诊断或可视化副本可作为后续验证对象"><a href="#56-高频诊断或可视化副本可作为后续验证对象" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.6 高频诊断或可视化副本：可作为后续验证对象</h3>
+<p>当某类消费者只关心近期样本，允许跳过中间帧，且不会依据缺失数据直接执行控制时，直接分发可能有价值。这类需求的恢复与业务审计要求较低，适合与现有路径隔离验证。</p>
+<h2 class="rp-toc-include" id="6-如需试点建议的最小边界"><a href="#6-如需试点建议的最小边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6. 如需试点，建议的最小边界</h2>
+<p>仅对明确允许丢弃的数据副本验证 PUB/SUB，不增加独立业务进程。下图是候选试验范围，不是当前实施架构。</p>
+<div></div>
+<p>试点遵循以下约束：</p>
+<ol>
+<li>副本关闭、阻塞或失败不得阻塞可靠分发与协议线程；采样进入 Streams 与最终落库分别确认，不增加本地持久化接收承诺。</li>
+<li>消息复用业务字段与稳定事件身份，携带来源代次、序号、时间、质量和配置版本。副本不写权威最新值，不触发控制。</li>
+<li>接收端按测点与来源版本去旧；启动或重连时先建立接收及有限缓冲，再读取快照并按版本合并。缓冲溢出或版本不能对齐时重新同步。</li>
+<li>周期读取权威快照并检查新鲜度，避免仅靠序号间隙检测：末尾更新丢失后可能没有下一条消息可暴露缺口。重同步只恢复最新视图，不补齐全部中间样本。</li>
+<li>初次验证复用相同编码与批量大小，单独测试传输差异；如再试 Protobuf，分别记录编码收益和传输收益。</li>
+<li>使用开关停用副本即可回到基线；消费者显示数据陈旧状态，并按既定频率通过原查询路径恢复。</li>
+</ol>
+<p>候选试点的价值必须在原有可靠路径仍运行时测量。只测 ZeroMQ 独立发送吞吐，无法说明系统增加副本后的整体收益。</p>
+<h2 class="rp-toc-include" id="7-依赖与维护成本"><a href="#7-依赖与维护成本" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7. 依赖与维护成本</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>工作项</th><th>需要落实的内容</th></tr></thead><tbody><tr><td>C++ 集成</td><td>固定 libzmq 与绑定版本，验证 C++17、Linux/ARM、安装打包及动态库搜索路径</td></tr><tr><td>Go 集成</td><td>明确是否涉及 Go 消费者；选择绑定后核查原生依赖、交叉编译和运行库要求</td></tr><tr><td>消息契约</td><td>编码、主题、大小限制、版本、质量、时间、未知类型处理和跨语言样例</td></tr><tr><td>生命周期</td><td>端点配置、启动顺序、重连、线程归属、队列上限、退出等待、重同步</td></tr><tr><td>运维</td><td>延迟、新鲜度、接收序号缺口、重同步次数、连接重建、CPU/RSS 和应用队列指标</td></tr><tr><td>访问控制</td><td>同机端点权限；跨主机身份校验、加密、密钥分发与轮换，限制允许接入的消费者</td></tr></tbody></table></div>
+<p><code>cppzmq</code> 是 libzmq 的头文件式 C++ 绑定，仍需底层库。<a href="https://github.com/zeromq/cppzmq" target="_blank" rel="noopener noreferrer" class="rp-link">cppzmq 官方仓库</a>。Go 生态有多种绑定，不能假定它们具有相同的构建与线程语义；例如 <code>pebbe/zmq4</code> 需要安装 ZeroMQ。<a href="https://zeromq.org/languages/go/" target="_blank" rel="noopener noreferrer" class="rp-link">ZeroMQ Go 入口</a>、<a href="https://github.com/pebbe/zmq4" target="_blank" rel="noopener noreferrer" class="rp-link">pebbe/zmq4 仓库</a>。</p>
+<p>ZeroMQ 的 CURVE 机制提供认证与保密能力，但项目仍需配置可信身份和密钥生命周期。<a href="https://libzmq.readthedocs.io/en/latest/zmq_curve.html" target="_blank" rel="noopener noreferrer" class="rp-link">CURVE 说明</a>。库能够提供传输能力，不意味着相关运维工作可以省略。</p>
+<p>PUB 端发送成功不能作为每位订阅者收到消息的指标，因此丢失与陈旧检测主要通过接收端版本、新鲜度及对账统计完成。无消息时也应通过周期检查识别失联。</p>
+<h2 class="rp-toc-include" id="8-重新评估的触发条件与验证计划"><a href="#8-重新评估的触发条件与验证计划" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8. 重新评估的触发条件与验证计划</h2>
+<h3 class="rp-toc-include" id="81-先补齐现场输入"><a href="#81-先补齐现场输入" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.1 先补齐现场输入</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>输入</th><th>用途</th></tr></thead><tbody><tr><td>设备、通道、测点数及各类采样频率</td><td>计算持续与峰值样本率</td></tr><tr><td>单条/批量消息字节数与消费者数量</td><td>估算序列化、分发及内存负载</td></tr><tr><td>数据可见延迟、控制完成延迟、新鲜度要求</td><td>分别定义 p95/p99 目标，避免混用</td></tr><tr><td>最大中断时长、允许丢弃的数据类型</td><td>确定内存缓冲与 Streams 容量、已投递事件回放与副本恢复边界</td></tr><tr><td>目标 ARM CPU、内存、磁盘与网络</td><td>在实际资源约束下验证收益</td></tr><tr><td>故障恢复时间与运维能力</td><td>判断新增通信组件能否长期维护</td></tr></tbody></table></div>
+<p>用于估算的量：<code>样本率 = Σ(测点数 × 采样频率)</code>；<code>载荷字节率 ≈ 样本率 × 平均样本字节数</code>。批量消息还要计入包头、批次等待和每个接收者的传输副本。缓冲/积压载荷可按字节率乘中断时长估算，Streams 实占另加索引、元数据和余量；进程内缓冲不能替代持久存储；这些公式不代表任何中间件的实测容量。</p>
+<h3 class="rp-toc-include" id="82-何时值得做原型"><a href="#82-何时值得做原型" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.2 何时值得做原型</h3>
+<p>同时满足下列条件才进入试点：</p>
+<ul>
+<li>已定义的业务延迟或资源预算不达标，并通过分段测量确认通信/分发是主要瓶颈。</li>
+<li>已评估批量、序列化、消费者并发、Redis 状态与事件负载隔离等基线优化，仍有明确缺口。</li>
+<li>存在可以单独评估的路径，数据丢弃与恢复语义已明确；收益不依赖取消必须的审计或持久化。</li>
+<li>团队可以维护该路径的依赖、监控和回退，并愿意以实际收益决定是否采用。</li>
+</ul>
+<p>例如，“高频诊断视图的 p99 数据年龄持续超过已约定目标，且主要时间消耗在当前分发路径”是有效触发条件。“进程超过四个”或“ZeroMQ 宣称高性能”不足以构成依据。</p>
+<h3 class="rp-toc-include" id="83-公平的比较方法"><a href="#83-公平的比较方法" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.3 公平的比较方法</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>项目</th><th>验证要求</th></tr></thead><tbody><tr><td>基线与候选</td><td>A 为当前目标路径；B 为优化后的基线；C 为保留可靠路径并开启 ZeroMQ 副本；必要时加入 gRPC streaming 对照</td></tr><tr><td>控制变量</td><td>同一设备或同规格 ARM 主机、编码、消息大小、批量等待、消费者数、持久化和安全配置</td></tr><tr><td>负载</td><td>现场持续负载、峰值突发、慢消费者，以及主业务与副本同时运行</td></tr><tr><td>分段时间</td><td>采集完成、入队、发布、接收、业务处理、设备协议确认/回读；明确每个指标起止点</td></tr><tr><td>时钟</td><td>同机用可比较的单调时钟；跨机量化同步误差，不能把未校准的时间差当精确单向延迟</td></tr><tr><td>资源</td><td>全系统 CPU、RSS、网络、磁盘、应用积压，以及对可靠通道的影响</td></tr><tr><td>数据结果</td><td>有效样本数、缺口、重复、陈旧比例、重同步耗时、可靠事件最终对账</td></tr></tbody></table></div>
+<p>不能用无持久化的 ZeroMQ 吞吐直接对比含磁盘确认的可靠事件路径。必须在同一业务语义下比较。也不能只报告成功收到的消息延迟而隐藏丢弃数量。</p>
+<p>故障验证至少包括生产者/消费者重启、订阅者晚加入、持续慢消费、达到队列上限、网络中断与恢复、Redis 快照暂不可用，以及进程带未发送消息退出。副本允许丢帧，但要能发现陈旧并恢复最新视图；可靠通道仍须按原验收标准核对数据。</p>
+<h3 class="rp-toc-include" id="84-采用或退出的标准"><a href="#84-采用或退出的标准" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.4 采用或退出的标准</h3>
+<p>试验前填写数据可见延迟、新鲜度、CPU/RSS、恢复时间、可靠路径退化上限及最小有意义收益的具体数值。本文不虚构尚未确认的现场指标。</p>
+<p>只有候选方案在重复测试中达到既定目标、收益足以覆盖维护成本、故障恢复可重复通过，并且不破坏可靠路径预算时，才把该局部路径写入正式架构决策。若基线优化已达标、收益来自不同编码/持久化条件，或恢复与维护成本过高，则结束试点并保留原方案。</p>
+<h2 class="rp-toc-include" id="9-当前工程决策记录"><a href="#9-当前工程决策记录" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9. 当前工程决策记录</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>项目</th><th>决策</th></tr></thead><tbody><tr><td>是否加入首期依赖</td><td>否</td></tr><tr><td>是否替换 Redis、Streams 或 gRPC</td><td>否</td></tr><tr><td>是否增加控制直连路径</td><td>否</td></tr><tr><td>保留的候选方向</td><td>有明确瓶颈的高频诊断/可视化副本</td></tr><tr><td>下一步</td><td>先落实当前通信契约与可靠路径，采集现场规模和分段性能数据</td></tr><tr><td>本次产出</td><td>独立评估文档及导航入口；未实现原型、安装依赖或运行基准</td></tr></tbody></table></div>
+<p>官方资料访问日期为 2026-09-13。本文引用的 latest 文档用于能力核实；正式集成时应固定库和绑定版本，重新验证所用 API、构建选项及平台支持。</p><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/decisions/zeromq-assessment.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/10/20 23:17:14</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/decisions/drogon-web" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>Web 后端采用 Drogon</span></span></a><div class="rp-prev-next-page__placeholder"></div></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#1-结论与适用条件" class="rp-toc-item rp-link" title="1. 结论与适用条件" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">1. 结论与适用条件</span></a><a href="#2-当前架构中的通信需求" class="rp-toc-item rp-link" title="2. 当前架构中的通信需求" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">2. 当前架构中的通信需求</span></a><a href="#3-zeromq-能力与保证边界" class="rp-toc-item rp-link" title="3. ZeroMQ 能力与保证边界" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">3. ZeroMQ 能力与保证边界</span></a><a href="#31-定位与可能收益" class="rp-toc-item rp-link" title="3.1 定位与可能收益" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.1 定位与可能收益</span></a><a href="#32-发送成功与持久化" class="rp-toc-item rp-link" title="3.2 发送成功与持久化" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.2 发送成功与持久化</span></a><a href="#33-消息模式影响丢弃与阻塞" class="rp-toc-item rp-link" title="3.3 消息模式影响丢弃与阻塞" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.3 消息模式影响丢弃与阻塞</span></a><a href="#34-线程传输与参数" class="rp-toc-item rp-link" title="3.4 线程、传输与参数" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.4 线程、传输与参数</span></a><a href="#4-与现有技术的关系" class="rp-toc-item rp-link" title="4. 与现有技术的关系" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">4. 与现有技术的关系</span></a><a href="#5-各候选方案的必要性" class="rp-toc-item rp-link" title="5. 各候选方案的必要性" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">5. 各候选方案的必要性</span></a><a href="#51-替换-redis-共享状态不建议" class="rp-toc-item rp-link" title="5.1 替换 Redis 共享状态：不建议" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.1 替换 Redis 共享状态：不建议</span></a><a href="#52-替换-streams-历史与告警通道不建议" class="rp-toc-item rp-link" title="5.2 替换 Streams 历史与告警通道：不建议" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.2 替换 Streams 历史与告警通道：不建议</span></a><a href="#53-增加策略到采集的控制直连首期不建议" class="rp-toc-item rp-link" title="5.3 增加策略到采集的控制直连：首期不建议" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.3 增加策略到采集的控制直连：首期不建议</span></a><a href="#54-替换-go--存储-grpc不建议" class="rp-toc-item rp-link" title="5.4 替换 Go → 存储 gRPC：不建议" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.4 替换 Go → 存储 gRPC：不建议</span></a><a href="#55-替换进程内队列暂不建议" class="rp-toc-item rp-link" title="5.5 替换进程内队列：暂不建议" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.5 替换进程内队列：暂不建议</span></a><a href="#56-高频诊断或可视化副本可作为后续验证对象" class="rp-toc-item rp-link" title="5.6 高频诊断或可视化副本：可作为后续验证对象" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.6 高频诊断或可视化副本：可作为后续验证对象</span></a><a href="#6-如需试点建议的最小边界" class="rp-toc-item rp-link" title="6. 如需试点，建议的最小边界" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">6. 如需试点，建议的最小边界</span></a><a href="#7-依赖与维护成本" class="rp-toc-item rp-link" title="7. 依赖与维护成本" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">7. 依赖与维护成本</span></a><a href="#8-重新评估的触发条件与验证计划" class="rp-toc-item rp-link" title="8. 重新评估的触发条件与验证计划" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">8. 重新评估的触发条件与验证计划</span></a><a href="#81-先补齐现场输入" class="rp-toc-item rp-link" title="8.1 先补齐现场输入" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.1 先补齐现场输入</span></a><a href="#82-何时值得做原型" class="rp-toc-item rp-link" title="8.2 何时值得做原型" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.2 何时值得做原型</span></a><a href="#83-公平的比较方法" class="rp-toc-item rp-link" title="8.3 公平的比较方法" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.3 公平的比较方法</span></a><a href="#84-采用或退出的标准" class="rp-toc-item rp-link" title="8.4 采用或退出的标准" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.4 采用或退出的标准</span></a><a href="#9-当前工程决策记录" class="rp-toc-item rp-link" title="9. 当前工程决策记录" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">9. 当前工程决策记录</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/decisions/zeromq-assessment.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+    <div id="__rspress_modal_container"></div>
+  </body>
+</html>

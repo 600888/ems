@@ -1,0 +1,958 @@
+<!doctype html>
+<html lang="zh">
+  <head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>公共模块设计与实施规范 - EMS 设计文档</title>
+<script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
+<link href="/ems/static/css/styles.3c463aa6ae.css" rel="stylesheet">
+<link rel="preload" href="/ems/static/js/async/route-8b9e75e7d2f0.7b9fa5c2e0.js" as="script">
+<script defer src="/ems/static/js/styles.560b9eab4d.js"></script>
+<script defer src="/ems/static/js/lib-react.0685ac4d75.js"></script>
+<script defer src="/ems/static/js/lib-router.de7486675c.js"></script>
+<script defer src="/ems/static/js/m3.da04ef77ed.js"></script>
+<script defer src="/ems/static/js/index.1377de6962.js"></script>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Rspress v2.0.21">
+<link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="公共模块设计与实施规范 - EMS 设计文档">
+<meta name="description" content="版本：1.2｜日期：2026-09-29｜状态：目标设计，部分模块已实现，其他部分待迁移与验收。 范围：C++17 公共库、跨进程与前后端数据契约及其与采集、协议、历史、存储、Web、策略模块的边界。各节描述目标契约，实际落地范围以对应模块 README 和测试为准。">
+<meta property="og:description" content="版本：1.2｜日期：2026-09-29｜状态：目标设计，部分模块已实现，其他部分待迁移与验收。 范围：C++17 公共库、跨进程与前后端数据契约及其与采集、协议、历史、存储、Web、策略模块的边界。各节描述目标契约，实际落地范围以对应模块 README 和测试为准。"></head>
+
+  <body>
+    <div id="__rspress_root"><link rel="preload" as="image" href="/ems/logo.svg"/><header class="rp-nav"><div class="rp-nav__left"><div class="rp-nav__title"><a href="/ems/" class="rp-nav__title__link rp-link"><div class="rp-nav__title__logo"><img src="/ems/logo.svg" alt="logo" id="logo" class="rspress-logo rp-nav__title__logo-image"/></div><span>EMS</span></a></div><ul class="rp-nav-menu rp-nav-menu--left"><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/" class="rp-nav-menu__item__container rp-link">首页</a></li><li class="rp-nav-menu__item"><a href="/ems/architecture/" class="rp-nav-menu__item__container rp-link">架构</a></li><li class="rp-nav-menu__item"><a href="/ems/processes/" class="rp-nav-menu__item__container rp-link">进程</a></li><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/common/" class="rp-nav-menu__item__container rp-link">公共模块</a></li><li class="rp-nav-menu__item"><a href="/ems/decisions/" class="rp-nav-menu__item__container rp-link">技术决策</a></li><li class="rp-nav-menu__item"><a href="/ems/reference/" class="rp-nav-menu__item__container rp-link">开发参考</a></li><li class="rp-nav-menu__item"><a href="/ems/guide/" class="rp-nav-menu__item__container rp-link">文档维护</a></li></ul></div><div class="rp-nav__right"><button class="rp-search-button"><div class="rp-search-button__content"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21" class="rp-search-button__icon"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg><span class="rp-search-button__word">搜索</span></div><div class="rp-search-button__hotkey" style="opacity:0"><span></span><span>K</span></div></button><div class="rp-search-button--mobile"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg></div><div class="rp-nav__others"><div class="rp-nav-menu__divider"></div><div class="rp-switch-appearance"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="rp-switch-appearance__icon rp-switch-appearance__icon--sun"><path fill="currentColor" d="m7.001 15.848-1.226 1.226a.58.58 0 0 0 0 .818.58.58 0 0 0 .818 0l1.226-1.226a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0m-.352-8.735a.584.584 0 0 0 .825-.825L6.237 5.051a.584.584 0 0 0-.825.825zM5.011 11.07h-1.75a.584.584 0 0 0 0 1.167h1.75c.324 0 .584-.26.584-.583a.585.585 0 0 0-.584-.584m7.003-5.835c.324 0 .584-.26.584-.584V2.9a.58.58 0 0 0-.584-.584.58.58 0 0 0-.583.583V4.65c0 .323.262.584.583.584m5.616 1.621 1.226-1.225a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0l-1.226 1.225a.58.58 0 0 0 0 .818.576.576 0 0 0 .818 0m3.138 4.214h-1.75a.58.58 0 0 0-.584.584c0 .324.26.584.583.584h1.751a.584.584 0 1 0 0-1.167m-3.389 5.124a.584.584 0 0 0-.825.825l1.238 1.238a.584.584 0 0 0 .825-.826zm-5.365-9.795a5.256 5.256 0 0 0-5.257 5.258 5.256 5.256 0 0 0 5.257 5.257 5.256 5.256 0 0 0 5.257-5.257 5.256 5.256 0 0 0-5.257-5.258m0 11.675a.58.58 0 0 0-.583.583v1.751a.582.582 0 1 0 1.167 0v-1.75a.584.584 0 0 0-.584-.584"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="currentColor" viewBox="0 0 19 19" class="rp-switch-appearance__icon rp-switch-appearance__icon--moon"><path fill="currentColor" d="M9.166 0a9.2 9.2 0 0 1 1.857.188.834.834 0 0 1 .042 1.623 4.47 4.47 0 1 0 5.457 5.457l.048-.135a.834.834 0 0 1 1.575.177q.186.902.188 1.856A9.168 9.168 0 1 1 9.166 0"></path></svg></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__sm"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg></button><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__md"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"><div class="rp-nav-menu__others-mobile__container"><div class="rp-nav-hamburger__md__hover-group"><div class="rp-nav-screen-appearance"><div class="rp-nav-screen-appearance__left">主题</div><div class="rp-nav-screen-appearance__right"></div></div><div class="rp-nav-screen-divider"></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div></div></ul></button></div></header><div class="rp-doc-layout__menu"><div class="rp-sidebar-menu"><button type="button" class="rp-sidebar-menu__left"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M4 6h24v2H4zm0 18h24v2H4zm0-12h24v2H4zm0 6h24v2H4z"></path></svg><span>菜单</span></button><button type="button" class="rp-sidebar-menu__right"><span class="rp-sidebar-menu__right__text">目录</span><svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-sidebar-menu__right__icon" style="transform:rotate(0deg);transition:transform 0.2s ease-out"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button></div></div><div class="rp-doc-layout__container"><aside class="rp-doc-layout__sidebar rp-scrollbar"><a href="/ems/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">返回文档首页</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-divider" style="padding-left:12px"></div><div class="rp-sidebar-section-header"><div class="rp-sidebar-section-header__left"><span>公共模块</span></div><div class="rp-sidebar-section-header__right"></div></div><a href="/ems/common/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">公共模块概览</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/design" class="rp-sidebar-item rp-sidebar-item--active rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">公共模块设计与实施</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">实时数据访问</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/common/realtime/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">实时数据与配置</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/access-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">C++17 多后端访问接口</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/zeromq-messaging-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">ZeroMQ 消息与命令设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/redis-key-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">Redis 键设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div></aside><div class="rp-doc-layout__doc"><main class="rp-doc-layout__doc-container"><div class="rp-doc rspress-doc"><!--$--><h1 class="rp-toc-include" id="公共模块设计与实施规范"><a href="#公共模块设计与实施规范" class="rp-header-anchor rp-link" aria-hidden="true">#</a>公共模块设计与实施规范<!-- --> </h1>
+<blockquote>
+<p>版本：1.2｜日期：2026-09-29｜状态：目标设计，部分模块已实现，其他部分待迁移与验收。
+范围：C++17 公共库、跨进程与前后端数据契约及其与采集、协议、历史、存储、Web、策略模块的边界。各节描述目标契约，实际落地范围以对应模块 README 和测试为准。</p>
+</blockquote>
+<h2 class="rp-toc-include" id="1-设计决策与实施入口"><a href="#1-设计决策与实施入口" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1. 设计决策与实施入口</h2>
+<p>公共模块保存多个业务模块共同使用的模型、接口和基础能力。<strong>设备属于公共模块</strong>：设备身份、资产关系、标准点、能力及绑定由公共模型统一定义；设备连接、采集任务和控制决策分别由采集、协议和策略模块实现。</p>
+<p>后端按公共、采集、协议、历史数据、存储、Web、策略七个逻辑模块组织。逻辑模块不等于操作系统进程：仍按既有架构运行采集与上送、存储、策略和 Web 四类业务进程。历史模块与存储实现组装在存储进程内；公共模块不启动第五个业务进程。</p>
+<p>后续执行本设计时，按第 15 节顺序交付，每阶段满足第 16 节对应验收项后再扩大范围。不要一次性移动所有旧目录，也不要把本文件中的目标路径误认为已有实现。</p>
+<h3 class="rp-toc-include" id="11-权威文档及变更规则"><a href="#11-权威文档及变更规则" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1.1 权威文档及变更规则</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>主题</th><th>权威位置</th><th>本文负责内容</th></tr></thead><tbody><tr><td>进程、数据库、控制闭环</td><td><a href="/ems/architecture/system-design" class="rp-link">系统架构</a></td><td>公共模块如何支持这些职责</td></tr><tr><td>资产、设备、固有点、能力、点表</td><td><a href="/ems/architecture/device-model" class="rp-link">设备模型</a></td><td>C++ 模型归属、接口及迁移</td></tr><tr><td>通道、协议 profile、通信资源、绑定</td><td><a href="/ems/architecture/channel-protocol" class="rp-link">设备、通道与协议</a></td><td>公共定义与协议实现的分界</td></tr><tr><td>实时读写、CAS、共享内存和 Redis</td><td><a href="/ems/common/realtime/access-design" class="rp-link">实时访问接口</a></td><td>集成关系与公共类型复用</td></tr><tr><td>code、实时物理键与字段</td><td><a href="/ems/common/realtime/redis-key-design" class="rp-link">Redis 键设计</a></td><td>编码器与跨进程验证</td></tr><tr><td>公共目录、库依赖、配置/数据库/消息接口、实施验收</td><td>本文</td><td>公共模块实施基线</td></tr></tbody></table></div>
+<p>本文不另建设备点位目录、Redis 键规则或实时存储接口的副本。实现发现冲突时，先修订对应权威专题及受影响契约，再编码；不能在某个适配器里建立隐藏例外。</p>
+<h3 class="rp-toc-include" id="12-必须遵守的约束"><a href="#12-必须遵守的约束" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1.2 必须遵守的约束</h3>
+<ol>
+<li>公共模块不依赖 collector、protocol 的具体驱动、history、storage、strategy 或 web 的业务实现。</li>
+<li>公共设备模型不持有 socket、线程、数据库连接、协议句柄或策略对象。</li>
+<li>实时状态、配置、遥测接收和业务命令分别使用专门接口，不合并为万能数据库类。</li>
+<li>MySQL 为配置与业务数据权威源；Redis 默认只提供实时状态，ZeroMQ 承担发布订阅与命令交接。</li>
+<li>每个进程独立建立连接池与事务；同一业务写入及其 outbox 使用同一数据库连接的同一事务。</li>
+<li>公共库只定义控制意图、命令、回执的类型和持久化接口；策略负责仲裁，采集负责执行。写实时状态不能触发设备动作。</li>
+<li>各 C++ 进程共享 schema、样例和语义，不跨进程传递 C++ 内存布局、连接对象或虚函数 ABI；浏览器与后端使用版本化 JSON 契约。</li>
+<li>所有等待有期限，所有队列有容量，结果未知与明确未执行必须区分；禁止静默丢弃可靠数据。</li>
+</ol>
+<h2 class="rp-toc-include" id="2-职责边界"><a href="#2-职责边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2. 职责边界</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>子模块</th><th>公共职责</th><th>业务模块负责的部分</th></tr></thead><tbody><tr><td>core</td><td>错误、调用上下文、时间、稳定身份基础类型</td><td>业务错误的决策与恢复流程</td></tr><tr><td>model</td><td>资产/设备/测点/能力/绑定定义，纯模型校验</td><td>设备会话、调度、协议 I/O、控制算法</td></tr><tr><td>codec</td><td>模型与契约之间的显式编解码</td><td>厂家报文、寄存器字节序和协议帧解析</td></tr><tr><td>config</td><td>版本配置读取、快照校验、本地不可变视图</td><td>Web 编辑流程、存储进程发布编排、采集/策略应用</td></tr><tr><td>database</td><td>C++ MySQL 连接池、事务、共享配置/意图/命令/告警/outbox Repository</td><td>历史采样规则、报表、TDengine 实现、Drogon HTTP 层</td></tr><tr><td>realtime</td><td>类型化实时访问、来源防护、CAS 与后端实现</td><td>来源选主、设备级隔离、策略新鲜度处理决策</td></tr><tr><td>messaging</td><td>事件信封、ZeroMQ 遥测与变化提示、命令传输接口</td><td>业务处理、持久归档和故障处置</td></tr><tr><td>observability</td><td>结构化日志、指标接口、健康状态基础类型</td><td>各进程 HTTP/gRPC 健康端点及就绪判定</td></tr><tr><td>util</td><td>有明确复用场景的字符串、时间等小型纯函数</td><td>通用任务调度框架、任意杂项业务逻辑</td></tr></tbody></table></div>
+<p><code>database</code> 与顶层 <code>storage</code> 的边界：多个进程都使用的 MySQL 事务与共享 Repository 放公共模块；只服务历史归档的 TDengine 适配器放存储模块。<code>history</code> 定义历史采样、聚合、保留和查询语义，存储实现依赖其 Repository 接口。不要为了复用一个客户端，把历史业务整体放进 common。</p>
+<p>告警定义、告警事件数据类型可以共享，告警产生/恢复/确认的业务状态机归策略；权限上下文可以共享，Web 用户认证及权限管理归 Web；共享配置校验不替代请求鉴权。</p>
+<h2 class="rp-toc-include" id="3-工程目录与命名"><a href="#3-工程目录与命名" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3. 工程目录与命名</h2>
+<p>为减少无意义搬迁，采用仓库现有的 <code>backend/include</code> 与 <code>backend/src</code> 分离方式。逻辑上的 <code>common/model</code> 对应下面的公共头文件和实现目录，不另外创建与其竞争的 <code>backend/common</code>。</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>backend/</span></span>
+<span class="line"><span>  include/</span></span>
+<span class="line"><span>    common/</span></span>
+<span class="line"><span>      core/                  # result.h、call_context.h、identity.h、time.h</span></span>
+<span class="line"><span>      model/                 # asset.h、device.h、point.h、channel.h、binding.h</span></span>
+<span class="line"><span>                             # capability.h、command.h、alarm.h、validation.h</span></span>
+<span class="line"><span>      codec/                 # model_codec.h、event_codec.h</span></span>
+<span class="line"><span>      config/                # config_snapshot.h、i_config_provider.h</span></span>
+<span class="line"><span>                             # i_config_snapshot_store.h、config_validator.h</span></span>
+<span class="line"><span>      database/              # i_database.h、i_transaction.h、repositories/</span></span>
+<span class="line"><span>      messaging/             # event.h、ZeroMQ 通道接口与编码</span></span>
+<span class="line"><span>      observability/         # logger.h、metrics.h、health.h</span></span>
+<span class="line"><span>      util/</span></span>
+<span class="line"><span>    realtime/                # 沿用实时专题规划的公开路径</span></span>
+<span class="line"><span>  src/common/</span></span>
+<span class="line"><span>    core/</span></span>
+<span class="line"><span>    model/</span></span>
+<span class="line"><span>    codec/</span></span>
+<span class="line"><span>    config/</span></span>
+<span class="line"><span>    db/                      # 沿用现有实现目录；公开 API 位于 common/database</span></span>
+<span class="line"><span>      mysql/                 # ormpp、行实体、迁移映射私有实现</span></span>
+<span class="line"><span>    realtime/                # core、factory、backends/redis、backends/shm</span></span>
+<span class="line"><span>    messaging/zmq_change_channel.cpp</span></span>
+<span class="line"><span>    observability/</span></span>
+<span class="line"><span>    util/</span></span>
+<span class="line"><span>  src/web/                  # Drogon Controller、Filter、Web Service；复用公共 Repository</span></span>
+<span class="line"><span>  apps/                      # 各 C++ 进程入口和依赖组装，按实施阶段建立</span></span>
+<span class="line"><span>  tests/common/              # model、codec、config、database、messaging</span></span>
+<span class="line"><span>  tests/realtime/            # 沿用实时专题的契约及多进程测试目录</span></span>
+<span class="line"><span>contracts/                   # 仓库根目录，供各 C++ 进程与前端共同使用</span></span>
+<span class="line"><span>  proto/                     # gRPC 与类型定义</span></span>
+<span class="line"><span>  jsonschema/                # 配置、事件和 JSON 映射约束</span></span>
+<span class="line"><span>  fixtures/                  # 有效、无效、兼容版本及边界样例</span></span>
+<span class="line"><span>  realtime/                  # 实时字段与逻辑键黄金样例，引用统一 schema</span></span>
+<span class="line"><span>  compatibility.md           # 当前支持的 schema 范围及兼容策略</span></span>
+<span class="line"><span>deploy/migrations/mysql/     # 唯一一套按版本执行的数据库迁移</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>命名空间采用 <code>ems::core</code>、<code>ems::model</code>、<code>ems::codec</code>、<code>ems::config</code>、<code>ems::database</code>、<code>ems::messaging</code>、<code>ems::observability</code>；实时保持 <code>ems::realtime</code>。类型用 PascalCase，字段与公开方法用 lower_snake_case；实时专题已定义的 camelCase 方法保留，不为风格统一另造一套接口。</p>
+<p>新代码包含 <code>&lt;common/model/device.h&gt;</code> 等公共路径。旧 <code>models/</code>、<code>db/</code>、<code>rtdb/</code> 头文件仅可作为阶段性转接；转接不能重新声明不同语义的同名模型。</p>
+<h2 class="rp-toc-include" id="4-编译目标与依赖方向"><a href="#4-编译目标与依赖方向" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4. 编译目标与依赖方向</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>Target</th><th>内容</th><th>允许的主要依赖</th></tr></thead><tbody><tr><td>ems_common_core</td><td>结果、上下文、身份、基础时间</td><td>C++17 标准库</td></tr><tr><td>ems_common_model</td><td>共享模型与纯校验</td><td>core</td></tr><tr><td>ems_common_codec</td><td>契约编解码与精度检查</td><td>model，私有 JSON/Protobuf 实现</td></tr><tr><td>ems_config_api / ems_config_core</td><td>配置接口、加载与校验</td><td>model、codec；通过接口注入配置来源</td></tr><tr><td>ems_database_api / ems_database_mysql</td><td>Repository/事务接口及 ormpp 实现</td><td>model、core；MySQL/ormpp 仅实现侧</td></tr><tr><td>ems_config_redis / ems_config_mysql</td><td>快照适配及权威版本读取</td><td>config_api、codec；各自数据库客户端</td></tr><tr><td>ems_realtime_api / ems_realtime_core</td><td>实时接口与业务门面</td><td>core、model、config_api</td></tr><tr><td>ems_realtime_redis / ems_realtime_shm</td><td>实时后端</td><td>realtime_api，私有平台或数据库依赖</td></tr><tr><td>ems_messaging_api / ems_zmq_messaging</td><td>事件信封及 ZeroMQ 传输</td><td>model、core；codec/ZeroMQ 仅实现侧</td></tr><tr><td>ems_observability</td><td>日志、指标、健康基础能力</td><td>core，复用现有 spdlog 封装</td></tr><tr><td>ems_web</td><td>Drogon Controller、Filter 与 Web Service</td><td>公共 model/database/config API、Drogon；HTTP 层不进入公共库</td></tr></tbody></table></div>
+<p>上表是目标拆分，不要求每项产出动态库。纯头接口使用 INTERFACE target，普通公共实现首期优先静态链接；已有 <code>ems_db</code> 如需过渡，可作为兼容 target 转发，移除旧实现重复编译。同一程序不得同时链接两套数据库或模型实现。</p>
+<p>业务模块链接需要的 API/core，由进程入口链接并注入具体后端。工厂显式注册后冻结；没有编译的后端被配置选中时启动失败，不能悄悄替换成其他后端。不要用一个 <code>ems_common</code> 聚合 target 强迫协议插件链接 MySQL、Redis 与全部公共能力。</p>
+<p>自研目标设置 <code>CXX_STANDARD 17</code>、<code>CXX_STANDARD_REQUIRED YES</code>、<code>CXX_EXTENSIONS NO</code>。每个公开头文件必须可独立包含；model/core 的最小构建不要求安装 Redis、MySQL 或 TDengine。第三方包含路径不能统一 PUBLIC 暴露到所有业务 target。</p>
+<p>C++ 虚函数和 STL 接口用于同一构建工具链内的库。协议动态插件继续使用版本化 C ABI；跨进程使用消息/gRPC；共享内存采用实时专题规定的布局。三者均不能直接传递本文中的 C++ 对象。</p>
+<h2 class="rp-toc-include" id="5-基础类型结果与时间"><a href="#5-基础类型结果与时间" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5. 基础类型、结果与时间</h2>
+<h3 class="rp-toc-include" id="51-共享结果类型"><a href="#51-共享结果类型" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.1 共享结果类型</h3>
+<p>将实时专题第 5 节已经定义的结果/上下文类型提升为 <code>ems::core</code>，字段与语义保持一致。在 <code>ems::realtime</code> 中使用类型别名，避免出现两个不能互换的 <code>Error</code>。其他公共模块复用同一基础结果模型。</p>
+<p>以下为可独立通过 C++17 语法检查的头文件草案；正式实施时拆为 <code>result.h</code> 与 <code>call_context.h</code>，不表示已有库实现。</p>
+<div class="rp-codeblock language-cpp"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="cpp"><code><span class="line"><span style="color:var(--shiki-token-keyword)">#pragma</span><span style="color:var(--shiki-token-function)"> once</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">#include</span><span style="color:var(--shiki-token-string-expression)"> &lt;chrono&gt;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">#include</span><span style="color:var(--shiki-token-string-expression)"> &lt;string&gt;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">#include</span><span style="color:var(--shiki-token-string-expression)"> &lt;variant&gt;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">namespace</span><span style="color:var(--shiki-foreground)"> ems</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-foreground)">core {</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">enum</span><span style="color:var(--shiki-token-keyword)"> class</span><span style="color:var(--shiki-token-function)"> ErrorCode</span><span style="color:var(--shiki-foreground)"> {</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    InvalidArgument</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> NotFound</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Conflict</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> PermissionDenied</span><span style="color:var(--shiki-token-punctuation)">,</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    NotReady</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Unavailable</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> DeadlineExceeded</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> ResourceExhausted</span><span style="color:var(--shiki-token-punctuation)">,</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    Unsupported</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> SchemaMismatch</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> CorruptData</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Internal</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">};</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">enum</span><span style="color:var(--shiki-token-keyword)"> class</span><span style="color:var(--shiki-token-function)"> WriteEffect</span><span style="color:var(--shiki-foreground)"> { NotApplicable</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> NotApplied</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-foreground)"> Unknown };</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> Error</span><span style="color:var(--shiki-foreground)"> {</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">    ErrorCode</span><span style="color:var(--shiki-foreground)"> code;</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">    WriteEffect</span><span style="color:var(--shiki-foreground)"> effect;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> message;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">};</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">template</span><span style="color:var(--shiki-foreground)">&lt;</span><span style="color:var(--shiki-token-keyword)">class</span><span style="color:var(--shiki-token-function)"> T</span><span style="color:var(--shiki-foreground)">&gt; </span><span style="color:var(--shiki-token-keyword)">using</span><span style="color:var(--shiki-token-function)"> Result</span><span style="color:var(--shiki-token-keyword)"> =</span><span style="color:var(--shiki-foreground)"> std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">variant</span><span style="color:var(--shiki-foreground)">&lt;</span><span style="color:var(--shiki-token-function)">T</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-token-function)"> Error</span><span style="color:var(--shiki-foreground)">&gt;;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> Unit</span><span style="color:var(--shiki-foreground)"> {};</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">using</span><span style="color:var(--shiki-token-function)"> Status</span><span style="color:var(--shiki-token-keyword)"> =</span><span style="color:var(--shiki-token-function)"> Result</span><span style="color:var(--shiki-foreground)">&lt;</span><span style="color:var(--shiki-token-function)">Unit</span><span style="color:var(--shiki-foreground)">&gt;;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">using</span><span style="color:var(--shiki-token-function)"> Deadline</span><span style="color:var(--shiki-token-keyword)"> =</span><span style="color:var(--shiki-foreground)"> std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-foreground)">chrono</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-foreground)">steady_clock</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">time_point</span><span style="color:var(--shiki-foreground)">;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> CallContext</span><span style="color:var(--shiki-foreground)"> {</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">    Deadline</span><span style="color:var(--shiki-foreground)"> deadline;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">string</span><span style="color:var(--shiki-foreground)"> trace_id;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">};</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">}</span><span style="color:var(--shiki-token-comment)"> // namespace ems::core</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>成功只通过返回值/Receipt 表达；<code>WriteEffect</code> 是失败时的确定性：读取失败为 NotApplicable；能证明没有修改为 NotApplied；可能提交但未收到响应为 Unknown。事务提交、事件发布均遵守此规则。不得把“网络超时”统一映射为“可以重试”。</p>
+<p>外部库异常在适配器边界转换为结果；不跨插件或线程边界传播异常。<code>message</code> 只作脱敏诊断，不作为业务分支依据。不在公共层返回 HTTP 状态码，Web 再映射。</p>
+<h3 class="rp-toc-include" id="52-身份与序列"><a href="#52-身份与序列" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.2 身份与序列</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>类型/字段</th><th>约定</th></tr></thead><tbody><tr><td>StationId、AssetId、DeviceId、PointId 等</td><td>使用独立强类型包装稳定 ID 文本；旧数字 ID 转十进制文本，迁移不重新编号</td></tr><tr><td>code</td><td>可读业务编码，格式、保留字、作用域和改名规则引用 Redis 键专题；不是显示名称</td></tr><tr><td>ConfigVersion</td><td>不可变配置版本标识，只比较相等；并发发布通过独立 activation revision 条件更新</td></tr><tr><td>revision</td><td>实时记录 CAS 不透明令牌，禁止当序号排序</td></tr><tr><td>source_epoch、owner_epoch</td><td>分别表示样本来源授权代次、控制所有权代次，不可互换</td></tr><tr><td>sequence</td><td>同一已授权来源代次内递增的 uint64；换来源不能直接比较序号</td></tr><tr><td>event_id、intent_id、command_id</td><td>生产者在持久受理/事件投递前生成，重试保持不变，数据库唯一约束兜底</td></tr></tbody></table></div>
+<p>新增数据库 ID 由统一 ID 分配策略产生，禁止进程各自从 1 计数；首期可使用 MySQL 权威表分配数字 ID。离线生成的事件/命令 ID 使用有碰撞检查的 UUID 文本。ID 内容不用于推导类型、权限或设备层级。</p>
+<h3 class="rp-toc-include" id="53-值质量与时间"><a href="#53-值质量与时间" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.3 值、质量与时间</h3>
+<p><code>PointValue</code> 使用 <code>std::variant&lt;bool, int64_t, uint64_t, double, std::string&gt;</code>，外层 optional 表示无值。类型、单位和质量由模型定义，编码器校验类型和值的组合；禁止将所有值转 double，禁止 NaN/Inf。枚举状态使用版本化码表，未知码保留原码并标记不确定，不能默认正常。</p>
+<p><code>quality</code> 沿用契约中的稳定码表，附带可选原因；<code>stale</code> 根据采样时间、新鲜度期限和时钟质量计算。配置禁用、配置未绑定、通信离线、值无效、值陈旧是不同概念，不能折叠成一个 bool。旧代码的 <code>DataQuality</code>、<code>PointQuality</code> 必须建立明确转换表后迁移。</p>
+<p>业务时间统一为 UTC Unix 微秒 int64。持久事件分别保存源时间、接收时间；源时间缺失时采用接收时间并保留缺失原因。进程内超时使用 steady clock；序列化只传业务时间或剩余预算，不能发送 steady_clock 的绝对数值。所有 64 位整数/ID 在 JSON 中使用十进制字符串；Protobuf 按明确字段类型映射，Web 到浏览器仍保持无损编码。</p>
+<h2 class="rp-toc-include" id="6-设备与其他公共模型"><a href="#6-设备与其他公共模型" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6. 设备与其他公共模型</h2>
+<h3 class="rp-toc-include" id="61-模型集合"><a href="#61-模型集合" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.1 模型集合</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>模型</th><th>必需内容</th><th>归属与限制</th></tr></thead><tbody><tr><td>AssetNode</td><td>asset_id、station_id、parent_asset_id、code、name、asset_type</td><td>唯一主要父节点，无环，不能跨站挂接</td></tr><tr><td>Station / EssUnit</td><td>对应 asset_id；站时区/接入点；单元额定能力</td><td>单元是调度资源，不固定等同一柜一 PCS</td></tr><tr><td>Device</td><td>device_id、asset_id、type_version_id、model_version_id、厂家/固件信息</td><td>code 从资产节点解析；不维护另一棵通道对象树</td></tr><tr><td>DeviceTypeDefinition</td><td>类型版本、标准点目录、能力依赖</td><td>PCS/BMS/电表等目录引用设备模型专题</td></tr><tr><td>StandardPointDefinition / Point</td><td>标准语义、值类型、单位、点种类；实例 point_id、asset_id、状态</td><td>telemetry/status/event/command 分开；命令和反馈分点</td></tr><tr><td>CapabilityDefinition</td><td>capability_code、所需点/反馈、参数及单位约束</td><td>表达配置能力，不保证当前允许执行</td></tr><tr><td>ChannelConfig / ProtocolProfileRef</td><td>通道身份、purpose、role、connection_mode、profile 版本、资源引用</td><td>不持有运行 session；资源和协议角色独立</td></tr><tr><td>DeviceChannelBinding</td><td>设备/通道引用、操作集合、版本、设备协议地址</td><td>多对多；共享总线地址属于绑定，不属于设备全局属性</td></tr><tr><td>VendorPointRoute / PointBinding</td><td>厂家点身份、南向路由、逻辑转换和绑定角色</td><td>标准点身份独立于通信路径</td></tr><tr><td>ForwardingPointMap</td><td>标准点到北向协议地址及方向映射</td><td>与南向厂家点路由分开</td></tr><tr><td>DeviceState / ChannelState / UnitState</td><td>时间、质量、版本及类型化状态字段</td><td>可复制运行快照，不是执行对象</td></tr><tr><td>ControlIntent / Command / CommandResult</td><td>稳定身份、目标能力、期限、配置/所有权、审计上下文</td><td>状态值沿用系统架构；无执行方法</td></tr><tr><td>AlarmDefinition / AlarmEvent</td><td>规则引用、资产、发生/恢复/确认事件和版本</td><td>状态机与规则引擎在策略模块</td></tr></tbody></table></div>
+<p>资产关系和电气拓扑使用独立模型，不能把所有关系都压到 parent_asset_id。电池部件可以有测点而没有独立通信设备。标准采样引用逻辑 point_id；厂家原始值只作为明确的诊断载荷，不能污染标准单位/符号。</p>
+<h3 class="rp-toc-include" id="62-静态配置快照与执行对象分离"><a href="#62-静态配置快照与执行对象分离" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.2 静态配置、快照与执行对象分离</h3>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>Device / DeviceConfig       -&gt; 公共模型：身份和版本化定义</span></span>
+<span class="line"><span>DeviceState                 -&gt; 公共模型：某时刻的状态数据</span></span>
+<span class="line"><span>DeviceSession/ChannelWorker -&gt; 采集模块：任务、连接生命周期、运行资源</span></span>
+<span class="line"><span>ProtocolHandler             -&gt; 协议模块：协议事务和报文</span></span>
+<span class="line"><span>UnitController              -&gt; 策略模块：约束与控制决策</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>公共模型采用值对象、稳定 ID 引用和只读集合，不用双向 shared_ptr 拼出可变对象图。聚合配置在构建时建立索引，发布后通过 <code>shared_ptr&lt;const ConfigSnapshot&gt;</code> 共享；读取者持有旧版本期间旧对象保持有效。</p>
+<p>模型不继承强制 <code>to_json/from_json</code> 的基类，序列化由 codec 承担；不带 ORM 注解或数据库连接方法。数据库行实体可以与模型不同，但必须通过显式映射函数转换，不能让业务使用表字段作为协议配置。</p>
+<p>设备业务类型目录可由 <code>DeviceModel</code> 基类与 PCS/BMS/消防子类生成；基类只持有类型标识、版本和名称，类型专有的固有点与能力保留在子类。生成后的 <code>DeviceTypeDefinition</code> 及实例 <code>Device</code> 仍是上述快照中的值对象，不能把多态对象或协议连接放入跨进程契约。</p>
+<h3 class="rp-toc-include" id="63-查询与校验接口"><a href="#63-查询与校验接口" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.3 查询与校验接口</h3>
+<p>首期不增加万能 <code>DeviceManager</code>。只读 <code>ModelView</code> 从固定版本快照提供下列操作，全部为内存操作：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>操作</th><th>输入与输出</th><th>失败语义</th></tr></thead><tbody><tr><td>find_device</td><td>device_id → Device 或 NotFound</td><td>不隐式查询数据库补齐</td></tr><tr><td>find_point</td><td>point_id → Point 或 NotFound</td><td>不以 point_code 跨设备查找</td></tr><tr><td>list_bindings</td><td>device_id、operation → 对应绑定列表</td><td>空列表表示无此操作绑定</td></tr><tr><td>resolve_capability</td><td>device_id、capability_code → 启用点、命令与反馈定义</td><td>缺失/禁用依赖给出明确原因</td></tr><tr><td>validate_snapshot</td><td>完整候选配置 → ValidationReport</td><td>聚合有上限的字段错误，不返回首个 bool</td></tr></tbody></table></div>
+<p><code>ValidationIssue</code> 至少含稳定错误码、对象 ID、字段路径、原因；<code>ValidationReport</code> 含 issues 和 truncated。校验覆盖身份唯一、资产无环、引用存在、类型/单位、范围、设备/通道多对多、协议声明操作能力、主来源唯一、命令反馈依赖和版本闭合。协议专有配置由受控 schema/校验器验证；通过静态校验不等于驱动已完成现场能力验收。</p>
+<h2 class="rp-toc-include" id="7-配置访问与版本生效"><a href="#7-配置访问与版本生效" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7. 配置访问与版本生效</h2>
+<h3 class="rp-toc-include" id="71-三种配置"><a href="#71-三种配置" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.1 三种配置</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>类别</th><th>来源</th><th>生命周期</th></tr></thead><tbody><tr><td>进程部署配置</td><td>配置文件 + 明确允许的环境变量覆盖</td><td>决定后端、端点、实例身份、队列/池预算；连接/后端变更走受控重启</td></tr><tr><td>业务权威配置</td><td>MySQL 不可变版本及 active 发布元数据</td><td>Web 或其他职责内模块经公共 C++ Repository 按权限修改</td></tr><tr><td>运行快照</td><td>Redis 不可变完整快照 + 进程本地只读对象</td><td>按精确版本加载、校验、应用，不做权威编辑</td></tr></tbody></table></div>
+<p>部署配置解析优先级为显式启动参数 &gt; 白名单环境变量 &gt; 指定配置文件 &gt; 非敏感默认值。缺失密码/密钥不能回落到示例凭据；schema、容量和超时不合法时启动失败。业务配置版本不受环境变量局部覆盖。</p>
+<h3 class="rp-toc-include" id="72-接口责任"><a href="#72-接口责任" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.2 接口责任</h3>
+<p>以下表格固定接口行为；参数类在对应公开头文件中实现，不能用任意 JSON 字符串代替类型化业务接口。全部 I/O 方法接收 <code>CallContext</code>，结果使用第 5 节 <code>Result&lt;T&gt;</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>接口/方法</th><th>输入</th><th>输出与保证</th></tr></thead><tbody><tr><td>IConfigProvider::load_version</td><td>scope、config_version</td><td>完整只读快照；缺失时仅回源同一版本 MySQL</td></tr><tr><td>IConfigProvider::load_active</td><td>scope</td><td>带 activation revision 的 active 清单及其精确版本快照</td></tr><tr><td>IConfigSnapshotStore::get</td><td>scope、version</td><td>原始不可变快照与 checksum</td></tr><tr><td>IConfigSnapshotStore::put_if_absent</td><td>scope、version、bytes、checksum</td><td>同版本同内容幂等；同版本不同内容 Conflict</td></tr><tr><td>IConfigSnapshotStore::activate</td><td>scope、version、expected_activation_revision</td><td>条件切换 active；并发冲突不能后写覆盖</td></tr><tr><td>ConfigValidator::validate</td><td>候选完整快照</td><td>ValidationReport；不执行设备 I/O</td></tr><tr><td>IConfigApplyReporter::report</td><td>instance_id、scope、version、状态、原因</td><td>写入该实例应用报告；不是全系统应用成功</td></tr></tbody></table></div>
+<p>快照封套包含 schema_version、scope、config_version、generated_at、checksum 及引用清单。checksum 采用 SHA-256，计算对象是封套之外的实际 payload UTF-8 字节；发布者保存并发送同一份字节，读取者先校验原字节再解析，不能先重排 JSON 再算校验和。数据库必须能读取同版本发布载荷或按版本化确定性编码规则重建完全一致的字节。哈希用于完整性检查，不替代访问控制。</p>
+<p>同一 scope 的 active 清单原子切换；跨 scope 保存显式版本清单，不承诺跨站/跨单元原子生效。消费者对一次操作固定快照，禁止处理中途拼接另一版本的绑定或能力。</p>
+<h3 class="rp-toc-include" id="73-发布与应用流程"><a href="#73-发布与应用流程" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.3 发布与应用流程</h3>
+<ol>
+<li>Web/C++ 业务服务校验候选配置，在同一 MySQL 事务内保存不可变版本、发布请求/outbox，并检查编辑基版本。</li>
+<li>存储进程发布器读取已提交事件，生成/读取并持久记录发布载荷，写不可变快照，条件切换 active，再发布版本变化事件。请求携带前置 activation revision；重复请求已切到自身目标时视为已完成，过时请求不能覆盖较新发布。</li>
+<li>采集/策略收到通知或定期对账后，按精确版本加载并校验完整快照；Redis 缺失时回源该版本，不能改读“最新”。</li>
+<li>业务模块准备资源，在安全边界切换本地配置引用，并安装对应来源/配置授权；分别报告 loaded、applied 或 failed。采集的资源准备、listener 启停和在途任务处置由采集层完成。</li>
+<li>控制只使用相关参与者均满足的已应用版本；active 已更新而某采集实例失败时，页面保留其失败原因，拒绝依赖新映射的控制。</li>
+</ol>
+<p>本地引用切换使用 C++17 对 shared_ptr 的原子操作或显式互斥锁，不使用 C++20 的 <code>atomic&lt;shared_ptr&lt;T&gt;&gt;</code>。旧快照只读直到最后一个使用者释放；旧在途采样保留其原 config_version，由来源防护决定能否更新实时值。</p>
+<p>回滚通过新的发布操作引用保留的旧内容，并生成新的 activation revision；不篡改已发布版本，不恢复旧 owner_epoch/source_epoch，不自动重放旧命令。无法访问新配置时可继续已应用旧版本的监视，必须显式呈现版本落后；依赖新版本的操作拒绝。</p>
+<h2 class="rp-toc-include" id="8-公共数据库-api-与事务"><a href="#8-公共数据库-api-与事务" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8. 公共数据库 API 与事务</h2>
+<h3 class="rp-toc-include" id="81-接口及连接所有权"><a href="#81-接口及连接所有权" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.1 接口及连接所有权</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>接口</th><th>首期行为</th></tr></thead><tbody><tr><td>IDatabase::begin</td><td>在 deadline 内独占取得连接，返回不可复制的 ITransaction</td></tr><tr><td>ITransaction::commit / rollback</td><td>返回提交 Receipt 或带确定性的 Error；关闭后禁止继续调用</td></tr><tr><td>IConfigRepository</td><td>按稳定 ID/版本读取模型、保存不可变版本、乐观并发检查</td></tr><tr><td>IControlRepository</td><td>追加意图、执行命令、回执；查询稳定 ID 已有结果；条件推进允许的状态</td></tr><tr><td>IAlarmRepository</td><td>保存告警生命周期事件、确认记录及查询投影</td></tr><tr><td>IOutboxRepository</td><td>同事务 append；发布端有界 claim、续领/超时接管、mark_published</td></tr></tbody></table></div>
+<p>所有变更 Repository 方法显式接收调用方的 <code>ITransaction&amp;</code>；禁止在内部偷偷新建另一个连接或提交事务。事务与其创建的 IDatabase 实例绑定，跨实例传入直接拒绝。读方法可使用短借用连接，需一致读的一组查询必须显式使用同一事务和规定的隔离级别。</p>
+<p>连接池本身支持线程安全借还，单个连接/事务仅由一个线程使用；事务不可跨进程传递。事务析构对未提交工作尝试 rollback，若结果不确定则丢弃连接，不把它归还为健康连接。commit 返回 Unknown 后不再使用该事务，通过原稳定业务 ID 从新连接对账。</p>
+<p>首期业务事务使用 MySQL READ COMMITTED，并结合唯一约束、乐观版本或明确的行锁完成并发控制；需要更强快照保证的查询单独声明。不能仅依赖隔离级别名称代替配置冲突、outbox 领取等具体并发设计。</p>
+<h3 class="rp-toc-include" id="82-业务与-outbox-原子提交"><a href="#82-业务与-outbox-原子提交" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.2 业务与 outbox 原子提交</h3>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>业务模块验证权限/规则</span></span>
+<span class="line"><span>  -&gt; begin(ctx)</span></span>
+<span class="line"><span>  -&gt; repository.save(tx, stable_business_id, expected_version, data)</span></span>
+<span class="line"><span>  -&gt; outbox.append(tx, same_event_id, envelope)</span></span>
+<span class="line"><span>  -&gt; commit(tx)</span></span>
+<span class="line"><span>  -&gt; 成功才返回持久受理；Unknown 使用原 ID 查询对账</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>outbox 至少保存 event_id、业务关联 ID、scope/topic、schema_version、不可变 payload、created_at、领取者/领取期限、attempts、published_at。event_id 唯一；同 ID 不同载荷属于冲突，不能悄悄覆盖。</p>
+<p>发布器通过短事务及条件更新领取，领取包含独立令牌；网络发布不占用长事务。确认发布时校验领取令牌，防止旧领取者覆盖新状态。发布成功后进程崩溃可能重复发布，由消费者幂等处理。<code>published_at</code> 表示已投递事件后端，不等于下游归档完成；需持久归档的 outbox 不能只凭此字段删除，保留至业务确认或满足明确的对账保留策略。</p>
+<p>业务状态机检查由所属业务服务执行；Repository 提供状态/版本条件更新和审计原子保存，不把“任何状态可覆盖任何状态”的 CRUD 暴露为命令接口。</p>
+<h3 class="rp-toc-include" id="83-schema错误与限制"><a href="#83-schema错误与限制" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.3 Schema、错误与限制</h3>
+<p>数据库表结构只由 <code>deploy/migrations/mysql</code> 的版本化迁移维护；公共 ormpp Repository 与 Drogon 应用都不自动建表。迁移工具独立运行，应用检查 schema 版本范围，超出范围拒绝写就绪。滚动升级先新增兼容字段，再迁移和切换读取，最后在独立版本清理废弃列。</p>
+<p>唯一键冲突映射 Conflict；对象不存在为 NotFound；权限错误为 PermissionDenied；池耗尽/超时与服务器不可用分别返回明确错误。SQL 参数必须绑定；动态排序/列名只能来自白名单，业务接口不接收任意 SQL。</p>
+<p>查询必须分页并限制返回数量，批量写入必须有项数/字节上限；整批事务失败不能返回部分成功，逐项提交接口则必须返回逐项结果，两种接口不得混用。连接预算按所有进程实例累加核算。</p>
+<p>MySQL 不可用时停止受理和执行依赖持久状态的新常规控制；监视使用已应用配置，采样按有界内存队列预算暂存并显式标记缺口。SQLite 仅在明确的测试/本地用途下实现，不能默认替代权威 MySQL 并宣称事务语义完全相同。</p>
+<h2 class="rp-toc-include" id="9-实时数据服务"><a href="#9-实时数据服务" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9. 实时数据服务</h2>
+<p>实现严格沿用 <a href="/ems/common/realtime/access-design" class="rp-link">实时访问接口</a>，本节只固定集成边界：</p>
+<ul>
+<li><code>RealtimeService</code> 读取固定配置视图，将类型化样本转换为完整记录，校验类型、质量、来源授权、配置版本与序号。</li>
+<li><code>IRealtimeStore</code> 只处理逻辑记录的完整读、CAS、条件删除及逐项批量结果，不包含配置管理、事件队列或历史 SQL。</li>
+<li>最新值、设备/通道/单元状态及命令查询投影各有明确写角色；普通样本不能修改已批准来源字段。</li>
+<li><code>revision</code> 是并发令牌，来源代次由授权协调角色安装；公共库校验授权，不负责选主或证明旧主已隔离。</li>
+<li>Redis 默认权威实时后端；共享内存为同机可选后端。相同 scope 在一个部署代次只使用一个权威后端，失败时不能自动双写或切空后端。</li>
+<li>Web 在 Redis 部署下按契约读取；共享内存部署经存储进程实时查询 gRPC。Web 不直接解释共享内存布局。</li>
+</ul>
+<p>读到陈旧值仍可返回完整快照及 stale 状态；后端不可用不能伪装成所有设备离线，NotFound 不能伪装成 0。策略与 CAS 前置校验默认直接使用权威状态，不叠加未校验的实时读缓存。</p>
+<p>同一个采样的“最新值已处理”和“历史事件已归档”是独立进度。旧来源样本可以补历史而不更新最新值；实时 CAS 判为重复也不能跳过尚未确认的历史投递。</p>
+<h2 class="rp-toc-include" id="10-消息契约与事件总线"><a href="#10-消息契约与事件总线" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10. 消息契约与事件总线</h2>
+<h3 class="rp-toc-include" id="101-信封与载荷"><a href="#101-信封与载荷" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10.1 信封与载荷</h3>
+<p><code>EventEnvelope</code> 至少包含 schema_version、event_type、event_id、trace_id、producer_id、station_id/code、unit_id/code、asset_id、device_path、config_version、event_time、ingest_time。station 事件的 unit 字段为 null，根事件 device_path 为 <code>[]</code>；各事件 schema 明确允许为空的身份字段。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>事件类别</th><th>专属字段/责任</th></tr></thead><tbody><tr><td>telemetry</td><td>point/device/channel 身份、source_id、source_epoch、sequence、value_type/value/unit/quality、source_time</td></tr><tr><td>control_intent</td><td>intent_id、目标能力、请求值、来源、actor、reason、期限；尚未允许执行</td></tr><tr><td>command</td><td>command_id、intent_id、目标、expected_config_version、owner_epoch、priority、expires_at；仅策略产生</td></tr><tr><td>command_result</td><td>command_id、状态、协议确认/设备反馈、原因；按状态机追加事件</td></tr><tr><td>alarm_event</td><td>alarm_id、生命周期事件、规则/资产/确认者及时间</td></tr><tr><td>config_changed / config_applied</td><td>scope、配置版本、发布 revision 或应用实例与结果</td></tr></tbody></table></div>
+<p>type/schema 不支持时必须隔离并告警，不能反序列化为默认值继续执行。ZeroMQ 遥测首期载荷使用版本化 JSON；调用方通过受控 topic/scope 配置路由，不能在业务代码中拼物理帧。</p>
+<h3 class="rp-toc-include" id="102-zeromq-遥测接收接口"><a href="#102-zeromq-遥测接收接口" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10.2 ZeroMQ 遥测接收接口</h3>
+<p>存储进程的 <code>IHistoryFeed</code> 以受控 topic 接收原始 <code>EventEnvelope</code>，提供有界 <code>read(max_items, max_bytes, ctx)</code>、本地接收/丢弃计数和 <code>close()</code>。取出的事件不再由传输层重投；本地投递 token 只用于隔离诊断，不能当作跨进程游标或事件 ID。发布端的成功返回仅表示本地入队，不能证明存储已收到或写库成功。</p>
+<p>命令交接另用 ZeroMQ REQ/REP 与 MySQL outbox/inbox。采集执行前通过公共 Repository 条件写入 MySQL 执行状态；数据库不可用时禁止启动新设备写入，已发出的动作不能因入库失败而假定未执行。</p>
+<h3 class="rp-toc-include" id="103-容量坏消息和恢复"><a href="#103-容量坏消息和恢复" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10.3 容量、坏消息和恢复</h3>
+<p>ZeroMQ 接收与实时读写连接独立，接收队列、帧长度、读批次和并发处理数有上限。队列溢出或数据库故障增加丢样计数；坏格式或未知版本的已收到事件进入持久隔离区。隔离写失败也计入丢样，PUB/SUB 不会自动重送。命令消息不能自动修改后重新执行；修复后处理须保留原身份、检查有效期和原状态。</p>
+<h2 class="rp-toc-include" id="11-采样缓冲与恢复边界"><a href="#11-采样缓冲与恢复边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>11. 采样缓冲与恢复边界</h2>
+<p>不提供独立的本地持久化采样记录，也不使用运行日志保存可重放样本。采样由有界内存队列缓冲，经 ZeroMQ PUB/SUB 送存储进程，收到的事件按稳定 event_id 入库；命令、回执和告警使用 MySQL Repository 与 outbox 保存业务事实。</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>采样 -&gt; DataDispatcher 有界内存队列（稳定 event_id）</span></span>
+<span class="line"><span>     -&gt; 分别更新最新值、通过 ZeroMQ 发布原始事件</span></span>
+<span class="line"><span>     -&gt; 存储订阅器使用已收到的原始样本入库；失败计入缺口</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>命令/告警 -&gt; MySQL 业务记录 + outbox 同事务提交</span></span>
+<span class="line"><span>          -&gt; 存储发布器 -&gt; ZeroMQ 命令交接或变化提示</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>采集内存缓冲中的实时更新与遥测发布分别记录结果；实时 CAS 判为重复或旧来源不能跳过原始事件发布。PUB/SUB 无消费者确认；发布端断线、缓冲溢出、存储离线或写库失败都可能丢样。已收到事件的身份账本只用于冲突检查和重复接收时的幂等处理。</p>
+<p>采集或存储达到队列上限时按有界策略丢弃或背压，记录可观察的丢弃计数和时间范围；不能无限增长内存，也不能将丢失样本用当前最新值补造历史。进程重启、长时间中断和数据库故障可能形成不可自动恢复的历史缺口。</p>
+<p>命令和告警不使用采样的丢弃策略。命令执行前先在 MySQL 条件登记执行身份/状态；重复 command_id 查询已有结果。I/O 已开始但回执尚未持久化时崩溃，恢复后将未决执行视为 unknown，通过新回读/核验确定结果，不盲目重发。执行前登记失败则拒绝新动作；执行后数据库不可用时停止新控制并对账。该数据库状态不是设备动作的原子提交证明。</p>
+<p>outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或独立归档确认事件。未完成 outbox 保持原业务 ID 重试；遥测 PUB/SUB 不具备回放能力。</p>
+<h2 class="rp-toc-include" id="12-可观测性运行生命周期与资源预算"><a href="#12-可观测性运行生命周期与资源预算" class="rp-header-anchor rp-link" aria-hidden="true">#</a>12. 可观测性、运行生命周期与资源预算</h2>
+<h3 class="rp-toc-include" id="121-日志指标和健康"><a href="#121-日志指标和健康" class="rp-header-anchor rp-link" aria-hidden="true">#</a>12.1 日志、指标和健康</h3>
+<p>运行日志继续复用现有 spdlog 及 <code>backend/src/log/</code> 封装，公共模块只统一初始化、级别、轮转、异步队列及上下文字段。已有 ILogger 如保留，仅作薄适配，不另建日志框架；运行日志不承担采样补传或控制恢复。</p>
+<p>结构化日志统一包含 process_name、instance_id、module、trace_id，以及适用的 station/unit/device/point、config_version、event_id/command_id、error_code。密码、令牌、连接串凭据和原始认证载荷不输出。后台异步日志队列有界；业务审计不依赖调试日志保存。</p>
+<p>至少提供以下指标：池等待/占用、操作延迟/错误/Unknown 数、配置 active/applied 差异、实时冲突/陈旧/旧来源拒绝、ZeroMQ 发布拒绝/接收队列丢弃/写库失败、outbox 最旧未完成时长、采样缓冲占用/最老年龄/丢弃数量/缺口范围。按进程/模块/后端等低基数字段聚合，device_id、event_id 不作为默认指标标签。</p>
+<p>健康分 liveness、readiness、degraded，不能仅以线程存活宣称就绪。诊断必须区分：设备离线、配置未应用、实时后端不可用、历史积压、控制链路不就绪。公共模块返回组件健康，进程决定最终业务就绪。</p>
+<h3 class="rp-toc-include" id="122-生命周期"><a href="#122-生命周期" class="rp-header-anchor rp-link" aria-hidden="true">#</a>12.2 生命周期</h3>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>启动：部署配置校验 -&gt; 日志/指标 -&gt; 本进程数据库与业务状态恢复</span></span>
+<span class="line"><span>    -&gt; 精确配置加载 -&gt; 实时/事件后端初始化 -&gt; 来源/配置授权核验</span></span>
+<span class="line"><span>    -&gt; 业务模块准备与应用 -&gt; 标记对应能力就绪</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>停止：撤销就绪/停止接收新任务 -&gt; 停止新发布和读取</span></span>
+<span class="line"><span>    -&gt; 业务处理在途任务、持久记录未知结果 -&gt; 有界排空采样队列</span></span>
+<span class="line"><span>    -&gt; 等待有界后台任务结束 -&gt; 关闭总线/实时/数据库 -&gt; 关闭日志</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>无依赖的初始化可并行，但业务不能在所需依赖未就绪时启动。关闭超时后报告未送出采样数量；内存样本不保证重启恢复，持久业务记录通过 MySQL/outbox 对账。析构不能无限等待。后台任务归创建者所有，不创建无法 join 的分离线程；回调不得持内部锁调用用户逻辑。</p>
+<h3 class="rp-toc-include" id="123-必填预算与配置验证"><a href="#123-必填预算与配置验证" class="rp-header-anchor rp-link" aria-hidden="true">#</a>12.3 必填预算与配置验证</h3>
+<p>部署模板必须明确 operation_timeout、pool_acquire_timeout、pool_size、max_batch_items、max_payload_bytes、max_queue_items/bytes、shutdown_timeout。单项超时不得超出调用剩余预算；所有池/队列预算按进程实例累计。</p>
+<p>具体数值由站点规模、采样频率与目标硬件容量测试确定，不能把示例值当 SLA。实施阶段提交可运行的开发模板，以及记录设备/点数、吞吐、P95/P99 延迟、CPU/内存/磁盘和恢复时间的基线报告；未知预算不得用无限值代替。</p>
+<h2 class="rp-toc-include" id="13-跨进程与前后端契约及兼容升级"><a href="#13-跨进程与前后端契约及兼容升级" class="rp-header-anchor rp-link" aria-hidden="true">#</a>13. 跨进程与前后端契约及兼容升级</h2>
+<p><code>contracts</code> 为四类 C++ 进程和 Vue 前端的共同输入。进程间仍使用版本化事件、JSON Schema 与 Protobuf，不直接序列化 C++ 对象；浏览器 JSON 与后端类型映射必须通过相同 fixtures 校验精度、null、时间、code、键、事件和版本规则。</p>
+<p>契约交付至少包括：模型/事件 JSON Schema、Protobuf、C++/TypeScript 字段映射说明、合法/非法样例、枚举码表、schema 支持范围和变更记录。Protobuf 废弃字段保留编号，不能复用。JSON Schema 与 Protobuf 若无法自动生成同源定义，必须由同一批黄金样例检测漂移。</p>
+<p>同 major 下只允许有明确默认语义的兼容可选字段；字段重命名、类型/单位/枚举含义改变、新必需字段均升级不兼容版本。读取器可以忽略允许的未知可选字段，但不能忽略未知控制动作、未知权限值或不支持的 major。重放/转发保存原始载荷，避免旧读取器丢掉新字段后重新发布。</p>
+<p>兼容升级顺序：先部署可读新旧格式的消费者，再部署新格式生产者；未完成 outbox 对账后才移除旧命令读取支持。数据库、事件 schema、配置 schema、共享内存 layout、协议插件 ABI 是独立版本，不能混用一个整数。</p>
+<h2 class="rp-toc-include" id="14-现有代码迁移对照"><a href="#14-现有代码迁移对照" class="rp-header-anchor rp-link" aria-hidden="true">#</a>14. 现有代码迁移对照</h2>
+<p>下表依据当前仓库路径，不代表旧接口满足新语义。先建立新模块及转换测试，再逐个切换调用方。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>当前路径/内容</th><th>目标归属</th><th>迁移重点</th></tr></thead><tbody><tr><td>backend/src/models/base.h</td><td>common/core + common/model + codec</td><td>拆分身份/枚举与 JSON 基类，保留旧枚举值转换表</td></tr><tr><td>backend/src/models/device.h、device_group.h</td><td>common/model/asset、device</td><td>使用资产归属；设备通过 binding 引用通道</td></tr><tr><td>backend/src/models/channel.h、slave.h</td><td>common/model/channel、binding</td><td>从站地址迁到绑定，消除单设备通道假设；运行连接归采集</td></tr><tr><td>backend/src/models/point_runtime.hpp</td><td>common/model/point + realtime</td><td>分离配置、实时值、厂家解码；保留值类型/质量/时间</td></tr><tr><td>backend/src/models/point_mapping.h</td><td>对应标准绑定模型或策略派生点配置</td><td>现有公式映射不等于厂家点绑定，不能直接改名合并</td></tr><tr><td>backend/include/db/*.h</td><td>common/database 公共接口 + src/common/db/mysql 私有行实体</td><td>业务不再依赖 ORM 行结构，迁移显式转换与稳定 ID</td></tr><tr><td>backend/src/common/db/db_manager.cpp</td><td>database_mysql 与各 Repository</td><td>拆开连接、事务和业务 CRUD；采样历史写入迁往 history/storage</td></tr><tr><td>backend/src/rtdb/rtdb_device.h、rtdb_channel.h、rtdb_config.h</td><td>common/model + config</td><td>配置定义脱离 rtdb，统一设备/通道/点定义</td></tr><tr><td>backend/src/rtdb/rtdb_point.<em>、rtdb_cache.</em>、rtdb_manager.*</td><td>realtime + config 对应职责</td><td>用契约区分状态、缓存和配置；不保留万能管理器</td></tr><tr><td>backend/src/net/para_loader/*</td><td>collector 配置适配 + common/config</td><td>读取和校验复用公共库；通道准备/应用留采集</td></tr><tr><td>backend/src/net/collect/data_dispatcher.*</td><td>collector</td><td>注入实时/事件接口，管理有界内存队列，保留分发编排责任</td></tr><tr><td>backend/src/net/protocol/*</td><td>protocol</td><td>保留插件边界，不搬到 common；只复用纯模型/契约</td></tr><tr><td>backend/src/net/protocol/modbus/proto_modbus_util.hpp、modbus_mapping_map.hpp</td><td>protocol/modbus</td><td>协议专用工具移出通用工具</td></tr><tr><td>backend/src/log/*、通用 util</td><td>observability / util</td><td>按实际复用迁移，不把所有旧工具整体照搬</td></tr></tbody></table></div>
+<p>旧数据中的 ID、时间单位、质量码、设备类型、code 和绑定必须先导出映射报告。旧 YC/YX/YK/YT 保留导入转换：映射为标准 telemetry/status/command，并把反馈独立出来；不能仅改枚举名称。</p>
+<p>迁移期间每个 scope 只有一个权威配置/实时写入路径。新旧数据格式需要并存时，新格式先以只读影子验证；切换前停止旧写、对齐配置/水位和来源授权，再启用新写。禁止两个模型体系各写各的 Redis 键后长期依赖同步。</p>
+<p>回滚分代码回滚与数据回滚：保留迁移前备份、不可变配置、未完成 outbox 和转换清单；存在新格式数据时，只有兼容读取器可回滚上线。不可逆删列/删除旧索引延迟到独立清理阶段，未完成对账不清除原始数据。</p>
+<h2 class="rp-toc-include" id="15-分阶段实施任务"><a href="#15-分阶段实施任务" class="rp-header-anchor rp-link" aria-hidden="true">#</a>15. 分阶段实施任务</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>阶段</th><th>必须产出</th><th>完成门槛</th></tr></thead><tbody><tr><td>P0 基线与契约</td><td>现状依赖/数据清单；新目录与 CMake targets；C++17 依赖锁定；身份/枚举/时间转换表；contracts 初版及开发预算模板</td><td>core/model 无数据库依赖构建；Linux/ARM 工具链检查；旧数据转换无未解释项</td></tr><tr><td>P1 模型与编码</td><td>core、model、codec、ModelView、ValidationReport；设备/绑定/点/能力 fixtures</td><td>多对多、树/引用/类型校验、无效值和 64 位整数往返通过</td></tr><tr><td>P2 数据库与配置</td><td>MySQL 迁移、连接池/事务、共享 Repository、outbox；快照 provider/store/validator/reporter</td><td>同事务原子性、并发冲突、配置精确版本与发布恢复通过</td></tr><tr><td>P3 实时服务</td><td>按实时专题实现 api/core、Redis 默认后端，迁移 rtdb 调用</td><td>来源/CAS/完整替换/Unknown/后端恢复契约通过；设备定义已脱离 rtdb</td></tr><tr><td>P4 事件链路</td><td>ZeroMQ 遥测发布/订阅、持久隔离、采集有界缓冲；MySQL 执行状态/outbox 接入</td><td>重复、断线、队列溢出、数据库故障与丢样报告通过</td></tr><tr><td>P5 业务集成与旧代码退出</td><td>采集/策略/存储注入；Drogon Web 接入公共 Repository 与契约；逐项关闭旧接口；权限/健康/预算监控</td><td>四进程最小端到端链路通过，旧模型不再被生产路径引用</td></tr><tr><td>P6 可选后端与容量验收</td><td>SharedMemoryStore、Web 实时 gRPC 路径；目标现场负载与恢复报告</td><td>共享内存契约/崩溃恢复通过；性能/RPO/RTO 有实测记录</td></tr></tbody></table></div>
+<p>P4 的事件测试可用测试替身，但不能据此宣称历史链路完成。P5 必须接入存储进程真实归档路径验证幂等落库与丢样边界，并演练尚未发布的内存采样丢失场景。共享内存是规划能力；默认 Redis 实时版本可在 P5 验收后交付，共享内存部署须等待 P6。</p>
+<p>每阶段交付清单包括：实现代码、被影响调用方、契约/迁移变化、运行命令、测试结果、未完成项和回滚步骤。完成阶段后更新本文状态或追加实施记录，不能仅以“类已创建、编译通过”标为完成。</p>
+<h2 class="rp-toc-include" id="16-验收矩阵与完成定义"><a href="#16-验收矩阵与完成定义" class="rp-header-anchor rp-link" aria-hidden="true">#</a>16. 验收矩阵与完成定义</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>编号</th><th>验收场景</th><th>必须观察到的结果</th></tr></thead><tbody><tr><td>C01</td><td>独立包含全部公开头，core/model 最小构建</td><td>C++17 通过；无 Redis/MySQL/协议驱动隐式依赖</td></tr><tr><td>C02</td><td>同设备多通道、多设备共享总线、多单元同名 pcs01</td><td>稳定身份/绑定准确，不按全局 device_code 错误合并</td></tr><tr><td>C03</td><td>资产环、跨站父节点、缺失引用、禁用能力、命令缺反馈</td><td>校验给出对象/字段/原因，未配置或无效值不变成 0</td></tr><tr><td>C04</td><td>int64/uint64 边界、null、坏质量、UTC 微秒、未知枚举</td><td>C++/TypeScript fixtures 一致，无浮点精度损失</td></tr><tr><td>C05</td><td>事务中业务写成功、outbox 写失败；提交响应丢失</td><td>前者全部回滚；后者 Unknown，按原 ID 对账，无重复业务效果</td></tr><tr><td>C06</td><td>两发布者同基版本并发、快照缺失/校验失败、旧发布迟到</td><td>一方条件失败；不拼版本；旧发布不回退新 active</td></tr><tr><td>C07</td><td>配置已发布但采集应用失败，随后回滚</td><td>区分发布/应用；新映射控制拒绝；回滚不重放旧命令</td></tr><tr><td>C08</td><td>多进程 CAS、重复/旧序号、来源切换、完整字段删除</td><td>遵循实时专题，旧来源不覆盖新状态，逐项结果正确</td></tr><tr><td>C09</td><td>PUB/SUB 发布端或订阅端晚启动、断线</td><td>遥测缺口可观察，后续新样本继续；不宣称自动重放</td></tr><tr><td>C10</td><td>未知版本/坏消息，隔离数据库不可用</td><td>已收到事件的隔离错误可定位，失败计入丢样，不无限占内存</td></tr><tr><td>C11</td><td>发布前进程退出、Redis 中断、采样缓冲耗尽</td><td>显式报告可观察的丢弃/缺口；不承诺内存样本跨重启恢复，不伪造历史</td></tr><tr><td>C12</td><td>同一事件再次发布、同 ID 异载荷</td><td>相同身份幂等；冲突被隔离；不依赖消费 ACK</td></tr><tr><td>C13</td><td>Redis/MySQL 中断、池/队列满、关闭超时</td><td>有界退避/背压和明确错误；持久业务可对账，未发布内存采样可能丢失</td></tr><tr><td>C14</td><td>更新实时成功但发布失败，或发布成功而实时被拒绝</td><td>两条进度独立恢复；历史保存原样本，快照不回退</td></tr><tr><td>C15</td><td>Web/北向控制到策略、采集、回执和归档</td><td>统一仲裁；重复/过期/旧所有权拒绝；Unknown 不盲目重发</td></tr><tr><td>C16</td><td>Web 与其他 C++ 进程同表读写、滚动升级与旧事件重放</td><td>schema/枚举/事件兼容；同事务约束和稳定身份不变</td></tr><tr><td>C17</td><td>多进程共享内存、拥有锁的进程崩溃、重建段</td><td>满足实时专题；Web 走 gRPC；新代次拒绝旧授权</td></tr><tr><td>C18</td><td>现场负载、积压恢复、查询与控制并发</td><td>报告预算与 P95/P99、资源峰值、恢复水位及实测 RPO/RTO</td></tr></tbody></table></div>
+<p>默认 Redis 公共模块完成定义：P0–P5 完成，C01–C16 通过，C18 对默认部署有报告；C17 为共享内存交付门槛，不能在未实现时标通过。端到端测试需要尚未实现的策略/存储/Web 能力时，明确标依赖未完成，不用 mock 结果冒充集成验收。</p>
+<p>文档本身验收包括：相对链接存在、导航 JSON 可解析、代码围栏配对、C++ 草案可通过 C++17 语法检查，与权威专题无冲突。正式文档站渲染、Linux/ARM 构建、数据库/多进程故障测试分别记录，不能相互替代。</p>
+<h2 class="rp-toc-include" id="17-实施记录"><a href="#17-实施记录" class="rp-header-anchor rp-link" aria-hidden="true">#</a>17. 实施记录</h2>
+<h3 class="rp-toc-include" id="2026-09-19-p0p1-公共模块基线落地"><a href="#2026-09-19-p0p1-公共模块基线落地" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2026-09-19 P0/P1 公共模块基线落地</h3>
+<ul>
+<li>新增 <code>backend/include/common/</code>：core（result/call_context/identity/time，纯 C++17）、model（asset/device/point/channel/binding/capability/command/alarm/validation/catalog/model_view）、codec（model_codec/event_codec，nlohmann 为私有实现）、config、database、messaging、observability 接口头文件。</li>
+<li>新增 <code>backend/src/common/model/</code>（validation.cpp、model_view.cpp）、<code>backend/src/common/codec/</code>（model_codec.cpp、event_codec.cpp），实现纯校验与 JSON 编解码。</li>
+<li>CMake targets：ems_common_core（INTERFACE）、ems_common_model（STATIC）、ems_messaging_api（INTERFACE）、ems_common_codec（STATIC）、ems_config_api/ems_database_api/ems_observability（INTERFACE）；公共目标统一 CXX_STANDARD 17。</li>
+<li>测试：<code>backend/tests/common/</code>（test_core/test_model/test_codec，60 用例）覆盖身份/结果/时间、资产环/跨站/引用/绑定/反馈校验、多对多与共享总线、64 位整数与事件信封往返；MinGW g++ C++17 全部通过（C01/C02/C03/C04 局部覆盖）。</li>
+<li>未完成项：contracts 目录与黄金 fixtures、MySQL 迁移与 Repository 实现（P2）、实时后端（P3）、Streams 实现（P4）、Drogon Web 接入（P5）、Linux/ARM 工具链构建检查。旧 models/、db/、rtdb/ 迁移按第 14 节另行走。</li>
+</ul>
+<h3 class="rp-toc-include" id="2026-09-19-目录规范化与第二批实现"><a href="#2026-09-19-目录规范化与第二批实现" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2026-09-19 目录规范化与第二批实现</h3>
+<ul>
+<li>目录规范化：<code>backend/inc</code> 重命名为 <code>backend/include</code>，同步更新全部 CMake 引用（12 处）与文档（design.md、system-design.md、access-design.md）。</li>
+<li>realtime API：按实时专题第 5 节草案落地 <code>include/realtime/realtime_store.h</code>（IRealtimeStore/RealtimeStoreBase 批量默认实现）与 <code>include/realtime/backend_factory.h</code>（注册-冻结-Unsupported 语义），<code>src/realtime/realtime_store.cpp</code> 实现 RecordKey 公共验证器；新增 ems_realtime_api/ems_realtime_core targets。</li>
+<li>config core：<code>src/common/config/</code> 新增 CatalogValidator（复用 model 纯校验），target ems_config_core。</li>
+<li>当时测试报告为 82 用例，包含实时 API 和后来移除的本地文件记录测试；该数量是历史记录，不代表当前用例数。</li>
+<li>修复：realtime Revision 缺判等运算符；当时文件记录实现的修复随模块移除，不再作为当前交付内容。</li>
+<li>未完成项同上，另加：SharedMemoryStore/RedisStore 后端（P3/P6）、Streams adapter（P4）。</li>
+</ul>
+<h3 class="rp-toc-include" id="2026-09-19-移除-journal"><a href="#2026-09-19-移除-journal" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2026-09-19 移除 journal</h3>
+<ul>
+<li>按需求移除独立的 journal 接口、文件实现、构建目标、专属测试和归档确认事件，事件编号 7 保留不复用。</li>
+<li>采样采用有界内存缓冲与 Streams 消费确认；命令、回执、告警继续通过 MySQL/outbox 持久化，运行日志继续复用 spdlog。</li>
+<li>上述新增事件/控制恢复流程是调整后的目标设计，尚未实现的 Streams、Repository/outbox 集成仍按 P2/P4/P5 验收。</li>
+<li>本次验证：移除后剩余公共模块与新增废弃事件拒绝用例使用 MinGW g++ C++17 编译，72 个测试通过；这不等同于完整后端或 Linux/ARM 集成验收。</li>
+</ul><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/common/design.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/10/20 23:17:14</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/common/" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>公共模块概览</span></span></a><a href="/ems/common/realtime/" class="rp-prev-next-page__item rp-prev-next-page__next rp-link"><span class="rp-prev-next-page__item__desc">下一页</span><span class="rp-prev-next-page__item__title"><span>实时数据与配置</span><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></span></a></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#1-设计决策与实施入口" class="rp-toc-item rp-link" title="1. 设计决策与实施入口" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">1. 设计决策与实施入口</span></a><a href="#11-权威文档及变更规则" class="rp-toc-item rp-link" title="1.1 权威文档及变更规则" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">1.1 权威文档及变更规则</span></a><a href="#12-必须遵守的约束" class="rp-toc-item rp-link" title="1.2 必须遵守的约束" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">1.2 必须遵守的约束</span></a><a href="#2-职责边界" class="rp-toc-item rp-link" title="2. 职责边界" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">2. 职责边界</span></a><a href="#3-工程目录与命名" class="rp-toc-item rp-link" title="3. 工程目录与命名" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">3. 工程目录与命名</span></a><a href="#4-编译目标与依赖方向" class="rp-toc-item rp-link" title="4. 编译目标与依赖方向" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">4. 编译目标与依赖方向</span></a><a href="#5-基础类型结果与时间" class="rp-toc-item rp-link" title="5. 基础类型、结果与时间" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">5. 基础类型、结果与时间</span></a><a href="#51-共享结果类型" class="rp-toc-item rp-link" title="5.1 共享结果类型" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.1 共享结果类型</span></a><a href="#52-身份与序列" class="rp-toc-item rp-link" title="5.2 身份与序列" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.2 身份与序列</span></a><a href="#53-值质量与时间" class="rp-toc-item rp-link" title="5.3 值、质量与时间" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.3 值、质量与时间</span></a><a href="#6-设备与其他公共模型" class="rp-toc-item rp-link" title="6. 设备与其他公共模型" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">6. 设备与其他公共模型</span></a><a href="#61-模型集合" class="rp-toc-item rp-link" title="6.1 模型集合" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.1 模型集合</span></a><a href="#62-静态配置快照与执行对象分离" class="rp-toc-item rp-link" title="6.2 静态配置、快照与执行对象分离" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.2 静态配置、快照与执行对象分离</span></a><a href="#63-查询与校验接口" class="rp-toc-item rp-link" title="6.3 查询与校验接口" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.3 查询与校验接口</span></a><a href="#7-配置访问与版本生效" class="rp-toc-item rp-link" title="7. 配置访问与版本生效" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">7. 配置访问与版本生效</span></a><a href="#71-三种配置" class="rp-toc-item rp-link" title="7.1 三种配置" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.1 三种配置</span></a><a href="#72-接口责任" class="rp-toc-item rp-link" title="7.2 接口责任" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.2 接口责任</span></a><a href="#73-发布与应用流程" class="rp-toc-item rp-link" title="7.3 发布与应用流程" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.3 发布与应用流程</span></a><a href="#8-公共数据库-api-与事务" class="rp-toc-item rp-link" title="8. 公共数据库 API 与事务" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">8. 公共数据库 API 与事务</span></a><a href="#81-接口及连接所有权" class="rp-toc-item rp-link" title="8.1 接口及连接所有权" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.1 接口及连接所有权</span></a><a href="#82-业务与-outbox-原子提交" class="rp-toc-item rp-link" title="8.2 业务与 outbox 原子提交" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.2 业务与 outbox 原子提交</span></a><a href="#83-schema错误与限制" class="rp-toc-item rp-link" title="8.3 Schema、错误与限制" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.3 Schema、错误与限制</span></a><a href="#9-实时数据服务" class="rp-toc-item rp-link" title="9. 实时数据服务" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">9. 实时数据服务</span></a><a href="#10-消息契约与事件总线" class="rp-toc-item rp-link" title="10. 消息契约与事件总线" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">10. 消息契约与事件总线</span></a><a href="#101-信封与载荷" class="rp-toc-item rp-link" title="10.1 信封与载荷" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">10.1 信封与载荷</span></a><a href="#102-zeromq-遥测接收接口" class="rp-toc-item rp-link" title="10.2 ZeroMQ 遥测接收接口" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">10.2 ZeroMQ 遥测接收接口</span></a><a href="#103-容量坏消息和恢复" class="rp-toc-item rp-link" title="10.3 容量、坏消息和恢复" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">10.3 容量、坏消息和恢复</span></a><a href="#11-采样缓冲与恢复边界" class="rp-toc-item rp-link" title="11. 采样缓冲与恢复边界" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">11. 采样缓冲与恢复边界</span></a><a href="#12-可观测性运行生命周期与资源预算" class="rp-toc-item rp-link" title="12. 可观测性、运行生命周期与资源预算" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">12. 可观测性、运行生命周期与资源预算</span></a><a href="#121-日志指标和健康" class="rp-toc-item rp-link" title="12.1 日志、指标和健康" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">12.1 日志、指标和健康</span></a><a href="#122-生命周期" class="rp-toc-item rp-link" title="12.2 生命周期" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">12.2 生命周期</span></a><a href="#123-必填预算与配置验证" class="rp-toc-item rp-link" title="12.3 必填预算与配置验证" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">12.3 必填预算与配置验证</span></a><a href="#13-跨进程与前后端契约及兼容升级" class="rp-toc-item rp-link" title="13. 跨进程与前后端契约及兼容升级" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">13. 跨进程与前后端契约及兼容升级</span></a><a href="#14-现有代码迁移对照" class="rp-toc-item rp-link" title="14. 现有代码迁移对照" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">14. 现有代码迁移对照</span></a><a href="#15-分阶段实施任务" class="rp-toc-item rp-link" title="15. 分阶段实施任务" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">15. 分阶段实施任务</span></a><a href="#16-验收矩阵与完成定义" class="rp-toc-item rp-link" title="16. 验收矩阵与完成定义" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">16. 验收矩阵与完成定义</span></a><a href="#17-实施记录" class="rp-toc-item rp-link" title="17. 实施记录" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">17. 实施记录</span></a><a href="#2026-09-19-p0p1-公共模块基线落地" class="rp-toc-item rp-link" title="2026-09-19 P0/P1 公共模块基线落地" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2026-09-19 P0/P1 公共模块基线落地</span></a><a href="#2026-09-19-目录规范化与第二批实现" class="rp-toc-item rp-link" title="2026-09-19 目录规范化与第二批实现" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2026-09-19 目录规范化与第二批实现</span></a><a href="#2026-09-19-移除-journal" class="rp-toc-item rp-link" title="2026-09-19 移除 journal" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2026-09-19 移除 journal</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/common/design.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+    <div id="__rspress_modal_container"></div>
+  </body>
+</html>

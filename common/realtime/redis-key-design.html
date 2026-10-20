@@ -1,0 +1,263 @@
+<!doctype html>
+<html lang="zh">
+  <head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMS Redis 键设计 - EMS 设计文档</title>
+<script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
+<link href="/ems/static/css/styles.3c463aa6ae.css" rel="stylesheet">
+<link rel="preload" href="/ems/static/js/async/route-4d6085c5f1fe.292f2b79aa.js" as="script">
+<script defer src="/ems/static/js/styles.560b9eab4d.js"></script>
+<script defer src="/ems/static/js/lib-react.0685ac4d75.js"></script>
+<script defer src="/ems/static/js/lib-router.de7486675c.js"></script>
+<script defer src="/ems/static/js/m3.da04ef77ed.js"></script>
+<script defer src="/ems/static/js/index.1377de6962.js"></script>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Rspress v2.0.21">
+<link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="EMS Redis 键设计 - EMS 设计文档">
+<meta name="description" content="版本：1.6｜更新日期：2026-09-29｜状态：目标设计，待实现与迁移。 本文是 Redis 实时键命名与数据组织的约定。整体职责见 EMS 系统架构设计，遥测与配置入口见 实时数据与配置。四类 C++ 进程复用公共 ormpp API，并各自管理数据库连接。">
+<meta property="og:description" content="版本：1.6｜更新日期：2026-09-29｜状态：目标设计，待实现与迁移。 本文是 Redis 实时键命名与数据组织的约定。整体职责见 EMS 系统架构设计，遥测与配置入口见 实时数据与配置。四类 C++ 进程复用公共 ormpp API，并各自管理数据库连接。"></head>
+
+  <body>
+    <div id="__rspress_root"><link rel="preload" as="image" href="/ems/logo.svg"/><header class="rp-nav"><div class="rp-nav__left"><div class="rp-nav__title"><a href="/ems/" class="rp-nav__title__link rp-link"><div class="rp-nav__title__logo"><img src="/ems/logo.svg" alt="logo" id="logo" class="rspress-logo rp-nav__title__logo-image"/></div><span>EMS</span></a></div><ul class="rp-nav-menu rp-nav-menu--left"><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/" class="rp-nav-menu__item__container rp-link">首页</a></li><li class="rp-nav-menu__item"><a href="/ems/architecture/" class="rp-nav-menu__item__container rp-link">架构</a></li><li class="rp-nav-menu__item"><a href="/ems/processes/" class="rp-nav-menu__item__container rp-link">进程</a></li><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/common/" class="rp-nav-menu__item__container rp-link">公共模块</a></li><li class="rp-nav-menu__item"><a href="/ems/decisions/" class="rp-nav-menu__item__container rp-link">技术决策</a></li><li class="rp-nav-menu__item"><a href="/ems/reference/" class="rp-nav-menu__item__container rp-link">开发参考</a></li><li class="rp-nav-menu__item"><a href="/ems/guide/" class="rp-nav-menu__item__container rp-link">文档维护</a></li></ul></div><div class="rp-nav__right"><button class="rp-search-button"><div class="rp-search-button__content"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21" class="rp-search-button__icon"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg><span class="rp-search-button__word">搜索</span></div><div class="rp-search-button__hotkey" style="opacity:0"><span></span><span>K</span></div></button><div class="rp-search-button--mobile"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg></div><div class="rp-nav__others"><div class="rp-nav-menu__divider"></div><div class="rp-switch-appearance"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="rp-switch-appearance__icon rp-switch-appearance__icon--sun"><path fill="currentColor" d="m7.001 15.848-1.226 1.226a.58.58 0 0 0 0 .818.58.58 0 0 0 .818 0l1.226-1.226a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0m-.352-8.735a.584.584 0 0 0 .825-.825L6.237 5.051a.584.584 0 0 0-.825.825zM5.011 11.07h-1.75a.584.584 0 0 0 0 1.167h1.75c.324 0 .584-.26.584-.583a.585.585 0 0 0-.584-.584m7.003-5.835c.324 0 .584-.26.584-.584V2.9a.58.58 0 0 0-.584-.584.58.58 0 0 0-.583.583V4.65c0 .323.262.584.583.584m5.616 1.621 1.226-1.225a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0l-1.226 1.225a.58.58 0 0 0 0 .818.576.576 0 0 0 .818 0m3.138 4.214h-1.75a.58.58 0 0 0-.584.584c0 .324.26.584.583.584h1.751a.584.584 0 1 0 0-1.167m-3.389 5.124a.584.584 0 0 0-.825.825l1.238 1.238a.584.584 0 0 0 .825-.826zm-5.365-9.795a5.256 5.256 0 0 0-5.257 5.258 5.256 5.256 0 0 0 5.257 5.257 5.256 5.256 0 0 0 5.257-5.257 5.256 5.256 0 0 0-5.257-5.258m0 11.675a.58.58 0 0 0-.583.583v1.751a.582.582 0 1 0 1.167 0v-1.75a.584.584 0 0 0-.584-.584"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="currentColor" viewBox="0 0 19 19" class="rp-switch-appearance__icon rp-switch-appearance__icon--moon"><path fill="currentColor" d="M9.166 0a9.2 9.2 0 0 1 1.857.188.834.834 0 0 1 .042 1.623 4.47 4.47 0 1 0 5.457 5.457l.048-.135a.834.834 0 0 1 1.575.177q.186.902.188 1.856A9.168 9.168 0 1 1 9.166 0"></path></svg></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__sm"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg></button><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__md"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"><div class="rp-nav-menu__others-mobile__container"><div class="rp-nav-hamburger__md__hover-group"><div class="rp-nav-screen-appearance"><div class="rp-nav-screen-appearance__left">主题</div><div class="rp-nav-screen-appearance__right"></div></div><div class="rp-nav-screen-divider"></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div></div></ul></button></div></header><div class="rp-doc-layout__menu"><div class="rp-sidebar-menu"><button type="button" class="rp-sidebar-menu__left"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M4 6h24v2H4zm0 18h24v2H4zm0-12h24v2H4zm0 6h24v2H4z"></path></svg><span>菜单</span></button><button type="button" class="rp-sidebar-menu__right"><span class="rp-sidebar-menu__right__text">目录</span><svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-sidebar-menu__right__icon" style="transform:rotate(0deg);transition:transform 0.2s ease-out"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button></div></div><div class="rp-doc-layout__container"><aside class="rp-doc-layout__sidebar rp-scrollbar"><a href="/ems/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">返回文档首页</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-divider" style="padding-left:12px"></div><div class="rp-sidebar-section-header"><div class="rp-sidebar-section-header__left"><span>公共模块</span></div><div class="rp-sidebar-section-header__right"></div></div><a href="/ems/common/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">公共模块概览</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/design" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">公共模块设计与实施</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">实时数据访问</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/common/realtime/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">实时数据与配置</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/access-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">C++17 多后端访问接口</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/zeromq-messaging-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">ZeroMQ 消息与命令设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/redis-key-design" class="rp-sidebar-item rp-sidebar-item--active rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">Redis 键设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div></aside><div class="rp-doc-layout__doc"><main class="rp-doc-layout__doc-container"><div class="rp-doc rspress-doc"><!--$--><h1 class="rp-toc-include" id="ems-redis-键设计"><a href="#ems-redis-键设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>EMS Redis 键设计<!-- --> </h1>
+<blockquote>
+<p>版本：1.6｜更新日期：2026-09-29｜状态：目标设计，待实现与迁移。
+本文是 Redis 实时键命名与数据组织的约定。整体职责见 <a href="/ems/architecture/system-design" class="rp-link">EMS 系统架构设计</a>，遥测与配置入口见 <a href="/ems/common/realtime/" class="rp-link">实时数据与配置</a>。四类 C++ 进程复用公共 ormpp API，并各自管理数据库连接。</p>
+</blockquote>
+<h2 class="rp-toc-include" id="1-评估与决策"><a href="#1-评估与决策" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1. 评估与决策</h2>
+<p>本文定义 Redis 实时数据库的物理存储约定。业务统一通过 <a href="/ems/common/realtime/access-design" class="rp-link">公共实时数据访问接口</a> 访问共享内存、Redis 或其他内存数据库；作用域和资产身份跨后端保持一致，Redis 命令与键格式留在 Redis 适配器内。配置权威数据保存在 MySQL，消息走 ZeroMQ。</p>
+<p>采用“全局唯一储能单元 code → 设备 code → 子设备 code → 更深层设备 code”的路径设计。它与资产树一致，能直接定位单元、设备和部件，也避免让业务地址依赖采集进程的分片编号。</p>
+<p>单元作用域由 <code>{&lt;unit_code&gt;}</code> 标识；测点键统一以 <code>ems:rt:point:</code> 开头，再接作用域、设备层级和测点 code，例如 <code>ems:rt:point:{ess000001}:pcs01:active_power</code>。<code>&lt;...&gt;</code> 表示占位符，实际键只保留 code 外的一对花括号。站统一使用 <code>station</code>、<code>station_id</code>、<code>station_code</code>，API 集合名为 <code>stations</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>设计点</th><th>约定及理由</th></tr></thead><tbody><tr><td>单元根</td><td>unit_code 全局唯一，站的 code 不重复放进单元键；station 归属放在元数据和消息中</td></tr><tr><td>设备层级</td><td>设备 code 以冒号直接串联为 <code>&lt;设备code&gt;:&lt;子设备code&gt;:&lt;更深层code&gt;</code>；不固定为三层</td></tr><tr><td>code 与 ID</td><td>code 构成可读地址，稳定 ID 继续作为数据库关联、历史和审计身份</td></tr><tr><td>测点类型前缀</td><td>测点使用 <code>ems:rt:point:&lt;作用域&gt;:&lt;设备层级&gt;:&lt;point_code&gt;</code>；单元或 station 自身测点省略设备层级</td></tr><tr><td>其他资源</td><td>元数据、状态等继续使用资产路径后的 <code>meta</code>、<code>rt:state</code> 等资源后缀</td></tr><tr><td>遥测主题</td><td>ZeroMQ 按单元或 station 作用域区分，事件载荷携带设备路径；不创建 Redis Stream</td></tr><tr><td>公共资源</td><td>station 公共设备、共享通道、站级策略拥有独立 station 根，不挂到任意单元下面</td></tr></tbody></table></div>
+<p>每一级仅保留 code，节点种类由元数据 <code>asset_type</code> 区分。Rack、Pack、Cell 等没有协议连接的部件也可占用设备路径节点；路径表示资产包含关系，通信、供电和管理关系另行建模。</p>
+<h2 class="rp-toc-include" id="2-code-唯一性与身份"><a href="#2-code-唯一性与身份" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2. code 唯一性与身份</h2>
+<h3 class="rp-toc-include" id="21-格式与约束"><a href="#21-格式与约束" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.1 格式与约束</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>对象</th><th>唯一范围</th><th>持久约束</th></tr></thead><tbody><tr><td>station_code</td><td>整个 EMS 系统</td><td><code>station.code</code> 非空，唯一索引</td></tr><tr><td>unit_code</td><td>整个 EMS 系统，跨 station 唯一</td><td><code>ess_unit.code</code> 非空，唯一索引；不能仅约束 <code>(station_id, code)</code></td></tr><tr><td>设备及各层子设备 code</td><td>同一个直接父资产节点下</td><td><code>asset_node(parent_asset_id, code)</code> 唯一索引；设备节点 parent_asset_id 必须非空</td></tr><tr><td>point_code</td><td>同一个所属资产节点下</td><td><code>point(asset_id, code)</code> 唯一索引，原始点与派生点不得重名</td></tr><tr><td>channel_code / resource_code</td><td>同一 station 内</td><td>各自的 <code>(station_id, code)</code> 唯一索引</td></tr></tbody></table></div>
+<p>本版 code 采用 <code>^[a-z0-9][a-z0-9_-]{0,63}$</code>，只接受小写 ASCII；禁止空白、冒号、花括号、斜杠及通配符。显示名称独立存放，可使用中文和自由格式。新建接口遇到不合规 code 直接拒绝，不静默转小写；已有编码先生成规范化映射并检查冲突再导入。</p>
+<p>数字编号直接接在名称后面，例如 <code>ess000001</code>、<code>station001</code>、<code>pcs01</code>、<code>rack01</code>、<code>rs48501</code>；名称与编号之间不加连字符。code 校验在上述字符规则外拒绝 <code>-[0-9]</code> 片段；名称内部的单词连接仍可保留连字符，例如 <code>pcc-meter01</code>。编号位数由对应编码规则确定，code 按完整字符串处理，不能将数字部分转为整数后丢失前导零；已有 code 的调整仍按迁移流程执行。</p>
+<p>设备及各层子设备 code 额外禁止使用保留字 <code>meta</code>、<code>rt</code>、<code>config</code>、<code>stream</code>、<code>command</code>、<code>channel</code>、<code>resource</code>、<code>process</code>，用于区分设备路径与资源后缀。该限制只针对设备路径节点，不额外限制 unit_code、station_code 或 point_code。各进程的创建校验、导入与 KeyBuilder 共用保留字列表；新增保留字前检查已有编码兼容性。</p>
+<p>各 C++ 进程使用相同格式校验与数据库字符比较约定；数据库唯一约束负责解决并发创建竞态，不能仅靠“先查询是否存在”或 Redis 锁。绑定到同一资产的 station/ess_unit 扩展表 code 与资产节点 code 在同事务中保持一致，设备 code 直接取资产节点，不在 device 表独立维护另一份名称。</p>
+<p>全局唯一需要统一编码登记机制。共用 MySQL 时由全局唯一索引约束；多站独立 MySQL、离线建站时必须预分配不重叠的编码范围或先由中心登记，不能各站都从 <code>ess001</code> 独立编号后声称全局唯一。导入和跨站汇总仍检查冲突，冲突时拒绝覆盖已有单元。已退役 code 保留登记、不复用给新资产。</p>
+<h3 class="rp-toc-include" id="22-稳定性与层级"><a href="#22-稳定性与层级" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.2 稳定性与层级</h3>
+<ul>
+<li>code 发布后作为稳定业务编码，普通改显示名称不改变键。改 code、移动父节点均走第 8 节迁移流程。</li>
+<li>设备 code 不要求全局唯一：不同单元可以都有 <code>pcs01</code>，同一单元不同电池簇可以都有 <code>pack01</code>；完整祖先路径必须唯一。</li>
+<li>每个节点只有一个主要父节点，校验无环、station 一致；共享设备只保存一份权威状态，通过关系引用，不复制挂接。</li>
+<li>station_id、unit_id、asset_id、device_id（如节点可通信）、point_id 保持稳定。键变化不更换历史身份；事件保留产生时的 code 路径与 config_version。</li>
+<li>本版建议最大设备深度 8、键总长度不超过 2048 字节，由各 C++ 进程共用契约校验；这些是项目限制，调整需两端同步。</li>
+</ul>
+<h2 class="rp-toc-include" id="3-路径语法与例子"><a href="#3-路径语法与例子" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3. 路径语法与例子</h2>
+<p>下列 <code>U</code>、<code>S</code>、<code>D</code> 只是文档简写，不是实际键中的字符。</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>U = ems:{&lt;unit_code&gt;}</span></span>
+<span class="line"><span>S = ems:{station:&lt;station_code&gt;}</span></span>
+<span class="line"><span>D = U 或 S 后追加一至多组 :&lt;code&gt;</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>测点键语法（方括号表示可选设备层级，不写入实际键）：</span></span>
+<span class="line"><span>ems:rt:point:{&lt;unit_code&gt;}[:&lt;设备code&gt;:&lt;子设备code&gt;:...]:&lt;point_code&gt;</span></span>
+<span class="line"><span>ems:rt:point:{station:&lt;station_code&gt;}[:&lt;设备code&gt;:&lt;子设备code&gt;:...]:&lt;point_code&gt;</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>单元级测点：</span></span>
+<span class="line"><span>ems:rt:point:{ess000001}:soc</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>单元状态：</span></span>
+<span class="line"><span>ems:{ess000001}:rt:state</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>设备测点：</span></span>
+<span class="line"><span>ems:rt:point:{ess000001}:pcs01:active_power</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>子设备测点：</span></span>
+<span class="line"><span>ems:rt:point:{ess000001}:battery01:rack01:soc</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>子子设备测点：</span></span>
+<span class="line"><span>ems:rt:point:{ess000001}:battery01:rack01:pack01:voltage</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>更深部件测点：</span></span>
+<span class="line"><span>ems:rt:point:{ess000001}:battery01:rack01:pack01:cell01:voltage</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>station 公共设备：</span></span>
+<span class="line"><span>ems:rt:point:{station:station001}:pcc-meter01:active_power</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>station 共享通道：</span></span>
+<span class="line"><span>ems:{station:station001}:channel:rs48501:rt:state</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>测点键先识别固定前缀 <code>ems:rt:point:</code>，再读取完整花括号作用域；其后最后一段是 point_code，中间零至多段是设备 code 路径。零段设备 code 表示单元或 station 自身测点，例如 <code>ems:rt:point:{station:station001}:active_power</code>。层级与测点归属由已发布配置校验，不根据 code 中的 <code>pcs</code>、<code>rack</code> 等文本猜测设备类型。其他资源键仍按 U/S/D 加资源后缀解析；设备保留字继续用于这些资源键。station tag 含 <code>station:</code>，而 unit_code 禁止冒号，两类作用域不会因 code 相同而重名。</p>
+<h2 class="rp-toc-include" id="4-键目录与所有权"><a href="#4-键目录与所有权" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4. 键目录与所有权</h2>
+<h3 class="rp-toc-include" id="41-资产实时值与索引"><a href="#41-资产实时值与索引" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4.1 资产、实时值与索引</h3>
+<p>表中 <code>R</code> 表示 U 或 S，<code>N</code> 表示 R 或 D；<code>A</code> 是 N 去掉开头 <code>ems:</code> 后的资产路径，保留完整 hash tag。例如 N 为 <code>ems:{ess000001}:pcs01</code>，A 为 <code>{ess000001}:pcs01</code>，单元自身的 A 为 <code>{ess000001}</code>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>键模板</th><th>类型</th><th>内容与写入方</th></tr></thead><tbody><tr><td><code>N:rt:state</code></td><td>Hash</td><td>单元/station 聚合由策略写，设备通信与运行状态由指定状态所有者写；每个 Hash 明确唯一写角色</td></tr><tr><td><code>ems:rt:point:A:&lt;point_code&gt;</code></td><td>Hash</td><td>A 按上述定义展开；一个测点完整最新样本，采集写原始点，策略写独立派生点</td></tr><tr><td><code>S:channel:&lt;channel_code&gt;:rt:state</code></td><td>Hash</td><td>通道/监听就绪、会话数与汇总状态、收发/失败时间、owner_epoch、应用版本；所属通信实例写</td></tr><tr><td><code>S:resource:&lt;resource_code&gt;:owner</code></td><td>String（JSON）</td><td>物理资源 owner_id、owner_epoch、租约身份；指定所有权协调器维护，带租约 TTL</td></tr><tr><td><code>S:process:&lt;role&gt;:&lt;instance_id&gt;:heartbeat</code></td><td>String（JSON）</td><td>本实例心跳、启动代次、时间；各进程自行更新并设 TTL</td></tr></tbody></table></div>
+<p>instance_id、资源 ID、命令 ID 等动态后缀统一使用 <code>^[a-z0-9][a-z0-9_-]{0,63}$</code>，role 来自固定枚举，owner_shard 使用同样的安全标识格式；由 KeyBuilder 校验，不拼接用户任意输入。配置版本与资产目录由 MySQL 查询，不能凭 Redis 键推断完整配置。</p>
+<p>树形配置查询通过 MySQL 的版本化目录完成。Redis 键本身不是配置目录，前缀不会自动产生父子索引。业务请求不使用 <code>KEYS</code> 或全库 <code>SCAN</code> 拼资产树；运维遍历允许限速 SCAN，处理重复项，不能把遍历视为一致性快照。见 <a href="https://redis.io/docs/latest/commands/scan/" target="_blank" rel="noopener noreferrer" class="rp-link">Redis SCAN 说明</a>。</p>
+<p>station 通道只记录一份权威通道汇总状态；服务端的一条通道可以有多个运行 session，不能用一个 connected 布尔值代替全部会话状态。首期 session 明细由有界运行诊断接口提供，不临时发明未版本化的 Redis 键目录。归属不同单元的测点仍各自使用 <code>ems:rt:point:{&lt;unit_code&gt;}:...</code>，上送映射只引用标准点，不复制权威采样。设备/通道/profile/会话的关系见 <a href="/ems/architecture/channel-protocol" class="rp-link">设备、通道与协议</a>。</p>
+<p>通道更新与单元测点写入不要求跨槽原子性。多个单元引用同一站级电表时读取同一个 station 测点，通过关系模型避免重复计量。资源租约只辅助协调，设备执行前的旧主隔离要求仍按整体架构第 6.3 节执行。</p>
+<h3 class="rp-toc-include" id="42-配置"><a href="#42-配置" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4.2 配置</h3>
+<p>Redis 不保存配置快照、active/applied 版本或配置事件。各 C++ 进程通过公共 ormpp API 从 MySQL 读取指定版本；配置发布和实例应用状态也保存在 MySQL。ZeroMQ 只提示实例重读，提示遗漏后按 MySQL 版本定期对账。各实例的本地配置缓存必须按版本整体替换，不能混用不同版本的点位与路由。</p>
+<h3 class="rp-toc-include" id="43-事件与控制"><a href="#43-事件与控制" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4.3 事件与控制</h3>
+<p>Redis 不作为消息传输或命令执行入口。原始遥测经独立 ZeroMQ PUB/SUB 送存储进程，允许丢样；命令与告警的业务事实由 MySQL/outbox 保存，命令通过 ZeroMQ REQ/REP 交接，变化提示通过 PUB/SUB 发出。一个采集分片可服务多个单元，其命令端点按 <code>owner_shard</code> 路由；扩缩容后仍需校验 <code>owner_epoch</code>、有效期与设备所有权。</p>
+<h2 class="rp-toc-include" id="5-实时数据字段与更新"><a href="#5-实时数据字段与更新" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5. 实时数据字段与更新</h2>
+<p>统一接口管理的实时 Hash 增加内部 <code>_store_revision</code>，用于完整记录 CAS；<code>_store_</code> 前缀不接受业务任意写入。测点防护字段增加 <code>accepted_source_id、accepted_source_epoch、accepted_config_version、write_enabled</code>，由授权协调职责安装；普通采样在同一记录版本上保留并校验这些字段。revision 与业务 source_epoch/sequence 分别承担存储并发和来源顺序控制，详细语义见 <a href="/ems/common/realtime/access-design" class="rp-link">公共实时数据访问接口设计第 4、5 节</a>。</p>
+<p>Redis 派生类采用同槽临时 Hash 构建完整替换数据，再经脚本检查版本并 RENAME 发布，临时键为 <code>R:_store_tmp:&lt;write_id&gt;</code>；write_id 使用唯一安全标识，键只供适配器使用，不进入资产查询。构建时设置短 TTL，发布前取消临时 TTL 以保持最新值默认不过期；取消后未发布的孤儿由管理清理器在确认超过操作预算及恢复保留期后限速回收，正常成功或版本冲突路径立即清理不再使用的临时键。授权和清理必须覆盖该前缀，不能误清当前在途写入。</p>
+<p>单测点 Hash 至少包含 <code>point_id、value_type、value、unit、quality、source_time、ingest_time、source_epoch、sequence、config_version、event_id</code>。Redis Hash 字段采用统一字符串编码；value 使用 JSON 标量文本，value_type 说明业务类型，无效值编码为 JSON <code>null</code>，精确整数按契约使用十进制字符串。时间统一 UTC 并约定精度，不能让各进程及前端各用不同的时间单位。</p>
+<p>同一完整样本中的值、质量、时间、代次和序号必须一起更新，不能让读者看到一半新、一半旧。写入方根据已批准的来源代次及配置版本校验所有权；同一代次比较 sequence，重复忽略，旧事件只补历史。来源切换必须先更新权威来源代次，不能直接按随机进程 ID 或不同来源的 sequence 排序。</p>
+<p>采样进入有界内存队列，再分别更新 Redis 最新值和通过 ZeroMQ 发布原始事件，不设置本地文件缓冲。实时更新可以使用受限脚本保证单条完整记录的条件替换；遥测发布与实时写入不是同一事务。发布端、网络或存储端故障可能丢样，不能用 Redis 最新值补造历史。具体恢复和 outbox 规则沿用整体架构第 5.3 节。</p>
+<h2 class="rp-toc-include" id="6-cluster-与容量边界"><a href="#6-cluster-与容量边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6. Cluster 与容量边界</h2>
+<p>花括号只包住 unit_code，设备 code 放在其后。测点的 <code>rt:point:</code> 位于花括号之前；同单元实时状态键因此位于同一 hash slot，层级更深不会自动分散到其他节点。同槽多键限制与 hash tag 规则见 <a href="https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec/" target="_blank" rel="noopener noreferrer" class="rp-link">Redis Cluster 规范</a>。</p>
+<p>工程上的代价是一个大单元的热点不能靠增加 Cluster 节点自动拆开；不同单元还可能散列到同一槽，不能理解为一个单元独占一槽或一个节点。station 公共根同样需要容量限制。验收按单元/站级根分别统计键数量、内存、实时更新率和脚本时延。</p>
+<p>跨单元、单元与 station 之间分别读写，通过 config_version、采样时间和业务校验组合结果。pipeline 可减少往返，但不提供跨根事务快照。若最大单元的负载超过单槽预算，再设计明确版本的单元内分片方案，连同实时状态迁移一起调整，变更必须更新键契约版本。</p>
+<h2 class="rp-toc-include" id="7-生命周期与恢复"><a href="#7-生命周期与恢复" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7. 生命周期与恢复</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>数据</th><th>保留规则</th></tr></thead><tbody><tr><td>最新测点与设备状态</td><td>默认保留最后值，用质量、采样时间和 stale_after 判陈旧；不因离线直接删除最后值</td></tr><tr><td>心跳与租约</td><td>按心跳间隔/容错预算配置 TTL；租约续期和释放必须核对持有者身份</td></tr><tr><td>命令状态投影</td><td>可按查询窗口过期，权威状态和幂等记录始终以 MySQL 为准</td></tr><tr><td>退役设备路径</td><td>经版本切换、消费确认和保留期后按清单清理；不复用旧 code 接收新资产数据</td></tr></tbody></table></div>
+<p>Redis 缺失或故障后从 MySQL 配置与业务记录、重新采集的设备状态恢复实时投影；不能用恢复后的最新值补造历史。实时容量不足触发显式告警和背压。保留期、TTL、容量和最长中断目标在部署配置中量化，不在键中编码。</p>
+<h2 class="rp-toc-include" id="8-实施与迁移"><a href="#8-实施与迁移" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8. 实施与迁移</h2>
+<p>当前为文档变更，不对运行中的 Redis 执行改名、删除或重放。后续按以下顺序实施：</p>
+<ol>
+<li>盘点旧键和旧命名字段、实际消费组及积压；建立稳定 ID → station/unit code → device_path 映射，修复重名、非法 code 和设备保留字冲突，落实统一数据库迁移和唯一索引。已有带设备类型前缀或测点类型后缀的键按新语法重建并核对，不能仅修改读取端的拼接方式。</li>
+<li>在 <code>contracts/</code> 维护键语法、字段和样例；C++ 公共 Redis 模块实现统一 KeyBuilder，各进程复用，共享契约样例。接口接收已解析的根、code 数组和资源类型，业务代码不手工拼键，访问前按 station/资产授权。</li>
+<li>站表、字段、JSON、Protobuf 映射、API、SQL 示例和日志统一采用 station 命名；若已有旧客户端，提供明确的兼容窗口和契约版本，保留已有 Protobuf 字段编号，不直接破坏持久表或历史标签。TDengine 已有历史表不因文档改名就自动迁移。</li>
+<li>从同一 MySQL 配置版本重建实时最新值投影，并校验 ID、点数、质量和时间；影子写入只用于验证，新旧路径只允许一套权威控制执行消费者。</li>
+<li>选定切换水位，切换生产者、查询和订阅配置；迁移前对旧 Stream 未消费记录和 PEL 做一次性对账，再停用旧消息入口。跨新旧键/槽操作分步执行，验证后再清理。</li>
+<li>code 改名或移动设备时列出整棵子树受影响路径和遥测主题，暂停受影响的新控制，核对在途命令，按上述版本/水位切换。拒绝旧版本控制与旧路径实时写入；已收到的迟到旧事件仍按稳定 ID 归档，不恢复旧路径为权威值。回退也要先核对命令执行记录，避免重复设备动作。</li>
+</ol>
+<h2 class="rp-toc-include" id="9-验收要求"><a href="#9-验收要求" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9. 验收要求</h2>
+<ul>
+<li>不同 station 并发创建同一 unit_code 必须失败；离线导入重名、同父节点重名、非法分隔符、编号前连字符、设备保留字和大小写冲突都被拒绝；编号前导零在读写和键生成时保持一致。</li>
+<li>不同单元同名设备、不同父节点同名子设备不冲突；支持多层路径，拒绝环、超深层级和越权访问。</li>
+<li>各 C++ 进程对同一输入生成一致的实时键和字段；前端只使用逻辑身份与 JSON 字段，不生成物理 Redis 键。单元级、各层设备级和 station 测点都以 <code>ems:rt:point:</code> 开头，解析后的作用域、设备路径与 point_code 正确；station 与单元交互不依赖跨槽原子性。</li>
+<li>共享通道和公共电表只有一份权威状态；按关系查到正确设备，跨单元策略不重复计量。</li>
+<li>乱序、重复、来源切换、Redis 中断和存储重启后可对账实时状态；ZeroMQ 遥测丢样可观测，不能由 Redis 最新值推断缺失事件。</li>
+<li>配置部分发布、改名、换父节点、单元迁移、旧命令迟到与回退不会导致重复执行或历史身份变化；观察到的应用版本与实例心跳一致。</li>
+</ul>
+<p>官方规则核对日期为 2026-09-13；项目命名、深度、保留和迁移约定由本文定义，实际客户端版本与目标部署仍需集成验收。</p><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/common/realtime/redis-key-design.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/10/20 23:17:14</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/common/realtime/zeromq-messaging-design" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>ZeroMQ 消息与命令设计</span></span></a><div class="rp-prev-next-page__placeholder"></div></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#1-评估与决策" class="rp-toc-item rp-link" title="1. 评估与决策" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">1. 评估与决策</span></a><a href="#2-code-唯一性与身份" class="rp-toc-item rp-link" title="2. code 唯一性与身份" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">2. code 唯一性与身份</span></a><a href="#21-格式与约束" class="rp-toc-item rp-link" title="2.1 格式与约束" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.1 格式与约束</span></a><a href="#22-稳定性与层级" class="rp-toc-item rp-link" title="2.2 稳定性与层级" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.2 稳定性与层级</span></a><a href="#3-路径语法与例子" class="rp-toc-item rp-link" title="3. 路径语法与例子" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">3. 路径语法与例子</span></a><a href="#4-键目录与所有权" class="rp-toc-item rp-link" title="4. 键目录与所有权" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">4. 键目录与所有权</span></a><a href="#41-资产实时值与索引" class="rp-toc-item rp-link" title="4.1 资产、实时值与索引" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">4.1 资产、实时值与索引</span></a><a href="#42-配置" class="rp-toc-item rp-link" title="4.2 配置" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">4.2 配置</span></a><a href="#43-事件与控制" class="rp-toc-item rp-link" title="4.3 事件与控制" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">4.3 事件与控制</span></a><a href="#5-实时数据字段与更新" class="rp-toc-item rp-link" title="5. 实时数据字段与更新" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">5. 实时数据字段与更新</span></a><a href="#6-cluster-与容量边界" class="rp-toc-item rp-link" title="6. Cluster 与容量边界" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">6. Cluster 与容量边界</span></a><a href="#7-生命周期与恢复" class="rp-toc-item rp-link" title="7. 生命周期与恢复" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">7. 生命周期与恢复</span></a><a href="#8-实施与迁移" class="rp-toc-item rp-link" title="8. 实施与迁移" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">8. 实施与迁移</span></a><a href="#9-验收要求" class="rp-toc-item rp-link" title="9. 验收要求" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">9. 验收要求</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/common/realtime/redis-key-design.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+    <div id="__rspress_modal_container"></div>
+  </body>
+</html>

@@ -1,0 +1,444 @@
+<!doctype html>
+<html lang="zh">
+  <head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>采集执行与协议插件设计 - EMS 设计文档</title>
+<script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
+<link href="/ems/static/css/styles.3c463aa6ae.css" rel="stylesheet">
+<link rel="preload" href="/ems/static/js/async/route-1322c5b1f93c.3cecab42ac.js" as="script">
+<script defer src="/ems/static/js/styles.560b9eab4d.js"></script>
+<script defer src="/ems/static/js/lib-react.0685ac4d75.js"></script>
+<script defer src="/ems/static/js/lib-router.de7486675c.js"></script>
+<script defer src="/ems/static/js/m3.da04ef77ed.js"></script>
+<script defer src="/ems/static/js/index.1377de6962.js"></script>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Rspress v2.0.21">
+<link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="采集执行与协议插件设计 - EMS 设计文档">
+<meta name="description" content="2026-09-19 修订：本文说明 C++17 通信进程的采集执行子模块。进程完整职责见 采集与上送进程，设备/通道/协议的统一模型见 设备、通道与协议。轮询线程与插件示例仅说明 acquisition 客户端路径，不代表所有协议或服务端角色都必须实现同一套轮询接口。 Redis 地址遵循 Redis 键设计：全局唯一 unit_code 为根，设备与子设备 code 逐级展开；共享通道位于 station 命名空间，设备资产路径与通信路由分别解析。站字段统一使用 station_id/station_code。 公共实时状态访问采用 C++17 多后端接口设计：数据分发层注入 RealtimeService/IRealtimeStore，支持共享内存、Redis 与其他内存数据库派生类。本文涉及 Redis 最新值的流程和示意为默认部署实现；有界采样缓冲、事件通道、配置仓储与实时状态后端分别承担职责，协议和通道线程不判断后端类型。 设备类型、固有点位、厂家点表与实例绑定遵循 EMS 设备模型与点表绑定设计。采集按厂家路由读取并解码，再转换为标准逻辑点；控制按生效标准命令配置编码，执行前检查启用状态、版本、能力条件及独立反馈。">
+<meta property="og:description" content="2026-09-19 修订：本文说明 C++17 通信进程的采集执行子模块。进程完整职责见 采集与上送进程，设备/通道/协议的统一模型见 设备、通道与协议。轮询线程与插件示例仅说明 acquisition 客户端路径，不代表所有协议或服务端角色都必须实现同一套轮询接口。 Redis 地址遵循 Redis 键设计：全局唯一 unit_code 为根，设备与子设备 code 逐级展开；共享通道位于 station 命名空间，设备资产路径与通信路由分别解析。站字段统一使用 station_id/station_code。 公共实时状态访问采用 C++17 多后端接口设计：数据分发层注入 RealtimeService/IRealtimeStore，支持共享内存、Redis 与其他内存数据库派生类。本文涉及 Redis 最新值的流程和示意为默认部署实现；有界采样缓冲、事件通道、配置仓储与实时状态后端分别承担职责，协议和通道线程不判断后端类型。 设备类型、固有点位、厂家点表与实例绑定遵循 EMS 设备模型与点表绑定设计。采集按厂家路由读取并解码，再转换为标准逻辑点；控制按生效标准命令配置编码，执行前检查启用状态、版本、能力条件及独立反馈。"></head>
+
+  <body>
+    <div id="__rspress_root"><link rel="preload" as="image" href="/ems/logo.svg"/><header class="rp-nav"><div class="rp-nav__left"><div class="rp-nav__title"><a href="/ems/" class="rp-nav__title__link rp-link"><div class="rp-nav__title__logo"><img src="/ems/logo.svg" alt="logo" id="logo" class="rspress-logo rp-nav__title__logo-image"/></div><span>EMS</span></a></div><ul class="rp-nav-menu rp-nav-menu--left"><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/" class="rp-nav-menu__item__container rp-link">首页</a></li><li class="rp-nav-menu__item"><a href="/ems/architecture/" class="rp-nav-menu__item__container rp-link">架构</a></li><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/processes/" class="rp-nav-menu__item__container rp-link">进程</a></li><li class="rp-nav-menu__item"><a href="/ems/common/" class="rp-nav-menu__item__container rp-link">公共模块</a></li><li class="rp-nav-menu__item"><a href="/ems/decisions/" class="rp-nav-menu__item__container rp-link">技术决策</a></li><li class="rp-nav-menu__item"><a href="/ems/reference/" class="rp-nav-menu__item__container rp-link">开发参考</a></li><li class="rp-nav-menu__item"><a href="/ems/guide/" class="rp-nav-menu__item__container rp-link">文档维护</a></li></ul></div><div class="rp-nav__right"><button class="rp-search-button"><div class="rp-search-button__content"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21" class="rp-search-button__icon"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg><span class="rp-search-button__word">搜索</span></div><div class="rp-search-button__hotkey" style="opacity:0"><span></span><span>K</span></div></button><div class="rp-search-button--mobile"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg></div><div class="rp-nav__others"><div class="rp-nav-menu__divider"></div><div class="rp-switch-appearance"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="rp-switch-appearance__icon rp-switch-appearance__icon--sun"><path fill="currentColor" d="m7.001 15.848-1.226 1.226a.58.58 0 0 0 0 .818.58.58 0 0 0 .818 0l1.226-1.226a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0m-.352-8.735a.584.584 0 0 0 .825-.825L6.237 5.051a.584.584 0 0 0-.825.825zM5.011 11.07h-1.75a.584.584 0 0 0 0 1.167h1.75c.324 0 .584-.26.584-.583a.585.585 0 0 0-.584-.584m7.003-5.835c.324 0 .584-.26.584-.584V2.9a.58.58 0 0 0-.584-.584.58.58 0 0 0-.583.583V4.65c0 .323.262.584.583.584m5.616 1.621 1.226-1.225a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0l-1.226 1.225a.58.58 0 0 0 0 .818.576.576 0 0 0 .818 0m3.138 4.214h-1.75a.58.58 0 0 0-.584.584c0 .324.26.584.583.584h1.751a.584.584 0 1 0 0-1.167m-3.389 5.124a.584.584 0 0 0-.825.825l1.238 1.238a.584.584 0 0 0 .825-.826zm-5.365-9.795a5.256 5.256 0 0 0-5.257 5.258 5.256 5.256 0 0 0 5.257 5.257 5.256 5.256 0 0 0 5.257-5.257 5.256 5.256 0 0 0-5.257-5.258m0 11.675a.58.58 0 0 0-.583.583v1.751a.582.582 0 1 0 1.167 0v-1.75a.584.584 0 0 0-.584-.584"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="currentColor" viewBox="0 0 19 19" class="rp-switch-appearance__icon rp-switch-appearance__icon--moon"><path fill="currentColor" d="M9.166 0a9.2 9.2 0 0 1 1.857.188.834.834 0 0 1 .042 1.623 4.47 4.47 0 1 0 5.457 5.457l.048-.135a.834.834 0 0 1 1.575.177q.186.902.188 1.856A9.168 9.168 0 1 1 9.166 0"></path></svg></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__sm"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg></button><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__md"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"><div class="rp-nav-menu__others-mobile__container"><div class="rp-nav-hamburger__md__hover-group"><div class="rp-nav-screen-appearance"><div class="rp-nav-screen-appearance__left">主题</div><div class="rp-nav-screen-appearance__right"></div></div><div class="rp-nav-screen-divider"></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div></div></ul></button></div></header><div class="rp-doc-layout__menu"><div class="rp-sidebar-menu"><button type="button" class="rp-sidebar-menu__left"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M4 6h24v2H4zm0 18h24v2H4zm0-12h24v2H4zm0 6h24v2H4z"></path></svg><span>菜单</span></button><button type="button" class="rp-sidebar-menu__right"><span class="rp-sidebar-menu__right__text">目录</span><svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-sidebar-menu__right__icon" style="transform:rotate(0deg);transition:transform 0.2s ease-out"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button></div></div><div class="rp-doc-layout__container"><aside class="rp-doc-layout__sidebar rp-scrollbar"><a href="/ems/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">返回文档首页</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-divider" style="padding-left:12px"></div><div class="rp-sidebar-section-header"><div class="rp-sidebar-section-header__left"><span>进程设计</span></div><div class="rp-sidebar-section-header__right"></div></div><a href="/ems/processes/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">进程职责总览</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">采集与上送进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/collector/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">进程职责与模块</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/collector/design" class="rp-sidebar-item rp-sidebar-item--active rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">采集执行与协议插件</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/collector/protocol-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">通讯协议动态库（PIMPL / 跨平台）</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">存储进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/storage/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">存储进程设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/storage/design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">存储进程详细设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">策略进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/strategy/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">策略进程设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/strategy/design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">策略进程详细设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">Web 后端与前端</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/web/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">Web 后端与前端协作</span></div><div class="rp-sidebar-item__right"></div></a></div></div></aside><div class="rp-doc-layout__doc"><main class="rp-doc-layout__doc-container"><div class="rp-doc rspress-doc"><!--$--><h1 class="rp-toc-include" id="采集执行与协议插件设计"><a href="#采集执行与协议插件设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>采集执行与协议插件设计<!-- --> </h1>
+<blockquote>
+<p>2026-09-19 修订：本文说明 C++17 通信进程的采集执行子模块。进程完整职责见 <a href="/ems/processes/collector/" class="rp-link">采集与上送进程</a>，设备/通道/协议的统一模型见 <a href="/ems/architecture/channel-protocol" class="rp-link">设备、通道与协议</a>。轮询线程与插件示例仅说明 acquisition 客户端路径，不代表所有协议或服务端角色都必须实现同一套轮询接口。</p>
+</blockquote>
+<p>Redis 地址遵循 <a href="/ems/common/realtime/redis-key-design" class="rp-link">Redis 键设计</a>：全局唯一 unit_code 为根，设备与子设备 code 逐级展开；共享通道位于 station 命名空间，设备资产路径与通信路由分别解析。站字段统一使用 station_id/station_code。</p>
+<p>公共实时状态访问采用 <a href="/ems/common/realtime/access-design" class="rp-link">C++17 多后端接口设计</a>：数据分发层注入 <code>RealtimeService/IRealtimeStore</code>，支持共享内存、Redis 与其他内存数据库派生类。本文涉及 Redis 最新值的流程和示意为默认部署实现；有界采样缓冲、事件通道、配置仓储与实时状态后端分别承担职责，协议和通道线程不判断后端类型。</p>
+<p>设备类型、固有点位、厂家点表与实例绑定遵循 <a href="/ems/architecture/device-model" class="rp-link">EMS 设备模型与点表绑定设计</a>。采集按厂家路由读取并解码，再转换为标准逻辑点；控制按生效标准命令配置编码，执行前检查启用状态、版本、能力条件及独立反馈。</p>
+<h2 class="rp-toc-include" id="1-概述"><a href="#1-概述" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1. 概述</h2>
+<h3 class="rp-toc-include" id="11-设计目标"><a href="#11-设计目标" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1.1 设计目标</h3>
+<p>数据采集模块是 EMS 系统的核心组件，负责通过多种工业通信协议与现场设备交互，完成遥测（YC）、遥信（YX）、遥控（YK）、遥调（YT）四类数据的采集与下发。</p>
+<p>本设计基于以下核心原则：</p>
+<ul>
+<li><strong>资源单一所有者</strong>：独立通道使用一个 C++17 工作线程；共享同一物理串口/总线的设备绑定由同一线程调度，禁止重复打开同一资源</li>
+<li><strong>设备与通道多对多</strong>：支持采集专用、控制专用和采控共用，控制在事务边界插队，并保证采集新鲜度</li>
+<li><strong>规约动态库按需加载</strong>：各协议包独立动态库；公开 C++ API 使用 PIMPL，按平台加载 <code>.dll</code> / <code>.so</code>，不用到的协议不加载</li>
+<li><strong>统一接口抽象</strong>：所有协议插件实现统一的 C 接口，采集引擎不依赖任何具体协议实现</li>
+</ul>
+<h3 class="rp-toc-include" id="12-目标协议与采集能力"><a href="#12-目标协议与采集能力" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1.2 目标协议与采集能力</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>协议</th><th>传输方式</th><th>默认端口</th><th>典型设备</th><th>动态库文件名</th></tr></thead><tbody><tr><td>Modbus TCP/RTU</td><td>TCP / RS485</td><td>502</td><td>PCS、BMS、通用工控设备</td><td><code>libproto_modbus.so</code></td></tr><tr><td>DL/T 645-2007</td><td>串口网关 / RS485</td><td>网关配置，无统一 TCP 端口</td><td>电能表</td><td><code>libproto_dlt645.so</code></td></tr><tr><td>IEC 60870-5-104</td><td>TCP</td><td>2404</td><td>电力远动设备、保护装置</td><td><code>libproto_iec104.so</code></td></tr><tr><td>IEC 61850 MMS</td><td>TCP</td><td>102</td><td>变电站 IED，报告/控制按能力验收</td><td><code>libproto_iec61850.so</code></td></tr></tbody></table></div>
+<hr/>
+<p>GOOSE/SV 不包含在 MMS 的 TCP 接口中，须独立 profile、发布/订阅角色与能力验收。上送服务端的模型、会话和控制入口见 <a href="/ems/architecture/channel-protocol#6-上送通道设计" class="rp-link">通道协议设计第 6 节</a>。</p>
+<h2 class="rp-toc-include" id="2-整体架构"><a href="#2-整体架构" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2. 整体架构</h2>
+<h3 class="rp-toc-include" id="21-架构图"><a href="#21-架构图" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.1 架构图</h3>
+<div class="rp-codeblock language-txt"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="txt"><code><span class="line"><span>┌─────────────────────────────────────────────────────────────────────────┐</span></span>
+<span class="line"><span>│                          采集进程 (collect)                              │</span></span>
+<span class="line"><span>├─────────────────────────────────────────────────────────────────────────┤</span></span>
+<span class="line"><span>│                                                                         │</span></span>
+<span class="line"><span>│  ┌─────────────────────────────────────────────────────────────────┐   │</span></span>
+<span class="line"><span>│  │                     采集引擎 (CollectEngine)                     │   │</span></span>
+<span class="line"><span>│  │                                                                 │   │</span></span>
+<span class="line"><span>│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐          │   │</span></span>
+<span class="line"><span>│  │  │ 通道线程 #1   │  │ 通道线程 #2   │  │ 通道线程 #N   │  ...     │   │</span></span>
+<span class="line"><span>│  │  │              │  │              │  │              │          │   │</span></span>
+<span class="line"><span>│  │  │ ChannelCtx   │  │ ChannelCtx   │  │ ChannelCtx   │          │   │</span></span>
+<span class="line"><span>│  │  │  ┌────────┐  │  │  ┌────────┐  │  │  ┌────────┐  │          │   │</span></span>
+<span class="line"><span>│  │  │  │Protocol│  │  │  │Protocol│  │  │  │Protocol│  │          │   │</span></span>
+<span class="line"><span>│  │  │  │Plugin* │  │  │  │Plugin* │  │  │  │Plugin* │  │          │   │</span></span>
+<span class="line"><span>│  │  │  └────────┘  │  │  └────────┘  │  │  └────────┘  │          │   │</span></span>
+<span class="line"><span>│  │  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘          │   │</span></span>
+<span class="line"><span>│  │         │                 │                 │                   │   │</span></span>
+<span class="line"><span>│  └─────────┼─────────────────┼─────────────────┼───────────────────┘   │</span></span>
+<span class="line"><span>│            │                 │                 │                        │</span></span>
+<span class="line"><span>│  ┌─────────▼─────────────────▼─────────────────▼───────────────────┐   │</span></span>
+<span class="line"><span>│  │                    插件管理器 (PluginManager)                     │   │</span></span>
+<span class="line"><span>│  │                                                                 │   │</span></span>
+<span class="line"><span>│  │   dlopen/dlsym 按需加载，统一生命周期管理                          │   │</span></span>
+<span class="line"><span>│  │                                                                 │   │</span></span>
+<span class="line"><span>│  │   ┌─────────────────┐  ┌─────────────────┐                      │   │</span></span>
+<span class="line"><span>│   │   │ libproto_    │  │ libproto_    │  ...                 │   │</span></span>
+<span class="line"><span>│   │   │ modbus.so     │  │ iec104.so     │                      │   │</span></span>
+<span class="line"><span>│  │   └─────────────────┘  └─────────────────┘                      │   │</span></span>
+<span class="line"><span>│  └─────────────────────────────────────────────────────────────────┘   │</span></span>
+<span class="line"><span>│                                                                         │</span></span>
+<span class="line"><span>│  ┌─────────────────────────────────────────────────────────────────┐   │</span></span>
+<span class="line"><span>│  │                    数据分发层 (DataDispatcher)                    │   │</span></span>
+<span class="line"><span>│  │                                                                 │   │</span></span>
+<span class="line"><span>│  │   采集数据 ──▶ Redis Hash + Streams ──▶ 存储/策略                │   │</span></span>
+<span class="line"><span>│  └─────────────────────────────────────────────────────────────────┘   │</span></span>
+<span class="line"><span>│                                                                         │</span></span>
+<span class="line"><span>│  ┌─────────────────────────────────────────────────────────────────┐   │</span></span>
+<span class="line"><span>│  │                    参数加载器 (ParaLoader)                        │   │</span></span>
+<span class="line"><span>│  │                                                                 │   │</span></span>
+<span class="line"><span>│  │   从 Redis 版本快照加载配置，缺失时经公共 ormpp API 读库         │   │</span></span>
+<span class="line"><span>│  └─────────────────────────────────────────────────────────────────┘   │</span></span>
+<span class="line"><span>│                                                                         │</span></span>
+<span class="line"><span>└─────────────────────────────────────────────────────────────────────────┘</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<h3 class="rp-toc-include" id="22-核心组件职责"><a href="#22-核心组件职责" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.2 核心组件职责</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>组件</th><th>职责</th></tr></thead><tbody><tr><td><strong>CollectEngine</strong></td><td>采集引擎主类，管理所有通道线程的创建/销毁/启停，协调插件加载与数据分发</td></tr><tr><td><strong>ChannelThread</strong></td><td>每个通道对应一个独立线程，持有该通道的协议插件实例，执行轮询采集循环</td></tr><tr><td><strong>PluginManager</strong></td><td>通过 PIMPL 跨平台加载器管理库租约、协议别名与工厂；具体契约见通讯协议专题</td></tr><tr><td><strong>ProtocolPlugin</strong></td><td>动态库内 PIMPL 协议实现，经版本化 C ABI 与主程序交互</td></tr><tr><td><strong>DataDispatcher</strong></td><td>有界内存缓冲、经统一接口更新最新值、经独立事件接口发布采样；发布失败在预算内重试，超限报告缺口；默认使用 Redis/Streams，变更通知仅作刷新提示</td></tr><tr><td><strong>ParaLoader</strong></td><td>从存储发布的 Redis 快照或公共 ormpp API 加载指定版本的资产、通道绑定和测点配置，维护实际应用版本；数据库连接由采集进程独立管理</td></tr></tbody></table></div>
+<hr/>
+<h2 class="rp-toc-include" id="3-通道线程模型"><a href="#3-通道线程模型" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3. 通道线程模型</h2>
+<h3 class="rp-toc-include" id="31-一个独立资源一个工作线程"><a href="#31-一个独立资源一个工作线程" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.1 一个独立资源一个工作线程</h3>
+<p>独立通道对应一个 <code>std::thread</code>，线程独占协议实例；同一 RS485 总线的多个设备通过不同从站地址绑定到该通道。一个设备也可绑定多个独立通道，分别采集不同测点、控制或作为主备。</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>PCS01 ── telemetry ──▶ 通道 A / 独立连接 A / 线程 A</span></span>
+<span class="line"><span>       └─ control   ──▶ 通道 B / 独立连接 B / 线程 B</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>PCS02 ── both ───────▶ 通道 C / 共用连接 C / 线程 C</span></span>
+<span class="line"><span>                       优先控制队列 + 到期采集队列</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>电表-01 / addr=1 ──┐</span></span>
+<span class="line"><span>电表-02 / addr=2 ──┴──▶ 通道 D / 同一 RS485 / 线程 D</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>连接资源、设备资产归属、协议地址分别建模。多个逻辑通道若指向同一个不可并发物理资源，必须合并到同一调度器或拒绝冲突配置。详细调度见第 3.5、5.2 节。</p>
+<h3 class="rp-toc-include" id="32-线程隔离的好处"><a href="#32-线程隔离的好处" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.2 线程隔离的好处</h3>
+<ol>
+<li><strong>阻塞隔离</strong>：有界通信超时限制独立通道相互等待；共享总线仍会相互影响，插件内存错误仍可能导致整个采集进程退出</li>
+<li><strong>协议隔离</strong>：不同协议的阻塞调用（如串口 I/O）不会互相阻塞</li>
+<li><strong>独立调度</strong>：每个通道可以配置不同的采集周期和策略</li>
+<li><strong>资源可控</strong>：每个通道的内存和 CPU 使用独立可监控</li>
+</ol>
+<h3 class="rp-toc-include" id="33-通道线程生命周期"><a href="#33-通道线程生命周期" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.3 通道线程生命周期</h3>
+<div class="rp-codeblock language-txt"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="txt"><code><span class="line"><span>                    ┌──────────┐</span></span>
+<span class="line"><span>                    │  Created │</span></span>
+<span class="line"><span>                    └────┬─────┘</span></span>
+<span class="line"><span>                         │ start()</span></span>
+<span class="line"><span>                    ┌────▼─────┐</span></span>
+<span class="line"><span>           ┌───────│ Starting │──────────┐</span></span>
+<span class="line"><span>           │       └────┬─────┘          │</span></span>
+<span class="line"><span>           │ 加载插件    │ connect()      │ 加载失败</span></span>
+<span class="line"><span>           │ 失败       │ 成功            │</span></span>
+<span class="line"><span>           │       ┌────▼─────┐    ┌─────▼──────┐</span></span>
+<span class="line"><span>           │       │ Running  │    │  Error     │</span></span>
+<span class="line"><span>           │       └────┬─────┘    └─────┬──────┘</span></span>
+<span class="line"><span>           │            │ stop()         │ 重试/恢复</span></span>
+<span class="line"><span>           │       ┌────▼─────┐          │</span></span>
+<span class="line"><span>           └──────▶│ Stopping │◀─────────┘</span></span>
+<span class="line"><span>                   └────┬─────┘</span></span>
+<span class="line"><span>                        │</span></span>
+<span class="line"><span>                   ┌────▼─────┐</span></span>
+<span class="line"><span>                   │ Stopped  │</span></span>
+<span class="line"><span>                   └──────────┘</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<h3 class="rp-toc-include" id="34-通道上下文结构"><a href="#34-通道上下文结构" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.4 通道上下文结构</h3>
+<div class="rp-codeblock language-cpp"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="cpp"><code><span class="line"><span style="color:var(--shiki-token-keyword)">struct</span><span style="color:var(--shiki-token-function)"> ChannelContext</span><span style="color:var(--shiki-foreground)"> {</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">    int64_t</span><span style="color:var(--shiki-foreground)"> channel_id;</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">    ChannelConfig</span><span style="color:var(--shiki-foreground)"> config;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">unique_ptr</span><span style="color:var(--shiki-foreground)">&lt;std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">thread</span><span style="color:var(--shiki-foreground)">&gt; thread;</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">atomic</span><span style="color:var(--shiki-foreground)">&lt;</span><span style="color:var(--shiki-token-keyword)">bool</span><span style="color:var(--shiki-foreground)">&gt; </span><span style="color:var(--shiki-token-constant)">running</span><span style="color:var(--shiki-foreground)">{</span><span style="color:var(--shiki-token-constant)">false</span><span style="color:var(--shiki-foreground)">};</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">unique_ptr</span><span style="color:var(--shiki-foreground)">&lt;</span><span style="color:var(--shiki-token-function)">ProtocolChannel</span><span style="color:var(--shiki-foreground)">&gt; protocol;</span><span style="color:var(--shiki-token-comment)">  // PIMPL API，内部持有库租约</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">vector</span><span style="color:var(--shiki-foreground)">&lt;</span><span style="color:var(--shiki-token-function)">DeviceContext</span><span style="color:var(--shiki-foreground)">&gt; devices;</span><span style="color:var(--shiki-token-comment)">    // 由 device_channel_binding_version 构建的运行时设备视图</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">    int</span><span style="color:var(--shiki-foreground)"> poll_interval_ms{</span><span style="color:var(--shiki-token-constant)">1000</span><span style="color:var(--shiki-foreground)">};</span><span style="color:var(--shiki-token-comment)">            // 采集周期</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">mutex</span><span style="color:var(--shiki-foreground)"> cmd_mutex;</span><span style="color:var(--shiki-token-comment)">                  // 遥控/遥调命令队列锁</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">condition_variable</span><span style="color:var(--shiki-foreground)"> wakeup;</span><span style="color:var(--shiki-token-comment)">        // 命令/停止/配置变更唤醒</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">    std</span><span style="color:var(--shiki-token-punctuation)">::</span><span style="color:var(--shiki-token-function)">deque</span><span style="color:var(--shiki-foreground)">&lt;</span><span style="color:var(--shiki-token-function)">CommandTask</span><span style="color:var(--shiki-foreground)">&gt; cmd_queue;</span><span style="color:var(--shiki-token-comment)">     // 简化示意，实际为有界优先队列</span></span>
+<span class="line"><span style="color:var(--shiki-foreground)">};</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<hr/>
+<h3 class="rp-toc-include" id="35-绑定路由与控制插队"><a href="#35-绑定路由与控制插队" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.5 绑定、路由与控制插队</h3>
+<ul>
+<li><code>device_channel_binding_version</code> 保存 device_id、channel_id、config_version、operations 与类型化 device_address；采集专用/控制专用/采控共用对应 telemetry_in/control_out 的不同组合。本端 client/server 角色属于 channel_version.local_role，与此操作组合分开。vendor_point_route_version 保存厂家点的协议地址、编码与通道；point_binding 将标准逻辑点映射到厂家点并指定转换和主备来源。控制配置另行指定写入编码、启用条件和反馈逻辑点，写通道与反馈通道可以不同。</li>
+<li>telemetry 不允许控制写入；control 无常规遥测轮询，但允许协议确认/控制反馈读取；both 串行完成读取和控制。独立采控连接需设备支持，冲突控制仍按设备仲裁。</li>
+<li>每次只开始一个有界协议事务，在响应完成或超时后检查高优先命令。不得打断已发送帧；大批量读取拆分为多个事务，避免整轮采集阻塞控制。</li>
+<li>ZeroMQ 命令入口只负责接收、校验并持久登记 inbox；执行器从持久 inbox 恢复后入队、唤醒，不在网络回调中直接调用协议句柄。线程等待必须可被命令唤醒；队列锁不得跨网络 I/O 持有。</li>
+<li>设置控制连续预算、采集最大延迟和关键数据读取预算。优先队列满返回 queue_full；过期返回 expired。同优先级 FIFO，只有允许覆盖且未发送的设定值可合并，并记录 superseded。</li>
+<li>命令由策略仲裁，通过公共 ormpp API 将命令与 outbox 同事务保存，再由 outbox 发布器用 ZeroMQ REQ/REP 交给采集的持久 inbox。采集执行前再次验证有效期、配置版本、控制权代次与互锁；通过公共 Repository 条件登记 MySQL 执行状态后执行并回读验证，回执与 outbox 同事务保存，重复/不确定结果按整体架构第 6 节处理。</li>
+<li>通道故障与来源切换更新质量和 source_epoch；回读用发送后的新样本。未确认旧采集实例隔离时，不自动接管控制。</li>
+</ul>
+<h2 class="rp-toc-include" id="4-动态库插件机制"><a href="#4-动态库插件机制" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4. 动态库插件机制</h2>
+<p>统一契约见 <a href="/ems/processes/collector/protocol-design" class="rp-link">通讯协议动态库设计</a>：公开 API、PIMPL、按需加载、C ABI、引用与安全卸载、Windows/Linux/macOS 加载和部署。</p>
+<div></div>
+<p>同一 Modbus 包可服务 TCP/RTU 多通道，库句柄复用，通道实例与会话分别隔离。未启用通道、配置浏览和草稿编辑不触发加载。</p>
+<h2 class="rp-toc-include" id="5-采集流程"><a href="#5-采集流程" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5. 采集流程</h2>
+<h3 class="rp-toc-include" id="51-启动流程"><a href="#51-启动流程" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.1 启动流程</h3>
+<div class="rp-codeblock language-txt"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="txt"><code><span class="line"><span>1. 采集进程启动（C++17）</span></span>
+<span class="line"><span>   │</span></span>
+<span class="line"><span>   ├── ParaLoader::load_all_as_config()</span></span>
+<span class="line"><span>   │   ├── 读取 Redis 版本化快照；缺失时通过公共 ormpp API 读取 MySQL 指定版本</span></span>
+<span class="line"><span>   │   ├── 校验资产、设备、通道及 device_channel_binding</span></span>
+<span class="line"><span>   │   ├── 加载四遥点表与控制/回读路由</span></span>
+<span class="line"><span>   │   └── 校验完整性后切换版本，反馈 actual_config_version</span></span>
+<span class="line"><span>   │</span></span>
+<span class="line"><span>   ├── CollectEngine::initialize()</span></span>
+<span class="line"><span>   │   ├── 初始化 DataDispatcher (注入实时库与事件通道)</span></span>
+<span class="line"><span>   │   └── 初始化 PluginManager (设置插件目录)</span></span>
+<span class="line"><span>   │</span></span>
+<span class="line"><span>   └── CollectEngine::start_all()</span></span>
+<span class="line"><span>       │</span></span>
+<span class="line"><span>       └── for each channel:</span></span>
+<span class="line"><span>           │</span></span>
+<span class="line"><span>           ├── PluginManager::load(protocol_name)</span></span>
+<span class="line"><span>           │   └── dlopen + dlsym (按需加载)</span></span>
+<span class="line"><span>           │</span></span>
+<span class="line"><span>           ├── 创建 ChannelContext</span></span>
+<span class="line"><span>           │   ├── 绑定插件实例</span></span>
+<span class="line"><span>           │   ├── 绑定设备/测点列表</span></span>
+<span class="line"><span>           │   └── 设置采集周期</span></span>
+<span class="line"><span>           │</span></span>
+<span class="line"><span>           └── 启动 ChannelThread</span></span>
+<span class="line"><span>               └── plugin-&gt;connect() → 进入采集循环</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<h3 class="rp-toc-include" id="52-采集与控制循环"><a href="#52-采集与控制循环" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.2 采集与控制循环</h3>
+<p>下列为调度伪代码，函数代表待实现职责，不能直接编译：</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>while running:</span></span>
+<span class="line"><span>    处理停止请求、配置切换和所有者状态</span></span>
+<span class="line"><span>    清理已过期/失效命令并持久记录结果</span></span>
+<span class="line"><span>    if 未连接:</span></span>
+<span class="line"><span>        进行有界重连；可唤醒等待退避时间</span></span>
+<span class="line"><span>        continue</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>    task = 在控制优先级、连续控制预算、采集新鲜度约束内选择任务</span></span>
+<span class="line"><span>    if 没有任务:</span></span>
+<span class="line"><span>        条件变量等待至下一采集/重连时刻，或被命令/停止/配置唤醒</span></span>
+<span class="line"><span>        continue</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>    if task 是控制:</span></span>
+<span class="line"><span>        再校验目标绑定、期限、配置版本、控制权和实时互锁</span></span>
+<span class="line"><span>        查询/条件登记 command_id 的 MySQL 执行状态，失败不执行，拒绝不安全重复执行</span></span>
+<span class="line"><span>        持久记录发送意图</span></span>
+<span class="line"><span>        执行一个有超时的写事务，记录协议确认/失败/unknown</span></span>
+<span class="line"><span>        调度发送后的反馈读取，满足条件才标 verified</span></span>
+<span class="line"><span>    else:</span></span>
+<span class="line"><span>        读取一个有界采集事务，生成时间、质量、来源代次和序号</span></span>
+<span class="line"><span>        将结果交给有界分发队列</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>    事务结束返回调度点，重新检查控制队列</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>连接重试、写入和反馈读取均有时间上限。连续控制预算防止遥测饥饿；不能通过无限清空命令队列、整轮设备遍历或固定 sleep 实现上述要求。IEC104 等主动上报协议仍需处理接收/保活事件，不直接套用轮询专用循环。</p>
+<h3 class="rp-toc-include" id="53-数据分发与恢复"><a href="#53-数据分发与恢复" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5.3 数据分发与恢复</h3>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>通道线程 → DataDispatcher 有界内存队列（稳定 event_id）</span></span>
+<span class="line"><span>                                  → 分别更新最新值、ZeroMQ 发布原始遥测</span></span>
+<span class="line"><span>                                                            │</span></span>
+<span class="line"><span>                                              存储消费原始事件 → TDengine</span></span>
+<span class="line"><span>                                                            │</span></span>
+<span class="line"><span>                                              失败计入可观察的历史缺口</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>PUB/SUB 本地接受不证明存储收到；内存样本不保证跨重启恢复</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>策略读取权威实时快照；告警/回执先持久写 MySQL/outbox</span></span>
+<span class="line"><span>Drogon Web 读取快照并推送前端；变化提示与原始遥测使用独立 ZeroMQ PUB/SUB 主题</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>分发工作由独立工作线程执行，避免数据库/Redis 阻塞直接占用协议线程；队列满必须触发显式背压/降采样规则，不可无限增长。ZeroMQ 发布成功只表示本地接受；采集不等待归档确认。缓冲超限、进程重启、订阅离线或数据库故障可能丢样，应报告可观察的丢弃/缺口，不以最新值伪造缺失历史。</p>
+<p>采集进程可通过 <code>backend/src/common/db/</code> 公共模块执行职责内的 MySQL 操作，数据库工作安排在配置/业务线程。公共模块封装 ormpp API；采集、存储、策略分别创建和维护自己的连接或连接池，不跨进程共享连接、事务或连接池实例，详见整体架构第 7.2 节。</p>
+<p>最新值按 source_epoch/sequence 去旧；Redis 实时写入和 ZeroMQ 遥测发布分别记录结果。历史使用已接收到的原始事件，不能收到通知后再读 Hash。命令回执先与 outbox 同事务写入 MySQL，ZeroMQ 仅发出状态变化提示；采集按持久 inbox 与执行状态对账，不采用本地文件记录。</p>
+<hr/>
+<h2 class="rp-toc-include" id="6-目录结构"><a href="#6-目录结构" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6. 目录结构</h2>
+<p>协议 API、实现、平台适配及安装目录见 <a href="/ems/processes/collector/protocol-design#8-工程与构建" class="rp-link">通讯协议工程结构</a>。采集调度和分发仍位于 <code>backend/src/net/collect/</code>，协议实现位于 <code>backend/src/net/protocol/</code>，公开头位于 <code>backend/include/net/protocol/</code>。</p>
+<h2 class="rp-toc-include" id="7-cmake-构建配置"><a href="#7-cmake-构建配置" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7. CMake 构建配置</h2>
+<p>自研目标采用 C++17。主程序静态链接轻量 SDK，具体协议构建为 <code>MODULE</code>，仅在运行时加载；系统依赖使用 <code>Threads::Threads</code> 与 <code>${CMAKE_DL_LIBS}</code>。符号导出、三平台产物命名和部署规则由 <a href="/ems/processes/collector/protocol-design#8-工程与构建" class="rp-link">通讯协议构建契约</a>统一维护。</p>
+<h2 class="rp-toc-include" id="8-关键设计决策"><a href="#8-关键设计决策" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8. 关键设计决策</h2>
+<h3 class="rp-toc-include" id="81-为什么选择一个通道一个线程"><a href="#81-为什么选择一个通道一个线程" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.1 为什么选择一个通道一个线程？</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>方案</th><th>优点</th><th>缺点</th></tr></thead><tbody><tr><td><strong>每通道一线程</strong> (选用)</td><td>故障隔离好、实现简单、协议阻塞调用不影响其他通道</td><td>线程数与通道数成正比，大量通道时线程开销大</td></tr><tr><td>线程池 + 异步 I/O</td><td>线程数可控、资源利用率高</td><td>协议库多为同步阻塞 API，需要复杂封装；故障隔离困难</td></tr><tr><td>协程 (C++20)</td><td>轻量级、高并发</td><td>依赖 C++20、第三方协议库不支持协程、调试困难</td></tr></tbody></table></div>
+<p>首期在目标硬件和实际通道数量下验证线程、内存及响应开销；通道规模扩大后可在 C++17 下评估异步 I/O/事件循环。无实测数据时不假定所有现场都在固定通道数量范围。</p>
+<h3 class="rp-toc-include" id="82-为什么选择动态库按需加载"><a href="#82-为什么选择动态库按需加载" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.2 为什么选择动态库按需加载？</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>方案</th><th>优点</th><th>缺点</th></tr></thead><tbody><tr><td><strong>动态库按需加载</strong> (选用)</td><td>按需加载节省内存、新增协议无需重编译主程序、协议库可独立升级</td><td>运行时加载有微小开销、需要定义稳定的 C 接口</td></tr><tr><td>静态链接所有协议</td><td>无加载开销、调试方便</td><td>未使用的协议也占用内存、新增协议需重编译</td></tr><tr><td>进程级隔离</td><td>最强隔离、可独立重启</td><td>进程间通信开销大、架构复杂</td></tr></tbody></table></div>
+<p>动态库方案支持按需加载，使协议实现与核心引擎解耦。</p>
+<h3 class="rp-toc-include" id="83-为什么插件接口使用-c-导出函数"><a href="#83-为什么插件接口使用-c-导出函数" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8.3 为什么插件接口使用 C 导出函数？</h3>
+<ul>
+<li><strong>ABI 约束</strong>：C 导出避免名称修饰，但仍需统一结构体布局、版本、调用约定和内存所有权；不跨边界传递 STL 或异常</li>
+<li><strong>兼容验证</strong>：不同编译器/运行库组合需实测，不能仅凭 extern C 保证二进制兼容</li>
+<li><strong>平台封装</strong>：Windows 使用 <code>LoadLibraryExW/GetProcAddress</code>，Linux/macOS 使用 <code>dlopen/dlsym</code>，均隐藏在加载器 PIMPL 中</li>
+<li><strong>内部仍用 C++</strong>：SDK 和各协议实现采用 PIMPL；C ABI 桥在模块内调用协议对象</li>
+</ul>
+<hr/>
+<h2 class="rp-toc-include" id="9-错误处理与重连机制"><a href="#9-错误处理与重连机制" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9. 错误处理与重连机制</h2>
+<h3 class="rp-toc-include" id="91-连接异常处理"><a href="#91-连接异常处理" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9.1 连接异常处理</h3>
+<div class="rp-codeblock language-txt"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="txt"><code><span class="line"><span>┌──────────────────────────────────────────────────────────────┐</span></span>
+<span class="line"><span>│                   连接异常处理流程                             │</span></span>
+<span class="line"><span>├──────────────────────────────────────────────────────────────┤</span></span>
+<span class="line"><span>│                                                              │</span></span>
+<span class="line"><span>│  采集循环中检测到连接断开:                                     │</span></span>
+<span class="line"><span>│                                                              │</span></span>
+<span class="line"><span>│  plugin_-&gt;is_connected() == false                            │</span></span>
+<span class="line"><span>│       │                                                      │</span></span>
+<span class="line"><span>│       ▼                                                      │</span></span>
+<span class="line"><span>│  标记该通道所有测点品质为 Invalid                              │</span></span>
+<span class="line"><span>│       │                                                      │</span></span>
+<span class="line"><span>│       ▼                                                      │</span></span>
+<span class="line"><span>│  进入重连循环:                                                │</span></span>
+<span class="line"><span>│       │                                                      │</span></span>
+<span class="line"><span>│       ├── 重试次数 &lt; max_retries ?                            │</span></span>
+<span class="line"><span>│       │       │                                              │</span></span>
+<span class="line"><span>│       │    Yes│         No                                   │</span></span>
+<span class="line"><span>│       │       ▼              ▼                               │</span></span>
+<span class="line"><span>│       │  可唤醒退避等待   标记通道为 Error                    │</span></span>
+<span class="line"><span>│       │  connect()        通知上层（日志/告警）                │</span></span>
+<span class="line"><span>│       │       │                                              │</span></span>
+<span class="line"><span>│       │  成功? ──Yes──▶ 恢复采集循环                          │</span></span>
+<span class="line"><span>│       │    │                                                  │</span></span>
+<span class="line"><span>│       │   No ──▶ 继续重试                                     │</span></span>
+<span class="line"><span>│       │                                                      │</span></span>
+<span class="line"><span>│  指数退避策略:                                                │</span></span>
+<span class="line"><span>│    backoff = min(base_delay * 2^retry_count, max_delay)      │</span></span>
+<span class="line"><span>│    base_delay = 1s, max_delay = 60s                          │</span></span>
+<span class="line"><span>│                                                              │</span></span>
+<span class="line"><span>└──────────────────────────────────────────────────────────────┘</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<h3 class="rp-toc-include" id="92-采集超时处理"><a href="#92-采集超时处理" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9.2 采集超时处理</h3>
+<ul>
+<li>单次读取超时：标记该测点品质为 Invalid，按协议清理/隔离迟到响应，必要时重建会话后再采下一事务</li>
+<li>连续超时超过阈值：触发重连</li>
+<li>遥控/遥调超时：发送前到期为 expired；发送后不能确认结果为 unknown，不能直接认定设备执行失败；先回读/核验，不盲目自动重发</li>
+</ul>
+<hr/>
+<h2 class="rp-toc-include" id="10-性能优化策略"><a href="#10-性能优化策略" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10. 性能优化策略</h2>
+<h3 class="rp-toc-include" id="101-modbus-批量读取优化"><a href="#101-modbus-批量读取优化" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10.1 Modbus 批量读取优化</h3>
+<p>将同一从站、同一功能码的连续寄存器合并读取：</p>
+<div class="rp-codeblock language-txt"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="txt"><code><span class="line"><span>原始测点列表:</span></span>
+<span class="line"><span>  slave=1, fc=3, addr=0   (FLOAT, 2寄存器)</span></span>
+<span class="line"><span>  slave=1, fc=3, addr=2   (FLOAT, 2寄存器)</span></span>
+<span class="line"><span>  slave=1, fc=3, addr=10  (UINT16, 1寄存器)</span></span>
+<span class="line"><span>  slave=1, fc=3, addr=11  (UINT16, 1寄存器)</span></span>
+<span class="line"><span>  slave=2, fc=3, addr=0   (FLOAT, 2寄存器)</span></span>
+<span class="line"><span></span></span>
+<span class="line"><span>优化后请求:</span></span>
+<span class="line"><span>  1) slave=1, fc=3, read_holding_registers(0, 4)    // 合并 addr 0~3</span></span>
+<span class="line"><span>  2) slave=1, fc=3, read_holding_registers(10, 2)   // 合并 addr 10~11</span></span>
+<span class="line"><span>  3) slave=2, fc=3, read_holding_registers(0, 2)    // 不同 slave</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>上述 Modbus 合并仍受单事务长度和控制延迟预算限制；每个合并请求完成后必须返回调度点检查控制队列。</p>
+<h3 class="rp-toc-include" id="102-iec104-事件驱动优化"><a href="#102-iec104-事件驱动优化" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10.2 IEC104 事件驱动优化</h3>
+<ul>
+<li>启动时发送总召唤（InterrogationCommand），全量同步</li>
+<li>后续依赖设备主动上报（Spontaneous），仅处理变化量</li>
+<li>设置合理的 T1/T2/T3 链路超时参数</li>
+</ul>
+<h3 class="rp-toc-include" id="103-iec61850-dataset-批量读取"><a href="#103-iec61850-dataset-批量读取" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10.3 IEC61850 DataSet 批量读取</h3>
+<p>按数据模型组织批量读取：</p>
+<ul>
+<li>利用 DataSet 一次读取多个关联测点</li>
+<li>按 FC (Functional Constraint) 分组读取</li>
+<li>连接时自动发现数据模型，缓存 LN/DO 结构</li>
+</ul><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/collector/design.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/10/20 23:17:14</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/processes/collector/" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>进程职责与模块</span></span></a><a href="/ems/processes/collector/protocol-design" class="rp-prev-next-page__item rp-prev-next-page__next rp-link"><span class="rp-prev-next-page__item__desc">下一页</span><span class="rp-prev-next-page__item__title"><span>通讯协议动态库（PIMPL / 跨平台）</span><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></span></a></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#1-概述" class="rp-toc-item rp-link" title="1. 概述" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">1. 概述</span></a><a href="#11-设计目标" class="rp-toc-item rp-link" title="1.1 设计目标" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">1.1 设计目标</span></a><a href="#12-目标协议与采集能力" class="rp-toc-item rp-link" title="1.2 目标协议与采集能力" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">1.2 目标协议与采集能力</span></a><a href="#2-整体架构" class="rp-toc-item rp-link" title="2. 整体架构" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">2. 整体架构</span></a><a href="#21-架构图" class="rp-toc-item rp-link" title="2.1 架构图" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.1 架构图</span></a><a href="#22-核心组件职责" class="rp-toc-item rp-link" title="2.2 核心组件职责" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.2 核心组件职责</span></a><a href="#3-通道线程模型" class="rp-toc-item rp-link" title="3. 通道线程模型" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">3. 通道线程模型</span></a><a href="#31-一个独立资源一个工作线程" class="rp-toc-item rp-link" title="3.1 一个独立资源一个工作线程" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.1 一个独立资源一个工作线程</span></a><a href="#32-线程隔离的好处" class="rp-toc-item rp-link" title="3.2 线程隔离的好处" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.2 线程隔离的好处</span></a><a href="#33-通道线程生命周期" class="rp-toc-item rp-link" title="3.3 通道线程生命周期" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.3 通道线程生命周期</span></a><a href="#34-通道上下文结构" class="rp-toc-item rp-link" title="3.4 通道上下文结构" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.4 通道上下文结构</span></a><a href="#35-绑定路由与控制插队" class="rp-toc-item rp-link" title="3.5 绑定、路由与控制插队" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.5 绑定、路由与控制插队</span></a><a href="#4-动态库插件机制" class="rp-toc-item rp-link" title="4. 动态库插件机制" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">4. 动态库插件机制</span></a><a href="#5-采集流程" class="rp-toc-item rp-link" title="5. 采集流程" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">5. 采集流程</span></a><a href="#51-启动流程" class="rp-toc-item rp-link" title="5.1 启动流程" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.1 启动流程</span></a><a href="#52-采集与控制循环" class="rp-toc-item rp-link" title="5.2 采集与控制循环" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.2 采集与控制循环</span></a><a href="#53-数据分发与恢复" class="rp-toc-item rp-link" title="5.3 数据分发与恢复" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">5.3 数据分发与恢复</span></a><a href="#6-目录结构" class="rp-toc-item rp-link" title="6. 目录结构" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">6. 目录结构</span></a><a href="#7-cmake-构建配置" class="rp-toc-item rp-link" title="7. CMake 构建配置" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">7. CMake 构建配置</span></a><a href="#8-关键设计决策" class="rp-toc-item rp-link" title="8. 关键设计决策" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">8. 关键设计决策</span></a><a href="#81-为什么选择一个通道一个线程" class="rp-toc-item rp-link" title="8.1 为什么选择一个通道一个线程？" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.1 为什么选择一个通道一个线程？</span></a><a href="#82-为什么选择动态库按需加载" class="rp-toc-item rp-link" title="8.2 为什么选择动态库按需加载？" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.2 为什么选择动态库按需加载？</span></a><a href="#83-为什么插件接口使用-c-导出函数" class="rp-toc-item rp-link" title="8.3 为什么插件接口使用 C 导出函数？" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">8.3 为什么插件接口使用 C 导出函数？</span></a><a href="#9-错误处理与重连机制" class="rp-toc-item rp-link" title="9. 错误处理与重连机制" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">9. 错误处理与重连机制</span></a><a href="#91-连接异常处理" class="rp-toc-item rp-link" title="9.1 连接异常处理" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">9.1 连接异常处理</span></a><a href="#92-采集超时处理" class="rp-toc-item rp-link" title="9.2 采集超时处理" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">9.2 采集超时处理</span></a><a href="#10-性能优化策略" class="rp-toc-item rp-link" title="10. 性能优化策略" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">10. 性能优化策略</span></a><a href="#101-modbus-批量读取优化" class="rp-toc-item rp-link" title="10.1 Modbus 批量读取优化" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">10.1 Modbus 批量读取优化</span></a><a href="#102-iec104-事件驱动优化" class="rp-toc-item rp-link" title="10.2 IEC104 事件驱动优化" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">10.2 IEC104 事件驱动优化</span></a><a href="#103-iec61850-dataset-批量读取" class="rp-toc-item rp-link" title="10.3 IEC61850 DataSet 批量读取" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">10.3 IEC61850 DataSet 批量读取</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/collector/design.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+    <div id="__rspress_modal_container"></div>
+  </body>
+</html>

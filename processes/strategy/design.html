@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="zh">
+  <head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>策略进程详细设计 - EMS 设计文档</title>
+<script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
+<link href="/ems/static/css/styles.3c463aa6ae.css" rel="stylesheet">
+<link rel="preload" href="/ems/static/js/async/route-0600a343d2a5.8b9382dbe0.js" as="script">
+<script defer src="/ems/static/js/styles.560b9eab4d.js"></script>
+<script defer src="/ems/static/js/lib-react.0685ac4d75.js"></script>
+<script defer src="/ems/static/js/lib-router.de7486675c.js"></script>
+<script defer src="/ems/static/js/m3.da04ef77ed.js"></script>
+<script defer src="/ems/static/js/index.1377de6962.js"></script>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Rspress v2.0.21">
+<link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="策略进程详细设计 - EMS 设计文档">
+<meta name="description" content="版本：1.0｜日期：2026-09-30｜状态：目标设计，尚未实现策略运行闭环。参数默认值、计量方向、设备能力和保护动作必须在现场配置与验收后启用。 本文细化策略进程入口。设备和能力身份以设备模型为准，实时记录以公共访问契约为准，意图、命令和回执以系统架构第 6 节为准。">
+<meta property="og:description" content="版本：1.0｜日期：2026-09-30｜状态：目标设计，尚未实现策略运行闭环。参数默认值、计量方向、设备能力和保护动作必须在现场配置与验收后启用。 本文细化策略进程入口。设备和能力身份以设备模型为准，实时记录以公共访问契约为准，意图、命令和回执以系统架构第 6 节为准。"></head>
+
+  <body>
+    <div id="__rspress_root"><link rel="preload" as="image" href="/ems/logo.svg"/><header class="rp-nav"><div class="rp-nav__left"><div class="rp-nav__title"><a href="/ems/" class="rp-nav__title__link rp-link"><div class="rp-nav__title__logo"><img src="/ems/logo.svg" alt="logo" id="logo" class="rspress-logo rp-nav__title__logo-image"/></div><span>EMS</span></a></div><ul class="rp-nav-menu rp-nav-menu--left"><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/" class="rp-nav-menu__item__container rp-link">首页</a></li><li class="rp-nav-menu__item"><a href="/ems/architecture/" class="rp-nav-menu__item__container rp-link">架构</a></li><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/processes/" class="rp-nav-menu__item__container rp-link">进程</a></li><li class="rp-nav-menu__item"><a href="/ems/common/" class="rp-nav-menu__item__container rp-link">公共模块</a></li><li class="rp-nav-menu__item"><a href="/ems/decisions/" class="rp-nav-menu__item__container rp-link">技术决策</a></li><li class="rp-nav-menu__item"><a href="/ems/reference/" class="rp-nav-menu__item__container rp-link">开发参考</a></li><li class="rp-nav-menu__item"><a href="/ems/guide/" class="rp-nav-menu__item__container rp-link">文档维护</a></li></ul></div><div class="rp-nav__right"><button class="rp-search-button"><div class="rp-search-button__content"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21" class="rp-search-button__icon"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg><span class="rp-search-button__word">搜索</span></div><div class="rp-search-button__hotkey" style="opacity:0"><span></span><span>K</span></div></button><div class="rp-search-button--mobile"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg></div><div class="rp-nav__others"><div class="rp-nav-menu__divider"></div><div class="rp-switch-appearance"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="rp-switch-appearance__icon rp-switch-appearance__icon--sun"><path fill="currentColor" d="m7.001 15.848-1.226 1.226a.58.58 0 0 0 0 .818.58.58 0 0 0 .818 0l1.226-1.226a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0m-.352-8.735a.584.584 0 0 0 .825-.825L6.237 5.051a.584.584 0 0 0-.825.825zM5.011 11.07h-1.75a.584.584 0 0 0 0 1.167h1.75c.324 0 .584-.26.584-.583a.585.585 0 0 0-.584-.584m7.003-5.835c.324 0 .584-.26.584-.584V2.9a.58.58 0 0 0-.584-.584.58.58 0 0 0-.583.583V4.65c0 .323.262.584.583.584m5.616 1.621 1.226-1.225a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0l-1.226 1.225a.58.58 0 0 0 0 .818.576.576 0 0 0 .818 0m3.138 4.214h-1.75a.58.58 0 0 0-.584.584c0 .324.26.584.583.584h1.751a.584.584 0 1 0 0-1.167m-3.389 5.124a.584.584 0 0 0-.825.825l1.238 1.238a.584.584 0 0 0 .825-.826zm-5.365-9.795a5.256 5.256 0 0 0-5.257 5.258 5.256 5.256 0 0 0 5.257 5.257 5.256 5.256 0 0 0 5.257-5.257 5.256 5.256 0 0 0-5.257-5.258m0 11.675a.58.58 0 0 0-.583.583v1.751a.582.582 0 1 0 1.167 0v-1.75a.584.584 0 0 0-.584-.584"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="currentColor" viewBox="0 0 19 19" class="rp-switch-appearance__icon rp-switch-appearance__icon--moon"><path fill="currentColor" d="M9.166 0a9.2 9.2 0 0 1 1.857.188.834.834 0 0 1 .042 1.623 4.47 4.47 0 1 0 5.457 5.457l.048-.135a.834.834 0 0 1 1.575.177q.186.902.188 1.856A9.168 9.168 0 1 1 9.166 0"></path></svg></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__sm"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg></button><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__md"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"><div class="rp-nav-menu__others-mobile__container"><div class="rp-nav-hamburger__md__hover-group"><div class="rp-nav-screen-appearance"><div class="rp-nav-screen-appearance__left">主题</div><div class="rp-nav-screen-appearance__right"></div></div><div class="rp-nav-screen-divider"></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div></div></ul></button></div></header><div class="rp-doc-layout__menu"><div class="rp-sidebar-menu"><button type="button" class="rp-sidebar-menu__left"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M4 6h24v2H4zm0 18h24v2H4zm0-12h24v2H4zm0 6h24v2H4z"></path></svg><span>菜单</span></button><button type="button" class="rp-sidebar-menu__right"><span class="rp-sidebar-menu__right__text">目录</span><svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-sidebar-menu__right__icon" style="transform:rotate(0deg);transition:transform 0.2s ease-out"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button></div></div><div class="rp-doc-layout__container"><aside class="rp-doc-layout__sidebar rp-scrollbar"><a href="/ems/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">返回文档首页</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-divider" style="padding-left:12px"></div><div class="rp-sidebar-section-header"><div class="rp-sidebar-section-header__left"><span>进程设计</span></div><div class="rp-sidebar-section-header__right"></div></div><a href="/ems/processes/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">进程职责总览</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">采集与上送进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/collector/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">进程职责与模块</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/collector/design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">采集执行与协议插件</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/collector/protocol-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">通讯协议动态库（PIMPL / 跨平台）</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">存储进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/storage/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">存储进程设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/storage/design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">存储进程详细设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">策略进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/strategy/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">策略进程设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/strategy/design" class="rp-sidebar-item rp-sidebar-item--active rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">策略进程详细设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">Web 后端与前端</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/web/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">Web 后端与前端协作</span></div><div class="rp-sidebar-item__right"></div></a></div></div></aside><div class="rp-doc-layout__doc"><main class="rp-doc-layout__doc-container"><div class="rp-doc rspress-doc"><!--$--><h1 class="rp-toc-include" id="策略进程详细设计"><a href="#策略进程详细设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>策略进程详细设计<!-- --> </h1>
+<blockquote>
+<p>版本：1.0｜日期：2026-09-30｜状态：目标设计，尚未实现策略运行闭环。参数默认值、计量方向、设备能力和保护动作必须在现场配置与验收后启用。
+本文细化<a href="/ems/processes/strategy/" class="rp-link">策略进程入口</a>。设备和能力身份以<a href="/ems/architecture/device-model" class="rp-link">设备模型</a>为准，实时记录以<a href="/ems/common/realtime/access-design" class="rp-link">公共访问契约</a>为准，意图、命令和回执以<a href="/ems/architecture/system-design#6-控制闭环与策略进程" class="rp-link">系统架构第 6 节</a>为准。</p>
+</blockquote>
+<h2 class="rp-toc-include" id="1-范围与基本约定"><a href="#1-范围与基本约定" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1. 范围与基本约定</h2>
+<p>策略进程负责站级/单元级状态聚合、策略目标计算、功率约束、设备分配、告警和控制仲裁。本文覆盖并网储能与光伏协同场景中的防逆流、需量保护、计划曲线、手动模式、光伏限发，以及定功率、时段充放电、削峰填谷和 SOC 边界。站级控制以明确配置的 PCC 计量点和电气拓扑为边界；多个 PCC 或可切换母线必须先划分独立调度域，不能把几个表计简单求和后共用一个保护环。</p>
+<p>策略只读取标准逻辑点和已发布能力；调度算法输出自动意图，统一仲裁器输出持久执行命令。策略不解析厂家寄存器、不持有协议句柄。快速逆功率、过流、急停和孤岛保护由现场保护装置、PCS/BMS 或独立控制器完成。EMS 的防逆流与需量算法是采样和通信延迟下的监督控制，不能替代硬实时保护。站点若要求 EMS 停止时仍严格禁止上网，必须配置并验收独立的本地防逆流措施。</p>
+<h3 class="rp-toc-include" id="11-功率方向与计量边界"><a href="#11-功率方向与计量边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1.1 功率方向与计量边界</h3>
+<p>以下是本设计新增的<strong>标准化方向约定</strong>，发布站点配置时必须通过 CT/PT、倍率、反向功率和实际充放电试验确认；厂家原始方向由采集绑定转换。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>量</th><th>正值</th><th>负值</th><th>来源</th></tr></thead><tbody><tr><td><code>P_grid</code>，PCC 有功，kW</td><td>从电网购电</td><td>向电网上网</td><td>调度域唯一权威 PCC 电表；与 PCS 功率不是同一参考方向</td></tr><tr><td><code>P_ess</code>，储能交流有功，kW</td><td>PCS 放电、向交流母线送电</td><td>PCS 充电、从交流母线取电</td><td>PCS 标准 <code>active_power</code>，沿用设备模型</td></tr><tr><td><code>P_pv</code>，光伏交流净有功，kW</td><td>光伏向交流母线发电</td><td>夜间等场景从交流侧取电</td><td>光伏逆变器或经校验的光伏总表；限发上限仍为非负值</td></tr><tr><td><code>P_load</code>，站内其他净负荷，kW</td><td>消耗电能</td><td>仅用于诊断的反向流</td><td>拓扑明确时的推导量，不代替 PCC 实测</td></tr></tbody></table></div>
+<p>同一计量边界、无其他未建模电源时，近似平衡为 <code>P_grid = P_load - P_pv - P_ess</code>，其中 <code>P_ess</code> 是域内 PCS 实际交流功率之和。确无光伏的调度域可将 <code>P_pv</code> 定义为零；有光伏但测点失效时不能如此处理。变压器损耗、站用电和测量不同步会产生残差；控制以 PCC 实测为准，平衡式只用于预测、诊断和方向验收。共享 PCS、光伏和电表按物理资产只计一次，不能按被引用的单元重复汇总。</p>
+<p>一次控制周期内，在负荷近似不变时，以两个保守场景预测站级 PCC 功率：</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>P_grid_pred_low  = P_grid_meas - (P_ess_cmd - P_ess_actual)</span></span>
+<span class="line"><span>                   - (P_pv_upper - P_pv_actual)</span></span>
+<span class="line"><span>P_grid_pred_high = P_grid_meas - (P_ess_cmd - P_ess_actual)</span></span>
+<span class="line"><span>                   - (P_pv_lower - P_pv_actual)</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p><code>P_pv_upper/lower</code> 是下一控制周期光伏交流净功率的可信上下界，包含天气变化、现有限值和已验证的控制状态；缺少可信边界时不得据此放宽保护约束。光伏限发命令尚未得到新采样验证时，上界不得假定发电已经下降；依赖光伏增发来满足需量时，下界不得假定发电已经上升。防逆流使用 <code>P_grid_pred_low</code>，需量使用 <code>P_grid_pred_high</code>。计划跟踪可另用带质量标记的点预测 <code>P_pv_plan</code>，但它不代替两侧保守边界。负荷波动、控制延迟和模型误差由可配置裕量覆盖，不能把该近似当作保护动作已生效的证明。</p>
+<h2 class="rp-toc-include" id="2-输入配置与有效性"><a href="#2-输入配置与有效性" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2. 输入、配置与有效性</h2>
+<h3 class="rp-toc-include" id="21-标准输入和能力"><a href="#21-标准输入和能力" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.1 标准输入和能力</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>输入/能力</th><th>用途</th><th>不可用时的处理</th></tr></thead><tbody><tr><td>PCC <code>active_power</code>、计量方向、开关/并网状态</td><td>防逆流与需量的权威反馈、调度域边界</td><td>暂停依赖 PCC 的新远程功率命令并告警；不能把缺值当 0 或用负荷估算冒充 PCC 实测</td></tr><tr><td>PCC <code>energy_import</code> 或覆盖完整的正向功率样本</td><td>需量窗口内已购电电量</td><td>不声明需量保护有效；按验收过的保守瞬时限值降级，否则暂停需量相关新命令</td></tr><tr><td>PCS 实际功率、运行/故障/本地远程状态、动态最大充/放功率和设定反馈</td><td>计算基线、可行区间与闭环</td><td>对该 PCS 停止新设定，重新分配其余设备；执行状态未知时先对账</td></tr><tr><td>BMS SOC、充放电许可、动态电流/功率限值、故障</td><td>SOC 边界及可用功率</td><td>对相关单元收紧或禁用相应方向，不以额定值补缺失动态限值</td></tr><tr><td>光伏实际功率、运行/故障状态；可选限发能力及回读</td><td>光伏预测、协同限发和恢复</td><td>仅可监视时不得产生限发命令；无有效光伏功率时不得用它计算额外可用调节量</td></tr><tr><td>配置版本、来源代次、时间、质量、控制权及命令状态</td><td>保证输入和执行属于当前配置/所有者</td><td>版本不一致、过期、来源不明或旧主未隔离时拒绝新控制</td></tr></tbody></table></div>
+<p>每次计算检查点位启用、能力依赖、量纲、质量、新鲜度、来源代次、配置版本、最大采样时差和必要点的覆盖率。批量读取不是全局快照；计算前后检查关键记录版本，关键输入跨版本或超过时差预算则放弃本周期并重新读取。非有限数、越量程值、回退的源时间和异常计量方向均不可用于保护计算。单元 SOC 按有效容量加权并附覆盖率，站级共享设备按拓扑去重。派生状态包含输入版本、时间和不可用原因。</p>
+<h3 class="rp-toc-include" id="22-配置模型与发布校验"><a href="#22-配置模型与发布校验" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.2 配置模型与发布校验</h3>
+<p><code>strategy_config / schedule</code> 在当前架构中仍是逻辑表建议。目标配置至少包含以下字段组；持久化 DDL、权限和迁移在实施时与公共 Repository 一起落地。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>配置组</th><th>必需内容</th></tr></thead><tbody><tr><td>调度域</td><td><code>station_id</code>、PCC 资产和唯一权威测点、并网开关、归属 PCS/PV/电池关系、控制所有者与拓扑版本</td></tr><tr><td>计量</td><td>PCC 购电为正的方向映射、CT/PT 倍率、计量精度、样本最大年龄/时差、需量电量来源及其复位规则</td></tr><tr><td>防逆流</td><td>允许上网功率 <code>P_export_allow &gt;= 0</code>、购电裕量、进入/退出迟滞、采样/命令周期、动作超时和可用的 PV 限发能力</td></tr><tr><td>需量</td><td>需量上限 <code>D_limit</code>、固定计费窗口长度和对齐时区、能量裕量、可选瞬时购电上限、窗口样本覆盖率、保护提前量</td></tr><tr><td>储能</td><td>SOC 上下界及恢复迟滞、充放电动态限值、PCS/变压器/PCC 容量、斜率、最小保持时间和反馈误差/超时</td></tr><tr><td>计划与模式</td><td>曲线目标类型、插值方式、有效区间/版本、时区、缺段回退、人工租期上限、北向授权和同级冲突规则</td></tr><tr><td>光伏</td><td>可监视资产、可控限发能力、限发范围/斜率、功率与限值回读、解除限发条件及超时策略</td></tr></tbody></table></div>
+<p>发布时拒绝负功率限值、无效 SOC 区间、相互矛盾的 PCC 上下限、重复的权威电表、重叠或无解释的计划区间、缺失命令反馈或未确认计量方向。模式、计划和保护参数均保存不可变版本；页面分别展示已保存、已发布、策略已应用、采集已应用。策略与采集未应用同一所需配置版本时，不开放依赖新绑定的命令。站点现场数值在调试报告中确定，本文不预填通用阈值。</p>
+<h2 class="rp-toc-include" id="3-调度周期模式和优先级"><a href="#3-调度周期模式和优先级" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3. 调度周期、模式和优先级</h2>
+<p>一个调度域只允许一个活动策略所有者。周期执行顺序为：读取已发布配置和有效输入 → 恢复未终结命令/控制权 → 计算设备可行区间 → 计算防逆流和需量约束 → 选取当前模式的目标 → 站级分配与斜率限制 → 统一仲裁 → 持久命令与 outbox → 采集执行/回读 → 下一周期校正。状态聚合、告警与优化周期可分开，慢速优化失败不能阻塞保护约束的重算。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>层级</th><th>规则</th><th>与目标的关系</th></tr></thead><tbody><tr><td>现场联锁与控制资格</td><td>设备保护/故障、本地模式、BMS 许可、断路器状态、控制权与配置版本</td><td>不满足就不下发；EMS 不解除现场保护</td></tr><tr><td>EMS 约束</td><td>PCS/BMS/SOC/拓扑功率、PCC 防逆流与需量上限</td><td>形成可行功率区间；防逆流在不可同时满足时先保，需量违约显式告警</td></tr><tr><td>有效目标</td><td>有权限且未过期的人工意图、经授权的北向意图，或自动计划/优化目标</td><td>同一资产只选一个目标；人工与北向的同级/优先级由站点策略显式配置，连接来源本身不提高优先级</td></tr><tr><td>执行整形</td><td>斜率、死区、最小间隔、容量分配和反馈确认</td><td>产生本周期最多一个有效设定序列，不让各策略直接抢写同一设备</td></tr></tbody></table></div>
+<p>运行模式为 <code>automatic</code>、<code>manual</code>、<code>disabled</code>。<code>automatic</code> 使用已发布计划或优化目标；<code>manual</code> 使用有期限的人工目标；<code>disabled</code> 停止新的 EMS 常规设定并保持监视/告警，不保证站点仍满足防逆流或需量约束。需要不断监督控制才能满足并网约束的站点，只有独立本地保护可用且经过验收时才允许进入 <code>disabled</code>。北向意图在已授权的调度域内按显式策略仲裁，不能绕过运行模式。模式切换、所有权变化和意图抢占均持久审计并清理旧目标；已下发未终结命令先对账，不以“切换成功”推断设备立即跟随新模式。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>转换</th><th>进入条件与动作</th></tr></thead><tbody><tr><td><code>automatic → manual</code></td><td>已授权且租期有效；可在同一事务提交首个人工目标。若只切模式，旧自动意图停止续发，以储能零功率为中性目标并施加全部约束；从设备实测功率按斜率过渡，不把旧自动设定当作人工目标</td></tr><tr><td><code>manual → automatic</code></td><td>人工主动退出或租期届满；撤销人工目标，重新读取当前计划和设备反馈后平滑接入</td></tr><tr><td><code>automatic/manual → disabled</code></td><td>完成权限及独立本地保护校验；停止新的 EMS 常规设定，未终结命令仍对账</td></tr><tr><td><code>disabled → automatic/manual</code></td><td>PCC、设备、配置、所有权和命令状态重新校验通过，再从实测功率起步</td></tr></tbody></table></div>
+<h2 class="rp-toc-include" id="4-防逆流"><a href="#4-防逆流" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4. 防逆流</h2>
+<p>防逆流保护的是 PCC 上网功率。设允许上网幅值为 <code>P_export_allow</code>，正的购电裕量为 <code>M_export</code>，则本周期目标下界为：</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>P_grid_floor = -P_export_allow + M_export</span></span>
+<span class="line"><span>P_grid_pred_low &gt;= P_grid_floor</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>零上网场景取 <code>P_export_allow = 0</code>；裕量用于覆盖采样延迟和波动，不能随意大到造成不合理持续购电。按照第 1.1 节的预测式，储能目标上界为：</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>P_ess_cmd &lt;= P_ess_actual + P_grid_meas - P_grid_floor</span></span>
+<span class="line"><span>             - (P_pv_upper - P_pv_actual)</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>当预测或实测低于下界时，先限制储能放电，再在 BMS/SOC/PCS 允许范围内增加充电吸收。若仍不足，且光伏逆变器明确具有已验收的限发能力，才下发光伏限发；限发回读前按光伏尚未降功率计算，避免储能提前放开。若储能已到充电上限且光伏不可控、失联或限发不足，记录剩余预计上网功率、触发告警并交由本地保护；不能声称 EMS 已消除逆流。</p>
+<p>越界进入应及时处理；解除限制须满足退出阈值和稳定保持时间，光伏限发分级、按斜率恢复，防止在阈值附近频繁充放与限发。设备命令是否 <code>verified</code> 由该设备发送后的新反馈及容差判定；防逆流目标是否达成由 PCC 后续有效样本独立判定。设备正确执行但 PCC 仍逆流时继续限制/告警；PCC 偶然恢复也不证明设备命令已执行。PCC 表计失效时不继续用旧采样提高放电或解除限发；降级行为按第 10 节执行。</p>
+<h2 class="rp-toc-include" id="5-需量保护与削峰"><a href="#5-需量保护与削峰" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5. 需量保护与削峰</h2>
+<p>需量保护按现场计费规则配置，<strong>首期设计为可配置长度与时区对齐的固定窗口平均购电需量</strong>；若现场采用滑动窗口或其他结算口径，必须补充对应窗口计算与验收后才能启用，不能套用固定窗口算法。设窗口长度 <code>W_h</code>（小时）、目标需量 <code>D_limit</code>（kW）、窗口起点至当前时刻已累计正向购电电量 <code>E_used</code>（kWh）、剩余时间 <code>T_rem_h</code>（小时）、预计从采样到新功率目标可实际达到的时间 <code>T_lag_h</code>（包含通信与爬坡）、这段时间的购电上界 <code>E_lag_upper</code>（kWh），以及能量裕量 <code>E_margin</code>（kWh）：</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>E_used = integral_window max(P_grid, 0) dt</span></span>
+<span class="line"><span>T_effective_h = max(0, T_rem_h - T_lag_h)</span></span>
+<span class="line"><span>E_budget = D_limit * W_h - E_used - E_lag_upper - E_margin</span></span>
+<span class="line"><span>P_budget_cap = max(0, E_budget / max(T_effective_h, T_control_h))</span></span>
+<span class="line"><span>P_grid_ceiling = min(P_budget_cap, P_instant_cap)</span></span>
+<span class="line"><span>P_grid_pred_high &lt;= P_grid_ceiling</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p><code>P_instant_cap</code> 未配置时视为无穷大；<code>T_control_h</code> 是最小有效调节时长，包含控制离散周期和反馈预算。<code>E_lag_upper</code> 由当前购电、可信负荷/PV 波动上界及设备斜率估算；没有可信上界就不能声称当前窗口可受保护。若 <code>T_lag_h &gt;= T_rem_h</code>，本窗口已无法由新命令纠正，应立即标记预计/实际超限，并为下一窗口准备控制。窗口能量优先取有复位/倍率/时标语义的 PCC 正向累计电量差；若用功率积分，需覆盖窗口起点至当前时刻并记录缺样比例，负的上网功率不能抵消此前购电。窗口边界按发布时区换算成 UTC，不能用进程启动时间或收到第一条样本的时间临时起窗。到窗口末尾或预算耗尽时上限可收紧到零；已经超限的历史需量无法通过后来上网消除，必须告警并记录预计/实际超限。</p>
+<p>当购电预测高于上限时，优先让可用储能放电；已有光伏限发若不再受防逆流约束，可按反馈和斜率释放。不能假设能控制站内负荷或未配置的光伏设备。储能目标下界为：</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>P_ess_cmd &gt;= P_ess_actual + P_grid_meas - P_grid_ceiling</span></span>
+<span class="line"><span>             - (P_pv_lower - P_pv_actual)</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>调度器同时施加变压器/PCC 瞬时容量和 SOC 保护。若电池能量、PCS 功率或爬坡不足，按最大可行放电执行，记录缺口及预计超限；不能为守需量突破 BMS/PCS 许可或防逆流下界。需量窗口数据不完整时，可仅启用经现场验证的保守瞬时购电上限，并明确标记“需量窗口不可计算”；没有该配置时停止依赖需量的新调度。削峰填谷/峰谷价优化属于自动目标，始终接受同一需量和防逆流约束。</p>
+<h2 class="rp-toc-include" id="6-计划曲线与自动目标"><a href="#6-计划曲线与自动目标" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6. 计划曲线与自动目标</h2>
+<p>计划曲线是版本化的时间段集合，记录 <code>schedule_id/version</code>、调度域、目标类型、UTC 起止时间、目标值、插值方式、优先级及发布/生效状态。首期支持 <code>ess_power</code>（储能站级净功率，放电为正）与 <code>pcc_power</code>（PCC 购电为正）两种目标类型；一个调度域同一时刻只能有一个生效的主目标。定功率与时段充放电可表示为阶梯曲线；连续跟踪可选择线性插值。发布时校验断点严格递增、同层不重叠、范围合法和首尾/跨日规则，不能由运行时任意选择冲突段。</p>
+<p>本地日计划按站点时区编辑，发布时展开成明确的 UTC 区间；夏令时重复或缺失的本地时刻必须要求用户明确选择或拒绝发布，不让运行进程猜测。跨日时段拆成有序区间。缺段、计划过期或目标输入不可用时，默认使用储能净功率零的中性目标，并继续施加防逆流、需量和设备约束；站点可发布不同的有期限回退目标，但必须同样经过约束与反馈。若关键保护输入也失效，按第 10 节暂停新功率命令，不得无限沿用上一段目标。新的计划版本只在生效时刻切换，计算和命令保留所用版本，迟到配置提示不能倒退 active 版本。</p>
+<p>对于 <code>pcc_power</code> 目标，依据 PCC 实测和已验证的 PV 变化求储能候选值：</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>P_ess_candidate = P_ess_actual + P_grid_meas - P_grid_plan</span></span>
+<span class="line"><span>                  - (P_pv_plan - P_pv_actual)</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>对于 <code>ess_power</code> 目标，直接取曲线值。两种目标都要经过实时约束、站级分配和仲裁；可执行值与计划值分别记录。计划跟踪误差、未执行原因、PV 预测误差和被保护层截断的功率持续时间用于运行评估。历史曲线查询用于计划评估和离线优化，不用失效历史值替代当前保护输入。</p>
+<h2 class="rp-toc-include" id="7-手动模式和北向控制"><a href="#7-手动模式和北向控制" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7. 手动模式和北向控制</h2>
+<p>手动模式的进入、退出和功率设定是独立的持久意图。Web 校验用户权限、调度域、目标资产、单位、有效期、期望配置版本和幂等 ID；策略再检查当前模式、控制所有权、设备能力、实时约束和未终结命令。人工设定可面向站级储能净功率或指定 PCS；指定 PCS 时仍参与站级 PCC 约束与共享资源仲裁，不允许借“直控”绕过它们。</p>
+<p>人工租期有站点配置的最大长度，到期、操作者主动退出、配置版本失配、控制权丢失或模式切换均撤销人工目标。到期不把旧手动设定永久保持为新计划，也不自动补发未知结果的命令；恢复自动模式前先读取设备实际状态和未终结命令，再按斜率接入当前有效计划。手动请求在受理时超出已知硬约束应明确拒绝；运行中动态限值收紧时可缩小实际执行值，但必须展示请求值、执行值和限制原因，不能静默改写人工目标。</p>
+<p>人工模式只替代常规调度目标，不取消防逆流、需量、SOC、故障与控制权约束。若授权北向控制与人工控制冲突，由发布的站点优先级和租期规则决定；同级冲突用版本或明确的先后规则确定唯一赢家，并持久记录抢占/拒绝原因。北向连接成功不自动获得更高权限。所有来源最终经过同一仲裁和命令链路，Web/北向不能直接写 PCS 或光伏寄存器。</p>
+<h2 class="rp-toc-include" id="8-光伏协同"><a href="#8-光伏协同" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8. 光伏协同</h2>
+<p>光伏在本文中分为“可监视”和“可限发”两级。仅有发电测点时，策略可使用光伏实际功率做平衡诊断和计划评估；只有发布了光伏逆变器的标准限发能力、范围、远程控制状态、写入路由及可靠的限值回显，才能将其作为防逆流可用限发资源。缺少可靠限值回显时，协议确认或短时发电下降不足以证明限发有效，不计入防逆流能力。光伏逆变器固有目录是<a href="/ems/architecture/device-model" class="rp-link">设备模型</a>的目标扩展，当前公共 C++ 目录尚未实现该类型；不得把 PCS 的充放电命令或厂家原始点直接当作光伏能力。</p>
+<p>PV 限发目标建议表示为允许的最大交流输出 <code>P_pv_limit &gt;= 0</code>，实际发电 <code>P_pv_actual</code> 和限值回显独立采集。下发前检查可用输出估计、最小/最大限值、斜率、设备运行状态与控制权；没有可信可用输出估计时仅按实测和裕量逐步调整，不承诺达到某个精确光伏出力。防逆流需要限发时逐步降低上限，PCC 恢复稳定且储能调节空间允许时逐步解除。设备失联或模式转本地时，按该型号验收的失联行为记录实际风险，不默认它会保持或清除最后限值。</p>
+<p>需量保护优先利用未被防逆流限制的光伏发电；若防逆流和需量同时有效，计算 PCC 上下限的可行交集，不能一边为了需量放开光伏、一边为了防逆流继续要求其限发。光伏预测可改善经济调度，但预测缺失不影响基于 PCC 实测的保护计算。孤岛或并离网切换后的光伏控制另行设计联锁，未验收前暂停本策略的并网功率闭环。</p>
+<h2 class="rp-toc-include" id="9-可行区间设备分配和命令闭环"><a href="#9-可行区间设备分配和命令闭环" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9. 可行区间、设备分配和命令闭环</h2>
+<p>单元的储能可行区间为 <code>[-P_charge_available, P_discharge_available]</code>。它由 PCS 当前动态功率、BMS 许可及限值、SOC/温度、开关/故障状态、已占用共享资源、变压器/PCC 容量和控制周期内的斜率共同求交。SOC 接近上下限时按配置连续降额，越界后禁止对应方向，恢复需经过迟滞。不得用额定值覆盖失效的动态上限。共享 PCS 只能分配给一个站级调度决策，单元引用它不增加站级能力。</p>
+<p>由第 4、5 节产生的 PCC 下界和上界连同设备可行区间形成最终区间。正常配置必须满足 <code>P_grid_floor &lt;= P_grid_ceiling</code>；运行时若需量预算收紧或动态能力导致没有可行解，先满足现场联锁与 BMS/PCS 限值，再尽量压低上网风险，最后尽量压低需量超限，并公开各项剩余缺口。控制器不能声称不可实现的上网/需量目标已经满足。手动或计划目标在可行区间内取最近值。站级分配先求各 PCS 在斜率和最小步长下的区间 <code>[-C_i, D_i]</code>，再求满足 <code>sum(P_i) = P_ess_target</code> 的分配；目标超出可达总区间时先截断。多个可行解按 SOC 均衡、效率和已发布权重选择，同分时按稳定资产 ID 排序；光伏限发也按同一调度域内的已验收可控范围分配。分配后重新合算站级预测，保证舍入和斜率不使目标越界。优化权重不改变硬约束。</p>
+<p>同一 PCS/PV 在一个控制周期只接受统一仲裁器产生的一条有效设定序列。超过死区、最小间隔或反馈未确认时不持续刷写；保护收紧可以取代尚未发送的普通目标。已发送的动作不能靠取消意图撤回，须等待回执与新回读；结果未知时先对账，停止依赖该结果的正常新设定。意图、有效目标、约束截断、分配、命令和回执均关联 <code>intent_id / command_id / config_version / owner_epoch</code>。策略在 MySQL 事务中保存命令与 outbox，存储发布，采集持久受理后按生效绑定执行；协议确认和设备新样本回读分别记录。只有符合反馈条件才标记验证成功，结果未知不盲目补发切换、复位或脉冲命令。设备或进程重启后先恢复持久模式、计划版本、租期、未终结命令及最新有效反馈，再恢复调度。</p>
+<h2 class="rp-toc-include" id="10-降级告警和可观测性"><a href="#10-降级告警和可观测性" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10. 降级、告警和可观测性</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>情况</th><th>行为</th></tr></thead><tbody><tr><td>PCC 功率无效、陈旧、方向不明或拓扑切换中</td><td>停止新的依赖 PCC 的远程功率命令；保留已知设备状态并告警。若必须保证无逆流，由独立本地保护承担；EMS 不以旧值继续放电或解除限发</td></tr><tr><td>需量电量窗口缺失但 PCC 功率有效</td><td>仅按已验收的保守瞬时购电上限运行，标记需量窗口失效；无此配置则暂停需量相关新调度</td></tr><tr><td>PCS/BMS/SOC 或光伏能力失效</td><td>从可用集合移除受影响设备、重新计算区间；不能以额定值或上次能力补齐</td></tr><tr><td>配置未应用、MySQL/实时权威后端不可用、所有者失效</td><td>暂停新的常规控制并保留原因；既有设备本地保护继续。恢复后按版本与命令状态对账</td></tr><tr><td>命令反馈超时、状态 <code>unknown</code>、PCC 未按预测变化</td><td>停止依赖该执行结果的进一步放宽，查询持久状态与新回读，按策略告警；不重复非幂等动作</td></tr><tr><td>目标不可达、PV 限发不足或需量已超限</td><td>执行可行部分并发布预计/实际缺口、持续时间、限制原因和受影响资产</td></tr></tbody></table></div>
+<p>输出至少包括模式及拥有者、当前有效目标和来源、PCC 上下限、储能/PV 可行区间、实测/预测功率、需量窗口进度、计划偏差、命令状态、输入质量/覆盖率和最后一次约束原因。告警有去抖、迟滞、产生/恢复/确认生命周期及稳定 ID；模式变化、人工抢占、计划切换、限发和降级均进入审计。监控周期超时、样本年龄、执行/反馈时延、反复限发次数、预测残差、需量超限和约束不可行次数。</p>
+<h2 class="rp-toc-include" id="11-验收场景与实施边界"><a href="#11-验收场景与实施边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>11. 验收场景与实施边界</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>场景</th><th>期望结果</th></tr></thead><tbody><tr><td><code>P_load=100</code>、<code>P_pv=80</code>、<code>P_ess_actual=0</code>，计划放电 30 kW，零上网且购电裕量 5 kW</td><td>PCC 当前 20 kW；储能目标上界 15 kW，计划被截断，预测 PCC 不低于 5 kW</td></tr><tr><td>光伏下一周期可能在 60–100 kW，当前 80 kW；防逆流与需量同时生效</td><td>防逆流使用 100 kW 上界，需量使用 60 kW 下界；若约束无交集则公开缺口，不能共用单一点预测</td></tr><tr><td>光伏突然增加、储能已达最大充电，PV 可限发/不可限发各一次</td><td>可限发时按反馈收紧 PV；不可限发时明确剩余上网风险并告警，不宣称保护成功</td></tr><tr><td>固定需量窗口剩余 0.25 h，扣除控制延迟购电后的剩余预算 5 kWh，<code>T_lag_h=0</code>，无其他瞬时上限</td><td>本周期购电目标上限不高于 20 kW；若储能不足则记录预计超限，不能用上网抵扣已购电</td></tr><tr><td>需量窗口即将结束，通信加爬坡时长已超过剩余时间</td><td>不声明本窗口可由新命令修正；告警、记录延迟购电并为下一窗口重新计算</td></tr><tr><td>人工 50 kW 放电与防逆流 15 kW 上界冲突；另一次人工意图受理后 SOC 降低</td><td>前者在受理时明确拒绝；后者运行中显示原请求、受限执行值和原因，禁止突破 SOC/防逆流</td></tr><tr><td>计划跨日、缺段、夏令时重复时刻、配置版本切换</td><td>发布时可确定唯一 UTC 区间和回退；迟到版本不回滚；无合法目标时不沿用过期目标</td></tr><tr><td>PCC 坏质量、PCS 反馈超时、采集/策略重启、旧主未隔离</td><td>不产生基于失效输入的新功率命令；未终结命令和控制权先对账；本地保护仍工作</td></tr><tr><td>两个单元引用同一 PCS/PV/电表</td><td>站级聚合和分配只计一次，共享资产不会收到两个互相覆盖的设定</td></tr></tbody></table></div>
+<p>首期实施需要补齐策略进程构建与运行、PV 标准设备模型/能力、PCC 方向绑定、版本化策略/计划配置、模式与租期、需量窗口状态、算法、命令闭环及对应仿真/现场验收。当前 <code>backend/src/stgy</code> 仅有接口构建占位，以上表格是验收条件，不表示现有代码已通过。现场投运前还须确定 PCC 计量与窗口口径、控制周期、裕量、斜率、失联行为和独立保护配置，并用实测的阶跃、波动、故障与恢复工况验收。</p><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/strategy/design.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/10/20 23:17:14</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/processes/strategy/" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>策略进程设计</span></span></a><a href="/ems/processes/web/" class="rp-prev-next-page__item rp-prev-next-page__next rp-link"><span class="rp-prev-next-page__item__desc">下一页</span><span class="rp-prev-next-page__item__title"><span>Web 后端与前端协作</span><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></span></a></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#1-范围与基本约定" class="rp-toc-item rp-link" title="1. 范围与基本约定" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">1. 范围与基本约定</span></a><a href="#11-功率方向与计量边界" class="rp-toc-item rp-link" title="1.1 功率方向与计量边界" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">1.1 功率方向与计量边界</span></a><a href="#2-输入配置与有效性" class="rp-toc-item rp-link" title="2. 输入、配置与有效性" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">2. 输入、配置与有效性</span></a><a href="#21-标准输入和能力" class="rp-toc-item rp-link" title="2.1 标准输入和能力" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.1 标准输入和能力</span></a><a href="#22-配置模型与发布校验" class="rp-toc-item rp-link" title="2.2 配置模型与发布校验" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.2 配置模型与发布校验</span></a><a href="#3-调度周期模式和优先级" class="rp-toc-item rp-link" title="3. 调度周期、模式和优先级" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">3. 调度周期、模式和优先级</span></a><a href="#4-防逆流" class="rp-toc-item rp-link" title="4. 防逆流" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">4. 防逆流</span></a><a href="#5-需量保护与削峰" class="rp-toc-item rp-link" title="5. 需量保护与削峰" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">5. 需量保护与削峰</span></a><a href="#6-计划曲线与自动目标" class="rp-toc-item rp-link" title="6. 计划曲线与自动目标" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">6. 计划曲线与自动目标</span></a><a href="#7-手动模式和北向控制" class="rp-toc-item rp-link" title="7. 手动模式和北向控制" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">7. 手动模式和北向控制</span></a><a href="#8-光伏协同" class="rp-toc-item rp-link" title="8. 光伏协同" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">8. 光伏协同</span></a><a href="#9-可行区间设备分配和命令闭环" class="rp-toc-item rp-link" title="9. 可行区间、设备分配和命令闭环" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">9. 可行区间、设备分配和命令闭环</span></a><a href="#10-降级告警和可观测性" class="rp-toc-item rp-link" title="10. 降级、告警和可观测性" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">10. 降级、告警和可观测性</span></a><a href="#11-验收场景与实施边界" class="rp-toc-item rp-link" title="11. 验收场景与实施边界" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">11. 验收场景与实施边界</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/strategy/design.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+    <div id="__rspress_modal_container"></div>
+  </body>
+</html>
