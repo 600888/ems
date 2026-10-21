@@ -1,6 +1,6 @@
 # 公共模块设计与实施规范
 
-> 版本：1.2｜日期：2026-09-29｜状态：目标设计，部分模块已实现，其他部分待迁移与验收。
+> 版本：1.3｜日期：2026-10-21｜状态：目标设计，部分模块已实现；历史数据库访问向公共层迁移尚未实施。
 > 范围：C++17 公共库、跨进程与前后端数据契约及其与采集、协议、历史、存储、Web、策略模块的边界。各节描述目标契约，实际落地范围以对应模块 README 和测试为准。
 
 ## 1. 设计决策与实施入口
@@ -21,6 +21,7 @@
 | 实时读写、CAS、共享内存和 Redis | [实时访问接口](realtime/access-design.md) | 集成关系与公共类型复用 |
 | code、实时物理键与字段 | [Redis 键设计](realtime/redis-key-design.md) | 编码器与跨进程验证 |
 | 公共目录、库依赖、配置/数据库/消息接口、实施验收 | 本文 | 公共模块实施基线 |
+| 公共数据库访问、ormpp、历史适配与迁移 | [公共数据库访问层](database-design.md) | 数据访问的详细分层与整改基线 |
 
 本文不另建设备点位目录、Redis 键规则或实时存储接口的副本。实现发现冲突时，先修订对应权威专题及受影响契约，再编码；不能在某个适配器里建立隐藏例外。
 
@@ -43,13 +44,13 @@
 | model | 资产/设备/测点/能力/绑定定义，纯模型校验 | 设备会话、调度、协议 I/O、控制算法 |
 | codec | 模型与契约之间的显式编解码 | 厂家报文、寄存器字节序和协议帧解析 |
 | config | 版本配置读取、快照校验、本地不可变视图 | Web 编辑流程、存储进程发布编排、采集/策略应用 |
-| database | C++ MySQL 连接池、事务、共享配置/意图/命令/告警/outbox Repository | 历史采样规则、报表、TDengine 实现、Drogon HTTP 层 |
+| database | 连接池/事务、公共 ormpp Repository、历史目录/身份/隔离、时序接口及适配 | 历史采样/聚合规则、报表编排、鉴权、Drogon HTTP 层 |
 | realtime | 类型化实时访问、来源防护、CAS 与后端实现 | 来源选主、设备级隔离、策略新鲜度处理决策 |
 | messaging | 事件信封、ZeroMQ 遥测与变化提示、命令传输接口 | 业务处理、持久归档和故障处置 |
 | observability | 结构化日志、指标接口、健康状态基础类型 | 各进程 HTTP/gRPC 健康端点及就绪判定 |
 | util | 有明确复用场景的字符串、时间等小型纯函数 | 通用任务调度框架、任意杂项业务逻辑 |
 
-`database` 与顶层 `storage` 的边界：多个进程都使用的 MySQL 事务与共享 Repository 放公共模块；只服务历史归档的 TDengine 适配器放存储模块。`history` 定义历史采样、聚合、保留和查询语义，存储实现依赖其 Repository 接口。不要为了复用一个客户端，把历史业务整体放进 common。
+`database` 集中实现 MySQL/时序数据库访问，含历史目录与 TDengine 适配；业务进程不各自实现数据库连接、映射或 SQL。`history/storage` 保留采样校验、聚合/保留策略、发布和查询编排，通过公共 API 注入依赖。生产仅存储装配时序后端，其他进程经存储服务查询历史；公共模块不依赖存储业务类。详见[数据库访问分层](database-design.md#2-分层与职责)。
 
 告警定义、告警事件数据类型可以共享，告警产生/恢复/确认的业务状态机归策略；权限上下文可以共享，Web 用户认证及权限管理归 Web；共享配置校验不替代请求鉴权。
 
@@ -68,6 +69,8 @@ backend/
       config/                # config_snapshot.h、i_config_provider.h
                              # i_config_snapshot_store.h、config_validator.h
       database/              # i_database.h、i_transaction.h、repositories/
+        history/             # 历史目录、事件身份及隔离接口与 DTO
+        timeseries/          # 后端无关的时序读写接口、类型与工厂配置
       messaging/             # event.h、ZeroMQ 通道接口与编码
       observability/         # logger.h、metrics.h、health.h
       util/
@@ -78,7 +81,9 @@ backend/
     codec/
     config/
     db/                      # 沿用现有实现目录；公开 API 位于 common/database
+      runtime/               # 进程内连接管理、事务与错误转换
       mysql/                 # ormpp、行实体、迁移映射私有实现
+      timeseries/taos/        # TDengine 客户端、映射与读写实现
     realtime/                # core、factory、backends/redis、backends/shm
     messaging/zmq_change_channel.cpp
     observability/
@@ -93,7 +98,7 @@ contracts/                   # 仓库根目录，供各 C++ 进程与前端共�
   fixtures/                  # 有效、无效、兼容版本及边界样例
   realtime/                  # 实时字段与逻辑键黄金样例，引用统一 schema
   compatibility.md           # 当前支持的 schema 范围及兼容策略
-deploy/migrations/mysql/     # 唯一一套按版本执行的数据库迁移
+backend/data/migrations/     # 沿用已有 MySQL/TAOS 版本化迁移，唯一部署来源
 ```
 
 命名空间采用 `ems::core`、`ems::model`、`ems::codec`、`ems::config`、`ems::database`、`ems::messaging`、`ems::observability`；实时保持 `ems::realtime`。类型用 PascalCase，字段与公开方法用 lower_snake_case；实时专题已定义的 camelCase 方法保留，不为风格统一另造一套接口。
@@ -109,6 +114,7 @@ deploy/migrations/mysql/     # 唯一一套按版本执行的数据库迁移
 | ems_common_codec | 契约编解码与精度检查 | model，私有 JSON/Protobuf 实现 |
 | ems_config_api / ems_config_core | 配置接口、加载与校验 | model、codec；通过接口注入配置来源 |
 | ems_database_api / ems_database_mysql | Repository/事务接口及 ormpp 实现 | model、core；MySQL/ormpp 仅实现侧 |
+| ems_timeseries_api / ems_timeseries_taos | 时序接口及公共 TDengine 适配 | core/公共记录；TAOS 客户端仅实现侧，存储入口装配 |
 | ems_config_redis / ems_config_mysql | 快照适配及权威版本读取 | config_api、codec；各自数据库客户端 |
 | ems_realtime_api / ems_realtime_core | 实时接口与业务门面 | core、model、config_api |
 | ems_realtime_redis / ems_realtime_shm | 实时后端 | realtime_api，私有平台或数据库依赖 |
@@ -293,8 +299,13 @@ UnitController              -> 策略模块：约束与控制决策
 | IControlRepository | 追加意图、执行命令、回执；查询稳定 ID 已有结果；条件推进允许的状态 |
 | IAlarmRepository | 保存告警生命周期事件、确认记录及查询投影 |
 | IOutboxRepository | 同事务 append；发布端有界 claim、续领/超时接管、mark_published |
+| IHistoryCatalogRepository | 按样本作用域/版本批量读取目录和映射，完整校验后标记 ready |
+| IHistoryEventRepository | 原子登记/核对事件身份和摘要，持久保存隔离及诊断 |
+| ITimeSeriesDatabase | 类型化时序读写、逐项批量结果及有界扫描；独立于 MySQL 事务 |
 
-所有变更 Repository 方法显式接收调用方的 `ITransaction&`；禁止在内部偷偷新建另一个连接或提交事务。事务与其创建的 IDatabase 实例绑定，跨实例传入直接拒绝。读方法可使用短借用连接，需一致读的一组查询必须显式使用同一事务和规定的隔离级别。
+MySQL Repository 方法显式接收调用方的 `ITransaction&`，由业务服务开启/提交；禁止内部偷偷新建连接或提交事务。事务与其创建的 IDatabase 实例绑定，跨实例传入直接拒绝；需一致读的一组查询使用同一事务和规定的隔离级别。每进程内相同数据库/凭据与用途的 Repository 共用公共运行上下文及连接池，不各建私有连接。
+
+时序接口不接收 MySQL 事务。历史目录/事件账本经公共 ormpp 实现，确认登记提交后再调用公共时序写入；两库没有共同事务。TAOS 失败或结果未知计入缺口，账本不等于归档成功。接口拆分、连接和类型归属见[公共数据库访问层](database-design.md)。
 
 连接池本身支持线程安全借还，单个连接/事务仅由一个线程使用；事务不可跨进程传递。事务析构对未提交工作尝试 rollback，若结果不确定则丢弃连接，不把它归还为健康连接。commit 返回 Unknown 后不再使用该事务，通过原稳定业务 ID 从新连接对账。
 
@@ -319,9 +330,11 @@ outbox 至少保存 event_id、业务关联 ID、scope/topic、schema_version、
 
 ### 8.3 Schema、错误与限制
 
-数据库表结构只由 `deploy/migrations/mysql` 的版本化迁移维护；公共 ormpp Repository 与 Drogon 应用都不自动建表。迁移工具独立运行，应用检查 schema 版本范围，超出范围拒绝写就绪。滚动升级先新增兼容字段，再迁移和切换读取，最后在独立版本清理废弃列。
+数据库 schema 统一由 `backend/data/migrations/` 的版本化部署迁移维护，沿用现有 MySQL/TAOS 脚本；应用不自动建业务表、超级表或升级 schema。时序动态子表仅由公共适配器按已授权映射受控创建。应用检查 schema 版本范围，超出范围拒绝写就绪；滚动升级先增兼容字段，再迁移/切读，最后独立清理。
 
 唯一键冲突映射 Conflict；对象不存在为 NotFound；权限错误为 PermissionDenied；池耗尽/超时与服务器不可用分别返回明确错误。SQL 参数必须绑定；动态排序/列名只能来自白名单，业务接口不接收任意 SQL。
+
+MySQL 普通 CRUD 统一通过公共实现的 ormpp 实体接口；复杂查询/锁/条件更新所需的参数化 SQL 只允许留在公共 MySQL 实现。TDengine 不在固定版 ormpp 的支持范围，官方客户端及方言仅封装于公共时序适配器。业务目录不得包含 ORM/驱动头或维护执行语句，详见[ormpp 与 SQL 规则](database-design.md#4-ormpp-与-sql-使用规则)。
 
 查询必须分页并限制返回数量，批量写入必须有项数/字节上限；整批事务失败不能返回部分成功，逐项提交接口则必须返回逐项结果，两种接口不得混用。连接预算按所有进程实例累加核算。
 
@@ -444,7 +457,9 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | backend/src/models/point_runtime.hpp | common/model/point + realtime | 分离配置、实时值、厂家解码；保留值类型/质量/时间 |
 | backend/src/models/point_mapping.h | 对应标准绑定模型或策略派生点配置 | 现有公式映射不等于厂家点绑定，不能直接改名合并 |
 | backend/include/db/*.h | common/database 公共接口 + src/common/db/mysql 私有行实体 | 业务不再依赖 ORM 行结构，迁移显式转换与稳定 ID |
-| backend/src/common/db/db_manager.cpp | database_mysql 与各 Repository | 拆开连接、事务和业务 CRUD；采样历史写入迁往 history/storage |
+| backend/src/common/db/db_manager.cpp | database_mysql 与各 Repository | 拆开池/事务、业务 CRUD 和旧建表逻辑；历史业务编排留存储，数据库调用统一公共层 |
+| backend/src/scd/mysql_history.cpp | src/common/db/mysql + 公共 history API | 迁移实体、反射、查询与事件/目录持久化，复用公共连接/事务 |
+| backend/src/scd/taos_series.cpp、time_series_factory.cpp | src/common/db/timeseries + 公共 timeseries API | 客户端、方言、映射和工厂迁入公共层，存储只注入接口 |
 | backend/src/rtdb/rtdb_device.h、rtdb_channel.h、rtdb_config.h | common/model + config | 配置定义脱离 rtdb，统一设备/通道/点定义 |
 | backend/src/rtdb/rtdb_point.*、rtdb_cache.*、rtdb_manager.* | realtime + config 对应职责 | 用契约区分状态、缓存和配置；不保留万能管理器 |
 | backend/src/net/para_loader/* | collector 配置适配 + common/config | 读取和校验复用公共库；通道准备/应用留采集 |
@@ -465,7 +480,7 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | --- | --- | --- |
 | P0 基线与契约 | 现状依赖/数据清单；新目录与 CMake targets；C++17 依赖锁定；身份/枚举/时间转换表；contracts 初版及开发预算模板 | core/model 无数据库依赖构建；Linux/ARM 工具链检查；旧数据转换无未解释项 |
 | P1 模型与编码 | core、model、codec、ModelView、ValidationReport；设备/绑定/点/能力 fixtures | 多对多、树/引用/类型校验、无效值和 64 位整数往返通过 |
-| P2 数据库与配置 | MySQL 迁移、连接池/事务、共享 Repository、outbox；快照 provider/store/validator/reporter | 同事务原子性、并发冲突、配置精确版本与发布恢复通过 |
+| P2 数据库与配置 | 公共池/事务、ormpp Repository、历史目录/事件仓储、公共时序适配、统一迁移；配置与 outbox | 同事务原子性、跨 Repository 复用、历史语义兼容、并发/Unknown 与故障缺口通过 |
 | P3 实时服务 | 按实时专题实现 api/core、Redis 默认后端，迁移 rtdb 调用 | 来源/CAS/完整替换/Unknown/后端恢复契约通过；设备定义已脱离 rtdb |
 | P4 事件链路 | ZeroMQ 遥测发布/订阅、持久隔离、采集有界缓冲；MySQL 执行状态/outbox 接入 | 重复、断线、队列溢出、数据库故障与丢样报告通过 |
 | P5 业务集成与旧代码退出 | 采集/策略/存储注入；Drogon Web 接入公共 Repository 与契约；逐项关闭旧接口；权限/健康/预算监控 | 四进程最小端到端链路通过，旧模型不再被生产路径引用 |
@@ -503,6 +518,10 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 文档本身验收包括：相对链接存在、导航 JSON 可解析、代码围栏配对、C++ 草案可通过 C++17 语法检查，与权威专题无冲突。正式文档站渲染、Linux/ARM 构建、数据库/多进程故障测试分别记录，不能相互替代。
 
 ## 17. 实施记录
+
+### 2026-10-21 公共数据库层设计整改（待实施）
+
+新增[公共数据库访问层设计](database-design.md)，统一历史目录/事件仓储与时序适配的公共归属、ormpp/SQL 边界和迁移入口。当前 scd 私有适配器及旧 DBManager 尚未迁移；本次仅完成设计同步，P2 仍须按实际代码与数据库验收。
 
 ### 2026-09-19 P0/P1 公共模块基线落地
 

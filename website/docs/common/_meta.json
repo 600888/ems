@@ -10,6 +10,11 @@
     "label": "公共模块设计与实施"
   },
   {
+    "type": "file",
+    "name": "database-design",
+    "label": "公共数据库访问层（ormpp / 时序）"
+  },
+  {
     "type": "dir",
     "name": "realtime",
     "label": "实时数据访问",

@@ -8,6 +8,8 @@
 
 ## 构建
 
+目标整改见[公共数据库访问层设计](../../../website/docs/common/database-design.md)：当前 `mysql_history.cpp` 虽已使用 ormpp，实体、SQL 和连接仍在本目录私有维护；后续迁入公共 MySQL Repository。`taos_series.cpp` 与时序工厂也迁入公共适配层，存储保留订阅、归档和查询编排。该迁移尚未实施，下文描述当前构建与运行方式。
+
 `ems_storage_core` 只依赖仓库公共 C++17 模块。原生进程需要 MySQL 客户端开发库和 libzmq 4.3+；启用 TDengine 后端还需要 3.4.2 C/C++ 客户端。配置时设置 `EMS_WITH_ZEROMQ=ON`，CMake 才会创建 `ems_zmq_messaging` 和存储原生目标。MySQL 仓储使用仓库内固定的 ormpp 0.2.0，自有代码不直接调用 MySQL C API。`backend/data/migrations/001_storage_mysql.sql` 和 `002_storage_taos.sql` 由部署迁移流程执行；进程不会自动改表。
 
 目标 TDengine 服务端与客户端均为 3.4.2 系列，并使用微秒精度的 `ems_history` 库。先在目标补丁版本验证迁移 SQL、复合键和 stmt2 行为，再导入真实历史点位版本。`history_point_version.ready_at` 只应在该版本全部快照核对完成后设置。

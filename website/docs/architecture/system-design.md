@@ -1,6 +1,6 @@
 # EMS 系统架构设计文档
 
-> 版本：2.13｜更新日期：2026-09-29｜状态：目标架构，待分阶段实现。
+> 版本：2.14｜更新日期：2026-10-21｜状态：目标架构，待分阶段实现；数据库统一收口到公共访问层。
 > 本文是整体架构决策基线；采集细节见 [数据采集架构](../processes/collector/design.md)，实时数据与配置入口见 [实时数据与配置](../common/realtime/index.md)。下列进程名、接口、消息与数据模型是设计约定，不代表仓库已经实现。
 
 ## 1. 架构决策
@@ -15,10 +15,10 @@
 | 配置快照 | MySQL 保存版本化权威配置，各进程维护本地缓存 | ZeroMQ 提示重读；遗漏时按 MySQL 版本对账 |
 | Redis 键 | 全局唯一储能单元 code 为根，设备 code 按资产层级逐级展开 | 单元 hash tag 为 `{unit_code}`；站级公共资源使用 `{station:station_code}`；详见 [Redis 键设计](../common/realtime/redis-key-design.md) |
 | 异步消息 | ZeroMQ 负责发布订阅与命令交接 | 原始遥测独立 PUB/SUB，允许丢样；命令 REQ/REP 配合 MySQL outbox/inbox 恢复 |
-| gRPC | 建议首期引入，限定用于跨进程服务 API | 用于历史查询等由目标进程提供的服务；各进程自身的业务数据库操作直接使用对应 ORM |
+| gRPC | 建议首期引入，限定用于跨进程服务 API | 历史查询由存储提供；各进程的 MySQL 操作统一调用公共 ormpp Repository |
 | 独立 MQ | 首期不引入 Kafka/RabbitMQ 等独立中间件 | 达到明确的吞吐、积压、回放或跨站复制需求后再评估 |
-| 历史存储 | 时序后端抽象，首期 TDengine 3.4.2 | 时序值和聚合结果由存储进程统一访问；InfluxDB 适配后续实现 |
-| 业务存储 | MySQL；四类 C++ 进程复用公共 ormpp Repository | 数据库 API 封装到公共模块；每个进程独立创建和管理连接或连接池，Web 同步查询进入有界业务工作池 |
+| 历史存储 | 公共时序访问接口，首期 TDengine 3.4.2 | 公共层封装客户端与方言，仅存储进程装配，其他进程经历史服务查询；InfluxDB 后续实现 |
+| 业务存储 | MySQL；四类进程复用公共 ormpp Repository | 实体、查询、连接池实现及事务集中公共模块，各进程创建独立实例；业务代码不写 SQL |
 | 设备模型 | 站点 → 储能单元 → 设备/部件，加独立关系模型 | 分开描述资产归属、电气连接、控制能力与通信路径 |
 | 设备点位抽象 | 类型固有点位 → 厂家点表 → 实例绑定 | 导入先选实际设备，缺失能力显式禁用；标准读取、设定命令与反馈分开，见 [设备模型与点表绑定](device-model.md) |
 | 通道模型 | 设备与通道多对多；通道引用一个协议 profile 版本 | 分开定义采集/上送用途、EMS 客户端/服务端角色、连接模式与操作权限；详见 [设备、通道与协议](channel-protocol.md) |
@@ -324,41 +324,36 @@ Redis 异步复制租约本身不能保证网络分区下现场单写，PCS/串�
 
 ### 7.2 MySQL 与公共 ormpp 模块
 
-四类 C++ 进程统一采用 `业务模块 → 公共数据库 API / Repository → ormpp → MySQL`。Web 的业务 CRUD、配置编辑、用户权限和人工控制意图与采集、存储、策略的职责内操作复用相同数据库模型；连接池与事务仍由各进程独立管理。Drogon 只承担 Web HTTP/WebSocket 框架职责，Web 中的同步 ormpp 操作放入有界业务工作池，不阻塞网络 I/O 线程。
+全项目持久数据访问统一到公共库，详细实施基线见[公共数据库访问层](../common/database-design.md)。
 
-公共数据库模块规划放在 `backend/src/common/db/`，封装连接配置与创建、实体映射、Repository、事务接口和错误转换。公共 API 面向配置版本、命令、告警等业务数据，允许调用方在同一事务中组合业务写入与 outbox 写入；Web 专属用户/权限 Repository 仍使用相同事务接口与 schema 迁移规则。
+```mermaid
+flowchart TD
+    Business[采集 / 存储 / 策略 / Web 业务] --> Repo[公共领域 Repository]
+    Repo --> ORM[公共实体与事务 / ormpp]
+    ORM --> MySQL[(MySQL)]
+    Storage[存储归档与查询编排] --> Series[公共时序接口]
+    Series --> Adapter[公共 TDengine 适配器]
+    Adapter --> TAOS[(TDengine)]
+```
 
-**每个进程独立建立数据库连接或连接池**：进程启动后按需初始化，由本进程维护连接获取、归还、重连和退出关闭。公共模块只复用代码及配置结构，不跨进程共享连接对象、连接池、socket 或事务句柄；使用 fork 时，子进程应重新创建连接。进程内并发按连接独占使用或连接池借还规则执行，一个事务绑定同一连接；各进程连接上限应计入数据库总连接预算。
+| 统一复用 | 运行约束 |
+| --- | --- |
+| 配置、控制、告警、用户、outbox 与历史目录/事件 Repository | 实体、映射、查询与并发语义集中实现，业务不拼 SQL 或直调驱动 |
+| 公共连接池、事务、工厂与错误转换 | 各进程创建自身实例；同进程同数据库/凭据与用途共池，Repository 不各建连接 |
+| 公共时序读写、映射及客户端适配 | 仅存储进程装配，其他进程经 HistoryService；不把历史业务算法迁入公共层 |
+| 一套部署迁移 | 沿用 backend/data/migrations，应用仅检查版本，不自动建业务表或升级 schema |
 
-采集和策略通过公共 ormpp API 从 MySQL 加载指定版本配置，并维护进程本地缓存；配置读取及其他数据库操作放在配置/业务工作线程，避免阻塞协议 I/O 或策略实时计算。所有进程访问同一业务数据库，按表、操作和业务所有权限制权限。
+固定版 ormpp 支持 MySQL/PostgreSQL/SQLite，不含 TDengine。MySQL 普通 CRUD 使用 ORM；必要的参数化复杂查询仅留公共实现，TAOS 客户端/方言仅留公共时序适配器。公开 API 不提供任意 SQL，也不暴露 ORM/驱动对象。
 
-TDengine 仍由存储进程通过独立 `TimeSeriesRepository` 和官方客户端批量写入与查询。内部 gRPC 规划提供 `HistoryService` 等跨进程服务，接口面向业务，不开放任意 SQL；普通 MySQL CRUD 由调用进程使用自身 ORM 完成。
+复用公共代码不跨进程共享连接、socket、锁或事务；fork 后重建连接，各实例连接上限计入数据库总预算。业务与 outbox 同事务，跨 Repository 使用同一连接；MySQL 与时序库不组成分布式事务，账本提交不等于历史归档完成。
 
-[ormpp 官方仓库](https://github.com/qicosmos/ormpp)说明其使用 C++17，支持 MySQL、PostgreSQL、SQLite。Repository 可降低替换成本，但不能消除 SQL 方言、类型、索引、ID 生成、事务隔离、批量写入及 schema 迁移差异；切换仍需适配、迁移和兼容测试，不承诺只改连接串。
-
-各进程的业务写入统一使用事务、乐观版本检查和唯一 event_id/command_id 约束；同一业务变更及其 outbox 必须在本进程同一连接的事务内提交，不拆成跨进程事务。表结构只通过一套版本化迁移管理，应用不自动建表或多实例并发迁移。配置区分“已保存/已发布/各实例已应用”，采集和策略版本不一致时拒绝依赖新映射的控制。
+数据库工作放有界配置/业务线程，避免阻塞协议 I/O、策略计算和 Drogon 网络线程；表/操作权限仍按业务所有权限制。配置分别报告已保存/已发布/各实例已应用，版本不一致时拒绝依赖新映射的控制。后端更换仍需类型、索引、事务、迁移和行为兼容验收。
 
 ### 7.3 TDengine 时序模型
 
 首期按数据类型划分超级表、每个测点一张子表，适配不同设备点表/采样周期；同构高频设备可经容量测试评估宽表。标签是子表级元数据，不能在同一子表逐行更换 point_id 标签混存多个点。[TDengine 数据建模](https://docs.taosdata.com/quick-start/data-modeling/)、[数据表说明](https://docs.taosdata.com/tdengine-sql/ddl/table/)。
 
-下面为数值点逻辑示例，数据库需先创建；本方案要求验证 TDengine 3.3.0.0 及以上的复合主键能力，再形成迁移脚本。完整的点位版本目录、类型化表和消费规则见[存储进程详细设计](../processes/storage/design.md)。
-
-```sql
-CREATE STABLE IF NOT EXISTS ems.telemetry_numeric (
-    ts TIMESTAMP,
-    event_id VARCHAR(64) COMPOSITE KEY,
-    sample_value DOUBLE,
-    quality INT,
-    ingest_ts TIMESTAMP
-) TAGS (
-    point_id VARCHAR(64)
-);
-
-CREATE TABLE IF NOT EXISTS ems.p_9f03a6c2
-USING ems.telemetry_numeric
-TAGS ('point-001');
-```
+目标版本为 TDengine 3.4.2，服务端与客户端锁定兼容补丁。数值、整数、布尔及文本分别映射类型化超级表，以稳定 point_id 作标签，行身份为 `(ts, event_id)`；物理 schema 由 `backend/data/migrations/002_storage_taos.sql` 管理，动态子表只经公共适配器按受控映射创建。完整目录、字段组与消费规则见[存储进程详细设计](../processes/storage/design.md)。
 
 表名由受控 ID 映射产生，值使用参数绑定。布尔、状态、字符串和高精度整数使用对应类型，不能全部转 DOUBLE。名称、单位、资产归属等可变信息通过 MySQL 版本模型解释历史，避免修改标签造成历史含义漂移。
 
@@ -453,7 +448,7 @@ website/                    # 文档站点（内容位于 website/docs/）
 | --- | --- | --- |
 | 1. 标准/契约 | 迁移 C++17，定义单位/质量/时间/状态，锁定 Drogon 等依赖 | 目标 Linux/ARM 构建通过，进程间消息与前端 JSON 契约一致 |
 | 2. 资产/配置 | station 命名、全局单元 code、设备层级、固有点位与厂家绑定、导入草稿、模板版本、禁用/能力依赖；建立设备/通道多对多绑定与独立上送映射 | code 无冲突，先选设备再导入，两厂家 PCS 映射一致，缺失能力可禁用，旧配置可回滚 |
-| 3. 数据访问与存储服务 | C++ 公共 ormpp API、统一 MySQL 迁移、TDengine、历史 gRPC | 各进程独立连接，Repository 事务/分页/outbox 可恢复 |
+| 3. 数据访问与存储服务 | 公共 ormpp Repository、历史目录/事件仓储、时序适配、统一迁移与历史 gRPC | 无进程私有 SQL/驱动实现，实例独立，事务/并发/Unknown 与故障缺口验收通过 |
 | 4. 采集/事件 | 按独立 Redis 文档实现实时层级键；接入 MySQL 配置版本、ZeroMQ 原始遥测、有界内存缓冲与优先调度 | 键生成契约一致，遥测丢样可观测，双通道/共用通道运行，控制唤醒及时、采集不饥饿 |
 | 5. 策略闭环 | 聚合、仲裁、MySQL 幂等执行状态、回读、未知状态、主控隔离 | 重复/过期/旧代次命令不误执行，审计可对账 |
 | 6. Web/前端 | Drogon REST/WebSocket、Vue 页面、配置和历史 | 多单元监视、控制、查询、配置应用可完整演示 |
@@ -479,3 +474,4 @@ website/                    # 文档站点（内容位于 website/docs/）
 | 2.11 | 2026-09-28 | 实时最新值可选共享内存/Redis；消息订阅和命令下发分别改用 ZeroMQ PUB/SUB 与 REQ/REP，命令依赖 MySQL outbox/inbox 幂等恢复 |
 | 2.12 | 2026-09-28 | Web 后端由 Go/GORM 目标方案改为 C++17 + Drogon，四类进程复用公共 ormpp Repository；保留 Vue 前端与内部 gRPC 边界 |
 | 2.13 | 2026-09-29 | Redis 限于实时状态；原始遥测改走允许丢样的 ZeroMQ PUB/SUB；存储采用统一时序后端接口，首期 TDengine 3.4.2 |
+| 2.14 | 2026-10-21 | MySQL 实体/ormpp Repository、连接池/事务及历史时序适配统一收口公共层；各进程装配独立实例，明确 SQL、迁移、跨库边界及整改验收 |

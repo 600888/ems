@@ -17,13 +17,27 @@
 | 控制仲裁 | 人工、自动、北向上级统一优先级与所有权 | 拒绝理由或执行命令/outbox |
 | 反馈管理 | 关联 command_id、协议确认与设备反馈 | 控制状态和未知结果处理 |
 
-人工意图由 Drogon Web 经公共 Repository 持久受理，北向意图由通信进程持久受理，自动意图由策略保存。三者遵循同一有效期、幂等、审计和仲裁规则；北向连接不自动获得更高优先级。
+```mermaid
+flowchart TD
+    Web[Web / 人工意图] --> Intent[持久意图 / 有效期与幂等校验]
+    North[通信进程 / 北向意图] --> Intent
+    Auto[策略 / 自动意图] --> Intent
+    Intent --> Arb[统一仲裁 / 约束与控制权]
+    RT[有效标准点与设备能力] --> Arb
+    Arb -->|拒绝| Reason[持久原因 / 审计]
+    Arb -->|允许| Cmd[MySQL 命令与 outbox 同事务]
+    Cmd --> Pub[存储发布]
+    Pub --> Exec[采集执行 / 协议确认与新反馈]
+    Exec --> Reconcile[持久回执 / 策略对账]
+```
+
+各来源遵循同一审计和仲裁规则，北向连接不自动提高优先级。
 
 ## 实时与执行边界
 
-经 RealtimeService/IRealtimeStore 读取权威后端，不为共享内存/Redis分别实现算法。批量读不是全局快照，每次计算核对所需版本、时间和质量组合，不以读取成功代替输入有效。
+经 RealtimeService/IRealtimeStore 读取权威后端，算法不区分共享内存/Redis。批量读不是全局快照，计算须校验版本、时间与质量；协议、会话和厂家地址由采集按生效配置解析。
 
-命令与 outbox 在本进程 MySQL 事务提交，由存储发布；协议、会话与厂家地址由通信进程按生效配置解析。改变通道不应迫使策略改算法。
+配置、计划、命令、告警及 outbox 通过[公共数据库访问层](../../common/database-design.md)的 ormpp Repository 持久化；公共工厂装配本进程上下文，策略不自建实体、SQL 或连接实现。
 
 ## 降级、恢复与验收
 

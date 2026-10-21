@@ -1,6 +1,6 @@
 # 存储进程
 
-> 进程：`ems-storage`｜语言：C++17｜状态：历史订阅与 TDengine 适配已实现，采集发布端和服务接口待接入。
+> 进程：`ems-storage`｜语言：C++17｜状态：历史订阅与私有适配已实现，公共数据库层整改、采集发布端及服务接口待完成。
 
 负责接收 ZeroMQ 原始遥测、写入时序数据库、配置与业务事件发布，以及本进程的数据查询服务。PUB/SUB 历史采样允许丢样；它不代理其他进程的 MySQL 访问，也不持有现场协议会话。
 
@@ -19,11 +19,18 @@
 
 ## 连接、事务与配置发布
 
-通过公共 ormpp API 建立自己的 MySQL 连接池，专用客户端访问 TDengine。时序、审计、outbox、配置和查询使用独立预算，避免大报表阻塞命令归档。
+通过[公共数据库访问层](../../common/database-design.md)装配 ormpp Repository 与时序适配器，连接池/事务实现、实体和 SQL 统一复用；存储只持有本进程实例并编排业务。时序、审计、outbox、配置与查询分别设预算。数据库与 ZeroMQ 无共同事务，命令按业务 ID 重发/对账，遥测 PUB/SUB 允许丢样。
 
-数据库操作与 ZeroMQ 发布没有共同事务。业务状态和 outbox 同事务提交，命令交接可重复且按业务 ID 对账；原始遥测 PUB/SUB 不提供持久投递。
+```mermaid
+flowchart TD
+    Tx[业务状态与 outbox 同事务提交] --> Validate[校验 profile、资源、绑定、路由、映射及 peer]
+    Validate --> Catalog[构建就绪版本目录]
+    Catalog --> Active[按作用域版本清单切 active]
+    Active --> Notify[ZeroMQ 提示实例重读]
+    Notify --> Apply[实例应用 / 反馈版本与原因]
+```
 
-通道配置包含 profile、资源、设备绑定、厂家路由、上送映射、peer 策略及模型摘要。station 上送涉及多个单元时固定版本清单，跨作用域不承诺原子同时生效。快照发布成功不表示 listener 已启动或全部设备在线，通信实例反馈实际应用版本和原因。
+跨作用域不承诺原子生效；发布成功、实例应用、listener 就绪与设备在线分别判断。
 
 ## 故障与验收
 

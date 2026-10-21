@@ -58,7 +58,7 @@ make
 
 ## Windows 构建
 
-准备 CMake 3.21+、支持 C++20 的编译器，以及同架构、同工具链编译的
+准备 CMake 3.21+、支持 C++17 的编译器，以及同架构、同工具链编译的
 `hiredis >= 1.0` 和 `libmodbus >= 3.1.6`。`redis-plus-plus`、GoogleTest 和 IEC104 C 栈使用仓库内版本。
 DLT645 还需要 Boost 1.83+；其头文件可跨 MSVC / MinGW 使用。
 MSVC 构建需要 Ninja，并在 **x64 Native Tools Command Prompt / Developer PowerShell** 中执行；
@@ -194,4 +194,4 @@ CMake 文件按功能块分隔空行，统一 4 空格缩进和 100 列，规则
 
 ## C++ 标准
 
-项目使用 C++20 标准。
+项目使用 C++17 标准。
