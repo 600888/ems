@@ -1,6 +1,6 @@
 # 存储进程详细设计
 
-> 版本：1.3｜日期：2026-10-21｜状态：目标设计；历史订阅与 TDengine 私有适配已接入，公共数据库层整改、采集发布端、InfluxDB 及生产联调尚未完成。
+> 版本：1.4｜日期：2026-10-21｜状态：公共池/事务、历史 ormpp 仓储与时序适配迁移已实现；目录发布、其他 Repository、采集发布端、InfluxDB 与生产联调尚未完成。
 > 本文细化[存储进程入口](index.md)，公共契约见[设备模型](../../architecture/device-model.md)、[系统架构](../../architecture/system-design.md)及[实时数据与配置](../../common/realtime/index.md)。
 
 ## 1. 目标与职责边界
@@ -48,7 +48,7 @@ flowchart TD
     Adapter --> TS[(TDengine)]
 ```
 
-现有 `src/scd/mysql_history.cpp` 已调用 ormpp，但连接、实体和查询仍在存储私有实现中，需迁入公共层。ormpp 固定版本没有 TDengine 后端，后者由公共适配器封装官方客户端；业务代码不直接调用客户端或拼 SQL。
+历史 MySQL 实现已迁入 `src/common/db/mysql/mysql_database.cpp`，使用公共池和显式事务；旧 `src/scd/mysql_history.cpp` 已移除。ormpp 固定版本没有 TDengine 后端，后者封装于公共适配器；存储业务不直接调用客户端或拼 SQL。首批实现和剩余范围见[实施记录](../../common/database-design.md#71-首批实现记录)。
 
 ## 2. MySQL：历史点位目录
 
