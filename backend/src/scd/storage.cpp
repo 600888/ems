@@ -241,11 +241,15 @@ core::Result<Sample> parse_sample(const messaging::EventEnvelope& event,
     return sample;
 }
 
-HistoryConsumer::HistoryConsumer(IHistoryFeed& feed, IHistoryRepository& repository,
+HistoryConsumer::HistoryConsumer(IHistoryFeed& feed, database::IDatabase& database,
+                                 database::IHistoryCatalogRepository& repository,
+                                 database::IHistoryEventRepository& events,
                                  ITimeSeriesStore& series, std::string scope,
                                  ConsumerOptions options)
     : feed_(feed),
+      database_(database),
       repository_(repository),
+      events_(events),
       series_(series),
       scope_(std::move(scope)),
       options_(options) {}
@@ -261,8 +265,13 @@ core::Status HistoryConsumer::process(const messaging::Delivery& delivery,
         QuarantineRecord record{delivery.transport_cursor.value, scope_,
                                 delivery.event.event_id.value(), reason,
                                 raw.substr(0, options_.max_payload_bytes)};
-        auto saved = repository_.quarantine(record, ctx);
+        auto begun = database_.begin(ctx);
+        if (!core::is_ok(begun)) return core::error_of(begun);
+        auto& transaction = *std::get<0>(begun);
+        auto saved = events_.quarantine(transaction, record, ctx);
         if (!core::is_ok(saved)) return core::error_of(saved);
+        auto committed = transaction.commit(ctx);
+        if (!core::is_ok(committed)) return core::error_of(committed);
         ++report.quarantined;
         return core::ok_status();
     };
@@ -272,10 +281,14 @@ core::Status HistoryConsumer::process(const messaging::Delivery& delivery,
         (!options_.scope_kind.empty() && value.scope_kind != options_.scope_kind)) {
         return quarantine("telemetry scope mismatch");
     }
-    auto snapshot = repository_.find_point(value.scope_kind, value.scope_id, value.config_version,
-                                           value.point_id, ctx);
+    auto begun = database_.begin(ctx);
+    if (!core::is_ok(begun)) return core::error_of(begun);
+    auto transaction = std::move(std::get<0>(begun));
+    auto snapshot = repository_.find_point(*transaction, value.scope_kind, value.scope_id,
+                                           value.config_version, value.point_id, ctx);
     if (!core::is_ok(snapshot)) {
         const auto& error = core::error_of(snapshot);
+        transaction.reset();
         return deterministic(error.code) ? quarantine(error.message) : core::Status{error};
     }
     const auto& point = core::value_of(snapshot);
@@ -283,15 +296,20 @@ core::Status HistoryConsumer::process(const messaging::Delivery& delivery,
         point.point_id != value.point_id || point.scope_kind != value.scope_kind ||
         point.scope_id != value.scope_id || point.config_version != value.config_version ||
         !valid_series_key(point.series_key)) {
+        transaction.reset();
         return quarantine("point snapshot mismatch");
     }
     value.series_key = point.series_key;
-    auto registered = repository_.register_event(value, ctx);
+    auto registered = events_.register_event(*transaction, value, ctx);
     if (!core::is_ok(registered)) {
         const auto& error = core::error_of(registered);
+        transaction.reset();
         return error.code == core::ErrorCode::Conflict ? quarantine("event identity conflict")
                                                        : core::Status{error};
     }
+    auto committed = transaction->commit(ctx);
+    if (!core::is_ok(committed)) return core::error_of(committed);
+    transaction.reset();
     auto written = series_.write(value, ctx);
     if (!core::is_ok(written)) return core::error_of(written);
     ++report.written;
@@ -316,8 +334,10 @@ core::Result<BatchReport> HistoryConsumer::consume_batch(const core::CallContext
     return report;
 }
 
-HistoryQueryService::HistoryQueryService(IHistoryRepository& repository, ITimeSeriesReader& reader)
-    : repository_(repository), reader_(reader) {}
+HistoryQueryService::HistoryQueryService(database::IDatabase& database,
+                                         database::IHistoryCatalogRepository& repository,
+                                         ITimeSeriesReader& reader)
+    : database_(database), repository_(repository), reader_(reader) {}
 
 core::Result<HistoryPage> HistoryQueryService::query(
     const HistoryQuery& request, const std::vector<std::string>& authorized_scopes,
@@ -359,10 +379,13 @@ core::Result<HistoryPage> HistoryQueryService::query(
         return core::make_error(core::ErrorCode::InvalidArgument, core::WriteEffect::NotApplicable,
                                 "history cursor");
     }
+    auto begun = database_.begin(ctx);
+    if (!core::is_ok(begun)) return core::error_of(begun);
+    auto transaction = std::move(std::get<0>(begun));
     std::vector<SeriesMapping> mappings;
     mappings.reserve(point_set.size());
     for (const auto& point_id : point_set) {
-        auto mapping = repository_.find_series(point_id, ctx);
+        auto mapping = repository_.find_series(*transaction, point_id, ctx);
         if (!core::is_ok(mapping)) return core::error_of(mapping);
         if (core::value_of(mapping).point_id != point_id ||
             !valid_series_key(core::value_of(mapping).series_key)) {
@@ -371,6 +394,9 @@ core::Result<HistoryPage> HistoryQueryService::query(
         }
         mappings.push_back(core::value_of(mapping));
     }
+    auto closed = transaction->rollback(ctx);
+    if (!core::is_ok(closed)) return core::error_of(closed);
+    transaction.reset();
     auto scanned = reader_.scan(request, mappings, request.max_rows + 1, ctx);
     if (!core::is_ok(scanned)) return core::error_of(scanned);
     const auto& samples = core::value_of(scanned);
@@ -378,6 +404,9 @@ core::Result<HistoryPage> HistoryQueryService::query(
         return core::make_error(core::ErrorCode::CorruptData, core::WriteEffect::NotApplicable,
                                 "unbounded history reader");
     }
+    begun = database_.begin(ctx);
+    if (!core::is_ok(begun)) return core::error_of(begun);
+    transaction = std::move(std::get<0>(begun));
     HistoryPage page;
     std::map<std::pair<std::string, std::string>, PointSnapshot> snapshots;
     std::optional<std::tuple<std::int64_t, std::string, std::string>> previous;
@@ -397,7 +426,7 @@ core::Result<HistoryPage> HistoryQueryService::query(
         const auto snapshot_key = std::make_pair(sample.config_version, sample.point_id);
         auto found = snapshots.find(snapshot_key);
         if (found == snapshots.end()) {
-            auto resolved = repository_.find_point(sample.scope_kind, sample.scope_id,
+            auto resolved = repository_.find_point(*transaction, sample.scope_kind, sample.scope_id,
                                                    sample.config_version, sample.point_id, ctx);
             if (!core::is_ok(resolved)) return core::error_of(resolved);
             found = snapshots.emplace(snapshot_key, core::value_of(resolved)).first;
@@ -417,6 +446,8 @@ core::Result<HistoryPage> HistoryQueryService::query(
         page.next = QueryCursor{last.source_time_us, last.point_id, last.event_id, fingerprint,
                                 now_us + kCursorLifetimeUs};
     }
+    closed = transaction->rollback(ctx);
+    if (!core::is_ok(closed)) return core::error_of(closed);
     return page;
 }
 

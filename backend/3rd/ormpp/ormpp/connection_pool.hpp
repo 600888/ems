@@ -10,8 +10,11 @@
 #include <deque>
 #include <memory>
 #include <mutex>
+#include <optional>
+#include <stdexcept>
 #include <string>
 #include <tuple>
+#include <utility>
 
 namespace ormpp {
 template <typename DB>
@@ -22,51 +25,61 @@ class connection_pool {
     return instance;
   }
 
-  // call_once
+  // Initialize once on success; failed initialization may be retried.
   void init(int maxsize, const std::string &host = "",
             const std::string &user = "", const std::string &passwd = "",
             const std::string &db = "", const std::optional<int> &timeout = {},
             const std::optional<int> &port = {}) {
-    std::call_once(flag_, &connection_pool<DB>::init_impl, this, maxsize, host,
-                   user, passwd, db, timeout, port);
+    std::lock_guard<std::mutex> lock(init_mutex_);
+    if (initialized_) return;
+    init_impl(maxsize, host, user, passwd, db, timeout, port);
+    initialized_ = true;
   }
 
   std::shared_ptr<DB> get() {
-    std::unique_lock<std::mutex> lock(mutex_);
+    return get_until(std::chrono::steady_clock::now() + std::chrono::seconds(3));
+  }
 
-    while (pool_.empty()) {
-      if (condition_.wait_for(lock, std::chrono::seconds(3)) ==
-          std::cv_status::timeout) {
-        // timeout
-        return nullptr;
-      }
-    }
+  std::shared_ptr<DB> get_until(std::chrono::steady_clock::time_point deadline) {
+    std::unique_lock<std::mutex> lock(mutex_);
+    if (!condition_.wait_until(lock, deadline, [this] { return !pool_.empty(); }))
+      return nullptr;
+    if (std::chrono::steady_clock::now() >= deadline) return nullptr;
 
     auto conn = pool_.front();
     pool_.pop_front();
     lock.unlock();
 
-    if (conn == nullptr || !conn->ping()) {
-      return create_connection();
-    }
+    try {
+      if (conn == nullptr || !conn->ping()) {
+        conn = create_connection();
+      }
+      else {
+        // check timeout, idle time shuold less than 8 hours
+        auto now = std::chrono::system_clock::now();
+        auto last = conn->get_latest_operate_time();
+        auto mins =
+            std::chrono::duration_cast<std::chrono::minutes>(now - last).count();
+        if ((mins - 6 * 60) > 0) conn = create_connection();
+      }
 
-    // check timeout, idle time shuold less than 8 hours
-    auto now = std::chrono::system_clock::now();
-    auto last = conn->get_latest_operate_time();
-    auto mins =
-        std::chrono::duration_cast<std::chrono::minutes>(now - last).count();
-    if ((mins - 6 * 60) > 0) {
-      return create_connection();
+      if (conn) conn->update_operate_time();
+      else return_back(nullptr, false);
+      return conn;
     }
-
-    conn->update_operate_time();
-    return conn;
+    catch (...) {
+      return_back(nullptr, false);
+      throw;
+    }
   }
 
   void return_back(std::shared_ptr<DB> conn) {
-    if (conn == nullptr || conn->has_error()) {
-      conn = create_connection();
-    }
+    const bool reusable = conn && !conn->has_error();
+    return_back(std::move(conn), reusable);
+  }
+
+  void return_back(std::shared_ptr<DB> conn, bool reusable) {
+    if (!reusable) conn.reset();
     std::unique_lock<std::mutex> lock(mutex_);
     pool_.push_back(conn);
     lock.unlock();
@@ -79,16 +92,17 @@ class connection_pool {
                  const std::optional<int> &timeout,
                  const std::optional<int> &port) {
     args_ = std::make_tuple(host, user, passwd, db, timeout, port);
-
+    std::deque<std::shared_ptr<DB>> staged;
     for (int i = 0; i < maxsize; ++i) {
       auto conn = std::make_shared<DB>();
       if (conn->connect(args_)) {
-        pool_.push_back(conn);
+        staged.push_back(conn);
       }
       else {
         throw std::invalid_argument("init failed");
       }
     }
+    pool_.swap(staged);
   }
 
   auto create_connection() {
@@ -102,7 +116,8 @@ class connection_pool {
   connection_pool &operator=(const connection_pool &) = delete;
 
   std::mutex mutex_;
-  std::once_flag flag_;
+  std::mutex init_mutex_;
+  bool initialized_ = false;
   std::condition_variable condition_;
   std::deque<std::shared_ptr<DB>> pool_;
   std::tuple<std::string, std::string, std::string, std::string,

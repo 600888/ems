@@ -14,7 +14,7 @@ target_include_directories(
 
 target_link_libraries(
     ems_storage_core
-    PUBLIC ems_common_core ems_messaging_api
+    PUBLIC ems_common_core ems_messaging_api ems_database_api ems_timeseries_api
     PRIVATE ems_common_codec
 )
 
@@ -28,48 +28,22 @@ set_target_properties(
 option(EMS_STORAGE_WITH_NATIVE "Build ems-storage with MySQL and ZeroMQ" ON)
 
 if(EMS_STORAGE_WITH_NATIVE AND TARGET ems_zmq_messaging)
-    find_path(EMS_STORAGE_MYSQL_INCLUDE_DIR mysql/mysql.h)
-
-    find_path(EMS_STORAGE_MYSQL_HEADER_DIR mysql.h PATH_SUFFIXES mysql)
-
-    find_library(EMS_STORAGE_MYSQL_LIBRARY NAMES mysqlclient mariadb)
-
-    find_path(EMS_STORAGE_TAOS_INCLUDE_DIR taos.h)
-
-    find_library(EMS_STORAGE_TAOS_LIBRARY NAMES taos)
-
-    if(EMS_STORAGE_MYSQL_INCLUDE_DIR
-       AND EMS_STORAGE_MYSQL_HEADER_DIR
-       AND EMS_STORAGE_MYSQL_LIBRARY
-    )
+    get_target_property(_ems_mysql_available ems_database_mysql EMS_MYSQL_AVAILABLE)
+    if(_ems_mysql_available)
 
         add_library(
-            ems_storage_native STATIC mysql_history.cpp zmq_telemetry.cpp time_series_factory.cpp
-                                      native_adapters.h
+            ems_storage_native STATIC zmq_telemetry.cpp native_adapters.h
         )
 
         target_include_directories(
             ems_storage_native
-            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR} ${EMS_STORAGE_MYSQL_INCLUDE_DIR}
-                    ${EMS_STORAGE_MYSQL_HEADER_DIR} ${CMAKE_SOURCE_DIR}/3rd/ormpp
+            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
         )
-
-        if(EMS_STORAGE_TAOS_INCLUDE_DIR AND EMS_STORAGE_TAOS_LIBRARY)
-            target_sources(ems_storage_native PRIVATE taos_series.cpp)
-
-            target_include_directories(ems_storage_native PRIVATE ${EMS_STORAGE_TAOS_INCLUDE_DIR})
-
-            target_compile_definitions(ems_storage_native PRIVATE EMS_STORAGE_HAVE_TAOS)
-
-            target_link_libraries(ems_storage_native PRIVATE ${EMS_STORAGE_TAOS_LIBRARY})
-        endif()
-
-        target_compile_definitions(ems_storage_native PRIVATE ORMPP_ENABLE_MYSQL)
 
         target_link_libraries(
             ems_storage_native
             PUBLIC ems_storage_core
-            PRIVATE ems_common_codec ems_zmq_messaging ${EMS_STORAGE_MYSQL_LIBRARY}
+            PRIVATE ems_common_codec ems_zmq_messaging ems_database_mysql ems_timeseries
                     Threads::Threads
         )
 
@@ -85,6 +59,7 @@ if(EMS_STORAGE_WITH_NATIVE AND TARGET ems_zmq_messaging)
         )
 
         add_executable(ems-storage main.cpp)
+        ems_copy_mysql_runtime(ems-storage)
 
         target_link_libraries(ems-storage PRIVATE ems_storage_native)
 

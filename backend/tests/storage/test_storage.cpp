@@ -18,10 +18,11 @@ using ems::core::ErrorCode;
 using ems::core::Result;
 using ems::core::Status;
 using ems::core::WriteEffect;
+using ems::database::IHistoryCatalogRepository;
+using ems::database::IHistoryEventRepository;
 using ems::messaging::Delivery;
 using ems::messaging::EventEnvelope;
 using ems::storage::IHistoryFeed;
-using ems::storage::IHistoryRepository;
 using ems::storage::ITimeSeriesReader;
 using ems::storage::ITimeSeriesStore;
 using ems::storage::PointSnapshot;
@@ -43,15 +44,17 @@ struct FakeFeed final : IHistoryFeed {
     void close() noexcept override {}
 };
 
-struct FakeRepository final : IHistoryRepository {
+struct FakeRepository final : IHistoryCatalogRepository, IHistoryEventRepository {
     std::map<std::string, std::string> identities;
     std::vector<QuarantineRecord> quarantined;
     bool ready{true};
     bool quarantine_available{true};
+    ems::database::ITransaction* catalog_transaction{nullptr};
 
-    Result<PointSnapshot> find_point(const std::string& kind, const std::string& scope,
-                                     const std::string& version, const std::string& point,
-                                     const CallContext&) override {
+    Result<PointSnapshot> find_point(ems::database::ITransaction& tx, const std::string& kind,
+                                     const std::string& scope, const std::string& version,
+                                     const std::string& point, const CallContext&) override {
+        catalog_transaction = &tx;
         if (!ready) {
             return ems::core::make_error(ErrorCode::NotReady, WriteEffect::NotApplicable,
                                          "snapshot pending");
@@ -61,12 +64,15 @@ struct FakeRepository final : IHistoryRepository {
             "p_123", true};
     }
 
-    Result<ems::storage::SeriesMapping> find_series(const std::string& point,
+    Result<ems::storage::SeriesMapping> find_series(ems::database::ITransaction&,
+                                                    const std::string& point,
                                                     const CallContext&) override {
         return ems::storage::SeriesMapping{point, ValueType::Integer, "p_123"};
     }
 
-    Status register_event(const Sample& sample, const CallContext&) override {
+    Status register_event(ems::database::ITransaction& tx, const Sample& sample,
+                          const CallContext&) override {
+        assert(catalog_transaction == &tx);
         auto [item, inserted] = identities.emplace(sample.event_id, sample.payload_sha256);
         if (!inserted && item->second != sample.payload_sha256) {
             return ems::core::make_error(ErrorCode::Conflict, WriteEffect::NotApplied,
@@ -75,7 +81,8 @@ struct FakeRepository final : IHistoryRepository {
         return ems::core::ok_status();
     }
 
-    Status quarantine(const QuarantineRecord& record, const CallContext&) override {
+    Status quarantine(ems::database::ITransaction&, const QuarantineRecord& record,
+                      const CallContext&) override {
         if (!quarantine_available) {
             return ems::core::make_error(ErrorCode::Unavailable, WriteEffect::Unknown,
                                          "quarantine unavailable");
@@ -88,8 +95,10 @@ struct FakeRepository final : IHistoryRepository {
 struct FakeSeries final : ITimeSeriesStore {
     std::vector<Sample> written;
     bool available{true};
+    unsigned int* active_transactions{nullptr};
 
     Status write(const Sample& sample, const CallContext&) override {
+        assert(!active_transactions || *active_transactions == 0);
         if (!available) {
             return ems::core::make_error(ErrorCode::Unavailable, WriteEffect::Unknown,
                                          "TAOS unavailable");
@@ -111,10 +120,25 @@ struct FakeReader final : ITimeSeriesReader {
 
 struct FakeTransaction final : ems::database::ITransaction {
     bool* fail_commit;
+    unsigned int* active;
+    bool open{true};
 
-    explicit FakeTransaction(bool* failure) : fail_commit(failure) {}
+    explicit FakeTransaction(bool* failure, unsigned int* count)
+        : fail_commit(failure), active(count) {
+        ++*active;
+    }
+
+    ~FakeTransaction() override { close(); }
+
+    void close() {
+        if (open) {
+            --*active;
+            open = false;
+        }
+    }
 
     Result<ems::database::CommitReceipt> commit(const CallContext&) override {
+        close();
         if (*fail_commit) {
             return ems::core::make_error(ErrorCode::Unavailable, WriteEffect::Unknown,
                                          "commit response unknown");
@@ -122,14 +146,23 @@ struct FakeTransaction final : ems::database::ITransaction {
         return ems::database::CommitReceipt{};
     }
 
-    Status rollback(const CallContext&) override { return ems::core::ok_status(); }
+    Status rollback(const CallContext&) override {
+        close();
+        return ems::core::ok_status();
+    }
 };
 
 struct FakeDatabase final : ems::database::IDatabase {
     bool fail_commit{false};
+    bool available{true};
+    unsigned int active{0};
 
     Result<std::unique_ptr<ems::database::ITransaction>> begin(const CallContext&) override {
-        return std::unique_ptr<ems::database::ITransaction>(new FakeTransaction(&fail_commit));
+        if (!available)
+            return ems::core::make_error(ErrorCode::Unavailable, WriteEffect::NotApplied,
+                                         "database unavailable");
+        return std::unique_ptr<ems::database::ITransaction>(
+            new FakeTransaction(&fail_commit, &active));
     }
 };
 
@@ -199,11 +232,11 @@ Delivery make_delivery(std::string id, std::string value = "9223372036854775807"
     return Delivery{event, {event.event_id.value()}, event.event_id.value(), 1};
 }
 
-ems::storage::HistoryConsumer make_consumer(FakeFeed& feed, FakeRepository& repository,
-                                            FakeSeries& series) {
+ems::storage::HistoryConsumer make_consumer(FakeFeed& feed, FakeDatabase& database,
+                                            FakeRepository& repository, FakeSeries& series) {
     ems::storage::ConsumerOptions options;
     options.scope_kind = "station";
-    return {feed, repository, series, "station-1", options};
+    return {feed, database, repository, repository, series, "station-1", options};
 }
 
 }  // namespace
@@ -212,7 +245,9 @@ int main() {
     FakeFeed feed;
     FakeRepository repository;
     FakeSeries series;
-    auto consumer = make_consumer(feed, repository, series);
+    FakeDatabase history_database;
+    series.active_transactions = &history_database.active;
+    auto consumer = make_consumer(feed, history_database, repository, series);
     const auto ctx = ems::core::make_call_context(std::chrono::seconds(10));
 
     const auto original = make_delivery("event-1");
@@ -269,12 +304,31 @@ int main() {
     assert(ems::core::value_of(rejected_scope).quarantined == 1);
     assert(series.written.size() == 1);
 
+    // A locally received sample must not reach TAOS after an unknown MySQL commit.
+    history_database.fail_commit = true;
+    feed.deliveries = {make_delivery("event-unknown-commit")};
+    const auto writes_before = series.written.size();
+    auto unknown_commit = consumer.consume_batch(ctx);
+    assert(ems::core::is_ok(unknown_commit));
+    assert(ems::core::value_of(unknown_commit).dropped == 1);
+    assert(series.written.size() == writes_before);
+    assert(history_database.active == 0);
+    history_database.fail_commit = false;
+
+    history_database.available = false;
+    feed.deliveries = {make_delivery("event-no-database")};
+    auto no_database = consumer.consume_batch(ctx);
+    assert(ems::core::is_ok(no_database));
+    assert(ems::core::value_of(no_database).dropped == 1);
+    assert(series.written.size() == writes_before);
+    history_database.available = true;
+
     FakeReader reader;
     auto first_row = series.written.front();
     auto second_row = first_row;
     second_row.event_id = "event-4";
     reader.samples = {first_row, second_row};
-    ems::storage::HistoryQueryService query_service(repository, reader);
+    ems::storage::HistoryQueryService query_service(history_database, repository, reader);
     ems::storage::HistoryQuery query;
     query.scope_kind = "station";
     query.scope_id = "station-1";

@@ -131,6 +131,8 @@ target_link_libraries(ems_database_api INTERFACE ems_common_core)
 
 target_compile_features(ems_database_api INTERFACE cxx_std_17)
 
+add_subdirectory(db)
+
 add_library(ems_observability INTERFACE)
 
 target_include_directories(ems_observability INTERFACE ${CMAKE_SOURCE_DIR}/include)

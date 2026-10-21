@@ -18,5 +18,11 @@ int main() {
     const auto unknown = ems::storage::parse_time_series_backend("unknown");
     assert(!ems::core::is_ok(unknown));
     assert(ems::core::error_of(unknown).code == ems::core::ErrorCode::InvalidArgument);
+
+    // Invalid physical database is rejected before connecting, with or without the TAOS SDK.
+    options.taos.database = "not-ems-history";
+    const auto invalid_taos = ems::database::connect_taos_series(options.taos);
+    assert(!ems::core::is_ok(invalid_taos));
+    assert(ems::core::error_of(invalid_taos).code == ems::core::ErrorCode::Unsupported);
     return 0;
 }

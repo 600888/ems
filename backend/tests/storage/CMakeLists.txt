@@ -41,12 +41,11 @@ add_test(NAME ems_telemetry_feed COMMAND test_ems_telemetry_feed)
 
 add_executable(
     test_ems_time_series_factory test_time_series_factory.cpp
-                                 ${CMAKE_SOURCE_DIR}/src/scd/time_series_factory.cpp
 )
 
 target_include_directories(test_ems_time_series_factory PRIVATE ${CMAKE_SOURCE_DIR}/src/scd)
 
-target_link_libraries(test_ems_time_series_factory PRIVATE ems_common_core)
+target_link_libraries(test_ems_time_series_factory PRIVATE ems_timeseries)
 
 set_target_properties(
     test_ems_time_series_factory
@@ -56,3 +55,12 @@ set_target_properties(
 )
 
 add_test(NAME ems_time_series_factory COMMAND test_ems_time_series_factory)
+
+# These contract executables use assert, including in Release builds.
+foreach(_ems_test test_ems_storage test_ems_telemetry_feed test_ems_time_series_factory)
+    if(MSVC)
+        target_compile_options(${_ems_test} PRIVATE /UNDEBUG)
+    else()
+        target_compile_options(${_ems_test} PRIVATE -UNDEBUG)
+    endif()
+endforeach()

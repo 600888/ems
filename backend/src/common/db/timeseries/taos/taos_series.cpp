@@ -1,3 +1,4 @@
+#include <common/database/timeseries/factory.h>
 #include <taos.h>
 
 #include <algorithm>
@@ -12,9 +13,7 @@
 #include <variant>
 #include <vector>
 
-#include "native_adapters.h"
-
-namespace ems::storage {
+namespace ems::database {
 namespace {
 
 core::Error taos_error(const char* operation, core::WriteEffect effect) {
@@ -417,4 +416,4 @@ core::Result<std::unique_ptr<ITimeSeriesDatabase>> connect_taos_series(
     return std::unique_ptr<ITimeSeriesDatabase>(new TaosSeriesStore(std::move(connection)));
 }
 
-}  // namespace ems::storage
+}  // namespace ems::database

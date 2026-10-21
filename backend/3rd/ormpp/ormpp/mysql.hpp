@@ -25,15 +25,23 @@ class mysql {
   static void reset_error() {
     has_error_ = false;
     last_error_ = {};
+    last_error_code_ = 0;
   }
 
-  static void set_last_error(std::string last_error) {
+  static void set_last_error(std::string last_error, unsigned int code = 0) {
     has_error_ = true;
     last_error_ = std::move(last_error);
+    last_error_code_ = code;
+#ifdef ORMPP_ENABLE_LOG
     std::cout << last_error_ << std::endl;
+#endif
   }
 
   std::string get_last_error() const { return last_error_; }
+
+  unsigned int get_last_error_code() const { return last_error_code_; }
+
+  MYSQL *native_handle() const { return con_; }
 
   bool connect(
       const std::tuple<std::string, std::string, std::string, std::string,
@@ -52,8 +60,10 @@ class mysql {
     int timeout = std::get<4>(tp).has_value() ? std::get<4>(tp).value() : -1;
 
     if (timeout > 0) {
-      if (mysql_options(con_, MYSQL_OPT_CONNECT_TIMEOUT, &timeout) != 0) {
-        set_last_error(mysql_error(con_));
+      if (mysql_options(con_, MYSQL_OPT_CONNECT_TIMEOUT, &timeout) != 0 ||
+          mysql_options(con_, MYSQL_OPT_READ_TIMEOUT, &timeout) != 0 ||
+          mysql_options(con_, MYSQL_OPT_WRITE_TIMEOUT, &timeout) != 0) {
+        set_last_error(mysql_error(con_), mysql_errno(con_));
         return false;
       }
     }
@@ -67,7 +77,7 @@ class mysql {
             std::get<2>(tp).c_str(), std::get<3>(tp).c_str(),
             std::get<5>(tp).has_value() ? std::get<5>(tp).value() : 0, nullptr,
             0) == nullptr) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return false;
     }
 
@@ -101,7 +111,7 @@ class mysql {
     std::cout << sql << std::endl;
 #endif
     if (mysql_query(con_, sql.data())) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return false;
     }
     return true;
@@ -179,6 +189,7 @@ class mysql {
             (enum_field_types)ormpp_mysql::type_to_id(identity<U>{});
       }
       param.buffer = const_cast<void *>(static_cast<const void *>(&value));
+      param.is_unsigned = std::is_unsigned_v<U>;
     }
     else if constexpr (std::is_same_v<std::string, U>) {
       param.buffer_type = MYSQL_TYPE_STRING;
@@ -238,6 +249,7 @@ class mysql {
             (enum_field_types)ormpp_mysql::type_to_id(identity<U>{});
       }
       param_bind.buffer = const_cast<void *>(static_cast<const void *>(&value));
+      param_bind.is_unsigned = std::is_unsigned_v<U>;
     }
     else if constexpr (std::is_same_v<std::string, U>) {
       param_bind.buffer_type = MYSQL_TYPE_STRING;
@@ -326,13 +338,13 @@ class mysql {
 #endif
     stmt_ = mysql_stmt_init(con_);
     if (!stmt_) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return 0;
     }
 
     auto guard = guard_statment(stmt_);
     if (mysql_stmt_prepare(stmt_, sql.c_str(), (unsigned long)sql.size())) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return 0;
     }
 
@@ -341,13 +353,13 @@ class mysql {
       std::vector<MYSQL_BIND> param_binds;
       (set_param_bind(param_binds, args), ...);
       if (mysql_stmt_bind_param(stmt_, &param_binds[0])) {
-        set_last_error(mysql_stmt_error(stmt_));
+        set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
         return 0;
       }
     }
 
     if (mysql_stmt_execute(stmt_)) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return 0;
     }
     return (uint64_t)mysql_stmt_affected_rows(stmt_);
@@ -364,14 +376,14 @@ class mysql {
 
     stmt_ = mysql_stmt_init(con_);
     if (!stmt_) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return {};
     }
 
     auto guard = guard_statment(stmt_);
 
     if (mysql_stmt_prepare(stmt_, sql.c_str(), (unsigned long)sql.size())) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
@@ -379,7 +391,7 @@ class mysql {
       std::vector<MYSQL_BIND> param_binds;
       (set_param_bind(param_binds, args), ...);
       if (mysql_stmt_bind_param(stmt_, &param_binds[0])) {
-        set_last_error(mysql_stmt_error(stmt_));
+        set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
         return {};
       }
     }
@@ -403,12 +415,12 @@ class mysql {
     }
 
     if (mysql_stmt_bind_result(stmt_, &param_binds[0])) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
     if (mysql_stmt_execute(stmt_)) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
@@ -448,14 +460,14 @@ class mysql {
 #endif
     stmt_ = mysql_stmt_init(con_);
     if (!stmt_) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return {};
     }
 
     auto guard = guard_statment(stmt_);
 
     if (mysql_stmt_prepare(stmt_, sql.c_str(), (int)sql.size())) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
@@ -464,7 +476,7 @@ class mysql {
       std::vector<MYSQL_BIND> param_binds;
       (set_param_bind(param_binds, args), ...);
       if (mysql_stmt_bind_param(stmt_, &param_binds[0])) {
-        set_last_error(mysql_stmt_error(stmt_));
+        set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
         return {};
       }
     }
@@ -503,12 +515,12 @@ class mysql {
     }
 
     if (mysql_stmt_bind_result(stmt_, &param_binds[0])) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
     if (mysql_stmt_execute(stmt_)) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
@@ -584,14 +596,14 @@ class mysql {
 
     stmt_ = mysql_stmt_init(con_);
     if (!stmt_) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return {};
     }
 
     auto guard = guard_statment(stmt_);
 
     if (mysql_stmt_prepare(stmt_, sql.c_str(), (unsigned long)sql.size())) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
@@ -614,12 +626,12 @@ class mysql {
     }
 
     if (mysql_stmt_bind_result(stmt_, &param_binds[0])) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
     if (mysql_stmt_execute(stmt_)) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
@@ -672,14 +684,14 @@ class mysql {
 
     stmt_ = mysql_stmt_init(con_);
     if (!stmt_) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return {};
     }
 
     auto guard = guard_statment(stmt_);
 
     if (mysql_stmt_prepare(stmt_, sql.c_str(), (int)sql.size())) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
@@ -717,12 +729,12 @@ class mysql {
     }
 
     if (mysql_stmt_bind_result(stmt_, &param_binds[0])) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
     if (mysql_stmt_execute(stmt_)) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return {};
     }
 
@@ -797,7 +809,7 @@ class mysql {
 
     auto retcode = mysql_stmt_fetch_column(stmt_, &param, column, 0);
     if (retcode != 0) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return 0;
     }
 
@@ -811,18 +823,18 @@ class mysql {
 #endif
     stmt_ = mysql_stmt_init(con_);
     if (!stmt_) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return false;
     }
 
     auto guard = guard_statment(stmt_);
     if (mysql_stmt_prepare(stmt_, sql.c_str(), (unsigned long)sql.size())) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return false;
     }
 
     if (mysql_stmt_execute(stmt_)) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return false;
     }
     return true;
@@ -834,7 +846,7 @@ class mysql {
   bool begin() {
     reset_error();
     if (mysql_query(con_, "BEGIN")) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return false;
     }
     return true;
@@ -843,7 +855,7 @@ class mysql {
   bool commit() {
     reset_error();
     if (mysql_query(con_, "COMMIT")) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return false;
     }
     return true;
@@ -852,7 +864,7 @@ class mysql {
   bool rollback() {
     reset_error();
     if (mysql_query(con_, "ROLLBACK")) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return false;
     }
     return true;
@@ -1002,12 +1014,12 @@ class mysql {
     }
 
     if (mysql_stmt_bind_param(stmt_, &param_binds[0])) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return INT_MIN;
     }
 
     if (mysql_stmt_execute(stmt_)) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return INT_MIN;
     }
 
@@ -1060,12 +1072,12 @@ class mysql {
 #endif
     stmt_ = mysql_stmt_init(con_);
     if (!stmt_) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return std::nullopt;
     }
 
     if (mysql_stmt_prepare(stmt_, sql.c_str(), (int)sql.size())) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return std::nullopt;
     }
 
@@ -1090,12 +1102,12 @@ class mysql {
 #endif
     stmt_ = mysql_stmt_init(con_);
     if (!stmt_) {
-      set_last_error(mysql_error(con_));
+      set_last_error(mysql_error(con_), mysql_errno(con_));
       return std::nullopt;
     }
 
     if (mysql_stmt_prepare(stmt_, sql.c_str(), (int)sql.size())) {
-      set_last_error(mysql_stmt_error(stmt_));
+      set_last_error(mysql_stmt_error(stmt_), mysql_stmt_errno(stmt_));
       return std::nullopt;
     }
 
@@ -1141,9 +1153,10 @@ class mysql {
  private:
   MYSQL *con_ = nullptr;
   MYSQL_STMT *stmt_ = nullptr;
-  inline static std::string last_error_;
-  inline static bool has_error_ = false;
-  inline static bool transaction_ = true;
+  inline static thread_local std::string last_error_;
+  inline static thread_local bool has_error_ = false;
+  inline static thread_local unsigned int last_error_code_ = 0;
+  bool transaction_ = true;
 };
 }  // namespace ormpp
 

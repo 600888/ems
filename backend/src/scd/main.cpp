@@ -47,6 +47,7 @@ int main() {
     mysql.user = environment("EMS_MYSQL_USER");
     mysql.password = environment("EMS_MYSQL_PASSWORD");
     mysql.database = environment("EMS_MYSQL_DATABASE");
+    mysql.require_history_schema = true;
 
     ems::storage::TimeSeriesConnectionOptions time_series;
     const auto backend_name = environment("EMS_STORAGE_SERIES_BACKEND", "taos");
@@ -84,7 +85,8 @@ int main() {
                   << ems::core::error_of(series_result).message << '\n';
         return 1;
     }
-    auto repository_result = ems::storage::connect_mysql_history(mysql);
+    auto repository_result = ems::database::connect_mysql_database(
+        mysql, ems::core::make_call_context(std::chrono::seconds(10)));
     if (!ems::core::is_ok(repository_result)) {
         std::cerr << "ems-storage: MySQL history repository: "
                   << ems::core::error_of(repository_result).message << '\n';
@@ -95,15 +97,16 @@ int main() {
         std::cerr << "ems-storage: failed to subscribe to ZeroMQ telemetry\n";
         return 1;
     }
-    auto repository =
-        std::move(std::get<std::unique_ptr<ems::storage::IHistoryRepository>>(repository_result));
+    auto database = std::move(std::get<ems::database::MySqlDatabaseContext>(repository_result));
     auto series =
         std::move(std::get<std::unique_ptr<ems::storage::ITimeSeriesDatabase>>(series_result));
     auto feed = std::move(std::get<std::unique_ptr<ems::storage::IHistoryFeed>>(feed_result));
 
     ems::storage::ConsumerOptions consumer_options;
     consumer_options.scope_kind = scope_kind;
-    ems::storage::HistoryConsumer consumer(*feed, *repository, *series, scope_id, consumer_options);
+    ems::storage::HistoryConsumer consumer(*feed, *database.database, *database.history_catalog,
+                                           *database.history_events, *series, scope_id,
+                                           consumer_options);
     std::uint64_t last_local_drop_count = 0;
     while (running.load()) {
         auto ctx = ems::core::make_call_context(std::chrono::seconds(10));
