@@ -12,6 +12,11 @@
  *   ./data_collect_example --db-pass mypass --db-name ems
  *   ./data_collect_example --db-host 192.168.1.100 --poll-ms 2000 --cycles 10
  */
+#include <common/database/configuration/channel.h>
+#include <common/database/configuration/device.h>
+#include <common/database/configuration/point.h>
+#include <common/database/mysql_database.h>
+
 #include <atomic>
 #include <chrono>
 #include <csignal>
@@ -26,10 +31,6 @@
 #include <thread>
 #include <vector>
 
-#include "db/channel.h"
-#include "db/db_manager.h"
-#include "db/device.h"
-#include "db/point.h"
 #include "net/collect/channel_thread.h"
 #include "net/collect/collect_engine.h"
 #include "net/collect/data_dispatcher.h"
@@ -173,19 +174,24 @@ int main(int argc, char* argv[]) {
     std::cout << "[1/4] 初始化数据库..." << std::endl;
     std::cout << "  数据库: " << cfg.dbHost << ":" << cfg.dbPort << "/" << cfg.dbName << std::endl;
 
-    ems::db::DbConfig dbConfig;
+    ems::database::MySqlConnectionOptions dbConfig;
     dbConfig.host = cfg.dbHost;
-    dbConfig.port = cfg.dbPort;
+    if (cfg.dbPort <= 0 || cfg.dbPort > 65535) {
+        std::cerr << "Invalid MySQL port\n";
+        return 2;
+    }
+    dbConfig.port = static_cast<std::uint16_t>(cfg.dbPort);
     dbConfig.user = cfg.dbUser;
     dbConfig.password = cfg.dbPass;
-    dbConfig.dbname = cfg.dbName;
+    dbConfig.database = cfg.dbName;
 
-    // 建库建表 + 写入示例数据
-    std::cout << "  检查并初始化数据库和表..." << std::endl;
-    if (!ems::db::ensure_database_with_seed(dbConfig)) {
-        std::cout << "  ⚠ 自动建库建表失败，尝试使用已有数据库继续" << std::endl;
-    } else {
-        std::cout << "  ✅ 数据库和表已就绪" << std::endl;
+    dbConfig.require_configuration_schema = true;
+    auto connected = ems::database::connect_mysql_database(
+        dbConfig, ems::core::make_call_context(std::chrono::seconds(10)));
+    if (!ems::core::is_ok(connected)) {
+        std::cerr << "数据库未就绪，请先执行部署迁移: " << ems::core::error_of(connected).message
+                  << '\n';
+        return 1;
     }
 
     // ============================================================
@@ -195,7 +201,8 @@ int main(int argc, char* argv[]) {
     std::cout << "[2/4] 从数据库加载配置..." << std::endl;
 
     ParaLoader loader;
-    if (!loader.initialize(dbConfig)) {
+    if (!loader.initialize(ems::core::value_of(connected),
+                           ems::core::make_call_context(std::chrono::seconds(10)))) {
         std::cerr << "  ❌ 数据库连接失败: " << loader.last_error() << std::endl;
         return 1;
     }

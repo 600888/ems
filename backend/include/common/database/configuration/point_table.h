@@ -6,10 +6,9 @@
 #include <unordered_map>
 #include <vector>
 
-#include "export.h"
 #include "point.h"
 
-namespace ems::db {
+namespace ems::database {
 
 /// 追加拒绝已有编码；替换仅重建选定设备及通道的四遥配置。
 enum class PointTableImportMode { Append, Replace };
@@ -24,10 +23,10 @@ struct PointTableError {
 
 /// 四遥配置草稿，关联编码在入库时解析为数据库 ID。
 struct PointTableData {
-    std::vector<point_yc> yc;
-    std::vector<point_yx> yx;
-    std::vector<point_yk> yk;
-    std::vector<point_yt> yt;
+    std::vector<AnalogPoint> yc;
+    std::vector<StatusPoint> yx;
+    std::vector<ControlPoint> yk;
+    std::vector<SetpointPoint> yt;
     std::unordered_map<std::string, std::string> yk_feedback;
     std::unordered_map<std::string, std::string> yt_feedback;
 };
@@ -54,8 +53,7 @@ struct PointTableImportResult {
  * @param[in] device_id 选定的数据库设备 ID，须为正数。
  * @return 四遥配置及工作表/行/列错误；存在任何错误时禁止入库。
  */
-EMS_DB_API PointTableImportResult parse_point_table_excel(const std::string& path,
-                                                          int protocol_type, int64_t channel_id,
-                                                          int64_t device_id);
+PointTableImportResult parse_point_table_excel(const std::string& path, int protocol_type,
+                                               int64_t channel_id, int64_t device_id);
 
-}  // namespace ems::db
+}  // namespace ems::database

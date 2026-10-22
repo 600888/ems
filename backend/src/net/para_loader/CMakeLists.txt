@@ -2,14 +2,14 @@
 #
 # 注意：不作为独立库编译（非 STATIC/SHARED），
 # 编译为 OBJECT 库跟随采集进程链接。
-# 包含设备和通道配置加载、测点采集数据导入。
+# 从公共配置仓储加载设备、通道及测点配置。
 #
 # 采集进程启动流程:
 #   1. ParaLoader::load_all_as_config() 加载设备/通道/测点配置
 #   2. 按通道创建协议处理器开始采集
-#   3. PointImportCaller 定时将采集数据写入关系库
+#   3. 采样交给遥测/历史链路，不直接写关系库
 
-add_library(net_para_loader OBJECT para_loader.cpp point_import_caller.cpp)
+add_library(net_para_loader OBJECT para_loader.cpp)
 
 target_include_directories(
     net_para_loader
@@ -17,7 +17,7 @@ target_include_directories(
            ${CMAKE_SOURCE_DIR}/3rd ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
 )
 
-target_link_libraries(net_para_loader PUBLIC ems_db Threads::Threads)
+target_link_libraries(net_para_loader PUBLIC ems_database_api Threads::Threads)
 
 set_target_properties(
     net_para_loader

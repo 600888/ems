@@ -487,11 +487,10 @@ inline void get_sql_conditions(std::string &sql, const std::string &arg,
     sql = arg;
   }
   else {
-    if (temp.find("order by") != std::string::npos) {
-      auto pos = sql.find("where");
-      sql = sql.substr(0, pos);
-    }
-    if (temp.find("limit") != std::string::npos) {
+    const auto first = temp.find_first_not_of(" \t\r\n");
+    if (first != std::string::npos &&
+        (temp.compare(first, 8, "order by") == 0 ||
+         temp.compare(first, 5, "limit") == 0)) {
       auto pos = sql.find("where");
       sql = sql.substr(0, pos);
     }

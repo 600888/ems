@@ -5,18 +5,17 @@
  * 采集进程启动时调用本类从关系数据库加载所有运行参数，
  * 包括设备清单、通道连接参数、测点映射表等，初始化到运行时配置。
  *
- * 与 PointImportCaller 的区别:
- *   ParaLoader 负责  DB -> 运行时配置  (启动时加载)
- *   PointImportCaller 负责 采集数据 -> DB (运行时定时写入)
+ * 公共仓储负责数据库读取，本类保留已成功加载的配置用于运行时转换。
  */
 #pragma once
+
+#include <common/database/mysql_database.h>
 
 #include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
 
-#include "db/db_manager.h"
 #include "rtdb/rtdb_channel.h"
 #include "rtdb/rtdb_device.h"
 
@@ -73,11 +72,20 @@ class ParaLoader {
     ParaLoader& operator=(ParaLoader&& other) noexcept = default;
 
     /**
-     * @brief 初始化数据库连接
-     * @param[in] config 数据库配置
+     * @brief 注入进程入口创建的公共数据库上下文并加载配置。
+     * @param[in] database 进程内共享数据库上下文。
+     * @param[in] ctx 读取期限。
      * @return true 成功
      */
-    bool initialize(const ems::db::DbConfig& config);
+    bool initialize(ems::database::MySqlDatabaseContext database,
+                    const ems::core::CallContext& ctx);
+
+    /**
+     * @brief 从公共仓储重新加载配置，失败保留上次成功数据并返回错误。
+     * @param[in] ctx 读取期限。
+     * @return true 表示全量读取成功，失败原因通过 last_error 获取。
+     */
+    bool reload(const ems::core::CallContext& ctx);
 
     // ============================================================
     // 设备加载
@@ -87,21 +95,21 @@ class ParaLoader {
      * @brief 从 DB 加载所有启用设备 (enable=1)
      * @return 设备实体列表
      */
-    std::vector<ems::db::device> load_devices();
+    std::vector<ems::database::DeviceRecord> load_devices();
 
     /**
      * @brief 按 ID 加载设备
      * @param[in] id 对象标识。
      * @return 得到的设备记录。
      */
-    ems::db::device load_device_by_id(int64_t id);
+    ems::database::DeviceRecord load_device_by_id(int64_t id);
 
     /**
      * @brief 按编码加载设备
      * @param[in] code 对象编码。
      * @return 得到的设备记录。
      */
-    ems::db::device load_device_by_code(const std::string& code);
+    ems::database::DeviceRecord load_device_by_code(const std::string& code);
 
     // ============================================================
     // 通道加载
@@ -112,14 +120,14 @@ class ParaLoader {
      * @param[in] device_id 可选: 按设备过滤, 0=全部
      * @return 通道实体列表
      */
-    std::vector<ems::db::channel> load_channels(int64_t device_id = 0);
+    std::vector<ems::database::ChannelRecord> load_channels(int64_t device_id = 0);
 
     /**
      * @brief 按 ID 加载通道
      * @param[in] id 对象标识。
      * @return 得到的通道记录。
      */
-    ems::db::channel load_channel_by_id(int64_t id);
+    ems::database::ChannelRecord load_channel_by_id(int64_t id);
 
     // ============================================================
     // 测点配置加载
@@ -130,28 +138,28 @@ class ParaLoader {
      * @param[in] channel_id 可选: 按通道过滤, 0=全部
      * @return 匹配条件的数据集合。
      */
-    std::vector<ems::db::point_yc> load_yc_points(int64_t channel_id = 0);
+    std::vector<ems::database::AnalogPoint> load_yc_points(int64_t channel_id = 0);
 
     /**
      * @brief 加载 YX (遥信) 测点配置
      * @param[in] channel_id 通道 ID。
      * @return 匹配条件的数据集合。
      */
-    std::vector<ems::db::point_yx> load_yx_points(int64_t channel_id = 0);
+    std::vector<ems::database::StatusPoint> load_yx_points(int64_t channel_id = 0);
 
     /**
      * @brief 加载 YK (遥控) 测点配置
      * @param[in] channel_id 通道 ID。
      * @return 匹配条件的数据集合。
      */
-    std::vector<ems::db::point_yk> load_yk_points(int64_t channel_id = 0);
+    std::vector<ems::database::ControlPoint> load_yk_points(int64_t channel_id = 0);
 
     /**
      * @brief 加载 YT (遥调) 测点配置
      * @param[in] channel_id 通道 ID。
      * @return 匹配条件的数据集合。
      */
-    std::vector<ems::db::point_yt> load_yt_points(int64_t channel_id = 0);
+    std::vector<ems::database::SetpointPoint> load_yt_points(int64_t channel_id = 0);
 
     // ============================================================
     // 运行时配置转换 (DB entity -> 运行时 config)
@@ -166,8 +174,8 @@ class ParaLoader {
      * @return 匹配条件的数据集合。
      */
     std::vector<ems::rtdb::DeviceConfig> to_device_configs(
-        const std::vector<ems::db::device>& devices,
-        const std::vector<ems::db::channel>& channels = {});
+        const std::vector<ems::database::DeviceRecord>& devices,
+        const std::vector<ems::database::ChannelRecord>& channels = {});
 
     /**
      * @brief 将 channel 列表转换为运行时 ChannelConfig 列表
@@ -175,14 +183,14 @@ class ParaLoader {
      * @return 匹配条件的数据集合。
      */
     std::vector<ems::rtdb::ChannelConfig> to_channel_configs(
-        const std::vector<ems::db::channel>& channels);
+        const std::vector<ems::database::ChannelRecord>& channels);
 
     /**
      * @brief 单条转换
      * @param[in] ch 通道配置。
      * @return 得到的通道配置。
      */
-    ems::rtdb::ChannelConfig to_channel_config(const ems::db::channel& ch);
+    ems::rtdb::ChannelConfig to_channel_config(const ems::database::ChannelRecord& ch);
 
     /**
      * @brief 一次性加载全部配置并转为运行时配置
@@ -197,10 +205,10 @@ class ParaLoader {
      */
     bool load_all_as_config(std::vector<ems::rtdb::DeviceConfig>& devices,
                             std::vector<ems::rtdb::ChannelConfig>& channels,
-                            std::vector<ems::db::point_yc>* yc_points = nullptr,
-                            std::vector<ems::db::point_yx>* yx_points = nullptr,
-                            std::vector<ems::db::point_yk>* yk_points = nullptr,
-                            std::vector<ems::db::point_yt>* yt_points = nullptr);
+                            std::vector<ems::database::AnalogPoint>* yc_points = nullptr,
+                            std::vector<ems::database::StatusPoint>* yx_points = nullptr,
+                            std::vector<ems::database::ControlPoint>* yk_points = nullptr,
+                            std::vector<ems::database::SetpointPoint>* yt_points = nullptr);
 
     /**
      * @brief 是否已初始化
@@ -216,7 +224,8 @@ class ParaLoader {
 
    private:
     bool initialized_ = false;
-    std::shared_ptr<ems::db::DbManager> dbm_;
+    ems::database::MySqlDatabaseContext database_;
+    ems::database::ConfigurationRecords records_;
     std::string last_err_;
 };
 

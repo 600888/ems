@@ -1,4 +1,4 @@
-#include "db/point_table.h"
+#include <common/database/configuration/point_table.h>
 
 #include <algorithm>
 #include <cctype>
@@ -14,7 +14,7 @@
 
 #include "util/excel.hpp"
 
-namespace ems::db {
+namespace ems::database {
 namespace {
 
 constexpr std::size_t kMaxRows = 10000;
@@ -293,25 +293,25 @@ PointTableImportResult parse_point_table_excel(const std::string& path, int prot
                         if (point.unit.size() > 32) throw std::invalid_argument("单位超过 32 字节");
                     };
                     if (kind == 0) {
-                        point_yc p;
+                        AnalogPoint p;
                         init(p);
                         numeric(p);
                         result.data.yc.push_back(std::move(p));
                     } else if (kind == 1) {
-                        point_yx p;
+                        StatusPoint p;
                         init(p);
                         p.bit = p.bit_position = static_cast<int>(integer(get("位偏移"), 0, 15));
                         p.reverse_flag = static_cast<int>(integer(get("是否反转"), 0, 1));
                         result.data.yx.push_back(std::move(p));
                     } else if (kind == 2) {
-                        point_yk p;
+                        ControlPoint p;
                         init(p);
                         p.bit = p.bit_position = static_cast<int>(integer(get("位偏移"), 0, 15));
                         p.command_type = static_cast<int>(integer(get("命令类型"), 0, 1));
                         result.data.yk_feedback[p.code] = get("关联遥信编码");
                         result.data.yk.push_back(std::move(p));
                     } else {
-                        point_yt p;
+                        SetpointPoint p;
                         init(p);
                         numeric(p);
                         result.data.yt_feedback[p.code] = get("关联遥测编码");
@@ -333,4 +333,4 @@ PointTableImportResult parse_point_table_excel(const std::string& path, int prot
     return result;
 }
 
-}  // namespace ems::db
+}  // namespace ems::database

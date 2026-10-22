@@ -31,3 +31,7 @@
 - 补齐该头文件直接依赖的标准库 include。
 
 `DatabaseOrmPool` 和 `DatabaseRuntime` 测试直接使用库池，覆盖进程内复用、并发容量、耗尽期限、初始化/重建失败与事务归还。每进程目前只支持一个 MySQL 池配置，公共工厂显式拒绝再次传入不同配置。
+
+## 工程配置查询修复（2026-10-22）
+
+`ormpp/utility.hpp` 仅在参数以 `ORDER BY` 或 `LIMIT` 开头时移除默认 WHERE。原逻辑会在 `id=? LIMIT 2` 等组合条件中误删 WHERE，生成非法 SQL。配置仓储的真实 SQLite 读写回归与 SQL 生成测试覆盖筛选、排序和分页组合；未进行第三方格式整改。

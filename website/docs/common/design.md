@@ -1,6 +1,6 @@
 # 公共模块设计与实施规范
 
-> 版本：1.5｜日期：2026-10-22｜状态：目标设计，部分模块已实现；公共事务运行时、ormpp 进程内连接池、历史 MySQL 仓储和时序适配已完成首批迁移。
+> 版本：1.6｜日期：2026-10-22｜状态：目标设计，部分模块已实现；公共事务运行时、ormpp 进程内连接池、历史 MySQL 仓储和时序适配已完成首批迁移。
 > 范围：C++17 公共库、跨进程与前后端数据契约及其与采集、协议、历史、存储、Web、策略模块的边界。各节描述目标契约，实际落地范围以对应模块 README 和测试为准。
 
 ## 1. 设计决策与实施入口
@@ -122,7 +122,7 @@ backend/data/migrations/     # 沿用已有 MySQL/TAOS 版本化迁移，唯一�
 | ems_observability | 日志、指标、健康基础能力 | core，复用现有 spdlog 封装 |
 | ems_web | Drogon Controller、Filter 与 Web Service | 公共 model/database/config API、Drogon；HTTP 层不进入公共库 |
 
-上表是目标拆分，不要求每项产出动态库。纯头接口使用 INTERFACE target，普通公共实现首期优先静态链接；已有 `ems_db` 如需过渡，可作为兼容 target 转发，移除旧实现重复编译。同一程序不得同时链接两套数据库或模型实现。
+上表是目标拆分，不要求每项产出动态库。纯头接口使用 INTERFACE target，普通公共实现首期优先静态链接；旧 `ems_db` 与 DBManager 已删除，调用方直接使用公共数据库 target，不保留兼容转发。
 
 业务模块链接需要的 API/core，由进程入口链接并注入具体后端。工厂显式注册后冻结；没有编译的后端被配置选中时启动失败，不能悄悄替换成其他后端。不要用一个 `ems_common` 聚合 target 强迫协议插件链接 MySQL、Redis 与全部公共能力。
 
@@ -456,7 +456,7 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | backend/src/models/channel.h、slave.h | common/model/channel、binding | 从站地址迁到绑定，消除单设备通道假设；运行连接归采集 |
 | backend/src/models/point_runtime.hpp | common/model/point + realtime | 分离配置、实时值、厂家解码；保留值类型/质量/时间 |
 | backend/src/models/point_mapping.h | 对应标准绑定模型或策略派生点配置 | 现有公式映射不等于厂家点绑定，不能直接改名合并 |
-| backend/include/db/*.h | common/database 公共接口 + src/common/db/mysql 私有行实体 | 业务不再依赖 ORM 行结构，迁移显式转换与稳定 ID |
+| 原 backend/include/db/*.h（已删除） | common/database/configuration 公共记录与仓储 + 公共 ORM 实现 | 参数加载、点表导入和测试已直接替换，不保留旧别名 |
 | backend/src/common/db/db_manager.cpp | database_mysql 与各 Repository | 拆开池/事务、业务 CRUD 和旧建表逻辑；历史业务编排留存储，数据库调用统一公共层 |
 | backend/src/scd/mysql_history.cpp | src/common/db/mysql + 公共 history API | 迁移实体、反射、查询与事件/目录持久化，复用公共连接/事务 |
 | backend/src/scd/taos_series.cpp、time_series_factory.cpp | src/common/db/timeseries + 公共 timeseries API | 客户端、方言、映射和工厂迁入公共层，存储只注入接口 |
@@ -523,7 +523,7 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 
 按[公共数据库访问层设计](database-design.md#71-首批实现记录)，已接入 ormpp 进程内连接池、公共显式事务和历史目录/事件仓储，并将时序接口与 TDengine 适配迁出 scd。各进程独立初始化池，公共层只适配事务与错误，不自建池队列。存储业务通过注入公共接口完成目录校验、事件登记及查询编排；提交结果未知时禁止继续写时序库。
 
-旧 DBManager、配置/控制/告警/用户/outbox 的具体 Repository、目录发布及真实数据库联调仍待完成，P2 不标记为整体通过。已迁移代码和测试范围以公共数据库专题及 scd README 为准。
+旧 DBManager 及调用方已直接替换为公共工程配置仓储；版本配置发布、控制/告警/用户/outbox 的具体 Repository、历史目录发布及真实数据库联调仍待完成，P2 不标记为整体通过。已迁移代码和测试范围以公共数据库专题及 scd README 为准。
 
 ### 2026-09-19 P0/P1 公共模块基线落地
 

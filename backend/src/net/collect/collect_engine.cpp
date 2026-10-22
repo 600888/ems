@@ -82,8 +82,8 @@ bool CollectEngine::initialize(const EngineConfig& config) {
 // ============================================================
 
 int CollectEngine::start_all(ParaLoader& para_loader,
-                             const std::vector<ems::db::point_yc>* yc_points,
-                             const std::vector<ems::db::point_yx>* yx_points) {
+                             const std::vector<ems::database::AnalogPoint>* yc_points,
+                             const std::vector<ems::database::StatusPoint>* yx_points) {
     if (state_.load() == EngineState::Running) {
         LOG_WARN("采集引擎已在运行中");
         return 0;
@@ -111,8 +111,8 @@ int CollectEngine::start_all(ParaLoader& para_loader,
     LOG_INFO(fmt::format("从数据库加载了{}个通道配置", channels.size()).c_str());
 
     // 2. 加载测点配置（如果未提供）
-    std::vector<ems::db::point_yc> localYcPoints;
-    std::vector<ems::db::point_yx> localYxPoints;
+    std::vector<ems::database::AnalogPoint> localYcPoints;
+    std::vector<ems::database::StatusPoint> localYxPoints;
     if (!yc_points) {
         localYcPoints = para_loader.load_yc_points();
         yc_points = &localYcPoints;
@@ -329,8 +329,9 @@ void CollectEngine::on_channel_error(int64_t channel_id, const std::string& erro
 // ============================================================
 
 std::vector<DeviceContext> CollectEngine::build_device_contexts(
-    const ems::rtdb::ChannelConfig& channelConfig, const std::vector<ems::db::point_yc>* yc_points,
-    const std::vector<ems::db::point_yx>* yx_points) {
+    const ems::rtdb::ChannelConfig& channelConfig,
+    const std::vector<ems::database::AnalogPoint>* yc_points,
+    const std::vector<ems::database::StatusPoint>* yx_points) {
     std::unordered_map<int64_t, DeviceContext> deviceMap;
 
     // 处理 YC 测点

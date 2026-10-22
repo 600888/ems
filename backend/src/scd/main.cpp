@@ -41,12 +41,12 @@ int main() {
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
 
-    ems::storage::MySqlConnectionOptions mysql;
-    mysql.host = environment("EMS_MYSQL_HOST", mysql.host);
-    mysql.port = port("EMS_MYSQL_PORT", mysql.port);
-    mysql.user = environment("EMS_MYSQL_USER");
-    mysql.password = environment("EMS_MYSQL_PASSWORD");
-    mysql.database = environment("EMS_MYSQL_DATABASE");
+    auto mysql_options = ems::database::load_mysql_options();
+    if (!ems::core::is_ok(mysql_options)) {
+        std::cerr << ems::core::error_of(mysql_options).message << '\n';
+        return 2;
+    }
+    auto mysql = ems::core::value_of(mysql_options);
     mysql.require_history_schema = true;
 
     ems::storage::TimeSeriesConnectionOptions time_series;

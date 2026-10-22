@@ -20,6 +20,7 @@ MySQL 默认最多 4 条连接、借用等待 1 秒、每次网络 I/O 上限 5 
 
 | 名称 | 含义 |
 | --- | --- |
+| `EMS_DATABASE_CONFIG` | 可选公共 MySQL 配置 JSON 文件，环境变量覆盖文件字段 |
 | `EMS_MYSQL_HOST`, `EMS_MYSQL_PORT`, `EMS_MYSQL_USER`, `EMS_MYSQL_PASSWORD`, `EMS_MYSQL_DATABASE` | MySQL 连接 |
 | `EMS_STORAGE_SERIES_BACKEND` | `taos` 或 `tdengine`；默认 `taos`。`influxdb` 当前返回 `Unsupported` |
 | `EMS_TAOS_HOST`, `EMS_TAOS_PORT`, `EMS_TAOS_USER`, `EMS_TAOS_PASSWORD` | TDengine 原生连接；选择 TDengine 时使用 |
@@ -33,6 +34,6 @@ ZeroMQ 遥测正文为公共 `EventEnvelope` JSON。telemetry `payload` 至少�
 
 ## 本地验证
 
-2026-10-22：MSVC Release 后端构建及 183 项 CTest 通过；其中直接使用 ormpp 池的运行时与池恢复测试共 14 项，也在 MinGW C++17 下通过。MySQL 适配器已用 MariaDB Connector/C 3.4.8 编译链接，4 项无服务测试验证参数/期限拒绝、ORM 线程错误隔离及 uint64 绑定。当前未安装 TAOS SDK，原生 ZeroMQ 进程未参与本轮链接；测试结果不代表真实数据库和遥测链路验收。
+2026-10-22：MSVC Release 后端构建及 200 项 CTest 通过（含新增工程配置事务回归）；其中直接使用 ormpp 池的运行时与池恢复测试共 14 项，也在 MinGW C++17 下通过。MySQL 适配器已用 MariaDB Connector/C 3.4.8 编译链接，4 项无服务测试验证参数/期限拒绝、ORM 线程错误隔离及 uint64 绑定。当前未安装 TAOS SDK，原生 ZeroMQ 进程未参与本轮链接；测试结果不代表真实数据库和遥测链路验收。
 
 `backend/tests/storage/test_storage.cpp` 覆盖已取出样本写入失败后的丢弃、身份冲突、版本未就绪、隔离提交失败，以及跨作用域查询、分页和 outbox 场景。这些核心测试不证明 ZeroMQ 链路的投递率或故障表现。当前工作区没有完成采集发布端与 MySQL、TDengine、ZeroMQ 的端到端联调；配置发布、HistoryService gRPC 和丢样监控仍需验收。

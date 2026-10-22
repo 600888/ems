@@ -1,3 +1,11 @@
+add_library(ems_database_configuration STATIC configuration/point_table.cpp
+    configuration/import_service.cpp configuration/options.cpp)
+target_link_libraries(ems_database_configuration PUBLIC ems_database_api PRIVATE ems_excel)
+target_include_directories(ems_database_configuration SYSTEM PRIVATE
+    ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include)
+set_target_properties(ems_database_configuration PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO POSITION_INDEPENDENT_CODE ON)
+
 add_library(ems_database_runtime STATIC runtime/transaction_database.cpp)
 target_include_directories(ems_database_runtime PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(ems_database_runtime PUBLIC ems_database_api PRIVATE Threads::Threads)
@@ -26,7 +34,7 @@ else()
     add_library(ems_database_mysql STATIC mysql/mysql_unavailable.cpp)
     set_property(TARGET ems_database_mysql PROPERTY EMS_MYSQL_AVAILABLE FALSE)
 endif()
-target_link_libraries(ems_database_mysql PUBLIC ems_database_api PRIVATE ems_database_runtime)
+target_link_libraries(ems_database_mysql PUBLIC ems_database_api ems_database_configuration PRIVATE ems_database_runtime)
 set_target_properties(ems_database_mysql PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES
                                                   CXX_EXTENSIONS NO POSITION_INDEPENDENT_CODE ON)
 

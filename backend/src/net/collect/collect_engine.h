@@ -20,6 +20,10 @@
 #ifndef EMS_NET_COLLECT_COLLECT_ENGINE_H
 #define EMS_NET_COLLECT_COLLECT_ENGINE_H
 
+#include <common/database/configuration/channel.h>
+#include <common/database/configuration/device.h>
+#include <common/database/configuration/point.h>
+
 #include <atomic>
 #include <cstddef>
 #include <functional>
@@ -31,9 +35,6 @@
 
 #include "channel_thread.h"
 #include "data_dispatcher.h"
-#include "db/channel.h"
-#include "db/device.h"
-#include "db/point.h"
 #include "net/collect/collect_defaults.h"
 #include "net/collect/collect_types.h"
 #include "plugin_manager.h"
@@ -132,8 +133,8 @@ class CollectEngine {
      * @return 成功启动的通道数
      */
     int start_all(device::ParaLoader& para_loader,
-                  const std::vector<ems::db::point_yc>* yc_points = nullptr,
-                  const std::vector<ems::db::point_yx>* yx_points = nullptr);
+                  const std::vector<ems::database::AnalogPoint>* yc_points = nullptr,
+                  const std::vector<ems::database::StatusPoint>* yx_points = nullptr);
 
     /**
      * @brief 启动单个通道
@@ -250,8 +251,8 @@ class CollectEngine {
      */
     std::vector<DeviceContext> build_device_contexts(
         const ems::rtdb::ChannelConfig& channelConfig,
-        const std::vector<ems::db::point_yc>* yc_points,
-        const std::vector<ems::db::point_yx>* yx_points);
+        const std::vector<ems::database::AnalogPoint>* yc_points,
+        const std::vector<ems::database::StatusPoint>* yx_points);
 
     /**
      * @brief 处理通道上报的错误。

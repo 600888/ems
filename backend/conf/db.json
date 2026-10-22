@@ -3,7 +3,8 @@
     "port": 3306,
     "user": "cdy",
     "password": "123456",
-    "dbname": "ems",
-    "timeout": 5,
-    "conn_num": 4
+    "database": "ems",
+    "io_timeout_seconds": 5,
+    "max_connections": 4,
+    "acquire_timeout_ms": 1000
 }

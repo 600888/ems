@@ -19,7 +19,7 @@ target_link_libraries(
     data_collect_example
     PRIVATE net_collect
             net_para_loader
-            ems_db
+            ems_database_mysql ems_database_configuration
             rtdb
             ems_models
             redis++
@@ -55,3 +55,5 @@ if(WIN32 AND TARGET hiredis::hiredis)
         )
     endif()
 endif()
+
+ems_copy_mysql_runtime(data_collect_example)

@@ -1,6 +1,6 @@
 /**
  * @file point.h
- * @brief 四遥测点配置表 + 采集数据 ormpp 实体定义
+ * @brief 四遥测点配置表 + 采集数据 配置记录定义
  */
 #pragma once
 
@@ -8,9 +8,9 @@
 #include <string>
 
 namespace ems {
-namespace db {
+namespace database {
 
-struct point_yc {
+struct AnalogPoint {
     int64_t id = 0;
     std::string code;
     std::string name;
@@ -42,7 +42,7 @@ struct point_yc {
     std::string updated_at;
 };
 
-struct point_yx {
+struct StatusPoint {
     int64_t id = 0;
     std::string code;
     std::string name;
@@ -71,7 +71,7 @@ struct point_yx {
     std::string updated_at;
 };
 
-struct point_yk {
+struct ControlPoint {
     int64_t id = 0;
     std::string code;
     std::string name;
@@ -101,7 +101,7 @@ struct point_yk {
     std::string updated_at;
 };
 
-struct point_yt {
+struct SetpointPoint {
     int64_t id = 0;
     std::string code;
     std::string name;
@@ -134,17 +134,5 @@ struct point_yt {
     std::string updated_at;
 };
 
-struct point_collect {
-    int64_t id = 0;
-    std::string point_code;
-    int point_type = 0;
-    int64_t channel_id = 0;
-    int64_t device_id = 0;
-    int64_t raw_value = 0;
-    double eng_value = 0.0;
-    int quality = 0;
-    std::string collect_time;
-};
-
-}  // namespace db
+}  // namespace database
 }  // namespace ems

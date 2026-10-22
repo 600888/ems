@@ -1,6 +1,6 @@
 /**
  * @file channel.h
- * @brief 通道表 ormpp 实体定义
+ * @brief 通道表 配置记录定义
  */
 #pragma once
 
@@ -8,9 +8,9 @@
 #include <string>
 
 namespace ems {
-namespace db {
+namespace database {
 
-struct channel {
+struct ChannelRecord {
     int64_t id = 0;
     std::string code;       // 通道编码
     std::string name;       // 通道名称
@@ -39,5 +39,5 @@ struct channel {
     std::string updated_at;
 };
 
-}  // namespace db
+}  // namespace database
 }  // namespace ems

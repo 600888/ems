@@ -1,6 +1,6 @@
 # 公共数据库访问层设计
 
-> 版本：1.2｜日期：2026-10-22｜状态：ormpp 进程内连接池、公共事务适配、历史 MySQL 仓储与时序接口迁移已实现；其他领域 Repository 和真实服务验收待继续完成。适用全部 C++17 业务进程。
+> 版本：1.3｜日期：2026-10-22｜状态：ormpp 进程内连接池、公共事务适配、历史与工程配置仓储及调用方迁移已实现；其他领域 Repository 和真实服务验收待继续完成。适用全部 C++17 业务进程。
 > 本文统一数据库访问层、ormpp 使用、事务与迁移规则；历史数据语义仍见[存储设计](../processes/storage/design.md)，实时状态沿用[实时访问接口](realtime/access-design.md)。
 
 ## 1. 统一入口与整改范围
@@ -26,9 +26,9 @@ flowchart TD
 | 迁移起点 | 实施状态与目标 |
 | --- | --- |
 | 原 `src/scd/mysql_history.cpp` 自建连接、实体与手写查询 | 已移除，历史目录、事件身份及隔离记录统一由公共 ormpp Repository 实现 |
-| `src/common/db/db_manager.cpp` 混合连接、旧四遥 CRUD、建表及初始化 | 拆成公共连接/事务和各领域 Repository，退出应用启动时自动改表路径 |
+| 原 `src/common/db/db_manager.cpp` 混合连接、四遥 CRUD、建表及初始化 | 已删除；配置读写与点表导入由公共配置仓储承担，DDL 和示例数据改为显式部署脚本 |
 | 原 `src/scd/taos_series.cpp` 私有持有客户端与 SQL | 已迁入公共时序层，存储只保留归档与查询编排；真实 TDengine 验收待完成 |
-| 各模块可能各自包含 ormpp/数据库客户端头 | 历史路径已由公共适配器私有依赖；旧 DBManager 等调用方继续分批迁移 |
+| 各模块可能各自包含 ormpp/数据库客户端头 | 历史与工程配置路径已由公共适配器私有依赖，参数加载和导入工具只使用公共 API |
 
 仓库固定的 **ormpp 0.2.0** 支持 MySQL/PostgreSQL/SQLite，没有 TDengine 后端，依据仓库内的 ormpp 源码与来源记录。MySQL 统一使用 ormpp；TDengine 经公共时序适配器封装官方客户端，不假设存在 `ormpp::taos`，也不为迁移到 ORM 改变历史数据的权威存储。
 
@@ -85,6 +85,7 @@ flowchart TD
 
 | 接口 | 主要方法 | 关键约束 |
 | --- | --- | --- |
+| `IConfigurationRepository` | 设备/通道读写、四遥点表暂存、有界工程配置读取 | 当前工程配置 API；显式事务，不自动发布版本 |
 | `IConfigRepository` | 精确版本读取、保存版本、条件激活、应用报告 | 不拼接不同版本，乐观并发，active 不倒退 |
 | `IControlRepository` | 意图/命令、inbox 登记、条件推进、回执与对账 | 稳定 ID 去重，旧状态/控制权代次不可覆盖新状态 |
 | `IAlarmRepository` | 生命周期事件、确认与有界查询 | 稳定事件 ID，业务状态机归策略 |
@@ -181,7 +182,7 @@ backend/data/migrations/          唯一部署迁移来源
 | MySQL 历史迁移 | `mysql_history.cpp` 的实体、查询与连接迁入公共实现，目录与事件 Repository 注入存储；参数化及同事务测试通过 |
 | 时序迁移 | 复用现有接口及行为，迁移 TAOS 连接、写入/扫描/映射，业务不再包含 taos.h 或 SQL |
 | 其他调用方 | 采集/策略/Web/outbox 改用同一公共 Repository，移除重复模型、直连和旧建表入口 |
-| 退出过渡 | 旧接口仅委托并逐个移除；既有数据、表名、事件 ID、微秒精度和查询排序保持兼容 |
+| 删除旧入口 | 直接替换 DBManager 及调用方，删除 `ems_db`、旧头文件和自动建表入口，不提供兼容别名或转发 target |
 
 验收必须包含：
 
@@ -197,4 +198,12 @@ backend/data/migrations/          唯一部署迁移来源
 
 库池保留单例及一次初始化方式，仅补充按绝对期限借用、显式丢弃坏连接与初始化失败后清理部分连接，补丁列于 `backend/3rd/ormpp/EMS_UPSTREAM.md`，由实际库池的并发、耗尽、重建失败及事务测试覆盖。
 
-当前默认池上限 4、借用预算 1 秒、网络 I/O 上限 5 秒；MySQL 客户端超时按整秒配置，不能亚秒强制取消。启动可检查历史所需列，仍需完善迁移版本记录及索引约束核验。旧 DBManager、配置/控制/告警/用户/outbox 的具体 Repository 实现及完整目录发布/批量查询仍待后续阶段；不能将本阶段等同于全项目整改或 MySQL/TAOS 真实服务联调完成。
+当前默认池上限 4、借用预算 1 秒、网络 I/O 上限 5 秒；MySQL 客户端超时按整秒配置，不能亚秒强制取消。启动可检查历史所需列，仍需完善迁移版本记录及索引约束核验。工程配置仓储已迁移；版本配置发布、控制/告警/用户/outbox 的具体 Repository 及完整历史目录发布仍待后续阶段；不能将本阶段等同于全项目整改或 MySQL/TAOS 真实服务联调完成。
+
+### 7.2 工程配置入口替换
+
+旧 `DbManager`、`backend/include/db/` 与 `ems_db` target 已删除。`IConfigurationRepository` 负责设备/通道 CRUD、有界工程配置读取及四遥点表暂存；公开头只定义记录与接口，ormpp 反射及查询放在公共实现内部。点表服务在解析 XLSX 时释放连接，再通过新事务暂存并提交；Unknown 原样返回，不自动重试。
+
+`ParaLoader` 接收进程入口创建的公共上下文，加载成功后再替换本地配置；查询失败不伪装成空配置。点表 CLI 和采集示例直接使用公共工厂。未被调用的 `PointImportCaller/PointImporter` 与 `point_collect` 写入接口已删除，采样归现有遥测/历史链路。
+
+应用不再建库、建表或写示例数据。空库先执行 `backend/data/migrations/000_configuration_mysql.sql`；开发示例可显式执行 `backend/data/seeds/collection_demo.sql`。`load_mysql_options` 统一读取 `EMS_DATABASE_CONFIG` 与 `EMS_MYSQL_*`，旧 `DbConfig`、SQLite 生产连接入口和旧环境变量已退出。SQLite 只用于配置仓储事务回归，不能代替 MySQL 行锁联调。

@@ -85,7 +85,7 @@ PointTableImportResult parse_point_table_csv(const std::string& csv_text,
  * @param[in] device_id 已选定的实际设备 ID。
  * @param[in] binding_id 已选定的设备通道绑定 ID。
  * @return 解析后的厂家点草稿或文件、逐行错误；无配置写入。
- * @note 四遥中文模板及数据库写入使用 db::DbManager::import_point_table。
+ * @note 四遥中文模板及数据库写入使用 database::import_configuration_points。
  */
 PointTableImportResult import_point_table_file(const std::string& path,
                                                const core::DeviceId& device_id,

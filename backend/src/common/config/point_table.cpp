@@ -344,7 +344,7 @@ PointTableImportResult import_point_table_file(const std::string& path,
             if (sheet.empty())
                 throw std::invalid_argument(
                     "新格式 XLSX 需单工作表或名为点表的工作表；四遥模板请使用 "
-                    "DbManager::import_point_table");
+                    "database::import_configuration_points");
             const auto [rows, columns] = excel.usedSize(sheet);
             if (rows > kMaxRows + 1 || columns > 64)
                 throw std::invalid_argument("工作表超过 10000 数据行或 64 列");

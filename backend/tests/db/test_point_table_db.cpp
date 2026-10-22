@@ -1,15 +1,27 @@
-#include <db/db_manager.h>
+#include <common/database/configuration/repository.h>
+#include <common/database/mysql_database.h>
 #include <gtest/gtest.h>
 
+#include <algorithm>
+#include <cstdlib>
 #include <filesystem>
+#include <fstream>
+#include <optional>
 #include <string>
 #include <util/excel.hpp>
 
+#include "common/db/runtime/transaction_database.h"
+#include "net/para_loader/para_loader.h"
+
 #ifdef EMS_TEST_SQLITE
 #include <sqlite3.h>
+
+#include <ormpp/sqlite.hpp>
+
+#include "common/db/configuration/orm_repository.h"
 #endif
 
-namespace ems::db {
+namespace ems::database {
 namespace {
 
 std::string sample(const std::string& protocol) {
@@ -103,10 +115,159 @@ TEST_F(PointExcel, RejectsFormulaDuplicateCodeRangeAndProtocolMismatch) {
             .ok());
 }
 
+class MysqlEnvironment {
+   public:
+    MysqlEnvironment() {
+        for (const auto* key : keys_) {
+            const char* value = std::getenv(key);
+            previous_.push_back(value ? std::optional<std::string>(value) : std::nullopt);
+            set(key, nullptr);
+        }
+    }
+
+    ~MysqlEnvironment() {
+        for (std::size_t i = 0; i < keys_.size(); ++i)
+            set(keys_[i], previous_[i] ? previous_[i]->c_str() : nullptr);
+    }
+
+    static void set(const char* key, const char* value) {
+#ifdef _WIN32
+        _putenv_s(key, value ? value : "");
+#else
+        if (value)
+            setenv(key, value, 1);
+        else
+            unsetenv(key);
+#endif
+    }
+
+   private:
+    const std::vector<const char*> keys_{"EMS_DATABASE_CONFIG",
+                                         "EMS_MYSQL_HOST",
+                                         "EMS_MYSQL_PORT",
+                                         "EMS_MYSQL_USER",
+                                         "EMS_MYSQL_PASSWORD",
+                                         "EMS_MYSQL_DATABASE",
+                                         "EMS_MYSQL_MAX_CONNECTIONS",
+                                         "EMS_MYSQL_ACQUIRE_TIMEOUT_MS",
+                                         "EMS_MYSQL_IO_TIMEOUT_SECONDS"};
+    std::vector<std::optional<std::string>> previous_;
+};
+
+TEST_F(PointExcel, MysqlConfigurationIsStrictAndEnvironmentOverridesFile) {
+    MysqlEnvironment environment;
+    const auto file = dir / "database.json";
+    {
+        std::ofstream output(file);
+        output
+            << R"({"user":"file_user","database":"configuration","port":3307,"max_connections":2})";
+    }
+    MysqlEnvironment::set("EMS_MYSQL_USER", "environment_user");
+    auto options = load_mysql_options(file.u8string());
+    ASSERT_TRUE(core::is_ok(options));
+    EXPECT_EQ(core::value_of(options).user, "environment_user");
+    EXPECT_EQ(core::value_of(options).port, 3307);
+    EXPECT_EQ(core::value_of(options).max_connections, 2u);
+    MysqlEnvironment::set("EMS_MYSQL_PORT", "3306garbage");
+    EXPECT_FALSE(core::is_ok(load_mysql_options(file.u8string())));
+    MysqlEnvironment::set("EMS_MYSQL_PORT", "0");
+    EXPECT_FALSE(core::is_ok(load_mysql_options(file.u8string())));
+}
+
+TEST_F(PointExcel, InvalidConfigurationDoesNotSilentlyFallBack) {
+    MysqlEnvironment environment;
+    EXPECT_FALSE(core::is_ok(load_mysql_options((dir / "absent.json").u8string())));
+    const auto file = dir / "database.json";
+    for (const auto* contents :
+         {"{broken", "[]", R"({"user":"test","database":"test","port":3306.5})",
+          R"({"user":"test","database":"test","max_connections":-1})"}) {
+        {
+            std::ofstream output(file);
+            output << contents;
+        }
+        auto options = load_mysql_options(file.u8string());
+        ASSERT_FALSE(core::is_ok(options));
+        EXPECT_EQ(core::error_of(options).code, core::ErrorCode::InvalidArgument);
+    }
+}
+
 #ifdef EMS_TEST_SQLITE
+class SqliteTestConnection final : public detail::Connection {
+   public:
+    ormpp::sqlite orm;
+    inline static bool unknown_commit = false;
+
+    core::Status prepare(const core::CallContext& ctx) {
+        if (core::has_expired(ctx))
+            return core::make_error(core::ErrorCode::DeadlineExceeded,
+                                    core::WriteEffect::NotApplied, "test deadline");
+        return core::ok_status();
+    }
+
+    core::Status begin(const core::CallContext&) override { return status(orm.begin()); }
+
+    core::Status commit(const core::CallContext&) override {
+        auto result = status(orm.commit());
+        if (unknown_commit && core::is_ok(result))
+            return core::make_error(core::ErrorCode::Unavailable, core::WriteEffect::Unknown,
+                                    "lost commit reply");
+        return result;
+    }
+
+    core::Status rollback(const core::CallContext&) override { return status(orm.rollback()); }
+
+    static core::Status status(bool ok) {
+        return ok ? core::ok_status()
+                  : core::Status{core::make_error(core::ErrorCode::Unavailable,
+                                                  core::WriteEffect::Unknown,
+                                                  "test database failure")};
+    }
+};
+
 class PointDatabase : public PointExcel {
    protected:
-    DbManager database;
+    std::unique_ptr<detail::TransactionDatabase> database;
+    std::unique_ptr<IConfigurationRepository> repository;
+    std::string database_error;
+
+    static auto context() { return core::make_call_context(std::chrono::seconds(5)); }
+
+    PointTableImportResult import_points(const std::string& path, std::int64_t channel,
+                                         std::int64_t device,
+                                         PointTableImportMode mode = PointTableImportMode::Append) {
+        auto result = import_configuration_points(*database, *repository, path, channel, device,
+                                                  mode, context());
+        if (core::is_ok(result)) {
+            database_error.clear();
+            return core::value_of(result);
+        }
+        database_error = core::error_of(result).message;
+        PointTableImportResult failed;
+        failed.errors.push_back({{}, 0, "database", database_error});
+        return failed;
+    }
+
+    PointTableData points(std::int64_t channel) {
+        auto begun = database->begin(context());
+        EXPECT_TRUE(core::is_ok(begun));
+        if (!core::is_ok(begun)) return {};
+        auto tx = std::move(std::get<0>(begun));
+        auto read = repository->read_configuration(*tx, context());
+        EXPECT_TRUE(core::is_ok(read));
+        if (!core::is_ok(read)) return {};
+        auto records = core::value_of(read).points;
+        auto filter = [&](auto& values) {
+            values.erase(std::remove_if(values.begin(), values.end(),
+                                        [&](const auto& row) { return row.channel_id != channel; }),
+                         values.end());
+        };
+        filter(records.yc);
+        filter(records.yx);
+        filter(records.yk);
+        filter(records.yt);
+        return records;
+    }
+
     sqlite3* raw{nullptr};
 
     void sql(const std::string& command) {
@@ -143,24 +304,48 @@ class PointDatabase : public PointExcel {
             "TEXT,timeout INTEGER,enable INTEGER,created_at TEXT,updated_at TEXT)");
         sql("INSERT INTO device(id,code) VALUES (1,'pcs01'),(2,'pcs02')");
         sql("INSERT INTO channel(id,device_id,protocol_type) VALUES (1,1,2),(2,2,2)");
-        ASSERT_TRUE(database.connect_sqlite(file)) << database.last_error();
+        database = std::make_unique<detail::TransactionDatabase>(
+            detail::TransactionOptions{},
+            [file](const core::CallContext&) -> core::Result<detail::ConnectionLease> {
+                auto connection = std::make_shared<SqliteTestConnection>();
+                if (!connection->orm.connect("", "", "", file, {}, {}))
+                    return core::make_error(core::ErrorCode::Unavailable,
+                                            core::WriteEffect::NotApplied, "test connect failed");
+                connection->orm.set_enable_transaction(false);
+                return detail::ConnectionLease{connection,
+                                               [](std::shared_ptr<detail::Connection>, bool) {}};
+            });
+        repository = std::make_unique<detail::OrmConfigurationRepository<SqliteTestConnection>>(
+            [this](ITransaction& tx,
+                   const core::CallContext& ctx) -> core::Result<SqliteTestConnection*> {
+                auto connection = database->connection(tx, ctx);
+                if (!core::is_ok(connection)) return core::error_of(connection);
+                return static_cast<SqliteTestConnection*>(core::value_of(connection));
+            },
+            [this](ITransaction& tx) { database->invalidate(tx); },
+            [](SqliteTestConnection&) {
+                return core::make_error(core::ErrorCode::Conflict, core::WriteEffect::NotApplied,
+                                        "test SQL operation failed");
+            },
+            false);
     }
 
     void TearDown() override {
-        database.disconnect();
+        repository.reset();
+        database.reset();
         sqlite3_close(raw);
         PointExcel::TearDown();
     }
 };
 
 TEST_F(PointDatabase, CommitsAllFourTablesAndFeedbackIds) {
-    auto result = database.import_point_table(sample("modbus"), 1, 1);
-    ASSERT_TRUE(result.committed) << database.last_error();
+    auto result = import_points(sample("modbus"), 1, 1);
+    ASSERT_TRUE(result.committed) << database_error;
     EXPECT_EQ(result.inserted, 18u);
-    const auto yc = database.query_yc_points(1);
-    const auto yx = database.query_yx_points(1);
-    const auto yk = database.query_yk_points(1);
-    const auto yt = database.query_yt_points(1);
+    const auto yc = points(1).yc;
+    const auto yx = points(1).yx;
+    const auto yk = points(1).yk;
+    const auto yt = points(1).yt;
     ASSERT_EQ(yc.size(), 6u);
     ASSERT_EQ(yx.size(), 5u);
     ASSERT_EQ(yk.size(), 3u);
@@ -172,51 +357,46 @@ TEST_F(PointDatabase, CommitsAllFourTablesAndFeedbackIds) {
     EXPECT_EQ(yc[0].channel_id, 1);
     EXPECT_EQ(yc[0].device_id, 1);
     EXPECT_GT(yc[0].id, 0);
-    EXPECT_TRUE(database.is_connected());
-    database.disconnect();
-    EXPECT_FALSE(database.is_connected());
 }
 
 TEST_F(PointDatabase, DuplicateAppendAndInvalidScopeLeaveExistingTableIntact) {
-    ASSERT_TRUE(database.import_point_table(sample("modbus"), 1, 1).committed);
-    EXPECT_FALSE(database.import_point_table(sample("modbus"), 1, 1).committed);
-    EXPECT_FALSE(database.import_point_table(sample("modbus"), 1, 2).committed);
-    EXPECT_FALSE(database.import_point_table(sample("modbus"), 2, 2).committed);
-    EXPECT_EQ(database.query_yc_points(1).size(), 6u);
-    EXPECT_TRUE(database.query_yc_points(2).empty());
+    ASSERT_TRUE(import_points(sample("modbus"), 1, 1).committed);
+    EXPECT_FALSE(import_points(sample("modbus"), 1, 1).committed);
+    EXPECT_FALSE(import_points(sample("modbus"), 1, 2).committed);
+    EXPECT_FALSE(import_points(sample("modbus"), 2, 2).committed);
+    EXPECT_EQ(points(1).yc.size(), 6u);
+    EXPECT_TRUE(points(2).yc.empty());
 }
 
 TEST_F(PointDatabase, MissingFeedbackRollsBackAndSuccessfulReplaceResolvesNewIds) {
-    ASSERT_TRUE(database.import_point_table(sample("modbus"), 1, 1).committed);
-    const auto old = database.query_yc_points(1);
+    ASSERT_TRUE(import_points(sample("modbus"), 1, 1).committed);
+    const auto old = points(1).yc;
     const auto file = edited("遥控", "I2", std::string("MISSING"));
-    const auto failed = database.import_point_table(file, 1, 1, PointTableImportMode::Replace);
+    const auto failed = import_points(file, 1, 1, PointTableImportMode::Replace);
     EXPECT_FALSE(failed.committed);
     EXPECT_FALSE(failed.ok());
-    EXPECT_EQ(database.query_yc_points(1)[0].id, old[0].id);
-    EXPECT_EQ(database.query_yk_points(1).size(), 3u);
-    ASSERT_TRUE(database.import_point_table(sample("modbus"), 1, 1, PointTableImportMode::Replace)
-                    .committed);
-    const auto yx = database.query_yx_points(1);
-    EXPECT_EQ(database.query_yk_points(1)[0].related_yx_id, yx[0].id);
+    EXPECT_EQ(points(1).yc[0].id, old[0].id);
+    EXPECT_EQ(points(1).yk.size(), 3u);
+    ASSERT_TRUE(import_points(sample("modbus"), 1, 1, PointTableImportMode::Replace).committed);
+    const auto yx = points(1).yx;
+    EXPECT_EQ(points(1).yk[0].related_yx_id, yx[0].id);
 }
 
 TEST_F(PointDatabase, DatabaseFailureRollsBackPreviouslyWrittenRows) {
     sql("CREATE TRIGGER reject_command BEFORE INSERT ON point_yk BEGIN SELECT RAISE(ABORT,'test "
         "write failure'); END");
-    const auto result = database.import_point_table(sample("modbus"), 1, 1);
+    const auto result = import_points(sample("modbus"), 1, 1);
     EXPECT_FALSE(result.committed);
     EXPECT_FALSE(result.ok());
     EXPECT_EQ(result.inserted, 0u);
-    EXPECT_TRUE(database.query_yc_points(1).empty());
-    EXPECT_TRUE(database.query_yx_points(1).empty());
-    EXPECT_TRUE(database.query_yk_points(1).empty());
-    EXPECT_TRUE(database.query_yt_points(1).empty());
-    EXPECT_TRUE(database.last_error().empty());
+    EXPECT_TRUE(points(1).yc.empty());
+    EXPECT_TRUE(points(1).yx.empty());
+    EXPECT_TRUE(points(1).yk.empty());
+    EXPECT_TRUE(points(1).yt.empty());
 }
 
 TEST_F(PointDatabase, ReplacePreservesOtherChannelAndRejectsExternalFeedbackReferences) {
-    ASSERT_TRUE(database.import_point_table(sample("modbus"), 1, 1).committed);
+    ASSERT_TRUE(import_points(sample("modbus"), 1, 1).committed);
     util::Excel excel;
     excel.open(std::filesystem::u8path(sample("modbus")));
     for (const auto& sheet : excel.sheetNames()) {
@@ -239,57 +419,172 @@ TEST_F(PointDatabase, ReplacePreservesOtherChannelAndRejectsExternalFeedbackRefe
     const auto file = dir / "other.xlsx";
     excel.saveAs(file, true);
     excel.close();
-    ASSERT_TRUE(database.import_point_table(file.u8string(), 2, 2).committed);
-    const auto other = database.query_yc_points(2);
-    ASSERT_TRUE(database.import_point_table(sample("modbus"), 1, 1, PointTableImportMode::Replace)
-                    .committed);
-    EXPECT_EQ(database.query_yc_points(2)[0].id, other[0].id);
-    EXPECT_EQ(database.query_yc_points(2).size(), 6u);
-    const auto feedback = database.query_yx_points(1)[0].id;
+    ASSERT_TRUE(import_points(file.u8string(), 2, 2).committed);
+    const auto other = points(2).yc;
+    ASSERT_TRUE(import_points(sample("modbus"), 1, 1, PointTableImportMode::Replace).committed);
+    EXPECT_EQ(points(2).yc[0].id, other[0].id);
+    EXPECT_EQ(points(2).yc.size(), 6u);
+    const auto feedback = points(1).yx[0].id;
     sql("UPDATE point_yk SET related_yx_id=" + std::to_string(feedback) + " WHERE channel_id=2");
-    const auto failed =
-        database.import_point_table(sample("modbus"), 1, 1, PointTableImportMode::Replace);
+    const auto failed = import_points(sample("modbus"), 1, 1, PointTableImportMode::Replace);
     EXPECT_FALSE(failed.committed);
-    EXPECT_EQ(database.query_yx_points(1)[0].id, feedback);
+    EXPECT_EQ(points(1).yx[0].id, feedback);
 }
 
 TEST_F(PointDatabase, CrudUsesRealTableNamesAndBoundCodeParameters) {
-    device dev;
+    auto begun = database->begin(context());
+    ASSERT_TRUE(core::is_ok(begun));
+    auto tx = std::move(std::get<0>(begun));
+    DeviceRecord dev;
     dev.id = 3;
     dev.code = "manufacturer's-pcs";
-    ASSERT_TRUE(database.insert_device(dev));
-    EXPECT_EQ(database.query_device_by_code(dev.code).id, 3);
-    EXPECT_EQ(database.query_device_by_code("' OR 1=1 --").id, 0);
+    ASSERT_TRUE(
+        core::is_ok(repository->write_device(*tx, dev, RecordWriteMode::Insert, context())));
+    auto found = repository->find_device_by_code(*tx, dev.code, context());
+    ASSERT_TRUE(core::is_ok(found));
+    EXPECT_EQ(core::value_of(found).id, 3);
     dev.name = "新设备名称";
-    ASSERT_TRUE(database.update_device(dev));
-    EXPECT_EQ(database.query_device_by_id(3).name, dev.name);
-    channel ch;
+    ASSERT_TRUE(
+        core::is_ok(repository->write_device(*tx, dev, RecordWriteMode::Update, context())));
+    ChannelRecord ch;
     ch.id = 3;
     ch.device_id = 3;
     ch.code = "channel's-code";
-    ASSERT_TRUE(database.insert_channel(ch));
-    EXPECT_EQ(database.query_channel_by_code(ch.code).id, 3);
+    ASSERT_TRUE(
+        core::is_ok(repository->write_channel(*tx, ch, RecordWriteMode::Insert, context())));
+    found = repository->find_device(*tx, 3, context());
+    ASSERT_TRUE(core::is_ok(found));
+    EXPECT_EQ(core::value_of(found).name, dev.name);
     ch.name = "新通道名称";
-    ASSERT_TRUE(database.update_channel(ch));
-    EXPECT_EQ(database.query_channel_by_id(3).name, ch.name);
-    EXPECT_TRUE(database.delete_channel(3));
-    EXPECT_TRUE(database.delete_device(3));
+    ASSERT_TRUE(
+        core::is_ok(repository->write_channel(*tx, ch, RecordWriteMode::Update, context())));
+    auto saved_channel = repository->find_channel_by_code(*tx, ch.code, context());
+    ASSERT_TRUE(core::is_ok(saved_channel));
+    EXPECT_EQ(core::value_of(saved_channel).name, ch.name);
+    ASSERT_TRUE(core::is_ok(repository->remove_channel(*tx, 3, context())));
+    ASSERT_TRUE(core::is_ok(repository->remove_device(*tx, 3, context())));
+    ASSERT_TRUE(core::is_ok(tx->commit(context())));
+    begun = database->begin(context());
+    tx = std::move(std::get<0>(begun));
+    auto injection = repository->find_device_by_code(*tx, "' OR 1=1 --", context());
+    ASSERT_FALSE(core::is_ok(injection));
+    EXPECT_EQ(core::error_of(injection).code, core::ErrorCode::NotFound);
+}
+
+TEST_F(PointDatabase, RepositoryStagesWithoutCommittingAndDestructorRollsBack) {
+    auto parsed = parse_point_table_excel(sample("modbus"), 2, 1, 1);
+    ASSERT_TRUE(parsed.ok());
+    auto begun = database->begin(context());
+    ASSERT_TRUE(core::is_ok(begun));
+    auto tx = std::move(std::get<0>(begun));
+    auto staged = repository->stage_point_table(*tx, parsed.data, 1, 1,
+                                                PointTableImportMode::Append, context());
+    ASSERT_TRUE(core::is_ok(staged));
+    EXPECT_GT(core::value_of(staged).yc[0].id, 0);
+    tx.reset();
+    EXPECT_TRUE(points(1).yc.empty());
+    EXPECT_TRUE(points(1).yx.empty());
+    EXPECT_TRUE(import_points(sample("modbus"), 1, 1).committed);
+}
+
+TEST_F(PointDatabase, InvalidDraftPreventsCommitAndExpiredReadIsRejected) {
+    auto parsed = parse_point_table_excel(sample("modbus"), 2, 1, 1);
+    ASSERT_TRUE(parsed.ok());
+    parsed.data.yc[0].device_id = 2;
+    auto begun = database->begin(context());
+    auto tx = std::move(std::get<0>(begun));
+    auto staged = repository->stage_point_table(*tx, parsed.data, 1, 1,
+                                                PointTableImportMode::Append, context());
+    ASSERT_FALSE(core::is_ok(staged));
+    EXPECT_EQ(core::error_of(staged).code, core::ErrorCode::InvalidArgument);
+    EXPECT_FALSE(core::is_ok(tx->commit(context())));
+    EXPECT_TRUE(points(1).yc.empty());
+    begun = database->begin(context());
+    tx = std::move(std::get<0>(begun));
+    auto expired = repository->read_configuration(*tx, core::immediate_context());
+    ASSERT_FALSE(core::is_ok(expired));
+    EXPECT_EQ(core::error_of(expired).code, core::ErrorCode::DeadlineExceeded);
+}
+
+TEST_F(PointDatabase, MissingSchemaReturnsErrorInsteadOfEmptyConfiguration) {
+    sql("DROP TABLE point_yc");
+    auto begun = database->begin(context());
+    auto tx = std::move(std::get<0>(begun));
+    EXPECT_FALSE(core::is_ok(repository->read_configuration(*tx, context())));
+    EXPECT_FALSE(core::is_ok(tx->commit(context())));
+}
+
+TEST_F(PointDatabase, ParameterLoaderUsesPublicContextAndRetainsLastSuccessfulConfiguration) {
+    ASSERT_TRUE(import_points(sample("modbus"), 1, 1).committed);
+    sql("UPDATE device SET enable=1");
+    sql("UPDATE channel SET enable=1");
+    MySqlDatabaseContext context;
+    context.database = std::shared_ptr<IDatabase>(database.get(), [](auto*) {});
+    context.configuration =
+        std::shared_ptr<IConfigurationRepository>(repository.get(), [](auto*) {});
+    net::device::ParaLoader loader;
+    ASSERT_TRUE(loader.initialize(context, this->context()));
+    EXPECT_EQ(loader.load_devices().size(), 2u);
+    EXPECT_EQ(loader.load_channels().size(), 2u);
+    EXPECT_EQ(loader.load_yc_points(1).size(), 6u);
+    sql("DROP TABLE point_yc");
+    EXPECT_FALSE(loader.reload(this->context()));
+    EXPECT_FALSE(loader.last_error().empty());
+    EXPECT_EQ(loader.load_yc_points(1).size(), 6u);
+}
+
+TEST_F(PointDatabase, ParameterLoaderDoesNotTreatReadFailureAsSuccessfulEmptyConfiguration) {
+    sql("DROP TABLE point_yc");
+    MySqlDatabaseContext context;
+    context.database = std::shared_ptr<IDatabase>(database.get(), [](auto*) {});
+    context.configuration =
+        std::shared_ptr<IConfigurationRepository>(repository.get(), [](auto*) {});
+    net::device::ParaLoader loader;
+    EXPECT_FALSE(loader.initialize(context, this->context()));
+    EXPECT_FALSE(loader.is_initialized());
+    EXPECT_FALSE(loader.last_error().empty());
+}
+
+TEST_F(PointDatabase, ReferencedDeviceCannotBeDeleted) {
+    auto begun = database->begin(context());
+    auto tx = std::move(std::get<0>(begun));
+    auto removed = repository->remove_device(*tx, 1, context());
+    ASSERT_FALSE(core::is_ok(removed));
+    EXPECT_EQ(core::error_of(removed).code, core::ErrorCode::Conflict);
+    EXPECT_FALSE(core::is_ok(tx->commit(context())));
+}
+
+TEST_F(PointDatabase, UnknownCommitReturnsErrorAndDoesNotReplayImport) {
+    SqliteTestConnection::unknown_commit = true;
+    auto result = import_configuration_points(*database, *repository, sample("modbus"), 1, 1,
+                                              PointTableImportMode::Append, context());
+    SqliteTestConnection::unknown_commit = false;
+    ASSERT_FALSE(core::is_ok(result));
+    EXPECT_EQ(core::error_of(result).effect, core::WriteEffect::Unknown);
+    EXPECT_EQ(points(1).yc.size(), 6u);
+}
+
+TEST_F(PointDatabase, WhereConditionsRemainBoundWhenOrderedAndLimited) {
+    const auto filtered =
+        ormpp::generate_query_sql<ChannelRecord>("device_id=? ORDER BY id LIMIT 2");
+    EXPECT_NE(filtered.find("where"), std::string::npos);
+    EXPECT_NE(filtered.find("device_id=? ORDER BY id LIMIT 2"), std::string::npos);
+    const auto ordered = ormpp::generate_query_sql<ChannelRecord>("ORDER BY id LIMIT 2");
+    EXPECT_EQ(ordered.find("where"), std::string::npos);
 }
 
 TEST_F(PointDatabase, StoresIec104AsduAndDlt645DataIdentifier) {
     sql("UPDATE channel SET protocol_type=3 WHERE id=1");
-    ASSERT_TRUE(database.import_point_table(sample("iec104"), 1, 1).committed)
-        << database.last_error();
-    EXPECT_EQ(database.query_yc_points(1)[0].iec104_type, "M_ME_NB_1");
-    EXPECT_EQ(database.query_yc_points(1)[0].ioa, 16385);
+    ASSERT_TRUE(import_points(sample("iec104"), 1, 1).committed) << database_error;
+    EXPECT_EQ(points(1).yc[0].iec104_type, "M_ME_NB_1");
+    EXPECT_EQ(points(1).yc[0].ioa, 16385);
     sql("UPDATE channel SET protocol_type=0 WHERE id=1");
-    ASSERT_TRUE(database.import_point_table(sample("dlt645"), 1, 1, PointTableImportMode::Replace)
-                    .committed)
-        << database.last_error();
-    EXPECT_EQ(database.query_yc_points(1)[2].data_id, 0x02010100);
-    EXPECT_TRUE(database.query_yk_points(1).empty());
+    ASSERT_TRUE(import_points(sample("dlt645"), 1, 1, PointTableImportMode::Replace).committed)
+        << database_error;
+    EXPECT_EQ(points(1).yc[2].data_id, 0x02010100);
+    EXPECT_TRUE(points(1).yk.empty());
 }
 #endif
 
 }  // namespace
-}  // namespace ems::db
+}  // namespace ems::database

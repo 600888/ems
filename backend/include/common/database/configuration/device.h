@@ -1,6 +1,6 @@
 /**
  * @file device.h
- * @brief 设备表 ormpp 实体定义
+ * @brief 设备表 配置记录定义
  */
 #pragma once
 
@@ -8,9 +8,9 @@
 #include <string>
 
 namespace ems {
-namespace db {
+namespace database {
 
-struct device {
+struct DeviceRecord {
     int64_t id = 0;
     std::string code;         // 设备编码
     std::string name;         // 设备名称
@@ -22,5 +22,5 @@ struct device {
     std::string updated_at;   // 更新时间
 };
 
-}  // namespace db
+}  // namespace database
 }  // namespace ems

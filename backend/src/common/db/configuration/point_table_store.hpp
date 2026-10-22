@@ -1,5 +1,10 @@
 #pragma once
 
+#include <common/core/result.h>
+#include <common/database/configuration/channel.h>
+#include <common/database/configuration/device.h>
+#include <common/database/configuration/point_table.h>
+
 #include <ctime>
 #include <iomanip>
 #include <sstream>
@@ -7,53 +12,73 @@
 #include <unordered_map>
 #include <unordered_set>
 
-#include "db/channel.h"
-#include "db/device.h"
-#include "db/point_table.h"
-
-namespace ems::db {
+namespace ems::database {
 
 /**
- * @brief 在已连接的 ormpp 数据库上将整表配置原子写入四遥表。
+ * @brief 生成用于配置元数据的 UTC 时间文本。
+ * @return MySQL DATETIME 可用的时间文本。
+ */
+inline std::string configuration_timestamp() {
+    const auto now = std::time(nullptr);
+    std::tm utc{};
+#ifdef _WIN32
+    gmtime_s(&utc, &now);
+#else
+    gmtime_r(&now, &utc);
+#endif
+    std::ostringstream stream;
+    stream << std::put_time(&utc, "%Y-%m-%d %H:%M:%S");
+    return stream.str();
+}
+
+/**
+ * @brief 在调用方已开启的事务中暂存整表配置，不提交或回滚。
  * @param[in,out] database 由调用方独占使用的数据库连接。
  * @param[in,out] result 已通过解析的草稿；成功后写入新点 ID 和提交状态。
  * @param[in] channel_id 选定通道 ID。
  * @param[in] device_id 选定设备 ID。
  * @param[in] mode 导入模式。
  * @param[in] mysql 是否采用 MySQL 行锁。
- * @return true 表示事务已提交；失败时回滚并填入错误。
+ * @return true 表示已暂存；失败填入错误，调用方必须回滚。
  */
 template <typename Database>
 bool store_point_table(Database& database, PointTableImportResult& result, int64_t channel_id,
                        int64_t device_id, PointTableImportMode mode, bool mysql) {
-    bool transaction = false;
     auto check = [&]() {
         if (database.has_error()) throw std::runtime_error(database.get_last_error());
     };
     try {
-        if (!database.begin()) throw std::runtime_error(database.get_last_error());
-        transaction = true;
         // MySQL 串行化点表导入，防止不同通道同时通过跨四遥表的编码唯一性检查。
         if (mysql) {
-            database.template query_s<channel>("1=1 ORDER BY id FOR UPDATE");
+            const auto locked =
+                database.template query_s<ChannelRecord>("1=1 ORDER BY id LIMIT 10001 FOR UPDATE");
+            if (locked.size() > 10000)
+                throw core::make_error(core::ErrorCode::ResourceExhausted,
+                                       core::WriteEffect::NotApplied,
+                                       "configuration table exceeds row limit");
             check();
         }
-        const auto channels = database.template query_s<channel>("id=?", channel_id);
+        const auto channels = database.template query_s<ChannelRecord>("id=?", channel_id);
         check();
         const auto devices =
-            database.template query_s<device>(mysql ? "id=? FOR UPDATE" : "id=?", device_id);
+            database.template query_s<DeviceRecord>(mysql ? "id=? FOR UPDATE" : "id=?", device_id);
         check();
         if (channels.size() != 1 || devices.size() != 1 || channels[0].device_id != device_id) {
             throw std::runtime_error("设备或通道不存在，或通道不属于选定设备");
         }
-        auto all_yc = database.template query_s<point_yc>();
+        auto all_yc = database.template query_s<AnalogPoint>("1=1 ORDER BY id LIMIT 10001");
         check();
-        auto all_yx = database.template query_s<point_yx>();
+        auto all_yx = database.template query_s<StatusPoint>("1=1 ORDER BY id LIMIT 10001");
         check();
-        auto all_yk = database.template query_s<point_yk>();
+        auto all_yk = database.template query_s<ControlPoint>("1=1 ORDER BY id LIMIT 10001");
         check();
-        auto all_yt = database.template query_s<point_yt>();
+        auto all_yt = database.template query_s<SetpointPoint>("1=1 ORDER BY id LIMIT 10001");
         check();
+        if (all_yc.size() > 10000 || all_yx.size() > 10000 || all_yk.size() > 10000 ||
+            all_yt.size() > 10000)
+            throw core::make_error(core::ErrorCode::ResourceExhausted,
+                                   core::WriteEffect::NotApplied,
+                                   "configuration table exceeds row limit");
         auto selected = [&](const auto& point) {
             return point.channel_id == channel_id && point.device_id == device_id;
         };
@@ -96,31 +121,23 @@ bool store_point_table(Database& database, PointTableImportResult& result, int64
         unique(result.data.yt);
         if (mode == PointTableImportMode::Replace) {
             // 只删除本设备及通道的配置，先删命令再删反馈点。
-            database.template delete_records_s<point_yk>("channel_id=? AND device_id=?", channel_id,
-                                                         device_id);
+            database.template delete_records_s<ControlPoint>("channel_id=? AND device_id=?",
+                                                             channel_id, device_id);
             check();
-            database.template delete_records_s<point_yt>("channel_id=? AND device_id=?", channel_id,
-                                                         device_id);
+            database.template delete_records_s<SetpointPoint>("channel_id=? AND device_id=?",
+                                                              channel_id, device_id);
             check();
-            database.template delete_records_s<point_yx>("channel_id=? AND device_id=?", channel_id,
-                                                         device_id);
+            database.template delete_records_s<StatusPoint>("channel_id=? AND device_id=?",
+                                                            channel_id, device_id);
             check();
-            database.template delete_records_s<point_yc>("channel_id=? AND device_id=?", channel_id,
-                                                         device_id);
+            database.template delete_records_s<AnalogPoint>("channel_id=? AND device_id=?",
+                                                            channel_id, device_id);
             check();
         }
-        const auto now = std::time(nullptr);
-        std::tm utc{};
-#ifdef _WIN32
-        gmtime_s(&utc, &now);
-#else
-        gmtime_r(&now, &utc);
-#endif
-        std::ostringstream stream;
-        stream << std::put_time(&utc, "%Y-%m-%d %H:%M:%S");
+        const auto timestamp = configuration_timestamp();
         auto insert = [&](auto& points, auto& ids) {
             for (auto& point : points) {
-                point.created_at = point.updated_at = stream.str();
+                point.created_at = point.updated_at = timestamp;
                 const auto id = database.get_insert_id_after_insert(point);
                 check();
                 if (id == 0) throw std::runtime_error("测点写入失败：" + point.code);
@@ -149,15 +166,11 @@ bool store_point_table(Database& database, PointTableImportResult& result, int64
         std::unordered_map<std::string, int64_t> command_ids;
         insert(result.data.yk, command_ids);
         insert(result.data.yt, command_ids);
-        if (!database.commit()) throw std::runtime_error(database.get_last_error());
-        transaction = false;
         result.inserted = result.data.yc.size() + result.data.yx.size() + result.data.yk.size() +
                           result.data.yt.size();
-        result.committed = true;
         return true;
     } catch (const std::exception& e) {
         const auto reason = std::string(e.what());
-        if (transaction) database.rollback();
         result.errors.push_back({{}, 0, "database", reason});
         // 回滚后的 ID 不再代表数据库记录。
         auto clear = [](auto& points) {
@@ -173,4 +186,4 @@ bool store_point_table(Database& database, PointTableImportResult& result, int64
     }
 }
 
-}  // namespace ems::db
+}  // namespace ems::database

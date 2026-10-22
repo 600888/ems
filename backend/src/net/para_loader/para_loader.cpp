@@ -2,12 +2,10 @@
  * @file para_loader.cpp
  * @brief 采集进程参数加载器实现
  *
- * 封装对 DbManager 的查询操作，将数据库中的设备、通道、
+ * 使用公共配置仓储的事务读取操作，将数据库中的设备、通道、
  * 测点配置加载为运行时配置，供采集线程初始化使用。
  */
 #include "para_loader.h"
-
-#include <spdlog/fmt/bundled/format.h>
 
 #include <algorithm>
 #include <unordered_map>
@@ -19,61 +17,82 @@ namespace ems {
 namespace net {
 namespace device {
 
-ParaLoader::ParaLoader() : dbm_(std::make_shared<ems::db::DbManager>()) {}
+ParaLoader::ParaLoader() = default;
 
 ParaLoader::~ParaLoader() = default;
 
-bool ParaLoader::initialize(const ems::db::DbConfig& config) {
-    if (initialized_) {
-        LOG_INFO("参数加载器已初始化, 跳过");
-        return true;
+bool ParaLoader::initialize(ems::database::MySqlDatabaseContext database,
+                            const ems::core::CallContext& ctx) {
+    if (!database.database || !database.configuration) {
+        last_err_ = "configuration database context is incomplete";
+        return false;
     }
+    database_ = std::move(database);
+    return reload(ctx);
+}
 
-    LOG_INFO(fmt::format("初始化参数加载器: host={}, port={}, db={}, user={}", config.host,
-                         config.port, config.dbname, config.user)
-                 .c_str());
-    bool ok = dbm_->connect(config);
-    if (ok) {
-        initialized_ = true;
-        LOG_INFO("数据库连接成功");
-    } else {
-        last_err_ = dbm_->last_error();
-        LOG_ERROR(fmt::format("数据库连接失败: {}", last_err_).c_str());
+bool ParaLoader::reload(const ems::core::CallContext& ctx) {
+    if (!database_.database || !database_.configuration) return false;
+    auto begun = database_.database->begin(ctx);
+    if (!ems::core::is_ok(begun)) {
+        last_err_ = ems::core::error_of(begun).message;
+        return false;
     }
-    return ok;
+    auto tx = std::move(std::get<0>(begun));
+    auto records = database_.configuration->read_configuration(*tx, ctx);
+    if (!ems::core::is_ok(records)) {
+        last_err_ = ems::core::error_of(records).message;
+        return false;
+    }
+    auto closed = tx->rollback(ctx);
+    if (!ems::core::is_ok(closed)) {
+        last_err_ = ems::core::error_of(closed).message;
+        return false;
+    }
+    records_ = std::move(ems::core::value_of(records));
+    initialized_ = true;
+    last_err_.clear();
+    return true;
 }
 
 // ============================================================
 // 设备加载
 // ============================================================
 
-std::vector<ems::db::device> ParaLoader::load_devices() {
+std::vector<ems::database::DeviceRecord> ParaLoader::load_devices() {
     if (!initialized_) {
         LOG_ERROR("参数加载器未初始化, 无法加载设备");
         return {};
     }
 
-    auto devices = dbm_->query_all_devices();
+    auto devices = records_.devices;
 
     // 仅返回启用设备
-    devices.erase(std::remove_if(devices.begin(), devices.end(),
-                                 [](const ems::db::device& d) { return d.enable == 0; }),
-                  devices.end());
+    devices.erase(
+        std::remove_if(devices.begin(), devices.end(),
+                       [](const ems::database::DeviceRecord& d) { return d.enable == 0; }),
+        devices.end());
 
     LOG_DEBUG(fmt::format("加载设备: 共{}个启用设备", devices.size()).c_str());
     return devices;
 }
 
-ems::db::device ParaLoader::load_device_by_id(int64_t id) {
+ems::database::DeviceRecord ParaLoader::load_device_by_id(int64_t id) {
     if (!initialized_) return {};
-    auto dev = dbm_->query_device_by_id(id);
+    auto found = std::find_if(records_.devices.begin(), records_.devices.end(),
+                              [id](const auto& value) { return value.id == id; });
+    if (found == records_.devices.end()) return {};
+    auto dev = *found;
     if (dev.id == 0 || dev.enable == 0) return {};
     return dev;
 }
 
-ems::db::device ParaLoader::load_device_by_code(const std::string& code) {
+ems::database::DeviceRecord ParaLoader::load_device_by_code(const std::string& code) {
     if (!initialized_) return {};
-    auto dev = dbm_->query_device_by_code(code);
+    auto found = std::find_if(records_.devices.begin(), records_.devices.end(),
+                              [&code](const auto& value) { return value.code == code; });
+    if (found == records_.devices.end()) return {};
+    auto dev = *found;
     if (dev.id == 0 || dev.enable == 0) return {};
     return dev;
 }
@@ -82,32 +101,37 @@ ems::db::device ParaLoader::load_device_by_code(const std::string& code) {
 // 通道加载
 // ============================================================
 
-std::vector<ems::db::channel> ParaLoader::load_channels(int64_t device_id) {
+std::vector<ems::database::ChannelRecord> ParaLoader::load_channels(int64_t device_id) {
     if (!initialized_) {
         LOG_ERROR("参数加载器未初始化, 无法加载通道");
         return {};
     }
 
-    std::vector<ems::db::channel> channels;
+    auto channels = records_.channels;
     if (device_id > 0) {
-        channels = dbm_->query_channels_by_device(device_id);
-    } else {
-        channels = dbm_->query_all_channels();
+        channels.erase(
+            std::remove_if(channels.begin(), channels.end(),
+                           [device_id](const auto& value) { return value.device_id != device_id; }),
+            channels.end());
     }
 
     // 仅返回启用通道
-    channels.erase(std::remove_if(channels.begin(), channels.end(),
-                                  [](const ems::db::channel& c) { return c.enable == 0; }),
-                   channels.end());
+    channels.erase(
+        std::remove_if(channels.begin(), channels.end(),
+                       [](const ems::database::ChannelRecord& c) { return c.enable == 0; }),
+        channels.end());
 
     LOG_DEBUG(
         fmt::format("加载通道: device_id={}, 共{}个启用通道", device_id, channels.size()).c_str());
     return channels;
 }
 
-ems::db::channel ParaLoader::load_channel_by_id(int64_t id) {
+ems::database::ChannelRecord ParaLoader::load_channel_by_id(int64_t id) {
     if (!initialized_) return {};
-    auto ch = dbm_->query_channel_by_id(id);
+    auto found = std::find_if(records_.channels.begin(), records_.channels.end(),
+                              [id](const auto& value) { return value.id == id; });
+    if (found == records_.channels.end()) return {};
+    auto ch = *found;
     if (ch.id == 0 || ch.enable == 0) return {};
     return ch;
 }
@@ -116,31 +140,59 @@ ems::db::channel ParaLoader::load_channel_by_id(int64_t id) {
 // 测点配置加载
 // ============================================================
 
-std::vector<ems::db::point_yc> ParaLoader::load_yc_points(int64_t channel_id) {
+std::vector<ems::database::AnalogPoint> ParaLoader::load_yc_points(int64_t channel_id) {
     if (!initialized_) return {};
-    return dbm_->query_yc_points(channel_id);
+    auto points = records_.points.yc;
+    if (channel_id > 0)
+        points.erase(std::remove_if(points.begin(), points.end(),
+                                    [channel_id](const auto& point) {
+                                        return point.channel_id != channel_id;
+                                    }),
+                     points.end());
+    return points;
 }
 
-std::vector<ems::db::point_yx> ParaLoader::load_yx_points(int64_t channel_id) {
+std::vector<ems::database::StatusPoint> ParaLoader::load_yx_points(int64_t channel_id) {
     if (!initialized_) return {};
-    return dbm_->query_yx_points(channel_id);
+    auto points = records_.points.yx;
+    if (channel_id > 0)
+        points.erase(std::remove_if(points.begin(), points.end(),
+                                    [channel_id](const auto& point) {
+                                        return point.channel_id != channel_id;
+                                    }),
+                     points.end());
+    return points;
 }
 
-std::vector<ems::db::point_yk> ParaLoader::load_yk_points(int64_t channel_id) {
+std::vector<ems::database::ControlPoint> ParaLoader::load_yk_points(int64_t channel_id) {
     if (!initialized_) return {};
-    return dbm_->query_yk_points(channel_id);
+    auto points = records_.points.yk;
+    if (channel_id > 0)
+        points.erase(std::remove_if(points.begin(), points.end(),
+                                    [channel_id](const auto& point) {
+                                        return point.channel_id != channel_id;
+                                    }),
+                     points.end());
+    return points;
 }
 
-std::vector<ems::db::point_yt> ParaLoader::load_yt_points(int64_t channel_id) {
+std::vector<ems::database::SetpointPoint> ParaLoader::load_yt_points(int64_t channel_id) {
     if (!initialized_) return {};
-    return dbm_->query_yt_points(channel_id);
+    auto points = records_.points.yt;
+    if (channel_id > 0)
+        points.erase(std::remove_if(points.begin(), points.end(),
+                                    [channel_id](const auto& point) {
+                                        return point.channel_id != channel_id;
+                                    }),
+                     points.end());
+    return points;
 }
 
 // ============================================================
 // 运行时配置转换
 // ============================================================
 
-ems::rtdb::ChannelConfig ParaLoader::to_channel_config(const ems::db::channel& ch) {
+ems::rtdb::ChannelConfig ParaLoader::to_channel_config(const ems::database::ChannelRecord& ch) {
     ems::rtdb::ChannelConfig cfg;
     cfg.id_ = ch.id;
     cfg.name_ = ch.name;
@@ -179,7 +231,7 @@ ems::rtdb::ChannelConfig ParaLoader::to_channel_config(const ems::db::channel& c
 }
 
 std::vector<ems::rtdb::ChannelConfig> ParaLoader::to_channel_configs(
-    const std::vector<ems::db::channel>& channels) {
+    const std::vector<ems::database::ChannelRecord>& channels) {
     std::vector<ems::rtdb::ChannelConfig> result;
     result.reserve(channels.size());
     for (const auto& ch : channels) {
@@ -189,7 +241,8 @@ std::vector<ems::rtdb::ChannelConfig> ParaLoader::to_channel_configs(
 }
 
 std::vector<ems::rtdb::DeviceConfig> ParaLoader::to_device_configs(
-    const std::vector<ems::db::device>& devices, const std::vector<ems::db::channel>& channels) {
+    const std::vector<ems::database::DeviceRecord>& devices,
+    const std::vector<ems::database::ChannelRecord>& channels) {
     std::vector<ems::rtdb::DeviceConfig> result;
     result.reserve(devices.size());
 
@@ -223,10 +276,10 @@ std::vector<ems::rtdb::DeviceConfig> ParaLoader::to_device_configs(
 
 bool ParaLoader::load_all_as_config(std::vector<ems::rtdb::DeviceConfig>& devices,
                                     std::vector<ems::rtdb::ChannelConfig>& channels,
-                                    std::vector<ems::db::point_yc>* yc_points,
-                                    std::vector<ems::db::point_yx>* yx_points,
-                                    std::vector<ems::db::point_yk>* yk_points,
-                                    std::vector<ems::db::point_yt>* yt_points) {
+                                    std::vector<ems::database::AnalogPoint>* yc_points,
+                                    std::vector<ems::database::StatusPoint>* yx_points,
+                                    std::vector<ems::database::ControlPoint>* yk_points,
+                                    std::vector<ems::database::SetpointPoint>* yt_points) {
     if (!initialized_) {
         last_err_ = "ParaLoader not initialized";
         LOG_ERROR("参数加载器未初始化");

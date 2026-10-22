@@ -24,7 +24,7 @@
 
 ## 与 EMS 导入格式的关系
 
-本目录的四遥 XLSX 使用 `ems::db::DbManager::import_point_table()` 导入，校验后以事务写入 `point_yc`、`point_yx`、`point_yk`、`point_yt` 配置表。支持 Modbus RTU/TCP、IEC 104 和 DLT645 遥测；DNP3、OPC UA 示例暂作为参考。旧版 `.xls` 需先另存为 `.xlsx`。调用方先选择已有实际设备与所属通道，协议从数据库通道读取。
+本目录的四遥 XLSX 使用 `ems::database::import_configuration_points()` 导入，校验后以事务写入 `point_yc`、`point_yx`、`point_yk`、`point_yt` 配置表。支持 Modbus RTU/TCP、IEC 104 和 DLT645 遥测；DNP3、OPC UA 示例暂作为参考。旧版 `.xls` 需先另存为 `.xlsx`。调用方先选择已有实际设备与所属通道，协议从数据库通道读取。
 
 公共模型的 `ems::config::import_point_table_file()` 另支持 [Modbus CSV v1](../website/docs/architecture/point-table-import.md) 和沿用其英文列名的 XLSX，生成内存草稿。该格式与本目录四遥中文模板分别对应公共模型和现有数据库配置接口。
 
@@ -34,20 +34,11 @@
 
 ## 数据库接入
 
-已有 MySQL 配置库先执行 [Excel 点表迁移](../backend/data/point_table_excel_migration.sql)，补齐 ASDU 类型、遥调反馈 ID 和编码唯一索引。迁移可重复运行；历史重复编码需先处理。新库由 `ensure_database()` 创建完整结构，设备和通道须提前建立。
+新建空库后，由部署人员执行 [工程配置 schema](../backend/data/migrations/000_configuration_mysql.sql)，需要开发样例时再显式执行 [采集示例数据](../backend/data/seeds/collection_demo.sql)。应用不再自动建库、改表或写示例。存储历史表另执行 `001_storage_mysql.sql` 与 `002_storage_taos.sql`。
 
-```cpp
-ems::db::DbManager database;
-if (!database.connect(ems::db::get_default_db_config())) {
-    // database.last_error() 是连接错误。
-}
-auto result = database.import_point_table(
-    "data/point_csv/point_sample_modbus.xlsx", channel_id, device_id,
-    ems::db::PointTableImportMode::Append);
-// result.committed 为 true 才表示已入库；result.errors 包含失败位置与原因。
-```
+公共工厂 `connect_mysql_database()` 返回事务入口和 `IConfigurationRepository`；通过 `import_configuration_points()` 导入，只有返回值中的 `committed` 为 true 才表示已入库。数据库错误带写入确定性，提交 Unknown 时先核验数据库，再决定后续操作。点表导入不自动发布运行配置。
 
-启用 `BUILD_EXAMPLES` 构建后可使用 `ems_point_import`，数据库连接使用 `EMS_DB_CONF` 或 `EMS_DB_*` 环境变量：
+启用 `BUILD_EXAMPLES` 后使用 `ems_point_import`，通过 `EMS_DATABASE_CONFIG` 指定 JSON 文件，或设置 `EMS_MYSQL_HOST/PORT/USER/PASSWORD/DATABASE`；JSON 示例见 `backend/conf/db.json`。旧 DBManager API 与 `EMS_DB_*` 已删除：
 
 ```powershell
 # 参数顺序：文件、设备 ID、通道 ID、模式。
