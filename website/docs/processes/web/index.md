@@ -1,6 +1,6 @@
 # Web 后端与前端协作
 
-> 后端：`ems-web` / C++17 + Drogon｜前端：Vue 3 + TypeScript + Tailwind CSS｜阅读整理：2026-10-21｜状态：目标设计，尚未实现。
+> 后端：`ems-web` / C++17 + Drogon｜前端：Vue 3 + TypeScript + Tailwind CSS｜更新日期：2026-10-23｜状态：目标设计，尚未实现。
 
 负责认证授权、配置编辑/发布、业务 API 和展示编排。[Drogon](https://github.com/drogonframework/drogon) 提供 REST/WebSocket；MySQL 统一经[公共数据库访问层](../../common/database-design.md)的 ormpp Repository，不在 Web 维护实体、SQL 或另一套 ORM。前端统一经 Web 访问数据和提交意图。
 
@@ -16,7 +16,8 @@ flowchart TB
     Repo --> DB[(MySQL)]
     Service --> RT[实时查询契约]
     RT --> Redis["Redis 部署<br/>权威实时接口"]
-    RT --> Shared["共享内存部署<br/>存储实时 gRPC"]
+    RT --> Shared["共享内存部署<br/>本进程公共库直接映射"]
+    Data["数据进程<br/>生命周期 / 接入管理"] -.部署描述.-> RT
     Service --> History["HistoryService gRPC<br/>存储时序查询"]
 ```
 
@@ -28,6 +29,8 @@ flowchart TB
 | 权限 | Web 核验会话/令牌、角色、站点/资产/操作；策略与采集复核控制权、所有权和互锁 |
 | 超时 | 请求超时可能已提交，客户端用原幂等键查结果 |
 | 推送 | WebSocket 传展示数据/变化提示；重连重读权威快照，不代替审计持久化 |
+
+Web 在同机受信任部署下通过公共门面直接读取共享段，或通过 RedisStore 连接权威 Redis；公共库隐藏布局，浏览器只访问 Web。管理接口不进入每次查询路径，存储不再承担默认实时代理。锁等待同样进入有界业务工作池；共享内存后端当前需要读写映射来维护锁，业务只读不是 OS 只读隔离。跨机实时访问首期选 Redis，接入与恢复见[数据进程设计](../data/design.md)。
 
 ## 页面与关系
 

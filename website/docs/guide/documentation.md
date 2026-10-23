@@ -8,6 +8,7 @@
 | --- | --- | --- |
 | architecture | 系统边界、设备等跨进程业务模型 | 第三方库函数手册 |
 | processes/collector | 采集与上送进程，通道调度、协议实例/会话、分发与执行 | 另一份公共设备或 Redis 键规范 |
+| processes/data | 常驻实时后端管理、共享段生命周期、接入、健康与受控维护 | 每次数据读写代理、聚合算法、历史与控制仲裁 |
 | processes/storage | 归档、配置/outbox 发布、查询与恢复 | 现场协议、策略算法 |
 | processes/strategy | 状态聚合、告警、优化调度、仲裁 | 厂家原始点地址 |
 | processes/web | Drogon API、权限、配置页面和前端协作 | 直接设备控制和数据库内部连接对象 |

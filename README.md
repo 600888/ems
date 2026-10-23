@@ -1,7 +1,7 @@
 # ems
 储能EMS能量管理系统
 
-设计文档入口：[EMS 设计文档](website/docs/index.mdx)。目标架构包含采集与上送、存储、策略及 C++17 + Drogon Web 四类进程，前端为 Vue 3；下面的构建说明与现有实现状态分开维护。
+设计文档入口：[EMS 设计文档](website/docs/index.mdx)。目标架构包含采集与上送、数据、存储、策略及 C++17 + Drogon Web 五类进程，前端为 Vue 3；[数据进程](website/docs/processes/data/design.md)常驻管理实时后端生命周期，各进程通过公共库直接访问共享内存或 Redis。下面的构建说明与现有实现状态分开维护。
 
 在线文档：[EMS 设计文档](https://600888.github.io/ems/)。合并到 `main` 的文档变更会由 GitHub Actions 自动构建并发布到 GitHub Pages。
 

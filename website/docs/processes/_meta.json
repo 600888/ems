@@ -13,6 +13,13 @@
   },
   {
     "type": "dir",
+    "name": "data",
+    "label": "数据进程",
+    "collapsible": true,
+    "collapsed": false
+  },
+  {
+    "type": "dir",
     "name": "storage",
     "label": "存储进程",
     "collapsible": true,

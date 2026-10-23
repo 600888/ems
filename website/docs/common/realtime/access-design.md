@@ -1,7 +1,7 @@
 # 公共实时数据访问接口设计（C++17）
 
-> 版本：1.2｜日期：2026-09-19｜状态：目标设计，待实现与验收。
-> 适用范围：EMS 采集、策略、存储进程复用的公共实时数据访问库。
+> 版本：1.3｜日期：2026-10-23｜状态：目标设计；底层存储接口与后端已有实现，业务门面、常驻管理与完整业务接入待完成。
+> 适用范围：EMS 采集、数据、策略、存储及 C++ Web 后端复用的公共实时数据访问库。
 > 核心决策：通过抽象基类 `IRealtimeStore` 定义统一契约，由共享内存、Redis 和其他内存数据库派生类实现；业务层通过依赖注入使用接口。
 
 ## 1. 设计结论与范围
@@ -12,6 +12,8 @@
 
 - **业务门面 `RealtimeService`**：面向测点、设备、通道与控制状态，负责类型转换、配置校验、来源代次和序号检查、新鲜度计算。
 - **抽象存储 `IRealtimeStore`**：面向逻辑记录，提供单记录完整读取、条件替换、条件删除与逐项批量结果。`SharedMemoryStore`、`RedisStore` 以及新增后端均实现这一契约。
+
+两层均为进程内公共库接口。常驻 `ems-data` 管理后端生命周期、部署描述、接入及授权投影，各业务进程仍分别创建门面/后端对象，直接访问同一共享段或 Redis。管理接口不转发正常数据读写，生命周期权威设计见[数据进程详细设计](../../processes/data/design.md)。
 
 Redis 继续作为默认部署后端；共享内存成为同机部署的可选权威实时状态后端。每个逻辑作用域在一个部署代次内只配置一个权威后端，禁止两个后端同时独立受理权威写入。切换通过受控迁移完成，不因 Redis 连接失败就自动切到空共享内存。
 
@@ -33,8 +35,8 @@ Redis 继续作为默认部署后端；共享内存成为同机部署的可选�
 
 | 设计依据 | 必须延续的约束 | 本设计补充 |
 | --- | --- | --- |
-| [EMS 系统架构](../../architecture/system-design.md) | C++17 采集/存储/策略与 Drogon Web 四类进程；职责和控制闭环明确 | 实时状态由抽象接口访问，后端按部署选择 |
-| [数据采集架构](../../processes/collector/design.md) | 协议 I/O、通道调度与数据分发分离；可靠采样先落日志 | 分发层注入业务门面，协议模块不选择存储后端 |
+| [EMS 系统架构](../../architecture/system-design.md) | C++17 采集/数据/存储/策略与 Drogon Web 五类进程；职责和控制闭环明确 | 数据进程管理生命周期，各进程通过公共库直接访问后端 |
+| [数据采集架构](../../processes/collector/design.md) | 协议 I/O、通道调度与数据分发分离；采样有界缓冲、历史允许丢样 | 分发层注入业务门面，协议模块不选择存储后端 |
 | [设备模型与点表绑定](../../architecture/device-model.md) | 固有点位、厂家映射、启用状态和命令反馈分开 | 统一逻辑测点、类型和质量，不让物理存储决定业务模型 |
 | [Redis 键设计](redis-key-design.md) | station/unit 作用域、递归资产路径、稳定 ID、来源序号、配置版本 | 逻辑身份适用于全部后端，Redis 物理键只属于 Redis 适配器 |
 | [实时数据与配置](index.md) | 最新状态、可靠事件、配置权威和历史存储分别承担职责 | 共享内存替换实时状态访问时，其他职责保持独立 |
@@ -50,6 +52,8 @@ flowchart TB
     Collector[采集 DataDispatcher] --> Service[RealtimeService / 类型化业务门面]
     Strategy[策略 / 状态聚合] --> Service
     Storage[存储 / 状态投影] --> Service
+    Web[Drogon Web] --> Service
+    Data[数据进程 ems-data] -.初始化 / 生命周期 / 授权投影.-> Contract
     Service --> Contract[IRealtimeStore / C++17 抽象基类]
     Factory[进程启动 / BackendFactory] --> Contract
     Contract --> Shm[SharedMemoryStore]
@@ -61,11 +65,10 @@ flowchart TB
     Collector --> Buffer[有界内存采样队列]
     Buffer --> Bus[ZeroMQ 原始遥测 PUB/SUB]
     Bus --> Storage
-    Web[Drogon Web] --> Gateway[存储进程内实时查询 gRPC]
-    Gateway --> Service
+    Data -.管理接入 / 部署描述.-> Factory
 ```
 
-上图展示共享内存部署的 Web 查询路径。Redis 默认部署可由 Web 按契约直接读取；共享内存部署经存储进程实时查询 gRPC，避免 Web 依赖共享段布局。切换后不能继续读取未同步的 Redis。gRPC 服务复用存储业务进程，配独立有界工作池，不新增第五类业务进程。
+图中的 Service、Contract、Factory 代表各进程分别持有的库对象，不是一个共享 C++ 对象或集中转发服务。受信任的同机 C++ Web 后端与采集、策略一样通过公共库直接映射共享段，布局由适配器隐藏；Redis 部署各进程独立连接。浏览器只访问 Web；跨主机直接访问共享段不受支持，首期跨机实时访问选 Redis。存储只提供历史服务，数据进程只提供管理服务；后端切换时全部参与者核对同一部署与实际存储代次。
 
 ```mermaid
 classDiagram
@@ -384,7 +387,7 @@ private:
 
 新鲜度以采样时间及源时钟质量判定，源时间不可用时按配置采用 ingest_time 并记录降级原因；陈旧阈值 `stale_after` 来自配置。检测到时间倒退或未来时间超过允许时钟偏差时标记时间质量异常，不把负年龄视为永久新鲜。存储层不因陈旧而删除最后值。
 
-面向 Web 的实时查询 gRPC 提供与 getPoint/getPoints/getState 对应的只读方法，携带逻辑地址、类型化数据、质量、新鲜度和配置版本；错误映射保留逐项失败信息。服务端限制批大小和请求预算，按 station/资产鉴权。共享内存布局与 C++ revision 对象不直接暴露为跨进程 ABI；需要运维诊断时只传 revision 的不透明文本。
+Web 通过本进程门面调用 getPoint/getPoints/getState，向浏览器返回类型化数据、质量、新鲜度和配置版本，保留逐项失败信息，并在 Web 层按 station/资产鉴权及限制批量和预算。默认路径不再经过存储实时 gRPC。共享内存布局由库隐藏，C++ revision 对象不作为跨进程 ABI；JSON/管理诊断只传不透明文本。需要服务隔离的查询网关属于后续独立扩展。
 
 ## 6. 共享内存后端 `SharedMemoryStore`
 
@@ -426,15 +429,15 @@ Linux 实现使用经目标平台验证的 `PTHREAD_PROCESS_SHARED`、robust mut
 
 C++17 标准本身不提供可移植的跨进程原子提交保证。本实现需要封装并验证 Linux/Windows 的共享映射、原子发布与进程间锁组合；不把普通 `std::atomic` 放入共享段就视为问题已解决。若目标平台不能证明该提交协议，须在该平台禁用后端或采用经验证的共享内存存储组件；不要以 checksum 替代同步。也不使用“无锁读普通字段 + seqlock 重试”绕开 C++ 数据竞争。
 
-首次创建由指定初始化角色通过 OS 级独占创建/引导锁完成；其他进程只在 READY 状态 attach。初始化中崩溃由初始化角色在确认无活跃使用者后重建新代次，PID 不是唯一存活证据。锁获取预算统一使用 steady deadline；平台定时锁使用其他时钟时通过有界尝试循环换算，避免墙钟回拨造成无限等待。
+首次创建由 `ems-data` 指定初始化角色通过 OS 级独占创建/引导锁完成；其他进程只在结构 READY 状态 attach，结构就绪不等于业务已恢复。初始化中崩溃由管理恢复流程在确认无活跃使用者后重建新代次，PID 不是唯一存活证据。锁获取预算统一使用 steady deadline；平台定时锁使用其他时钟时通过有界尝试循环换算，避免墙钟回拨造成无限等待。
 
 ### 6.3 生命周期、容量与安全边界
 
 - 共享内存不持久保存历史。主机重启后加载配置并重新采集设备状态，控制投影从 MySQL 持久业务记录重建，未恢复完成返回 `NotReady`。
-- 普通进程退出不清段。清理由部署管理显式执行，先确认使用者退出；不只依据共享引用计数判断崩溃后的活跃性。
+- 普通进程退出只 detach；数据进程重启验证并复用有效段，不清零或重置存储代次。清理由数据进程配合部署管理显式执行，先确认使用者退出/隔离；不只依据共享引用计数、PID 或心跳判断活跃性。Windows 对象在最后引用释放后会丢失，不能视为持久存储。
 - 容量/单记录上限在启动时确定，满时返回 `ResourceExhausted/NotApplied`，不覆盖仍有效的记录、不静默淘汰控制状态。
 - `segment_bytes ≈ header + index + shards + slots × (key区 + 2 × image容量 + 元数据) + 对齐余量`。初始 256 MiB、64 KiB 最大记录等只能作为压测参数，必须核算 slot 数，不能据此宣称容纳任意点数。
-- 使用 OS 用户/组或 ACL 限制段和锁对象访问。能写共享段的进程具有底层修改能力，因此此后端面向互信进程；更强隔离需通过服务 API 访问。
+- 使用 OS 用户/组或 ACL 限制段和锁对象访问。能写共享段的进程具有底层修改能力，因此此后端面向互信进程；当前读也要更新锁状态，业务只读不等于 OS 只读映射。更强隔离需另行设计服务 API；命名空间、账户与容器限制见数据进程专题。
 - 变更通知可以用每分片版本计数配合平台唤醒；通知丢失、进程暂停或队列覆盖后必须重读快照，不作为唯一事件副本。
 
 ## 7. Redis 后端 `RedisStore`
@@ -537,7 +540,7 @@ telemetry:
 config:
   backend: mysql
 web_realtime:
-  mode: storage_grpc
+  mode: direct_store
 ```
 
 ```yaml
@@ -557,17 +560,17 @@ telemetry:
 config:
   backend: mysql
 web_realtime:
-  mode: redis_contract
+  mode: direct_store
 ```
 
-两段配置为二选一示例，超时/容量必须由目标硬件与采样周期验证。`BackendSpec.options` 仅用于工厂边界，工厂先转为类型化 Options 并执行严格校验；它不向业务层传播任意字符串配置。密钥使用引用，日志只显示脱敏的拓扑和段名。
+两段配置为业务参与者二选一示例，超时/容量必须由目标硬件与采样周期验证。数据进程的管理配置与接入描述见[部署设计](../../processes/data/design.md#11-配置与工程组织)，业务进程仅挂接，创建权限限于指定初始化角色。`BackendSpec.options` 仅用于工厂边界，先转为类型化 Options 严格校验；密钥使用引用，日志只显示脱敏拓扑。示例中的 Redis 拓扑/TLS 等为目标字段，当前单地址适配器不表示已支持全部部署能力。
 
 ### 10.2 目标目录与链接
 
 ```text
-backend/includelude/common/core/         # 共享 Error、Result、CallContext
-backend/includelude/common/model/        # 设备/测点/状态等模型，不由实时库重新定义
-backend/includelude/realtime/
+backend/include/common/core/         # 共享 Error、Result、CallContext
+backend/include/common/model/        # 设备/测点/状态等模型，不由实时库重新定义
+backend/include/realtime/
   types.h                       # 基础类型别名、RecordKey、Record、请求/结果
   i_realtime_store.h            # 抽象基类
   realtime_service.h            # 类型化门面
@@ -593,20 +596,28 @@ contracts/realtime/            # 字段 schema、逻辑键、C++/TypeScript 黄�
 ### 10.3 组装顺序
 
 ```text
-main / composition root
-  读取部署与配置版本 -> 注册已编译的后端 -> 冻结工厂
-  创建 IRealtimeStore -> 检查容量/作用域部署/版本/能力
-  初始化 MySQL 配置缓存与 ZeroMQ 通道 -> 恢复授权与必要状态
+ems-data / composition root
+  获取唯一管理权 -> 核对可信部署与配置 -> 注册并冻结后端工厂
+  创建或验证复用后端 -> 安装已确认的授权投影 -> 发布实际存储代次
+  启动管理服务与健康观测 -> 维护接入状态
+
+业务进程 / composition root
+  核对部署描述 -> 注册并冻结后端工厂
+  仅挂接共享段或创建本进程 Redis 池 -> 核对实际布局/代次/能力
+  初始化本进程配置缓存与所需 ZeroMQ 通道
   构造 RealtimeService(store, config_provider, caller_role)
-  注入 DataDispatcher / 策略 / 查询服务 -> 标记就绪
+  核对授权和业务依赖 -> 注入分发器 / 策略 / Web -> 登记并就绪
 ```
 
 每个进程有独立 Store 对象与连接/映射句柄，可在本进程线程间共享；跨进程只共享后端数据，不共享 C++ 对象。进程生命周期由应用负责，分发器关闭时不擅自关闭仍被其他本进程服务使用的 store。
+
+管理心跳不参与每次数据访问；管理服务中断时，实际后端与授权仍有效的已挂接进程可按原规则运行，新接入和变更暂停。管理者重启与维护隔离流程以[数据进程生命周期](../../processes/data/design.md#7-共享内存生命周期)为准。
 
 ## 11. 故障语义、运行指标与性能
 
 | 场景 | 接口/门面行为 | 上层动作 |
 | --- | --- | --- |
+| 数据管理服务中断但实际后端有效 | 已挂接者保持直接读写；新接入/授权变更未就绪 | 管理恢复核对并复用原存储代次，不清段 |
 | 字段、code、schema 非法 | InvalidArgument / SchemaMismatch | 修复配置或版本，不盲目重试 |
 | 记录不存在 | NotFound；测点写门面返回尚未授权/NotReady | 初始化授权；不输出默认零值 |
 | 版本冲突 | Conflict / NotApplied | 有界重读并重做业务校验 |
@@ -639,7 +650,7 @@ main / composition root
 Redis → 共享内存（反向同理）的切换步骤：
 
 1. 检查目标容量、平台、schema 与访问路径；创建新 generation，目标尚不接受业务写。
-2. 暂停受影响作用域的新调度与实时投影写入，采集可短暂使用有界内存缓冲；排空在途 CAS，记录已投递事件进度与配置/来源授权，报告未发布样本风险。
+2. 暂停受影响作用域的新调度与实时投影写入，采集可短暂使用有界内存缓冲；排空在途 CAS，记录配置/来源授权并报告未发布样本风险。由数据进程配合部署管理确认旧使用者已退出或被隔离，不能将心跳超时当作停写证明。
 3. 按配置目录复制完整状态并验证记录数、稳定 ID、值/质量/时间、来源与内容摘要；目标生成新 revision，不复制源后端 CAS 令牌。
 4. 处理暂停期间仍保留的内存样本并核对事件发布；对已丢失样本报告缺口；更新部署代次，将全部生产者、消费者、Web 查询入口切到目标，确认旧实例已退出写权限。没有参与者确认不得开放双写。
 5. 核对新状态与授权，恢复业务；旧后端只读保留至观察期结束。期间影子对比不用于控制执行。
