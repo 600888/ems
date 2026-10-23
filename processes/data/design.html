@@ -1,0 +1,497 @@
+<!doctype html>
+<html lang="zh">
+  <head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>数据进程详细设计 - EMS 设计文档</title>
+<script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
+<link href="/ems/static/css/styles.3c463aa6ae.css" rel="stylesheet">
+<link rel="preload" href="/ems/static/js/async/route-87275ed00468.7d418faa37.js" as="script">
+<script defer src="/ems/static/js/styles.560b9eab4d.js"></script>
+<script defer src="/ems/static/js/lib-react.0685ac4d75.js"></script>
+<script defer src="/ems/static/js/lib-router.de7486675c.js"></script>
+<script defer src="/ems/static/js/m3.da04ef77ed.js"></script>
+<script defer src="/ems/static/js/index.842035c663.js"></script>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Rspress v2.0.21">
+<link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="数据进程详细设计 - EMS 设计文档">
+<meta name="description" content="版本：1.0｜日期：2026-10-23｜状态：目标设计，尚未实现常驻进程与管理接口。 本文定义 ems-data 的组装和管理职责；底层记录、并发、来源检查与错误语义引用公共实时访问接口，不另建一套数据契约。">
+<meta property="og:description" content="版本：1.0｜日期：2026-10-23｜状态：目标设计，尚未实现常驻进程与管理接口。 本文定义 ems-data 的组装和管理职责；底层记录、并发、来源检查与错误语义引用公共实时访问接口，不另建一套数据契约。"></head>
+
+  <body>
+    <div id="__rspress_root"><link rel="preload" as="image" href="/ems/logo.svg"/><header class="rp-nav"><div class="rp-nav__left"><div class="rp-nav__title"><a href="/ems/" class="rp-nav__title__link rp-link"><div class="rp-nav__title__logo"><img src="/ems/logo.svg" alt="logo" id="logo" class="rspress-logo rp-nav__title__logo-image"/></div><span>EMS</span></a></div><ul class="rp-nav-menu rp-nav-menu--left"><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/" class="rp-nav-menu__item__container rp-link">首页</a></li><li class="rp-nav-menu__item"><a href="/ems/architecture/" class="rp-nav-menu__item__container rp-link">架构</a></li><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/processes/" class="rp-nav-menu__item__container rp-link">进程</a></li><li class="rp-nav-menu__item"><a href="/ems/common/" class="rp-nav-menu__item__container rp-link">公共模块</a></li><li class="rp-nav-menu__item"><a href="/ems/decisions/" class="rp-nav-menu__item__container rp-link">技术决策</a></li><li class="rp-nav-menu__item"><a href="/ems/reference/" class="rp-nav-menu__item__container rp-link">开发参考</a></li><li class="rp-nav-menu__item"><a href="/ems/guide/" class="rp-nav-menu__item__container rp-link">文档维护</a></li></ul></div><div class="rp-nav__right"><button class="rp-search-button"><div class="rp-search-button__content"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21" class="rp-search-button__icon"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg><span class="rp-search-button__word">搜索</span></div><div class="rp-search-button__hotkey" style="opacity:0"><span></span><span>K</span></div></button><div class="rp-search-button--mobile"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg></div><div class="rp-nav__others"><div class="rp-nav-menu__divider"></div><div class="rp-switch-appearance"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="rp-switch-appearance__icon rp-switch-appearance__icon--sun"><path fill="currentColor" d="m7.001 15.848-1.226 1.226a.58.58 0 0 0 0 .818.58.58 0 0 0 .818 0l1.226-1.226a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0m-.352-8.735a.584.584 0 0 0 .825-.825L6.237 5.051a.584.584 0 0 0-.825.825zM5.011 11.07h-1.75a.584.584 0 0 0 0 1.167h1.75c.324 0 .584-.26.584-.583a.585.585 0 0 0-.584-.584m7.003-5.835c.324 0 .584-.26.584-.584V2.9a.58.58 0 0 0-.584-.584.58.58 0 0 0-.583.583V4.65c0 .323.262.584.583.584m5.616 1.621 1.226-1.225a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0l-1.226 1.225a.58.58 0 0 0 0 .818.576.576 0 0 0 .818 0m3.138 4.214h-1.75a.58.58 0 0 0-.584.584c0 .324.26.584.583.584h1.751a.584.584 0 1 0 0-1.167m-3.389 5.124a.584.584 0 0 0-.825.825l1.238 1.238a.584.584 0 0 0 .825-.826zm-5.365-9.795a5.256 5.256 0 0 0-5.257 5.258 5.256 5.256 0 0 0 5.257 5.257 5.256 5.256 0 0 0 5.257-5.257 5.256 5.256 0 0 0-5.257-5.258m0 11.675a.58.58 0 0 0-.583.583v1.751a.582.582 0 1 0 1.167 0v-1.75a.584.584 0 0 0-.584-.584"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="currentColor" viewBox="0 0 19 19" class="rp-switch-appearance__icon rp-switch-appearance__icon--moon"><path fill="currentColor" d="M9.166 0a9.2 9.2 0 0 1 1.857.188.834.834 0 0 1 .042 1.623 4.47 4.47 0 1 0 5.457 5.457l.048-.135a.834.834 0 0 1 1.575.177q.186.902.188 1.856A9.168 9.168 0 1 1 9.166 0"></path></svg></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__sm"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg></button><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__md"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"><div class="rp-nav-menu__others-mobile__container"><div class="rp-nav-hamburger__md__hover-group"><div class="rp-nav-screen-appearance"><div class="rp-nav-screen-appearance__left">主题</div><div class="rp-nav-screen-appearance__right"></div></div><div class="rp-nav-screen-divider"></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div></div></ul></button></div></header><div class="rp-doc-layout__menu"><div class="rp-sidebar-menu"><button type="button" class="rp-sidebar-menu__left"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M4 6h24v2H4zm0 18h24v2H4zm0-12h24v2H4zm0 6h24v2H4z"></path></svg><span>菜单</span></button><button type="button" class="rp-sidebar-menu__right"><span class="rp-sidebar-menu__right__text">目录</span><svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-sidebar-menu__right__icon" style="transform:rotate(0deg);transition:transform 0.2s ease-out"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button></div></div><div class="rp-doc-layout__container"><aside class="rp-doc-layout__sidebar rp-scrollbar"><a href="/ems/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">返回文档首页</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-divider" style="padding-left:12px"></div><div class="rp-sidebar-section-header"><div class="rp-sidebar-section-header__left"><span>进程设计</span></div><div class="rp-sidebar-section-header__right"></div></div><a href="/ems/processes/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">进程职责总览</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">采集与上送进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/collector/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">进程职责与模块</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/collector/design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">采集执行与协议插件</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/collector/protocol-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">通讯协议动态库（PIMPL / 跨平台）</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">数据进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/data/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">数据进程设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/data/design" class="rp-sidebar-item rp-sidebar-item--active rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">数据进程详细设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">存储进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/storage/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">存储进程设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/storage/design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">存储进程详细设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">策略进程</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/strategy/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">策略进程设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/processes/strategy/design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">策略进程详细设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">Web 后端与前端</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/processes/web/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">Web 后端与前端协作</span></div><div class="rp-sidebar-item__right"></div></a></div></div></aside><div class="rp-doc-layout__doc"><main class="rp-doc-layout__doc-container"><div class="rp-doc rspress-doc"><!--$--><h1 class="rp-toc-include" id="数据进程详细设计"><a href="#数据进程详细设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>数据进程详细设计<!-- --> </h1>
+<blockquote>
+<p>版本：1.0｜日期：2026-10-23｜状态：目标设计，尚未实现常驻进程与管理接口。
+本文定义 <code>ems-data</code> 的组装和管理职责；底层记录、并发、来源检查与错误语义引用<a href="/ems/common/realtime/access-design" class="rp-link">公共实时访问接口</a>，不另建一套数据契约。</p>
+</blockquote>
+<h2 class="rp-toc-include" id="1-设计决策"><a href="#1-设计决策" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1. 设计决策</h2>
+<p>新增 C++17 常驻数据进程，将 EMS 调整为采集与上送、数据、存储、策略、Web 五类业务进程。数据进程负责实时后端的初始化与生命周期管理，各业务进程直接通过公共库访问所选后端。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>项目</th><th>决策</th></tr></thead><tbody><tr><td>正常数据访问</td><td>本进程 <code>RealtimeService → IRealtimeStore → SharedMemoryStore / RedisStore</code>；不经数据进程逐次转发</td></tr><tr><td>共享内存</td><td>操作系统管理同一共享对象；各进程拥有独立映射、句柄和 C++ 对象</td></tr><tr><td>Redis</td><td>Redis 服务持有数据；各进程独立连接池，数据进程管理部署契约与接入状态</td></tr><tr><td>后端选择</td><td>Redis 保持默认，共享内存为同机选项；一个作用域、一个部署代次只使用一个权威后端</td></tr><tr><td>管理通道</td><td>目标采用内部版本化 gRPC；仅用于接入、诊断及维护，不进入每次实时读写路径</td></tr><tr><td>记录写角色</td><td>原始点、派生状态、通道状态、命令投影分别指定业务写入者，数据进程不接管所有写入</td></tr><tr><td>消息与历史</td><td>ZeroMQ 及 MySQL outbox/inbox 继续承担原有职责，不要求经过数据进程</td></tr><tr><td>首期维护</td><td>停止受影响使用者后切换或重建；不承诺在线热扩容、跨后端双写或自动故障降级</td></tr></tbody></table></div>
+<p>这里的“对外接口”有两类：供业务代码调用的公共库 API，以及供进程之间使用的管理 API。前者在调用者进程内执行；后者才需要 IPC/RPC。管理进程存在不意味着共享数据必须经过它复制。</p>
+<h2 class="rp-toc-include" id="2-总体结构与依赖"><a href="#2-总体结构与依赖" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2. 总体结构与依赖</h2>
+<div></div>
+<p>公共模型、编解码、门面、存储适配器仍是可复用库，不能依赖 <code>ems-data</code> 业务类。数据进程和其他进程都在各自入口装配这些库；平台映射地址、连接池、虚函数对象和 STL 容器不跨进程传递。协议插件继续使用原有 C ABI，通过采集分发器接入实时库，不要求每个插件单独连接管理服务。</p>
+<h2 class="rp-toc-include" id="3-职责与写入归属"><a href="#3-职责与写入归属" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3. 职责与写入归属</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>数据或行为</th><th>责任方</th><th>数据进程的责任</th></tr></thead><tbody><tr><td>实测点、设备通信质量、通道状态</td><td>所属采集实例</td><td>建立接入信息，按确认的配置与来源事实安装防护字段</td></tr><tr><td>单元/站级聚合、策略状态与告警</td><td>策略</td><td>管理后端，不重复计算聚合或运行告警状态机</td></tr><tr><td>命令状态查询投影</td><td>执行/持久回执协调职责，具体状态字段固定写角色</td><td>提供存储空间；重建时要求责任方按 MySQL 事实恢复</td></tr><tr><td>已发布配置、来源所有权和代次</td><td>既有配置发布/持久协调流程</td><td>读取已确认结果并条件安装，反馈安装版本与缺失项</td></tr><tr><td>历史、审计、配置发布、outbox</td><td>存储及事实产生进程</td><td>不改变原链路，不将最新值当作历史事件</td></tr><tr><td>用户身份、站点/资产可见范围</td><td>Web</td><td>提供运行诊断；业务鉴权仍在 Web 执行</td></tr></tbody></table></div>
+<p>每种记录明确唯一业务写角色；多个采集实例按资源所有权分片。初始化记录时先写无有效样本与防护字段，再允许样本更新，不能填默认零值伪造就绪。普通写入方保持 <code>accepted_source_id / accepted_source_epoch / accepted_config_version / write_enabled</code>，不能自行提高 epoch 获取写权。</p>
+<p>数据进程安装防护字段也使用同一记录 CAS，冲突后重读并核对当前持久授权。配置发布版本、授权已安装版本、实例已应用版本分别跟踪；多记录安装逐项完成，不承诺作用域内原子切换。分配来源代次、隔离旧采集实例和控制权仲裁仍由持久协调流程负责。现有来源协调尚未完成，实施时须先明确其权威 Repository 与隔离证据，不能以管理心跳代替。</p>
+<h2 class="rp-toc-include" id="4-公共库接口与直接访问"><a href="#4-公共库接口与直接访问" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4. 公共库接口与直接访问</h2>
+<p>沿用 <code>IRealtimeStore</code> 的 <code>read / compareExchange / erase / readMany / writeMany / info / close</code>。业务使用目标 <code>RealtimeService</code> 的类型化测点和状态接口，具体参数与返回值引用<a href="/ems/common/realtime/access-design#53-业务层使用的公共-api" class="rp-link">门面契约</a>。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>约束</th><th>集成要求</th></tr></thead><tbody><tr><td>进程内实例</td><td>每个进程独立创建 store；线程间可按接口约定共享，跨进程不共享对象</td></tr><tr><td>attach</td><td>业务进程在共享内存模式强制 <code>create_if_missing=false</code>，仅挂接已发布的段</td></tr><tr><td>并发</td><td>库内部执行进程间锁、完整记录读取与 CAS；禁止进程自行 memcpy 修改业务字段</td></tr><tr><td>批量</td><td>保留逐项结果与部分成功；不把 <code>readMany</code> 当作同一时刻快照</td></tr><tr><td>时间与错误</td><td>每次操作有本地 steady deadline，保留 NotFound、NotReady、Conflict、Unknown 等区别</td></tr><tr><td>地址</td><td>传逻辑记录键，不能传共享段 offset、裸指针或 Redis 原始键给业务算法</td></tr><tr><td>关闭</td><td>停入口、等待本进程有界在途调用结束，再关闭自身映射/连接；不删除共享对象</td></tr></tbody></table></div>
+<p>典型数据路径如下，管理服务不参与后两次调用：</p>
+<div></div>
+<h2 class="rp-toc-include" id="5-管理接口与部署描述"><a href="#5-管理接口与部署描述" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5. 管理接口与部署描述</h2>
+<p>管理服务目标名为 <code>RealtimeAdminService</code>，契约放在 <code>contracts/proto/</code>，首期采用内部 gRPC。接口名和字段为设计约定，仓库尚无对应服务实现。客户端的管理连接与数据连接分开；RPC deadline 转成本地剩余预算，不跨进程序列化 steady_clock 的绝对时间。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>操作</th><th>输入</th><th>返回与限制</th></tr></thead><tbody><tr><td><code>GetDeployment</code></td><td>逻辑作用域、支持的契约/布局版本</td><td>当前发布描述；初始化/维护中返回明确状态，不能猜测后端</td></tr><tr><td><code>RegisterClient</code></td><td>实例 ID、启动唯一标识、角色、作用域、已验证的部署/存储代次</td><td>接入 ID、管理者启动标识、心跳周期；登记不授予设备控制权</td></tr><tr><td><code>ReportClient</code></td><td>接入 ID、加载版本、挂接代次、就绪/维护状态及有界统计</td><td>接收结果、重核描述或重同步提示；超时只表示状态未知</td></tr><tr><td><code>UnregisterClient</code></td><td>接入 ID、启动标识、退出状态</td><td>幂等注销，不由注销数量推断可以删段</td></tr><tr><td><code>GetHealth</code></td><td>授权的作用域、分页/条数上限</td><td>管理、后端、授权、接入状态及诊断；不无限扫描测点</td></tr><tr><td><code>PrepareMaintenance</code></td><td>运维身份、期望部署代次、操作 ID、维护类型</td><td>维护计划与当前阶段；不立即重建、删段或切换权威后端</td></tr></tbody></table></div>
+<p>有副作用的管理请求使用稳定操作 ID 与期望代次；响应丢失后先查询操作状态，不盲目重放。维护结果与发布进度须保存到部署管理的持久记录，原子发布运行描述；具体文件/服务适配在实施时固定，不能仅存于会随进程退出消失的内存。首期实际停止进程及最终清理由部署管理执行，管理 API 不提供任意段名删除、SQL 或任意字段写入接口。</p>
+<p>部署描述至少包含：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段组</th><th>字段与含义</th></tr></thead><tbody><tr><td>契约</td><td>schema 版本、支持范围、逻辑作用域、配置/授权应用状态</td></tr><tr><td>部署身份</td><td><code>deployment_generation</code>：后端选择及部署清单代次；管理进程普通重启不改变</td></tr><tr><td>存储身份</td><td><code>storage_generation</code>：当前后端实例代次；共享段创建后读取实际值，禁止自行推算</td></tr><tr><td>管理身份</td><td><code>manager_incarnation</code>：本次管理进程启动标识；只用于接入重登记</td></tr><tr><td>后端定位</td><td>后端类型、共享段名或 Redis 非敏感端点描述、凭据引用</td></tr><tr><td>兼容与容量</td><td>布局/schema、平台同步 ABI 要求、段大小、slot 数、分片数、记录与批量上限</td></tr></tbody></table></div>
+<p>部署管理持久保存预期清单，数据进程检查真实后端后发布当前描述。客户端先核对可信部署配置与描述，再打开后端并复核实际 <code>info()</code>/布局；描述文件和 RPC 应答不能代替后端核验。密钥不出现在描述、心跳或日志中。<code>revision</code>、来源 <code>source_epoch</code>、部署代次、存储代次及管理者启动标识互不替代。</p>
+<h2 class="rp-toc-include" id="6-启动与接入"><a href="#6-启动与接入" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6. 启动与接入</h2>
+<p>一个 authority domain 对应一个作用域或显式列出的作用域集合；整站和按单元管理二选一，不允许重叠管理。首期每个管理实例只负责一个 domain；Redis 跨主机使用时由部署指定唯一活动管理者，不引入未经验证的自动选主。</p>
+<ol>
+<li><strong>取得管理权</strong>：部署锁保证 domain 只有一个管理者；同机使用独立于共享段的 OS 独占锁，并在进程生命周期内持有。跨机 Redis 场景依赖部署隔离旧管理者，单机锁不足以证明唯一性。</li>
+<li><strong>加载清单</strong>：校验后端选择、平台、预算、容量和已发布配置；Redis 只连接验证，不由数据进程启动 Redis 服务。</li>
+<li><strong>创建或复用后端</strong>：共享段不存在时仅在首次部署或已批准的恢复流程创建；已存在时验证布局/存储代次并复用，不清零现有记录。</li>
+<li><strong>建立授权投影</strong>：按持久配置与来源事实初始化缺失记录或协调版本；不能每次重启都重置样本、revision 或来源授权。</li>
+<li><strong>发布接入描述</strong>：真实后端通过结构检查后允许兼容客户端挂接，分别显示尚未完成的授权/状态恢复。</li>
+<li><strong>客户端接入</strong>：核对描述、以禁止创建模式打开共享段，或创建自己的 Redis 池；构造公共门面，登记实际版本与代次。</li>
+<li><strong>业务就绪</strong>：按本角色检查配置、所依赖记录的授权和新鲜度；管理服务就绪不代表设备已在线或策略可控制。</li>
+</ol>
+<p>管理服务发布前，初始化与部署诊断可用，普通客户端有限重试并保持未就绪。共享段 header 的结构 <code>READY</code> 只说明布局和锁已初始化，不代表全部测点、命令投影或业务依赖已恢复。</p>
+<h2 class="rp-toc-include" id="7-共享内存生命周期"><a href="#7-共享内存生命周期" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7. 共享内存生命周期</h2>
+<h3 class="rp-toc-include" id="71-创建挂接与平台差异"><a href="#71-创建挂接与平台差异" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.1 创建、挂接与平台差异</h3>
+<p>数据进程是指定初始化者，负责命名、容量、布局检查与常驻持有；业务进程只能 attach/detach。初始化仍遵循公共实时专题的独占创建、结构 READY 和崩溃恢复协议，业务进程不自行 <code>unlink</code>、truncate 或重建。</p>
+<p>Linux 命名共享内存由 <code>shm_open/mmap</code> 创建和挂接，<code>shm_unlink</code> 移除名称；已有映射可能继续存在，直到全部使用者解除映射才释放对象。因此同名删除再创建可能让新旧进程访问不同对象，维护不能以“名称相同”证明数据相同。<a href="https://man7.org/linux/man-pages/man3/shm_open.3.html" target="_blank" rel="noopener noreferrer" class="rp-link">Linux shm_open/shm_unlink 手册</a></p>
+<p>Windows 使用命名文件映射，各进程分别取得视图和句柄。数据进程常驻持有映射，所有引用释放后对象不能被视为仍然存在；重新创建须按新存储代次处理。<a href="https://learn.microsoft.com/en-us/windows/win32/memory/creating-named-shared-memory" target="_blank" rel="noopener noreferrer" class="rp-link">Microsoft 命名共享内存</a>、<a href="https://learn.microsoft.com/en-us/windows/win32/memory/closing-a-file-mapping-object" target="_blank" rel="noopener noreferrer" class="rp-link">关闭映射</a></p>
+<p>当前实现采用 <code>Local</code> 命名空间和默认对象安全属性；Linux 创建权限为 <code>0600</code>。首期部署须保证参与者可访问同一对象、Windows 会话及 Linux IPC/挂载命名空间一致；服务跨会话、不同 OS 账户/容器共享及 ACL 扩展必须另行实现验证，不能仅靠相同段名宣称可用。</p>
+<h3 class="rp-toc-include" id="72-管理进程重启"><a href="#72-管理进程重启" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.2 管理进程重启</h3>
+<p>管理进程退出后，已挂接且共享段仍有效的业务进程可以继续按现有配置与授权直接读写，不要求每次操作探测管理心跳。其前提是实际存储代次未变、锁恢复成功、样本有效，且业务自身依赖的持久状态与控制权仍满足要求。</p>
+<p>管理不可用期间不开放新来源授权、后端切换或新客户端的就绪接入；客户端普通运行重读不依赖管理 RPC。重启的管理者取得唯一管理权后，核对持久部署记录、段内实际 generation、布局和授权，再复用原段；更新 <code>manager_incarnation</code> 并收集重新登记，保留原 <code>storage_generation</code>。</p>
+<p>若对象已丢失、初始化未完成或实际代次无法与可信记录对应，进入恢复待办并停止业务就绪，不因 <code>create_if_missing=true</code> 自动创建空段接替原段。心跳过期和 PID 不存在都不是足以删除共享对象的唯一证据。</p>
+<h3 class="rp-toc-include" id="73-扩容重建与清理"><a href="#73-扩容重建与清理" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.3 扩容、重建与清理</h3>
+<p>首期使用维护窗口，不承诺在线热迁移：</p>
+<ol>
+<li>持久登记维护操作及目标部署，关闭新接入，暂停受影响域的新常规调度。</li>
+<li>通知参与者停写并排空本进程在途操作；采样缓冲仍有界，超限和停机历史缺口按原规则报告。</li>
+<li>由部署管理确认相关使用者已退出或已被 OS/容器级隔离；未报告、断线和心跳超时不能当作已停写。无法证明旧实例隔离则中止切换。</li>
+<li>创建带新名称及新 <code>storage_generation</code> 的目标共享段，校验容量与布局；不原地修改仍在使用的锁或记录结构。</li>
+<li>按配置和持久来源事实恢复防护字段；可复制经验证的最后值，但保留原时间/质量并重新判断陈旧。命令投影从 MySQL 恢复，不能推断未知设备动作已完成。</li>
+<li>原子发布新部署描述，重启/重新挂接全部受影响使用者，核对配置、实际代次和角色恢复后开放写入与调度。</li>
+<li>确认旧段不再有使用者，按平台规则清理旧对象；维护失败停在明确阶段，不自动把旧写入者接回新权威域。</li>
+</ol>
+<p>首期不以“客户端收到了新描述”替代旧写入者隔离。共享段内的普通代次字段和 CAS 无法阻止一个仍持旧映射的进程继续操作旧对象；可靠切换依赖上述停止和隔离流程。回滚同样暂停、隔离并发布新的部署代次，不直接恢复旧来源授权。</p>
+<h2 class="rp-toc-include" id="8-redis-模式与后端切换"><a href="#8-redis-模式与后端切换" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8. Redis 模式与后端切换</h2>
+<p>各业务进程用 <code>RedisStore</code> 直接访问权威主节点，独立管理自身连接池和预算。数据进程持有自己的池，负责部署描述、结构检查、授权投影及接入观测；重启它不重启 Redis，也不为其他进程分配或共享连接句柄。</p>
+<p>Redis 拓扑恢复按公共实时专题核对来源、配置及状态，管理健康不能代替每个客户端的实际连接健康。当前适配器配置是单地址/端口模型，不能将设计中的 Sentinel、Cluster 或 TLS 字段宣称为已支持能力。</p>
+<p>切换共享内存与 Redis 沿用第 7.3 节停写、隔离、恢复与发布流程，并执行<a href="/ems/common/realtime/access-design#12-实施计划后端切换与回滚" class="rp-link">公共接口的后端迁移约定</a>。同一作用域不得同时接受两个后端的权威写入；Redis 不可用时不自动切换到空共享内存。共享内存跨主机需求应选择 Redis 部署，不自动叠加跨机镜像。</p>
+<h2 class="rp-toc-include" id="9-通知历史控制与-web"><a href="#9-通知历史控制与-web" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9. 通知、历史、控制与 Web</h2>
+<ul>
+<li><strong>变化提示</strong>：由实际更新者在写入后按既有 ZeroMQ 主题发布；数据进程不靠遍历共享段补发每次变化。通知仅唤醒重读，可以丢失；周期性读取和新鲜度检查仍是正确性的基础。管理通知与测点变化主题分开。</li>
+<li><strong>历史采样</strong>：采集/派生样本产生者发布完整原始事件给存储，最新值更新与发布分别计结果。数据进程不从共享内存轮询生成历史，也不能承诺收到所有中间样本。</li>
+<li><strong>控制闭环</strong>：写实时值不触发设备动作。MySQL 意图/outbox/inbox、策略仲裁、采集执行与回读链路继续运行；数据进程只维护实时授权投影和状态存储。</li>
+<li><strong>Web</strong>：同机受信任的 Drogon 后端通过公共门面直接读取，与采集、策略使用同一后端。浏览器只访问 REST/WebSocket；Web 的用户权限、分页和展示刷新由 Web 执行，读取锁等待放入有界业务工作池。</li>
+</ul>
+<p>跨主机 Web 无法直接读取本机共享段；首期需要跨机共享实时访问时选 Redis。受限查询网关是另行评审的扩展，不继续默认要求存储进程代理所有 Web 实时查询。</p>
+<h2 class="rp-toc-include" id="10-权限健康与故障"><a href="#10-权限健康与故障" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10. 权限、健康与故障</h2>
+<h3 class="rp-toc-include" id="101-直接访问的信任边界"><a href="#101-直接访问的信任边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10.1 直接访问的信任边界</h3>
+<p>共享段使用 OS 权限/ACL 限制参与者，管理接口另行认证并区分普通接入、只读诊断和维护权限。公共库执行角色与来源校验，但能直接写共享段的受信进程具有底层修改能力；这不是抵御恶意调用者的逐记录权限边界。</p>
+<p>当前共享内存读操作也会更新进程间锁的同步状态，映射使用读写权限；Web 的“业务只读”不能等同于 OS <code>PROT_READ</code>/只读视图。更强隔离需要额外网关或经验证的布局/权限设计，首期不宣称已支持。</p>
+<h3 class="rp-toc-include" id="102-就绪与观测"><a href="#102-就绪与观测" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10.2 就绪与观测</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>状态</th><th>判断</th></tr></thead><tbody><tr><td>管理存活</td><td>管理循环与独占管理权正常，不等于后端就绪</td></tr><tr><td>后端结构就绪</td><td>后端可访问、实际代次/布局匹配、必要锁可恢复</td></tr><tr><td>配置授权就绪</td><td>已确认配置与来源授权按依赖集合安装完成</td></tr><tr><td>客户端就绪</td><td>各实例报告自身后端、配置与业务依赖有效；报告超时标记未知</td></tr><tr><td>控制就绪</td><td>策略/采集分别复核持久状态、隔离、质量和能力，数据进程不代为承诺</td></tr></tbody></table></div>
+<p>指标包含管理重启/接入拒绝、未就绪原因、共享容量、CAS 冲突、锁超时与恢复、代次不匹配、授权安装滞后、Redis 池等待和后端不可用。直接数据访问的调用量/时延由每个进程采集，管理进程自身流量不能代表全系统吞吐；不承诺现有接口已有 slot 使用率扫描或集中指标聚合，须补受限诊断接口。指标避免 point_id 等高基数标签。</p>
+<h3 class="rp-toc-include" id="103-故障矩阵"><a href="#103-故障矩阵" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10.3 故障矩阵</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>故障</th><th>处理与边界</th></tr></thead><tbody><tr><td>管理进程退出、后端仍有效</td><td>已挂接者按原授权访问；新接入和配置/授权变更暂停；恢复复用同代次</td></tr><tr><td>所有 Windows 引用释放或主机重启</td><td>实时对象丢失，按受控新代次恢复；不能返回默认零值当在线</td></tr><tr><td>初始化者中途崩溃</td><td>保持未就绪，确认无使用者后管理恢复；客户端不抢先创建</td></tr><tr><td>两个管理者同时启动</td><td>唯一管理权获取失败者退出，不修改后端；跨机先保证部署隔离</td></tr><tr><td>写入进程持锁崩溃</td><td>按公共实时后端的 robust/abandoned 锁及映像校验恢复；无法证明有效则隔离报错</td></tr><tr><td>容量满、记录过大</td><td>返回 ResourceExhausted/InvalidArgument，不覆盖有效数据；进入容量维护流程</td></tr><tr><td>代次/布局不匹配</td><td>拒绝接入或就绪，不能原地解释为当前布局</td></tr><tr><td>Redis 或共享后端不可用</td><td>客户端保留结构化错误，按业务规则降级；不自动另选后端</td></tr><tr><td>管理通知/变化提示遗漏</td><td>重读描述或权威快照，检查配置和新鲜度，不依赖一次通知恢复历史</td></tr><tr><td>维护时旧实例无法确认隔离</td><td>停止切换，保留维护状态；不因心跳超时清段或开放新写入者</td></tr></tbody></table></div>
+<h2 class="rp-toc-include" id="11-配置与工程组织"><a href="#11-配置与工程组织" class="rp-header-anchor rp-link" aria-hidden="true">#</a>11. 配置与工程组织</h2>
+<p>以下 YAML 是目标部署清单示例，不是现有配置解析器支持承诺。布局/容量与实际后端参数须统一，<code>create_if_missing</code> 由角色决定，不能让业务配置任意覆盖。</p>
+<div class="rp-codeblock language-yaml"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="yaml"><code><span class="line"><span style="color:var(--shiki-token-keyword)">data_manager</span><span style="color:var(--shiki-token-keyword)">:</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  instance_id</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-string-expression)"> &quot;data-station001&quot;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  authority_domain</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-string-expression)"> &quot;station001-realtime&quot;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  scopes</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-foreground)"> [</span><span style="color:var(--shiki-token-string-expression)">&quot;station:station001&quot;</span><span style="color:var(--shiki-token-punctuation)">,</span><span style="color:var(--shiki-token-string-expression)"> &quot;unit:ess000001&quot;</span><span style="color:var(--shiki-foreground)">]</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  deployment_generation</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-string-expression)"> &quot;rt20261023a&quot;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  admin_endpoint</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-string-expression)"> &quot;127.0.0.1:5562&quot;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  backend</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-string-expression)"> shm</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  shared_memory</span><span style="color:var(--shiki-token-keyword)">:</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">    segment_name</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-string-expression)"> &quot;station001_rt_a&quot;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">    capacity</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-constant)"> 1024</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">    shard_count</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-constant)"> 16</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">    max_record_bytes</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-constant)"> 65536</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">    max_batch_items</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-constant)"> 256</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">    segment_bytes</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-constant)"> 268435456</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">realtime_client</span><span style="color:var(--shiki-token-keyword)">:</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  access_mode</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-string-expression)"> direct</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  admin_endpoint</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-string-expression)"> &quot;127.0.0.1:5562&quot;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  operation_timeout_ms</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-constant)"> 50</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  create_if_missing</span><span style="color:var(--shiki-token-keyword)">:</span><span style="color:var(--shiki-token-constant)"> false</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p><code>storage_generation</code> 来自真实后端核验结果，不在示例中预造。容量须按固定槽、双映像、索引和对齐核算；示例不是现场点数/时延承诺。Redis 模式把 backend 改为 redis 并使用公共 <code>RedisOptions</code>，凭据由每进程的受控密钥来源取得。首期不默认开启远程管理端点；跨机管理须配置身份认证、传输保护和网络边界后验收。</p>
+<p>目标工程在现有目录上增量补充，不搬迁已完成的后端实现：</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>backend/include/realtime/             # 已有存储、工厂及后端公共头</span></span>
+<span class="line"><span>  realtime_service.h                 # 待实现：类型化门面</span></span>
+<span class="line"><span>  deployment.h                       # 待实现：部署描述及校验</span></span>
+<span class="line"><span>  admin_client.h                     # 待实现：独立管理客户端</span></span>
+<span class="line"><span>backend/src/realtime/                 # 已有 shm / Redis 实现；补公共门面</span></span>
+<span class="line"><span>backend/src/data/                     # 待新增：ems-data 组装与业务编排</span></span>
+<span class="line"><span>  main.cpp</span></span>
+<span class="line"><span>  lifecycle_manager.*</span></span>
+<span class="line"><span>  deployment_registry.*</span></span>
+<span class="line"><span>  authorization_installer.*</span></span>
+<span class="line"><span>  admin_service.*</span></span>
+<span class="line"><span>contracts/proto/                      # 待新增：版本化管理契约</span></span>
+<span class="line"><span>backend/tests/data/                  # 待新增：生命周期与接入验收</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>目标 <code>ems-data</code> 链接实时库、公共配置/数据库 API 和管理传输实现；其他业务入口分别链接所选实时后端。库不依赖数据进程目标，公共头不暴露 OS/Redis/gRPC 实现类型。新增 C/C++ 声明须遵循仓库 Doxygen 与格式约定。</p>
+<p>部署先启动 MySQL/所选 Redis 等依赖，再启动 <code>ems-data</code>；结构与所需授权就绪后启动业务。正常整组退出时先停策略新调度与各业务入口，等待在途操作、关闭各自映射，最后关闭管理进程；单独重启管理者遵循第 7.2 节，不执行整组清理。</p>
+<h2 class="rp-toc-include" id="12-当前实现与实施计划"><a href="#12-当前实现与实施计划" class="rp-header-anchor rp-link" aria-hidden="true">#</a>12. 当前实现与实施计划</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>已有基础</th><th>尚缺能力</th></tr></thead><tbody><tr><td><code>IRealtimeStore</code>、<code>RealtimeStoreBase</code>、<code>BackendFactory</code></td><td>类型化 <code>RealtimeService</code>、可信部署描述及组装校验</td></tr><tr><td><code>SharedMemoryStore</code> 的创建/挂接、布局/代次检查、平台锁与 CAS</td><td>常驻生命周期管理、接入登记、维护隔离与清理编排</td></tr><tr><td><code>RedisStore</code> 的读写、完整替换及错误适配</td><td>管理者/客户端统一部署校验、授权协调接入</td></tr><tr><td>部分后端与存储核心测试</td><td>真正多进程生命周期、管理 RPC 与业务端到端验收</td></tr></tbody></table></div>
+<p>旧采集分发器仍使用旧 RTDB 管理对象，不能把后端库存在视为所有进程已接入。管理接口、配置解析器、类型化门面和常驻入口均为后续工作，本文不声称已经实现。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>阶段</th><th>交付</th><th>退出条件</th></tr></thead><tbody><tr><td>D1 部署契约</td><td>domain、角色、描述、代次和接入错误；明确来源协调权威</td><td>公共样例与布局配置一致，无第二份记录模型</td></tr><tr><td>D2 常驻管理</td><td>独占管理权、创建/复用、健康、退出</td><td>业务进程可直接访问；管理重启不清空现有段</td></tr><tr><td>D3 门面与授权</td><td>公共业务门面、防护字段安装与持久协调接入</td><td>旧来源拒绝、版本失配拒绝，多点部分完成可观测</td></tr><tr><td>D4 管理与业务接入</td><td>管理 RPC、客户端、采集/策略/Web 组装与导航配置</td><td>同套业务 API 可分别运行于 shm/Redis，正常调用无管理转发</td></tr><tr><td>D5 维护恢复</td><td>停用/隔离、重建、切换、持久进度与清理</td><td>旧实例未隔离不切换；重建/回滚不复用错误授权</td></tr><tr><td>D6 部署验收</td><td>Linux/ARM 与 Windows 多进程、故障、容量及性能报告</td><td>明确支持矩阵、恢复边界和现场预算</td></tr></tbody></table></div>
+<h2 class="rp-toc-include" id="13-验收场景"><a href="#13-验收场景" class="rp-header-anchor rp-link" aria-hidden="true">#</a>13. 验收场景</h2>
+<ol>
+<li>独立 OS 进程创建与挂接，同名/同代次读到同一记录；业务进程禁止创建，错误布局或代次拒绝接入。</li>
+<li>多进程同时 CAS 同键最多一个成功；批量逐项结果、完整替换、删除重建与业务来源检查保持公共契约。</li>
+<li>停止管理 RPC 或重启管理进程，已挂接业务仍可按原授权直接读写；新接入保持未就绪，恢复后重登记且样本/revision 不被重置。</li>
+<li>并发管理者、初始化崩溃、残留对象、持锁写入者死亡、校验损坏分别得到可观测结果，不用同进程线程用例代替。</li>
+<li>管理进程和全部业务进程分别退出，核对 Linux 残留名称及 Windows 最后引用释放；重新启动不误认旧代次。</li>
+<li>维护时保留一个断联旧写入者，切换必须被阻止；隔离后新段使用新名称/代次，全部使用者重新核验后才能恢复业务。</li>
+<li>切换 shm/Redis、Redis 中断恢复、MySQL 授权读取失败、通知遗漏和容量满，不双写、不自动降级、不以最新值补造历史。</li>
+<li>Web 通过同机公共库或 Redis 读取，用户范围仍由 Web 校验；浏览器不能取得共享段句柄，业务只读不宣称物理只读映射。</li>
+<li>按实际点数、频率、记录大小、热点分布、进程数及批大小压测，记录完整门面 P95/P99、锁/池等待、冲突及管理恢复时间；不以 memcpy 或管理 RPC 吞吐代表数据路径性能。</li>
+</ol>
+<p>报告明确实际平台、后端版本、数据规模、通过项与剩余限制。历史丢样、控制持久恢复和配置发布继续执行各自专题验收，不因新增数据进程而视为已解决。</p><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/data/design.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/10/23 00:08:07</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/processes/data/" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>数据进程设计</span></span></a><a href="/ems/processes/storage/" class="rp-prev-next-page__item rp-prev-next-page__next rp-link"><span class="rp-prev-next-page__item__desc">下一页</span><span class="rp-prev-next-page__item__title"><span>存储进程设计</span><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></span></a></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#1-设计决策" class="rp-toc-item rp-link" title="1. 设计决策" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">1. 设计决策</span></a><a href="#2-总体结构与依赖" class="rp-toc-item rp-link" title="2. 总体结构与依赖" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">2. 总体结构与依赖</span></a><a href="#3-职责与写入归属" class="rp-toc-item rp-link" title="3. 职责与写入归属" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">3. 职责与写入归属</span></a><a href="#4-公共库接口与直接访问" class="rp-toc-item rp-link" title="4. 公共库接口与直接访问" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">4. 公共库接口与直接访问</span></a><a href="#5-管理接口与部署描述" class="rp-toc-item rp-link" title="5. 管理接口与部署描述" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">5. 管理接口与部署描述</span></a><a href="#6-启动与接入" class="rp-toc-item rp-link" title="6. 启动与接入" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">6. 启动与接入</span></a><a href="#7-共享内存生命周期" class="rp-toc-item rp-link" title="7. 共享内存生命周期" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">7. 共享内存生命周期</span></a><a href="#71-创建挂接与平台差异" class="rp-toc-item rp-link" title="7.1 创建、挂接与平台差异" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.1 创建、挂接与平台差异</span></a><a href="#72-管理进程重启" class="rp-toc-item rp-link" title="7.2 管理进程重启" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.2 管理进程重启</span></a><a href="#73-扩容重建与清理" class="rp-toc-item rp-link" title="7.3 扩容、重建与清理" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.3 扩容、重建与清理</span></a><a href="#8-redis-模式与后端切换" class="rp-toc-item rp-link" title="8. Redis 模式与后端切换" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">8. Redis 模式与后端切换</span></a><a href="#9-通知历史控制与-web" class="rp-toc-item rp-link" title="9. 通知、历史、控制与 Web" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">9. 通知、历史、控制与 Web</span></a><a href="#10-权限健康与故障" class="rp-toc-item rp-link" title="10. 权限、健康与故障" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">10. 权限、健康与故障</span></a><a href="#101-直接访问的信任边界" class="rp-toc-item rp-link" title="10.1 直接访问的信任边界" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">10.1 直接访问的信任边界</span></a><a href="#102-就绪与观测" class="rp-toc-item rp-link" title="10.2 就绪与观测" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">10.2 就绪与观测</span></a><a href="#103-故障矩阵" class="rp-toc-item rp-link" title="10.3 故障矩阵" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">10.3 故障矩阵</span></a><a href="#11-配置与工程组织" class="rp-toc-item rp-link" title="11. 配置与工程组织" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">11. 配置与工程组织</span></a><a href="#12-当前实现与实施计划" class="rp-toc-item rp-link" title="12. 当前实现与实施计划" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">12. 当前实现与实施计划</span></a><a href="#13-验收场景" class="rp-toc-item rp-link" title="13. 验收场景" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">13. 验收场景</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/data/design.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+    <div id="__rspress_modal_container"></div>
+  </body>
+</html>
