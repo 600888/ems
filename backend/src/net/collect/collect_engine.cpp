@@ -39,9 +39,8 @@ bool CollectEngine::initialize(const EngineConfig& config) {
         return false;
     }
 
-    LOG_INFO(fmt::format("初始化采集引擎: 插件目录={}, Redis={}:{}, 默认周期={}ms",
-                         config.pluginDir_, config.redisHost_, config.redisPort_,
-                         config.defaultPollIntervalMs_)
+    LOG_INFO(fmt::format("初始化采集引擎: 插件目录={}, RTDB配置={}, 默认周期={}ms",
+                         config.pluginDir_, config.rtdbConfigPath_, config.defaultPollIntervalMs_)
                  .c_str());
     config_ = config;
 
@@ -50,6 +49,8 @@ bool CollectEngine::initialize(const EngineConfig& config) {
 
     // 2. 初始化数据分发器
     DataDispatcherConfig dispatchConfig;
+    dispatchConfig.rtdbConfigPath_ = config.rtdbConfigPath_;
+    dispatchConfig.rtdbScopeCode_ = config.rtdbScopeCode_;
     dispatchConfig.redisHost_ = config.redisHost_;
     dispatchConfig.redisPort_ = config.redisPort_;
     dispatchConfig.redisPassword_ = config.redisPassword_;
@@ -65,9 +66,7 @@ bool CollectEngine::initialize(const EngineConfig& config) {
 
     dispatcher_ = std::make_shared<DataDispatcher>();
     if (!dispatcher_->initialize(dispatchConfig)) {
-        LOG_ERROR(
-            fmt::format("数据分发器初始化失败, Redis={}:{}", config.redisHost_, config.redisPort_)
-                .c_str());
+        LOG_ERROR(fmt::format("数据分发器初始化失败, RTDB配置={}", config.rtdbConfigPath_).c_str());
         dispatcher_.reset();
         return false;
     }

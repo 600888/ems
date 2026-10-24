@@ -155,7 +155,7 @@ target_compile_features(ems_realtime_api INTERFACE cxx_std_17)
 # ---------------------------------------------------------------------------
 # ems_realtime_core：RecordKey 公共验证器
 # ---------------------------------------------------------------------------
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../realtime ${CMAKE_CURRENT_BINARY_DIR}/realtime)
+# 统一实现由 src/rtdb 构建，避免在 common 中另建一套存储目标。
 
 # ---------------------------------------------------------------------------
 # ems_config_core：配置校验默认实现（依赖 model 纯校验）

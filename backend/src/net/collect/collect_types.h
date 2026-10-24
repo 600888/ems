@@ -24,6 +24,7 @@ enum class ChannelState : int {
 enum class NotificationBackend : int {
     Redis = 0,
     ZeroMQ = 1,
+    None = 2,
 };
 
 }  // namespace ems::net::collect

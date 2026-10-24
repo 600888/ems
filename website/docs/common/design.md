@@ -91,7 +91,7 @@ backend/
   src/web/                  # Drogon Controller、Filter、Web Service；复用公共 Repository
   apps/                      # 各 C++ 进程入口和依赖组装，按实施阶段建立
   tests/common/              # model、codec、config、database、messaging
-  tests/realtime/            # 沿用实时专题的契约及多进程测试目录
+  tests/rtdb/                # 统一 RTDB 契约、业务、分发器及多进程测试
 contracts/                   # 仓库根目录，供各 C++ 进程与前端共同使用
   proto/                     # gRPC 与类型定义
   jsonschema/                # 配置、事件和 JSON 映射约束
@@ -101,7 +101,7 @@ contracts/                   # 仓库根目录，供各 C++ 进程与前端共�
 backend/data/migrations/     # 沿用已有 MySQL/TAOS 版本化迁移，唯一部署来源
 ```
 
-命名空间采用 `ems::core`、`ems::model`、`ems::codec`、`ems::config`、`ems::database`、`ems::messaging`、`ems::observability`；实时保持 `ems::realtime`。类型用 PascalCase，字段与公开方法用 lower_snake_case；实时专题已定义的 camelCase 方法保留，不为风格统一另造一套接口。
+命名空间采用 `ems::core`、`ems::model`、`ems::codec`、`ems::config`、`ems::database`、`ems::messaging`、`ems::observability`；实时保持 `ems::rtdb`。类型用 PascalCase，字段与公开方法用 lower_snake_case；实时专题已定义的 camelCase 方法保留，不为风格统一另造一套接口。
 
 新代码包含 `<common/model/device.h>` 等公共路径。旧 `models/`、`db/`、`rtdb/` 头文件仅可作为阶段性转接；转接不能重新声明不同语义的同名模型。
 
@@ -138,7 +138,7 @@ C++ 虚函数和 STL 接口用于同一构建工具链内的库。协议动态�
 
 ### 5.1 共享结果类型
 
-将实时专题第 5 节已经定义的结果/上下文类型提升为 `ems::core`，字段与语义保持一致。在 `ems::realtime` 中使用类型别名，避免出现两个不能互换的 `Error`。其他公共模块复用同一基础结果模型。
+将实时专题第 5 节已经定义的结果/上下文类型提升为 `ems::core`，字段与语义保持一致。在 `ems::rtdb` 中使用类型别名，避免出现两个不能互换的 `Error`。其他公共模块复用同一基础结果模型。
 
 以下为可独立通过 C++17 语法检查的头文件草案；正式实施时拆为 `result.h` 与 `call_context.h`，不表示已有库实现。
 
@@ -466,8 +466,8 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | backend/src/common/db/db_manager.cpp | database_mysql 与各 Repository | 拆开池/事务、业务 CRUD 和旧建表逻辑；历史业务编排留存储，数据库调用统一公共层 |
 | backend/src/scd/mysql_history.cpp | src/common/db/mysql + 公共 history API | 迁移实体、反射、查询与事件/目录持久化，复用公共连接/事务 |
 | backend/src/scd/taos_series.cpp、time_series_factory.cpp | src/common/db/timeseries + 公共 timeseries API | 客户端、方言、映射和工厂迁入公共层，存储只注入接口 |
-| backend/src/rtdb/rtdb_device.h、rtdb_channel.h、rtdb_config.h | common/model + config | 配置定义脱离 rtdb，统一设备/通道/点定义 |
-| backend/src/rtdb/rtdb_point.*、rtdb_cache.*、rtdb_manager.* | realtime + config 对应职责 | 用契约区分状态、缓存和配置；不保留万能管理器 |
+| backend/src/rtdb/model/rtdb_device.h、rtdb_channel.h、rtdb_config.h | common/model + config | 配置定义脱离 rtdb，统一设备/通道/点定义 |
+| backend/src/rtdb/model/、client/ | 统一 RTDB 模型、缓存和业务客户端 | 原有业务接口复用统一记录存储，来源授权及配置发布另行接入 |
 | backend/src/net/para_loader/* | collector 配置适配 + common/config | 读取和校验复用公共库；通道准备/应用留采集 |
 | backend/src/net/collect/data_dispatcher.* | collector | 注入实时/事件接口，管理有界内存队列，保留分发编排责任 |
 | backend/src/net/protocol/* | protocol | 保留插件边界，不搬到 common；只复用纯模型/契约 |
@@ -542,7 +542,7 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 ### 2026-09-19 目录规范化与第二批实现
 
 - 目录规范化：`backend/inc` 重命名为 `backend/include`，同步更新全部 CMake 引用（12 处）与文档（design.md、system-design.md、access-design.md）。
-- realtime API：按实时专题第 5 节草案落地 `include/realtime/realtime_store.h`（IRealtimeStore/RealtimeStoreBase 批量默认实现）与 `include/realtime/backend_factory.h`（注册-冻结-Unsupported 语义），`src/realtime/realtime_store.cpp` 实现 RecordKey 公共验证器；新增 ems_realtime_api/ems_realtime_core targets。
+- realtime API：按实时专题第 5 节草案落地 `include/rtdb/store/realtime_store.h`（IRealtimeStore/RealtimeStoreBase 批量默认实现）与 `include/rtdb/store/backend_factory.h`（注册-冻结-Unsupported 语义），`src/rtdb/store/realtime_store.cpp` 实现 RecordKey 公共验证器；ems_realtime_api/ems_realtime_core 为统一动态库的接口或兼容目标。
 - config core：`src/common/config/` 新增 CatalogValidator（复用 model 纯校验），target ems_config_core。
 - 当时测试报告为 82 用例，包含实时 API 和后来移除的本地文件记录测试；该数量是历史记录，不代表当前用例数。
 - 修复：realtime Revision 缺判等运算符；当时文件记录实现的修复随模块移除，不再作为当前交付内容。

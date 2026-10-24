@@ -45,6 +45,6 @@ flowchart TB
 
 先复用已有 `IRealtimeStore`、`SharedMemoryStore`、`RedisStore` 和 `BackendFactory`，再补统一客户端、配置发现、常驻管理及业务接入。验证相同业务代码与客户端配置在不同后端运行，以及直接访问、管理重启、并发初始化、崩溃恢复和容量维护。首期配置选择采用编译期内置适配器，切换通过维护窗口完成，未内置的新后端需要更新公共库并验收。
 
-本批共享内存使用系统 Boost.Interprocess（本机 Boost 1.89），Redis 使用仓库内 redis-plus-plus，公共头和实现分离。交付为 `ems_rtdb.dll/.lib` 或 SO、公共头及 CMake 包；调用方链接 `ems::rtdb`。MSVC/MinGW 各 10 项通过、4 项真实 Redis 用例跳过，安装包的独立进程消费验证通过。实际构建、接口与限制见[实现说明](https://github.com/600888/ems/blob/main/backend/src/realtime/README.md)。
+共享内存使用系统 Boost.Interprocess（本机 Boost 1.89），Redis 使用仓库内 redis-plus-plus。源码、公共头和测试统一到 rtdb，四类测点、设备快照、拓扑及配置缓存复用同一动态库，采集分发器已接入。交付为 `ems_rtdb.dll/.lib` 或 SO、公共头及 CMake 包；调用方链接 `ems::rtdb`。真实 Redis 联调仍需专用实例。实际构建、接口与限制见[实现说明](https://github.com/600888/ems/blob/main/backend/src/rtdb/README.md)。
 
 生命周期、管理接口、部署字段、故障矩阵和实施阶段见[实时数据库进程详细设计](design.md)。记录布局、CAS、错误与来源检查继续以[公共实时访问接口](../../common/realtime/access-design.md)为唯一契约；整体边界见[系统架构](../../architecture/system-design.md)。

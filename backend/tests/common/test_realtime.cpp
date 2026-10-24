@@ -3,14 +3,14 @@
  * @brief realtime API 测试：工厂注册/冻结、RecordKey 校验、批量默认实现语义
  */
 #include <gtest/gtest.h>
-#include <realtime/backend_factory.h>
-#include <realtime/realtime_store.h>
+#include <rtdb/store/backend_factory.h>
+#include <rtdb/store/realtime_store.h>
 
 #include <map>
 #include <memory>
 #include <string>
 
-namespace ems::realtime {
+namespace ems::rtdb {
 namespace {
 
 core::CallContext ctx_short() { return core::make_call_context(std::chrono::milliseconds(100)); }
@@ -288,4 +288,4 @@ TEST(RealtimeFactory, RegisterFreezeCreate) {
 }
 
 }  // namespace
-}  // namespace ems::realtime
+}  // namespace ems::rtdb

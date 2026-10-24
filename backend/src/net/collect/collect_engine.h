@@ -38,7 +38,7 @@
 #include "net/collect/collect_defaults.h"
 #include "net/collect/collect_types.h"
 #include "plugin_manager.h"
-#include "rtdb/rtdb_device.h"
+#include "rtdb/model/rtdb_device.h"
 
 namespace ems {
 namespace net {
@@ -54,7 +54,9 @@ namespace collect {
 struct EngineConfig {
     std::string pluginDir_{"./lib"};  // 插件动态库目录
 
-    // Redis/RTDB 配置
+    std::string rtdbConfigPath_{"conf/realtime.json"};
+    std::string rtdbScopeCode_{"station001"};
+    // Redis 变更通知配置；与 RTDB 状态存储选择独立。
     std::string redisHost_{"127.0.0.1"};
     int redisPort_{enum_value(DispatchDefaults::RedisPort)};
     std::string redisPassword_;

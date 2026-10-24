@@ -1,6 +1,6 @@
 # 实时数据库进程详细设计
 
-> 版本：1.2｜日期：2026-10-24｜状态：分阶段实现；本批落地第三方后端、动态库和配置驱动的基础访问，完整类型化门面及管理 RPC 后续接入。
+> 版本：1.3｜日期：2026-10-24｜状态：统一 rtdb 模块、第三方后端、动态库、兼容业务门面和采集分发器接入已实现；来源授权及管理 RPC 后续接入。
 > 本文定义实时数据库进程、统一客户端、配置驱动及后端扩展的职责；底层记录、并发、来源检查与错误语义引用[公共实时访问接口](../../common/realtime/access-design.md)，不另建一套数据契约。
 
 ## 1. 设计决策
@@ -331,15 +331,15 @@ realtime_client:
 
 先交付记录级 RealtimeClient（read/CAS/erase/batch）、严格 JSON 配置及创建者/挂接者角色。完整类型化测点门面、授权业务闭环、管理 RPC 和自动发布配置清单仍按后续阶段交付；不能将首批低层 API 当成已经完成控制授权。配置创建权限仅给予常驻进程，业务客户端不能自行创建共享段。
 
-可执行程序名统一为 `ems-rtdb`。新进程实现规划在 `backend/src/rtdb_service/`，与已有 `backend/src/rtdb/` 旧库和 `backend/src/realtime/` 公共后端实现区分；本次不移动既有代码。文档保留 `processes/data/` 路径以维持站内链接稳定，标题与导航统一使用“实时数据库进程”。
+可执行程序名统一为 `ems-rtdb`。新进程实现规划在 `backend/src/rtdb_service/`，与已有 `backend/src/rtdb/` 旧库和 `backend/src/rtdb/` 公共后端实现区分；本次不移动既有代码。文档保留 `processes/data/` 路径以维持站内链接稳定，标题与导航统一使用“实时数据库进程”。
 
 ```text
-backend/include/realtime/             # 已有存储、工厂及后端公共头
+backend/include/rtdb/             # 已有存储、工厂及后端公共头
   realtime_client.h                  # 待实现：唯一业务入口，隐藏具体后端与接入
   realtime_service.h                 # 待实现：类型化门面
   deployment.h                       # 待实现：部署描述及校验
   admin_client.h                     # 待实现：独立管理客户端
-backend/src/realtime/                 # 已有 shm / Redis；补客户端、发现、内部组装
+backend/src/rtdb/                 # 已有 shm / Redis；补客户端、发现、内部组装
 backend/src/rtdb_service/              # 待新增：ems-rtdb 组装与业务编排
   main.cpp
   lifecycle_manager.*
@@ -359,11 +359,12 @@ backend/tests/rtdb_service/            # 待新增：生命周期与接入验收
 | 已有基础 | 尚缺能力 |
 | --- | --- |
 | `ems_rtdb` 动态库、导出宏、安装头/CMake 包、记录级 RealtimeClient 与严格 JSON 配置 | 类型化 RealtimeService、可信部署发现及业务角色/来源校验 |
+| 四类测点、设备快照、拓扑、配置缓存及采集分发器接入统一动态库 | 来源授权、可靠命令及历史业务链路验收 |
 | Boost.Interprocess 创建/挂接、共享容器、段级锁、CAS、代次/容量检查及显式 remove | 管理接入登记、授权安装、维护隔离与重建编排 |
 | redis-plus-plus 连接池、Hash/eval、完整替换与结构化错误 | 隔离 Redis 实例联调、精细调用预算及拓扑/授权恢复验收 |
 | ems-rtdb 基础常驻初始化入口、两套 Windows 工具链测试、独立安装包消费 | 管理 RPC、唯一管理者协调、Linux/ARM 与完整业务端到端验收 |
 
-旧采集分发器尚未接入新客户端。首批入口位于 backend/src/realtime/main.cpp，复用同一个动态库；普通客户端只打开现有共享段，初始化角色由部署保证唯一。当前通过配置文件直接接入，自动管理发现、类型化授权门面及受控切换仍待完成，不能将记录级 CAS 当作控制授权。构建与真实验证范围见[实现说明](https://github.com/600888/ems/blob/main/backend/src/realtime/README.md)。
+源码、公共头和测试已统一到 rtdb，原 Redis 专用静态实现已移除。RtDb/RtDbManager/RTDBEMS 业务门面统一调用 RealtimeClient，采集分发器已接入，Redis 通知独立于状态存储。常驻入口位于 backend/src/rtdb/process/main.cpp，复用同一个动态库；普通客户端只打开现有共享段，初始化角色由部署保证唯一。当前通过配置文件直接接入，自动管理发现、类型化授权门面及受控切换仍待完成，不能将记录级 CAS 当作控制授权。构建与真实验证范围见[实现说明](https://github.com/600888/ems/blob/main/backend/src/rtdb/README.md)。
 
 | 阶段 | 交付 | 退出条件 |
 | --- | --- | --- |

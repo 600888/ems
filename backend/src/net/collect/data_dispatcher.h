@@ -2,7 +2,7 @@
  * @file data_dispatcher.h
  * @brief 采集数据分发器
  *
- * 将采集线程读取到的数据批量写入旧 RTDB (Redis)，并通过可选的
+ * 将采集线程读取到的数据通过统一 RTDB 动态库写入配置选定的后端，并通过可选的
  * Redis 或 ZeroMQ Pub/Sub 通知其他进程。
  * 支持 YC/YX/YK/YT 四类测点的分别写入和批量优化。
  */
@@ -43,13 +43,17 @@ using handler::PointValue;
 struct DataDispatcherConfig {
     using NotificationBackend = collect::NotificationBackend;
 
+    std::string rtdbConfigPath_{"conf/realtime.json"};
+    std::string rtdbScopeCode_{"station001"};
+
+    // Redis 地址、认证及连接池仅用于通知；实时状态后端由 rtdbConfigPath_ 决定。
     std::string redisHost_{"127.0.0.1"};
     int redisPort_{enum_value(DispatchDefaults::RedisPort)};
     std::string redisPassword_;
     int redisDb_{0};
     int poolSize_{enum_value(DispatchDefaults::RedisPoolSize)};
-    int timeoutMs_{enum_value(DispatchDefaults::RedisTimeoutMs)};
-    std::string keyPrefix_{"ems:"};
+    int timeoutMs_{enum_value(DispatchDefaults::RedisTimeoutMs)};  // 通知等待和业务调用预算
+    std::string keyPrefix_{"ems:"};                                // 逻辑数据命名空间及通知主题前缀
 
     // Pub/Sub 通知通道
     std::string pubsubChannelYc_{"rtdb:yc:update"};
@@ -249,6 +253,8 @@ class DataDispatcher {
     Stats stats() const;
 
    private:
+    struct RedisNotifier;
+    std::unique_ptr<RedisNotifier> redis_notifier_;
     /**
      * @brief 根据采集值构造遥测运行数据。
      * @param[in] code 对象编码。

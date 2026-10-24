@@ -5,7 +5,7 @@
 
 在线文档：[EMS 设计文档](https://600888.github.io/ems/)。合并到 `main` 的文档变更会由 GitHub Actions 自动构建并发布到 GitHub Pages。
 
-实时数据库已开始按动态库交付：公共头 + `ems::rtdb`，共享内存使用系统 Boost.Interprocess（本机 Boost 1.89），Redis 使用仓库内 redis-plus-plus。首批记录级接口、配置/常驻入口、安装包与验证范围见[实时数据库实现说明](backend/src/realtime/README.md)；类型化授权门面和完整管理 RPC 尚待接入。
+实时数据库源码、公共头和测试已统一到 `rtdb`，按动态库交付：公共头 + `ems::rtdb`，共享内存使用系统 Boost.Interprocess（本机 Boost 1.89），Redis 使用仓库内 redis-plus-plus。记录接口、原有业务门面、采集分发器接入、配置/常驻入口和验证范围见[实时数据库实现说明](backend/src/rtdb/README.md)；来源授权和完整管理 RPC 尚待接入。
 
 文档站点独立放在 `website/`，使用相同的 Rspress 2 主题，需要 Node.js 22.12+：
 

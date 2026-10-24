@@ -3,18 +3,21 @@
  * @brief 点表导入单元测试（不依赖Redis/Mock，直接测试导入相关核心逻辑）
  */
 #include <gtest/gtest.h>
-#include <unistd.h>
+#include <rtdb/backend/shared_memory_store.h>
+#include <rtdb/client/realtime_client.h>
 
 #include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <filesystem>
 #include <fstream>
 #include <nlohmann/json.hpp>
 #include <sstream>
 #include <vector>
 
-#include "rtdb.h"
-#include "rtdb_cache.h"
+#include "rtdb/client/rtdb.h"
+#include "rtdb/model/rtdb_cache.h"
+#include "store_detail.h"
 
 using namespace ems::rtdb;
 
@@ -39,14 +42,13 @@ class PointImportTest : public ::testing::Test {
 
     // 创建临时JSON文件的辅助方法
     std::string createTempJsonFile(const std::string& content) {
-        char tmpPath[] = "/tmp/ems_test_XXXXXX";
-        int fd = mkstemp(tmpPath);
-        if (fd == -1) {
-            return "";
-        }
-        write(fd, content.c_str(), content.size());
-        close(fd);
-        return std::string(tmpPath);
+        auto nonce = ems::rtdb::detail::token();
+        if (!ems::core::is_ok(nonce)) return {};
+        const auto path = std::filesystem::temp_directory_path() /
+                          ("point_import_" + ems::core::value_of(nonce) + ".json");
+        std::ofstream output(path);
+        if (!(output << content)) return {};
+        return path.u8string();
     }
 
     // 删除临时文件
@@ -481,11 +483,11 @@ TEST_F(PointImportTest, YcPointJsonSerialization) {
     point.quality_ = PointQuality::Good;
     point.status_ = 1;
 
-    std::string json = point.toJson();
+    std::string json = point.to_json().dump();
     EXPECT_FALSE(json.empty());
 
     YcPoint deserialized;
-    deserialized.fromJson(json);
+    deserialized.from_json(nlohmann::json::parse(json));
 
     EXPECT_EQ(deserialized.code_, "YC_SER_001");
     EXPECT_EQ(deserialized.name_, "序列化测试点");
@@ -509,11 +511,11 @@ TEST_F(PointImportTest, YxPointJsonSerialization) {
     point.quality_ = PointQuality::Good;
     point.status_ = 1;
 
-    std::string json = point.toJson();
+    std::string json = point.to_json().dump();
     EXPECT_FALSE(json.empty());
 
     YxPoint deserialized;
-    deserialized.fromJson(json);
+    deserialized.from_json(nlohmann::json::parse(json));
 
     EXPECT_EQ(deserialized.code_, "YX_SER_001");
     EXPECT_EQ(deserialized.name_, "遥信序列化测试");
@@ -530,21 +532,21 @@ TEST_F(PointImportTest, YkPointJsonSerialization) {
     point.decodeCode_ = DecodeCode::BOOL;
     point.value_ = 1;
     point.commandType_ = 0;
-    point.ykStatus_ = YKStatus::Success;
+    point.status_ = YKStatus::Success;
     point.timestamp_ = 1234567890;
     point.executeTime_ = 1234567895;
     point.result_ = "执行成功";
 
-    std::string json = point.toJson();
+    std::string json = point.to_json().dump();
     EXPECT_FALSE(json.empty());
 
     YkPoint deserialized;
-    deserialized.fromJson(json);
+    deserialized.from_json(nlohmann::json::parse(json));
 
     EXPECT_EQ(deserialized.code_, "YK_SER_001");
     EXPECT_EQ(deserialized.name_, "遥控序列化测试");
     EXPECT_EQ(deserialized.value_, 1);
-    EXPECT_EQ(deserialized.ykStatus_, YKStatus::Success);
+    EXPECT_EQ(deserialized.status_, YKStatus::Success);
     EXPECT_EQ(deserialized.result_, "执行成功");
 }
 
@@ -563,11 +565,11 @@ TEST_F(PointImportTest, YtPointJsonSerialization) {
     point.quality_ = PointQuality::Good;
     point.status_ = 1;
 
-    std::string json = point.toJson();
+    std::string json = point.to_json().dump();
     EXPECT_FALSE(json.empty());
 
     YtPoint deserialized;
-    deserialized.fromJson(json);
+    deserialized.from_json(nlohmann::json::parse(json));
 
     EXPECT_EQ(deserialized.code_, "YT_SER_001");
     EXPECT_EQ(deserialized.name_, "遥调序列化测试");
@@ -841,41 +843,54 @@ TEST_F(PointImportTest, FullImportWorkflow) {
 // 7. 实时数据库（Redis）写入/读取测试
 // ============================================================
 
-class PointImportRedisTest : public ::testing::Test {
+class PointImportStorageTest : public ::testing::Test {
    protected:
-    void SetUp() override {
-        RtDbConfig config;
-        config.host = "localhost";
-        config.port = 6379;
-        config.password = "888888";
-        config.db = 0;
-        config.poolSize = 10;
-        config.timeoutMs = 5000;
-        config.prefix = "ems:";
+    std::shared_ptr<RtDb> rtdb;
+    std::unique_ptr<RealtimeClient> owner;
+    std::string segment;
+    std::filesystem::path path;
 
+    void SetUp() override {
+#ifdef EMS_REALTIME_TEST_SHM
+        auto nonce = detail::token();
+        ASSERT_TRUE(ems::core::is_ok(nonce));
+        segment = "import_" + ems::core::value_of(nonce);
+        path = std::filesystem::temp_directory_path() / (segment + ".json");
+        nlohmann::json json = {
+            { "realtime",
+              { { "backend",
+                  { {"type", "shm"},
+                    { "options",
+                      { {"segment_name", segment},
+                        {"capacity", 128},
+                        {"shard_count", 1},
+                        {"segment_bytes", 1048576} } } } } } }};
+        std::ofstream(path) << json.dump();
+        RtDbConfig config;
+        config.config_path = path.u8string();
+        auto opened = RealtimeClient::initialize(
+            config.config_path, ems::core::make_call_context(std::chrono::seconds(3)));
+        ASSERT_TRUE(ems::core::is_ok(opened));
+        owner = std::get<0>(std::move(opened));
         rtdb = std::make_shared<RtDb>();
-        if (!rtdb->initialize(config)) {
-            rtdb.reset();
-            GTEST_SKIP() << "无法连接到Redis服务器，跳过实时数据库测试";
-        }
+        ASSERT_TRUE(rtdb->initialize(config));
+#else
+        GTEST_SKIP() << "Shared-memory backend disabled";
+#endif
     }
 
     void TearDown() override {
-        // if (rtdb) {
-        //     rtdb->deleteYc("REDIS_YC_001");
-        //     rtdb->deleteYx("REDIS_YX_001");
-        //     rtdb->deleteYk("REDIS_YK_001");
-        //     rtdb->deleteYt("REDIS_YT_001");
-        //     rtdb->deleteYc("REDIS_YC_BATCH_001");
-        //     rtdb->deleteYc("REDIS_YC_BATCH_002");
-        // }
         rtdb.reset();
+        owner.reset();
+#ifdef EMS_REALTIME_TEST_SHM
+        if (!segment.empty()) SharedMemoryStore::remove(segment);
+#endif
+        std::error_code ignored;
+        if (!path.empty()) std::filesystem::remove(path, ignored);
     }
-
-    std::shared_ptr<RtDb> rtdb;
 };
 
-TEST_F(PointImportRedisTest, WriteAndReadYcPoint) {
+TEST_F(PointImportStorageTest, WriteAndReadYcPoint) {
     YcPoint point;
     point.code_ = "REDIS_YC_001";
     point.value_ = 220.5;
@@ -903,7 +918,7 @@ TEST_F(PointImportRedisTest, WriteAndReadYcPoint) {
     EXPECT_EQ(retrieved.unit_, "V");
 }
 
-TEST_F(PointImportRedisTest, WriteAndReadYxPoint) {
+TEST_F(PointImportStorageTest, WriteAndReadYxPoint) {
     YxPoint point;
     point.code_ = "REDIS_YX_001";
     point.value_ = 1;
@@ -925,12 +940,12 @@ TEST_F(PointImportRedisTest, WriteAndReadYxPoint) {
     EXPECT_EQ(retrieved.quality_, PointQuality::Good);
 }
 
-TEST_F(PointImportRedisTest, WriteAndReadYkPoint) {
+TEST_F(PointImportStorageTest, WriteAndReadYkPoint) {
     YkPoint point;
     point.code_ = "REDIS_YK_001";
     point.value_ = 1;
     point.commandType_ = 0;
-    point.ykStatus_ = YKStatus::Pending;
+    point.status_ = YKStatus::Pending;
     point.timestamp_ = std::chrono::duration_cast<std::chrono::milliseconds>(
                            std::chrono::system_clock::now().time_since_epoch())
                            .count();
@@ -944,10 +959,10 @@ TEST_F(PointImportRedisTest, WriteAndReadYkPoint) {
     EXPECT_EQ(retrieved.code_, "REDIS_YK_001");
     EXPECT_EQ(retrieved.value_, 1);
     EXPECT_EQ(retrieved.commandType_, 0);
-    EXPECT_EQ(retrieved.ykStatus_, YKStatus::Pending);
+    EXPECT_EQ(retrieved.status_, YKStatus::Pending);
 }
 
-TEST_F(PointImportRedisTest, WriteAndReadYtPoint) {
+TEST_F(PointImportStorageTest, WriteAndReadYtPoint) {
     YtPoint point;
     point.code_ = "REDIS_YT_001";
     point.value_ = 50.0;
@@ -972,7 +987,7 @@ TEST_F(PointImportRedisTest, WriteAndReadYtPoint) {
     EXPECT_EQ(retrieved.quality_, PointQuality::Good);
 }
 
-TEST_F(PointImportRedisTest, BatchWriteAndReadYcPoints) {
+TEST_F(PointImportStorageTest, BatchWriteAndReadYcPoints) {
     std::map<std::string, YcPoint> batchData;
 
     YcPoint p1;
@@ -1012,7 +1027,7 @@ TEST_F(PointImportRedisTest, BatchWriteAndReadYcPoints) {
     }
 }
 
-TEST_F(PointImportRedisTest, DeleteYcPoint) {
+TEST_F(PointImportStorageTest, DeleteYcPoint) {
     YcPoint point;
     point.code_ = "REDIS_YC_001";
     point.value_ = 100.0;
@@ -1030,7 +1045,7 @@ TEST_F(PointImportRedisTest, DeleteYcPoint) {
     EXPECT_FALSE(rtdb->getYc("REDIS_YC_001", retrieved));
 }
 
-TEST_F(PointImportRedisTest, GetYcCodes) {
+TEST_F(PointImportStorageTest, GetYcCodes) {
     YcPoint point;
     point.code_ = "REDIS_YC_001";
     point.value_ = 100.0;

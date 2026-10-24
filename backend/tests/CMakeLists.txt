@@ -5,6 +5,7 @@ include_directories(
 )
 
 add_subdirectory(common)
+add_subdirectory(rtdb)
 add_subdirectory(util)
 add_subdirectory(db)
 

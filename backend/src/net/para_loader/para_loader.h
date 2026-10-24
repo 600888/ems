@@ -16,8 +16,8 @@
 #include <string>
 #include <vector>
 
-#include "rtdb/rtdb_channel.h"
-#include "rtdb/rtdb_device.h"
+#include "rtdb/model/rtdb_channel.h"
+#include "rtdb/model/rtdb_device.h"
 
 namespace ems {
 namespace net {

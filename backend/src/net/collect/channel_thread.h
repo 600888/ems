@@ -31,7 +31,7 @@
 #include "net/handler/protocol_handler.h"
 #include "net/log.h"
 #include "plugin_manager.h"
-#include "rtdb/rtdb_channel.h"
+#include "rtdb/model/rtdb_channel.h"
 
 namespace ems {
 namespace net {

@@ -430,7 +430,7 @@ backend/                    # C++17
   src/scd/                  # 存储服务，沿用现有目录时明确含义
   src/stgy/                 # 策略、控制仲裁
   include/common/               # core、model、codec、config、database、messaging 等公开接口
-  include/realtime/             # C++17 公共实时状态抽象接口与类型
+  include/rtdb/                 # 统一 RTDB 公共客户端、模型和存储契约
   src/common/               # 公共接口实现，设备模型不持有连接或线程
     model/                  # 资产/设备/测点/能力/绑定及纯校验
     config/                 # 精确版本、快照与校验

@@ -1,6 +1,6 @@
 # 公共实时数据访问接口设计（C++17）
 
-> 版本：1.5｜日期：2026-10-24｜状态：首批记录级动态库、第三方后端、JSON 配置及常驻入口已实现；类型化授权门面与管理 RPC 待完成。
+> 版本：1.6｜日期：2026-10-24｜状态：统一 rtdb 动态库、第三方后端、兼容业务门面、采集分发器、JSON 配置及常驻入口已实现；来源授权与管理 RPC 待完成。
 > 适用范围：EMS 采集、实时数据库、策略、存储及 C++ Web 后端复用的公共实时数据访问库。
 > 核心决策：业务只使用 `RealtimeClient`；公共组件通过 `IRealtimeStore` 适配共享内存、Redis 和其他合格后端，由实时数据库进程的配置统一选择。
 
@@ -168,7 +168,7 @@ revision 建议采用后端实例代次与每次写入唯一标识组合的字�
 #include <common/core/result.h>
 #include <common/core/call_context.h>
 
-namespace ems::realtime {
+namespace ems::rtdb {
 
 using ErrorCode = ems::core::ErrorCode;
 using WriteEffect = ems::core::WriteEffect;
@@ -330,7 +330,7 @@ private:
     std::map<std::string, Creator> creators_;
 };
 
-} // namespace ems::realtime
+} // namespace ems::rtdb
 ```
 
 ### 5.1 补充契约
@@ -520,24 +520,18 @@ config:
 ```text
 backend/include/common/core/         # 共享 Error、Result、CallContext
 backend/include/common/model/        # 设备/测点/状态等模型，不由实时库重新定义
-backend/include/realtime/
-  realtime_client.h             # 唯一业务入口；管理发现与后端组装隐藏在实现中
-  types.h                       # 基础类型别名、RecordKey、Record、请求/结果
-  i_realtime_store.h            # 抽象基类
-  realtime_service.h            # 类型化门面
-  backend_factory.h
-backend/src/common/realtime/
-  realtime_store_base.cpp
-  realtime_service.cpp
-  key_codec.cpp
-  backend_factory.cpp
-  backends/shm/                 # SharedMemoryStore + Linux/Windows 平台层
-  backends/redis/               # RedisStore + Lua + 私有客户端依赖
-  backends/inprocess/           # 仅测试替身
-backend/tests/realtime/
-  contract/                    # 每个后端运行同一套契约用例
-  integration/                 # 多进程/网络/故障恢复
-contracts/realtime/            # 字段 schema、逻辑键、C++/TypeScript 黄金样例
+backend/include/rtdb/
+  client/                      # 统一记录客户端、测点/设备/拓扑业务门面
+  model/                       # 业务配置、类型别名和本进程缓存
+  store/                       # IRealtimeStore、RecordKey、CAS 和工厂
+  backend/                     # 后端打开与维护接口
+backend/src/rtdb/
+  client/                      # 业务序列化与有界 CAS 更新
+  model/                       # 配置缓存
+  store/                       # 记录校验、编码和版本工具
+  backend/                     # 系统 Boost.Interprocess / redis-plus-plus
+  process/                     # ems-rtdb 入口
+backend/tests/rtdb/             # 契约、业务迁移、采集分发器和安装包消费测试
 ```
 
 本批实际交付 `ems_rtdb` 动态库，统一包含 core、client 和所启用的第三方适配器；原 ems_realtime_core/shm/redis target 保留为链接同一动态库的兼容接口，避免多个库实例各自持有工厂与资源。业务链接安装包的 `ems::rtdb`，通过导出头调用 API。Boost Interprocess 与 redis-plus-plus 的包含路径仅在实现侧可见；使用公共 C++ STL API 要求调用者与库使用兼容工具链/CRT，不承诺跨编译器 ABI。

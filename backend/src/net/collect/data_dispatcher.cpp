@@ -11,10 +11,13 @@
 #include <chrono>
 #include <sstream>
 #include <unordered_map>
+#ifdef EMS_NOTIFICATION_WITH_REDIS
+#include <sw/redis++/redis++.h>
+#endif
 
 #include "net/log.h"
 #include "net/protocol/protocol_types.h"
-#include "rtdb/rtdb_manager.h"
+#include "rtdb/client/rtdb_manager.h"
 
 namespace ems {
 namespace net {
@@ -32,6 +35,50 @@ uint64_t now_ms() {
 // 构造 / 析构
 // ============================================================
 
+struct DataDispatcher::RedisNotifier {
+#ifdef EMS_NOTIFICATION_WITH_REDIS
+    std::unique_ptr<sw::redis::Redis> client;
+#endif
+    bool configure(const DataDispatcherConfig& config) {
+#ifdef EMS_NOTIFICATION_WITH_REDIS
+        if (config.timeoutMs_ <= 0 || config.poolSize_ <= 0 || config.redisPort_ <= 0 ||
+            config.redisPort_ > 65535)
+            return false;
+        try {
+            sw::redis::ConnectionOptions options;
+            options.host = config.redisHost_;
+            options.port = config.redisPort_;
+            options.password = config.redisPassword_;
+            options.db = config.redisDb_;
+            options.socket_timeout = std::chrono::milliseconds(config.timeoutMs_);
+            options.connect_timeout = options.socket_timeout;
+            sw::redis::ConnectionPoolOptions pool;
+            pool.size = config.poolSize_;
+            pool.wait_timeout = options.socket_timeout;
+            client = std::make_unique<sw::redis::Redis>(options, pool);
+            return true;
+        } catch (const std::exception&) {
+            return false;
+        }
+#else
+        return false;
+#endif
+    }
+
+    bool publish(const std::string& channel, const std::string& message) {
+#ifdef EMS_NOTIFICATION_WITH_REDIS
+        try {
+            client->publish(channel, message);
+            return true;
+        } catch (const std::exception&) {
+            return false;
+        }
+#else
+        return false;
+#endif
+    }
+};
+
 DataDispatcher::DataDispatcher() = default;
 
 DataDispatcher::~DataDispatcher() { shutdown(); }
@@ -46,25 +93,20 @@ bool DataDispatcher::initialize(const DataDispatcherConfig& config) {
         return true;
     }
 
-    LOG_INFO(fmt::format("初始化数据分发器: Redis={}:{}, db={}, 前缀={}", config.redisHost_,
-                         config.redisPort_, config.redisDb_, config.keyPrefix_)
+    LOG_INFO(fmt::format("初始化数据分发器: RTDB配置={}, 作用域={}", config.rtdbConfigPath_,
+                         config.rtdbScopeCode_)
                  .c_str());
     config_ = config;
 
     ems::rtdb::RtDbConfig rtdbConfig;
-    rtdbConfig.host = config.redisHost_;
-    rtdbConfig.port = config.redisPort_;
-    rtdbConfig.password = config.redisPassword_;
-    rtdbConfig.db = config.redisDb_;
-    rtdbConfig.poolSize = config.poolSize_;
+    rtdbConfig.config_path = config.rtdbConfigPath_;
+    rtdbConfig.scope_code = config.rtdbScopeCode_;
     rtdbConfig.timeoutMs = config.timeoutMs_;
     rtdbConfig.prefix = config.keyPrefix_;
 
     rtdb_mgr_ = std::make_shared<ems::rtdb::RtDbManager>();
     if (!rtdb_mgr_->initialize(rtdbConfig)) {
-        LOG_ERROR(fmt::format("RTDB管理器初始化失败: host={}, port={}", config.redisHost_,
-                              config.redisPort_)
-                      .c_str());
+        LOG_ERROR(fmt::format("RTDB客户端初始化失败: config={}", config.rtdbConfigPath_).c_str());
         rtdb_mgr_.reset();
         return false;
     }
@@ -92,6 +134,17 @@ bool DataDispatcher::initialize(const DataDispatcherConfig& config) {
 #endif
     }
 
+    if (config.notificationBackend_ == DataDispatcherConfig::NotificationBackend::Redis) {
+        redis_notifier_ = std::make_unique<RedisNotifier>();
+        if (!redis_notifier_->configure(config)) {
+            shutdown();
+            return false;
+        }
+    } else if (config.notificationBackend_ != DataDispatcherConfig::NotificationBackend::ZeroMQ &&
+               config.notificationBackend_ != DataDispatcherConfig::NotificationBackend::None) {
+        shutdown();
+        return false;
+    }
     initialized_.store(true);
     LOG_INFO("数据分发器初始化成功");
     return true;
@@ -100,6 +153,7 @@ bool DataDispatcher::initialize(const DataDispatcherConfig& config) {
 void DataDispatcher::shutdown() {
     LOG_INFO("关闭数据分发器");
     initialized_.store(false);
+    redis_notifier_.reset();
 #ifdef EMS_WITH_ZEROMQ
     if (zmq_publisher_) {
         zmq_publisher_->stop();
@@ -395,9 +449,10 @@ bool DataDispatcher::publish_change(const std::string& pointType, const std::str
 #ifdef EMS_WITH_ZEROMQ
         ok = zmq_publisher_ && zmq_publisher_->publish(config_.keyPrefix_ + channel, jsonData);
 #endif
-    } else {
-        auto rtdb = rtdb_mgr_->getRtDb();
-        ok = rtdb && rtdb->publish(channel, jsonData);
+    } else if (config_.notificationBackend_ == DataDispatcherConfig::NotificationBackend::Redis) {
+        ok = redis_notifier_ && redis_notifier_->publish(config_.keyPrefix_ + channel, jsonData);
+    } else if (config_.notificationBackend_ == DataDispatcherConfig::NotificationBackend::None) {
+        ok = true;
     }
 
     {

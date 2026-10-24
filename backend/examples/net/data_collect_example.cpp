@@ -36,7 +36,7 @@
 #include "net/collect/data_dispatcher.h"
 #include "net/collect/plugin_manager.h"
 #include "net/para_loader/para_loader.h"
-#include "rtdb/rtdb_channel.h"
+#include "rtdb/model/rtdb_channel.h"
 
 #ifndef EMS_EXAMPLE_PLUGIN_RELATIVE_DIR
 #define EMS_EXAMPLE_PLUGIN_RELATIVE_DIR "../../lib"
@@ -76,7 +76,10 @@ static void print_usage(const char* prog) {
               << "  --db-user   <user>   数据库用户 (默认: " << DEFAULT_DB_USER << ")\n"
               << "  --db-pass   <pass>   数据库密码 (默认: " << DEFAULT_DB_PASS << ")\n"
               << "  --db-name   <name>   数据库名称 (默认: " << DEFAULT_DB_NAME << ")\n"
-              << "  --redis-host <host>  Redis 地址 (默认: " << DEFAULT_REDIS_HOST << ")\n"
+              << "  --rtdb-config <file> 统一实时数据库部署配置 (默认: conf/realtime.json)\n"
+              << "  --rtdb-scope <code>  业务作用域 (默认: station001)\n"
+              << "  --no-notifications  关闭可选变更通知\n"
+              << "  --redis-host <host>  Redis 通知地址 (默认: " << DEFAULT_REDIS_HOST << ")\n"
               << "  --redis-port <port>  Redis 端口 (默认: " << DEFAULT_REDIS_PORT << ")\n"
               << "  --zmq-endpoint <uri>  用 ZeroMQ 发布可丢弃变更通知\n"
               << "  --modbus-ip  <addr>  Modbus 服务器地址 (默认: 从数据库读取)\n"
@@ -101,6 +104,9 @@ struct AppConfig {
     std::string dbPass{DEFAULT_DB_PASS};
     std::string dbName{DEFAULT_DB_NAME};
     std::string redisHost{DEFAULT_REDIS_HOST};
+    std::string rtdbConfig{"conf/realtime.json"};
+    std::string rtdbScope{"station001"};
+    bool noNotifications{false};
     int redisPort{DEFAULT_REDIS_PORT};
     std::string zmqEndpoint;
     std::string modbusIp;  // 空=从数据库读取
@@ -129,6 +135,12 @@ static AppConfig parse_args(int argc, char* argv[]) {
             cfg.dbPass = argv[++i];
         else if (arg == "--db-name" && i + 1 < argc)
             cfg.dbName = argv[++i];
+        else if (arg == "--rtdb-config" && i + 1 < argc)
+            cfg.rtdbConfig = argv[++i];
+        else if (arg == "--rtdb-scope" && i + 1 < argc)
+            cfg.rtdbScope = argv[++i];
+        else if (arg == "--no-notifications")
+            cfg.noNotifications = true;
         else if (arg == "--redis-host" && i + 1 < argc)
             cfg.redisHost = argv[++i];
         else if (arg == "--redis-port" && i + 1 < argc)
@@ -230,12 +242,17 @@ int main(int argc, char* argv[]) {
 
     ems::net::collect::EngineConfig engineCfg;
     engineCfg.pluginDir_ = cfg.pluginDir;
+    engineCfg.rtdbConfigPath_ = cfg.rtdbConfig;
+    engineCfg.rtdbScopeCode_ = cfg.rtdbScope;
     engineCfg.redisHost_ = cfg.redisHost;
     engineCfg.redisPort_ = cfg.redisPort;
     if (!cfg.zmqEndpoint.empty()) {
         engineCfg.notificationBackend_ =
             ems::net::collect::DataDispatcherConfig::NotificationBackend::ZeroMQ;
         engineCfg.zmqEndpoint_ = cfg.zmqEndpoint;
+    }
+    if (cfg.noNotifications) {
+        engineCfg.notificationBackend_ = ems::net::collect::NotificationBackend::None;
     }
     engineCfg.defaultPollIntervalMs_ = cfg.pollIntervalMs;
 
