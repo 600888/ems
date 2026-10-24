@@ -20,19 +20,29 @@ struct Fixture {
     DevicePointDraft draft;
 
     Fixture() {
-        AssetNode asset;
-        asset.asset_id = core::AssetId("asset-pcs");
-        asset.station_id = core::StationId("station-1");
-        asset.code = "pcs01";
-        asset.asset_type = AssetType::Device;
-        catalog.assets.push_back(asset);
+        Device station;
+        station.device_id = core::DeviceId("station-1");
+        station.parent_device_id = core::DeviceId("");
+        station.node_kind = DeviceNodeKind::Station;
+        station.code = "station01";
+        catalog.devices.push_back(station);
+
+        Device device;
+        device.device_id = core::DeviceId("device-1");
+        device.parent_device_id = core::DeviceId("station-1");
+        device.node_kind = DeviceNodeKind::Device;
+        device.code = "pcs01";
+        device.type_version_id = "pcs-v1";
+        catalog.devices.push_back(device);
+        draft.device_id = device.device_id;
 
         PcsDeviceModel model;
         auto type = model.definition();
+        draft.capabilities = model.capabilities();
         for (const auto& definition : type.standard_points) {
             auto point =
                 make_standard_point(definition, core::PointId("point-" + definition.semantic_code),
-                                    asset.asset_id, definition.semantic_code);
+                                    device.device_id, definition.semantic_code);
             const core::PointId point_id = as_base(point).point_id;
             catalog.add_point(std::move(point));
 
@@ -46,17 +56,9 @@ struct Fixture {
         }
         catalog.device_types.push_back(std::move(type));
 
-        Device device;
-        device.device_id = core::DeviceId("device-1");
-        device.asset_id = asset.asset_id;
-        device.type_version_id = "pcs-v1";
-        catalog.devices.push_back(device);
-        draft.device_id = device.device_id;
-        draft.capabilities = model.capabilities();
-
         ChannelConfig channel;
         channel.channel_id = core::ChannelId("channel-1");
-        channel.station_id = asset.station_id;
+        channel.station_id = core::StationId("station-1");
         channel.purpose = ChannelPurpose::Both;
         catalog.channels.push_back(channel);
         DeviceChannelBinding binding;

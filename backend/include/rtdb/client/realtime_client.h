@@ -44,12 +44,12 @@ class EMS_RTDB_API RealtimeClient final {
     Result<Record> read(const RecordKey& key, const CallContext& ctx);
 
     /**
-     * @brief 枚举资产记录键，用于业务文档和测点目录；不保证并发快照。
+     * @brief 枚举设备状态记录键，用于业务文档和测点目录；不保证并发快照。
      * @param[in] scope 待枚举的作用域。
      * @param[in] ctx 调用预算。
      * @return 键集合；不可用、超时或超过 65536 个键时返回错误。
      */
-    Result<std::vector<RecordKey>> listAssets(const Scope& scope, const CallContext& ctx);
+    Result<std::vector<RecordKey>> listDeviceStates(const Scope& scope, const CallContext& ctx);
 
     /**
      * @brief 按预期版本完整替换或条件创建记录。

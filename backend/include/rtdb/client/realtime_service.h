@@ -169,7 +169,7 @@ struct ChannelHealthDelta {
     core::Sequence sequence{0};
 };
 
-/// 作用域运行版本记录（实时库根的 AssetState 记录）。
+/// 作用域运行版本记录（实时库根的 DeviceState 记录）。
 struct ScopeRuntime {
     std::string config_version;
     std::string activation_revision;

@@ -44,7 +44,7 @@ core::Result<std::string> encode_event(const messaging::EventEnvelope& e) {
     j["producer_id"] = e.producer_id;
     j["station_id"] = e.station_id.has_value() ? json(e.station_id->value()) : json(nullptr);
     j["unit_id"] = e.unit_id.has_value() ? json(e.unit_id->value()) : json(nullptr);
-    j["asset_id"] = e.asset_id.has_value() ? json(e.asset_id->value()) : json(nullptr);
+    j["device_id"] = e.device_id.has_value() ? json(e.device_id->value()) : json(nullptr);
     json device_path = json::array();
     for (const auto& p : e.device_path) device_path.push_back(p);
     j["device_path"] = device_path;  // 根事件为 []
@@ -92,8 +92,8 @@ core::Result<messaging::EventEnvelope> decode_event(const std::string& json_text
     if (j.contains("unit_id") && j["unit_id"].is_string()) {
         e.unit_id = core::EssUnitId(j["unit_id"].get<std::string>());
     }
-    if (j.contains("asset_id") && j["asset_id"].is_string()) {
-        e.asset_id = core::AssetId(j["asset_id"].get<std::string>());
+    if (j.contains("device_id") && j["device_id"].is_string()) {
+        e.device_id = core::DeviceId(j["device_id"].get<std::string>());
     }
     if (j.contains("device_path") && j["device_path"].is_array()) {
         for (const auto& p : j["device_path"]) {

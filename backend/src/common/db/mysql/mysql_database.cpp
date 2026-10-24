@@ -33,7 +33,7 @@ struct history_point_snapshot {
     std::string scope_id;
     std::uint64_t config_version{0};
     std::string point_id;
-    std::string asset_id;
+    std::string owner_device_id;
     std::string point_code;
     std::string display_name;
     std::optional<std::string> unit;
@@ -41,7 +41,7 @@ struct history_point_snapshot {
     bool enabled{false};
 };
 
-YLT_REFL(history_point_snapshot, scope_kind, scope_id, config_version, point_id, asset_id,
+YLT_REFL(history_point_snapshot, scope_kind, scope_id, config_version, point_id, owner_device_id,
          point_code, display_name, unit, value_type, enabled);
 
 struct history_point_series {
@@ -410,7 +410,7 @@ class HistoryRepositories final : public IHistoryCatalogRepository, public IHist
                              row.scope_id,
                              std::to_string(row.config_version),
                              row.point_id,
-                             row.asset_id,
+                             row.owner_device_id,
                              row.point_code,
                              row.display_name,
                              row.unit.value_or(""),

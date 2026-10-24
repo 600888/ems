@@ -19,6 +19,8 @@ struct Upload {
     std::string filename;
     std::string bytes;
     Json parsed;
+    /// 整站包导入（/api/station-imports/create）预解析结果；单文件导入为空。
+    std::shared_ptr<struct StationPackage> package;
 };
 
 class DeviceRequest {
@@ -166,6 +168,17 @@ DeviceResult catalog_action(DeviceRequest& request, const std::string& path, con
  */
 DeviceResult import_action(DeviceRequest& request, const std::string& path, const Json& body,
                            const Upload& upload, const std::string& workspace);
+/** @brief 处理整站点表打包导入（manifest.json + 每设备 xlsx）。
+ * @param[in,out] request 活动事务。
+ * @param[in] path 固定路由（template/create）。
+ * @param[in] body JSON metadata。
+ * @param[in] upload 整站 zip 包（execute 阶段已预解析）。
+ * @param[in] workspace 受限工作区。
+ * @return 业务结果。
+ */
+DeviceResult station_import_action(DeviceRequest& request, const std::string& path,
+                                   const Json& body, const Upload& upload,
+                                   const std::string& workspace);
 /** @brief 生成对外 DTO，隐藏数据库主键并转换 JSON 列与大整数。
  * @param[in] row 内部行。
  * @return 对外对象。

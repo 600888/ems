@@ -53,12 +53,13 @@ class EMS_RTDB_API RedisStore final : public RealtimeStoreBase {
     Result<Record> read(const RecordKey& key, const CallContext& ctx) override;
 
     /**
-     * @brief 通过 SCAN 去重枚举资产键，不保证并发快照。
+     * @brief 通过 SCAN 去重枚举设备状态键，不保证并发快照。
      * @param[in] scope 逻辑作用域。
      * @param[in] ctx 调用预算。
      * @return 至多 65536 个键；超时或超限时返回错误。
      */
-    Result<std::vector<RecordKey>> listAssets(const Scope& scope, const CallContext& ctx) override;
+    Result<std::vector<RecordKey>> listDeviceStates(const Scope& scope,
+                                                    const CallContext& ctx) override;
 
     /**
      * @copydoc IRealtimeStore::compareExchange

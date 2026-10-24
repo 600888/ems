@@ -9,7 +9,7 @@ struct PointSnapshot {
     std::string scope_id;
     std::string config_version;
     std::string point_id;
-    std::string asset_id;
+    std::string owner_device_id;  ///< 点归属设备树节点
     std::string point_code;
     std::string display_name;
     std::string unit;

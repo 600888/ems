@@ -7,6 +7,7 @@
 #include <set>
 
 #include "web/modules/device/infrastructure/point_table_parser.h"
+#include "web/modules/device/infrastructure/station_package_parser.h"
 #include "web/platform/crypto.h"
 
 namespace ems::web {
@@ -232,6 +233,9 @@ DeviceResult DeviceService::execute(const std::string& path, const Json& body,
             preflight.finish({Json::object()});
         }
         prepared.parsed = parse_upload(body, upload, workspace_);
+    } else if (path == "/api/station-imports/create") {
+        // 整站包解析在事务之外完成；结构错误在进入工程事务前整包拒绝。
+        prepared.package = std::make_shared<StationPackage>(parse_station_package(prepared));
     }
     const auto action = path.substr(path.find_last_of('/') + 1);
     const bool write = action == "create" || action == "update" || action == "delete" ||
@@ -253,6 +257,8 @@ DeviceResult DeviceService::execute(const std::string& path, const Json& body,
         result = point_action(request, path, body);
     } else if (path.rfind("/api/point-imports/", 0) == 0) {
         result = import_action(request, path, body, prepared, workspace_);
+    } else if (path.rfind("/api/station-imports/", 0) == 0) {
+        result = station_import_action(request, path, body, prepared, workspace_);
     } else {
         result = catalog_action(request, path, body);
     }

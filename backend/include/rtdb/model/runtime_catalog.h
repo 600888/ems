@@ -2,18 +2,18 @@
  * @file runtime_catalog.h
  * @brief 已发布配置的运行目录：稳定点地址、设备/通道路径、来源授权与能力依赖。
  *
- * 运行目录是配置版本与实时库之间的只读边界：实时库不查询 MySQL，
- * 也不解析点表文件，只使用本目录提供的稳定身份、类型、时效阈值与
- * 授权策略。目录构建完成后只读，可被多个线程共享。
+ * 运行目录是配置与实时库之间的只读边界：实时库不查询 MySQL，也不解析
+ * 点表文件，只接收配置服务从设备树配置（cfg_device + 四遥点表）投影出的
+ * 设备树快照，并使用本目录提供的稳定身份、类型、时效阈值与授权策略。
+ * 目录构建完成后只读，可被多个线程共享。
  *
  * 与数据库的对应关系见 website/docs/common/database/device-management.md
- * 第 11 节：cfg_device.path → PointAddress.device_path，
+ * 第 10 节：cfg_device 设备树 → PointAddress.device_path，
  * cfg_device.config_revision → RuntimeCatalog::configVersion()（文本如 r37）。
  */
 #pragma once
 
 #include <common/core/identity.h>
-#include <common/model/catalog.h>
 #include <common/model/point.h>
 #include <rtdb/export.h>
 #include <rtdb/store/realtime_store.h>
@@ -26,6 +26,14 @@
 #include <vector>
 
 namespace ems::rtdb {
+
+/// 设备树节点种类（与 cfg_device.node_kind 一致）
+enum class NodeKind : std::uint8_t {
+    Station = 0,   ///< 站根
+    Unit = 1,      ///< 储能单元
+    Device = 2,    ///< 通信设备
+    Component = 3  ///< 部件（电池簇/包/电芯，可有点但无独立协议连接）
+};
 
 /**
  * @brief 标准点在实时库中的逻辑地址。
@@ -79,9 +87,9 @@ struct SourcePolicy {
 /// 遥控与遥调都存为 Command，控制侧必须读 point_type 才能区分“固定值写入”
 /// 与“工程值缩放写入”，不能只看 kind。
 struct RuntimePoint {
-    core::PointId point_id;                                 ///< 稳定点 ID
-    core::DeviceId device_id;                               ///< 所属通信设备；部件点为空
-    PointAddress address;                                   ///< 实时记录地址
+    core::PointId point_id;    ///< 稳定点 ID
+    core::DeviceId device_id;  ///< 所属设备树节点（设备或部件）；单元/站根点为空
+    PointAddress address;      ///< 实时记录地址
     model::PointType point_type{model::PointType::YC};      ///< 四遥分类
     model::PointKind kind{model::PointKind::Telemetry};     ///< 记录种类
     model::ValueType value_type{model::ValueType::Double};  ///< 值类型
@@ -285,19 +293,56 @@ struct RuntimeCatalogBuildResult {
     bool ok() const noexcept { return issues.empty(); }
 };
 
+/// 运行目录构建输入：设备树节点（配置服务从 cfg_device 行投影，实时库不感知数据库表）。
+struct CatalogNode {
+    core::DeviceId node_id;      ///< 稳定节点 ID（设备与部件共用 cfg_device.device_id 空间）
+    std::string parent_node_id;  ///< 父节点 ID；站根为空
+    NodeKind kind{NodeKind::Device};
+    std::string code;  ///< 同父节点下唯一的业务编码
+    bool enabled{true};
+};
+
+/// 运行目录构建输入：四遥点（配置服务从 cfg_point_yc/yx/yk/yt 行投影）。
+struct CatalogPoint {
+    core::PointId point_id;
+    std::string owner_node_id;                           ///< 点归属节点；单元/站根点填根节点 ID
+    std::string code;                                    ///< 同一归属节点下唯一的业务编码
+    model::PointType point_type{model::PointType::YC};   ///< 四遥分类
+    model::PointKind kind{model::PointKind::Telemetry};  ///< 记录种类；必须与 point_type 自洽
+    model::ValueType value_type{model::ValueType::Double};
+    std::string unit;
+    std::uint32_t stale_after_ms{0};  ///< 0 表示使用构建参数中的默认值
+    bool enabled{true};
+};
+
+/// 运行目录构建输入：通道（通道状态记录固定使用站作用域）。
+struct CatalogChannel {
+    core::ChannelId channel_id;
+    std::string code;
+    bool enabled{true};
+};
+
+/// 一次运行目录构建的输入快照：由配置服务在内存中投影自设备管理配置。
+struct DeviceTreeSnapshot {
+    std::vector<CatalogNode> nodes;
+    std::vector<CatalogPoint> points;
+    std::vector<CatalogChannel> channels;
+};
+
 /**
- * @brief 由已校验的公共模型目录编译运行目录。
+ * @brief 由设备树快照编译运行目录。
  *
  * 只做内存转换，不访问数据库。作用域根按 options.scope 的 kind 与 code
- * 在设备树中匹配；根之下的节点路径写入 PointAddress.device_path。
- * 设备树成环、父节点缺失、路径超过 8 级、编码非法等问题写入 issues，
- * 由调用方拒绝发布，而不是部分生效。
+ * 在设备树中匹配（Station↔站根、Unit↔单元）；根之下的节点路径写入
+ * PointAddress.device_path，作用域根之外的节点跳过。设备树成环、父节点
+ * 缺失、路径超过 8 级、编码非法、点归属缺失等问题写入 issues，由调用方
+ * 拒绝发布，而不是部分生效。
  *
- * @param[in] catalog 已通过 build_indexes 的配置模型目录。
+ * @param[in] snapshot 配置服务投影出的设备树快照。
  * @param[in] options 作用域、版本与来源授权。
  * @return 运行目录及逐项构建问题。
  */
-EMS_RTDB_API RuntimeCatalogBuildResult buildRuntimeCatalog(const model::ModelCatalog& catalog,
+EMS_RTDB_API RuntimeCatalogBuildResult buildRuntimeCatalog(const DeviceTreeSnapshot& snapshot,
                                                            const RuntimeCatalogOptions& options);
 
 }  // namespace ems::rtdb

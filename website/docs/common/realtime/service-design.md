@@ -8,7 +8,7 @@
 
 `IRealtimeStore` 只解决“逻辑记录如何安全读写”，不负责：
 
-- 把资产路径、点编码解析成记录键；
+- 把设备树路径、点编码解析成记录键；
 - 判断样本是否来自已授权来源、是否属于当前配置版本；
 - 判断序号新旧、重复上报与乱序；
 - 计算新鲜度、组装类型化值；
@@ -44,7 +44,7 @@ flowchart TB
     Service --> Store
 ```
 
-- `RuntimeCatalog` 由 `model::ModelCatalog`（已发布的精确版本）编译，只保存运行需要的最小字段；不持有数据库连接。
+- `RuntimeCatalog` 由配置服务投影的设备树快照（`DeviceTreeSnapshot`，只有设备树，没有资产概念）编译，只保存运行需要的最小字段；不持有数据库连接。
 - `RealtimeService` 不缓存数据，每次调用都经过存储；实例无状态，可并发调用。
 - 时钟可注入，生产使用系统 UTC 微秒，测试用固定时间验证陈旧边界。
 
@@ -55,7 +55,7 @@ flowchart TB
 ```cpp
 struct PointAddress {
     Scope scope;                        // unit / station + code
-    std::vector<std::string> device_path;  // 相对作用域根的资产路径，最多 8 级
+    std::vector<std::string> device_path;  // 相对作用域根的设备树路径，最多 8 级
     std::string code;                   // 点编码
 };
 ```
@@ -68,7 +68,7 @@ struct PointAddress {
 | 单元下电池簇 `rack01` 的 `soc` | `unit|unit01`, `["rack01"]`, `soc` |
 | 电池簇下 `pack03` 的 `cell_voltage_max` | `unit|unit01`, `["rack01","pack03"]`, `cell_voltage_max` |
 
-Pack/Cell 点挂在部件资产上，路径包含部件层级但**没有**对应的 `device_id`；不会为每个 Cell 虚构通信设备（对应差距 G3）。
+Pack/Cell 点挂在部件节点上（部件也是 `cfg_device` 树节点，有自己的稳定 ID），路径包含部件层级；部件点的采集通信设备由 `source_device_id` 在采集侧解析，实时库不为每个 Cell 虚构通信设备。
 
 ### 3.2 目录内容
 
@@ -83,11 +83,11 @@ Pack/Cell 点挂在部件资产上，路径包含部件层级但**没有**对应
 
 `buildRuntimeCatalog` 处理：
 
-- 根资产按 `scope.kind`（`EssUnit`/`Station`）与 `scope.code` 匹配，找不到或重复直接失败；
-- 资产父链缺失、成环、路径段编码非法、路径超过 8 级写入问题列表；
-- 设备资产不能同时是作用域根（否则设备状态键与作用域运行键重合）；
-- 通道状态固定使用站作用域，只包含与根资产同站的通道；
-- 点所属设备由“点所在资产 → 设备档案”推导，不由点表行猜测。
+- 作用域根节点按 `scope.kind`（`Station`/`Unit` 对应 `node_kind`）与 `scope.code` 匹配，找不到或重复直接失败；
+- 设备树父链缺失、成环、路径段编码非法、路径超过 8 级写入问题列表；
+- 设备/部件节点不能同时是作用域根（否则设备状态键与作用域运行键重合）；
+- 通道状态固定使用站作用域，通道来自配置服务投影的站内通道；
+- 点归属直接使用点表行的 `owner_device_id`（设备或部件节点），不由点表行猜测设备类型。
 
 ## 4. 记录契约
 
@@ -103,11 +103,11 @@ Pack/Cell 点挂在部件资产上，路径包含部件层级但**没有**对应
 | 授权 | `accepted_source_id`、`accepted_source_epoch`、`accepted_config_version`、`write_enabled` | 只能由 `authorizePoint` 或首次创建写入 |
 | 诊断 | `updated_at` | 写入时间，不参与新旧判断 |
 
-设备状态记录（`AssetState`，路径为设备资产路径）字段：`state`、`quality`、`quality_reason`、`since`、`last_valid_time`、`active_alarms`、`config_version`、`source_*`、`sequence`。
+设备状态记录（`DeviceState`，路径为设备树路径）字段：`state`、`quality`、`quality_reason`、`since`、`last_valid_time`、`active_alarms`、`config_version`、`source_*`、`sequence`。
 
 通道状态记录（`ChannelState`，站作用域 + 通道 code）字段：`state`、`reason`、`since`、`window_start`、`last_success_time`、`last_error`、`requests`、`successes`、`timeouts`、`avg_latency_ms`、`max_latency_ms`、`config_version`、`source_*`、`sequence`。
 
-作用域运行记录使用根级 `AssetState`（空路径），字段：`config_version`、`activation_revision`、`applied_at`。它不替代站根 `cfg_device.config_revision`，只是“该进程实际已加载哪个修订号”的实时证据。
+作用域运行记录使用根级 `DeviceState`（空路径），字段：`config_version`、`activation_revision`、`applied_at`。它不替代站根 `cfg_device.config_revision`，只是“该进程实际已加载哪个修订号”的实时证据。
 
 ## 5. 写入规则
 

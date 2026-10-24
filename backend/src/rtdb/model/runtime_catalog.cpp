@@ -1,8 +1,8 @@
 /**
  * @file runtime_catalog.cpp
- * @brief 由公共模型目录编译实时运行目录。
+ * @brief 由设备树快照编译实时运行目录。
  *
- * 只做内存转换：资产路径、点地址、设备/通道状态键与来源授权。
+ * 只做内存转换：设备树路径、点地址、设备/通道状态键与来源授权。
  * 不访问数据库、不解析点表文件，也不推断点种类。
  */
 #include <rtdb/model/runtime_catalog.h>
@@ -20,7 +20,7 @@ constexpr std::size_t kMaxPathDepth = 8;    ///< 与 RecordKey 校验一致
 constexpr std::size_t kMaxCodeLength = 64;  ///< 与 RecordKey 校验一致
 
 /**
- * @brief 校验资产/点/通道编码，规则与实时库 RecordKey 校验保持一致。
+ * @brief 校验节点/点/通道编码，规则与实时库 RecordKey 校验保持一致。
  * @param[in] text 待校验编码。
  * @param[in] device_segment 是否为设备路径段（保留字限制）。
  * @return true 表示可用作记录键片段。
@@ -61,89 +61,110 @@ std::string capabilityKey(const core::DeviceId& device_id, const std::string& co
     return device_id.value() + "|" + code;
 }
 
-/// 路径解析上下文：缓存资产到作用域根的相对路径。
+/**
+ * @brief 判断节点种类是否为作用域根种类。
+ * @param[in] kind 节点种类。
+ * @param[in] scope_kind 作用域种类。
+ * @return true 表示该节点种类可作为对应作用域的根。
+ */
+bool rootKindMatches(NodeKind kind, ScopeKind scope_kind) {
+    return scope_kind == ScopeKind::Station ? kind == NodeKind::Station : kind == NodeKind::Unit;
+}
+
+/// 路径解析上下文：索引设备树并缓存节点到作用域根的相对路径。
 class PathResolver {
    public:
-    PathResolver(const model::ModelCatalog& catalog, std::string root_id)
-        : root_id_(std::move(root_id)) {
-        for (const auto& asset : catalog.assets)
-            asset_index_.emplace(asset.asset_id.value(), &asset);
+    /**
+     * @brief 建立节点索引并报告结构性问题。
+     * @param[in] snapshot 设备树快照。
+     * @param[in,out] issues 构建问题列表。
+     */
+    explicit PathResolver(const DeviceTreeSnapshot& snapshot, std::vector<std::string>& issues) {
+        for (const auto& node : snapshot.nodes) {
+            if (node.node_id.empty()) {
+                issues.emplace_back("设备树节点 ID 为空");
+                continue;
+            }
+            if (node.parent_node_id == node.node_id.value()) {
+                issues.emplace_back("设备树节点父指针指向自身: " + node.node_id.value());
+                continue;
+            }
+            if (!index_.emplace(node.node_id.value(), &node).second) {
+                issues.emplace_back("设备树节点 ID 重复: " + node.node_id.value());
+            }
+        }
     }
 
     /**
-     * @brief 解析资产相对作用域根的路径。
-     * @param[in] asset_id 资产 ID。
+     * @brief 解析节点相对作用域根的路径。
+     * @param[in] node 目标节点。
+     * @param[in] root 作用域根节点。
      * @param[out] path 解析结果；根节点为空路径。
      * @param[out] reason 失败原因。
-     * @return true 表示解析成功。
+     * @return true 表示解析成功（节点在作用域根之下）。
      */
-    bool resolve(const core::AssetId& asset_id, std::vector<std::string>& path,
+    bool resolve(const CatalogNode& node, const CatalogNode& root, std::vector<std::string>& path,
                  std::string& reason) {
-        if (asset_id.empty()) {
-            reason = "资产 ID 为空";
-            return false;
-        }
-        if (asset_id.value() == root_id_) {
+        if (node.node_id == root.node_id) {
             path.clear();
             return true;
         }
-        const auto cached = cache_.find(asset_id.value());
+        const auto cached = cache_.find(node.node_id.value());
         if (cached != cache_.end()) {
             path = cached->second;
             return true;
         }
 
-        std::vector<const model::AssetNode*> chain;
+        std::vector<const CatalogNode*> chain;
         std::unordered_set<std::string> visited;
-        const model::AssetNode* current = lookup(asset_id.value());
-        while (current != nullptr && current->asset_id.value() != root_id_) {
-            if (!visited.insert(current->asset_id.value()).second) {
-                reason = "资产树成环，无法解析路径: " + asset_id.value();
+        const CatalogNode* current = &node;
+        while (current->node_id != root.node_id) {
+            if (!visited.insert(current->node_id.value()).second) {
+                reason = "设备树成环，无法解析路径: " + node.node_id.value();
                 return false;
             }
             chain.push_back(current);
-            if (!current->parent_asset_id.has_value()) {
-                reason = "资产不在作用域根之下: " + asset_id.value();
+            if (current->parent_node_id.empty()) {
+                reason = "节点不在作用域根之下: " + node.node_id.value();
                 return false;
             }
-            current = lookup(current->parent_asset_id->value());
+            current = lookup(current->parent_node_id);
             if (current == nullptr) {
-                reason = "父资产不存在: " + asset_id.value();
+                reason = "父节点不存在: " + node.node_id.value();
                 return false;
             }
-        }
-        if (current == nullptr) {
-            reason = "资产不在作用域根之下: " + asset_id.value();
-            return false;
         }
 
         std::vector<std::string> resolved;
         resolved.reserve(chain.size());
         for (auto it = chain.rbegin(); it != chain.rend(); ++it) {
-            const std::string& code = (*it)->code;
-            if (!validCode(code, true)) {
-                reason = "资产路径段编码非法: " + code;
+            if (!validCode((*it)->code, true)) {
+                reason = "设备路径段编码非法: " + (*it)->code;
                 return false;
             }
-            resolved.push_back(code);
+            resolved.push_back((*it)->code);
         }
         if (resolved.size() > kMaxPathDepth) {
-            reason = "资产路径超过 8 级: " + asset_id.value();
+            reason = "设备路径超过 8 级: " + node.node_id.value();
             return false;
         }
-        cache_.emplace(asset_id.value(), resolved);
+        cache_.emplace(node.node_id.value(), resolved);
         path = std::move(resolved);
         return true;
     }
 
-   private:
-    const model::AssetNode* lookup(const std::string& id) const {
-        const auto it = asset_index_.find(id);
-        return it == asset_index_.end() ? nullptr : it->second;
+    /**
+     * @brief 按稳定节点 ID 查找节点。
+     * @param[in] id 节点 ID 文本。
+     * @return 匹配的节点；未找到时为空。
+     */
+    const CatalogNode* lookup(const std::string& id) const {
+        const auto it = index_.find(id);
+        return it == index_.end() ? nullptr : it->second;
     }
 
-    std::string root_id_;
-    std::unordered_map<std::string, const model::AssetNode*> asset_index_;
+   private:
+    std::unordered_map<std::string, const CatalogNode*> index_;
     std::unordered_map<std::string, std::vector<std::string>> cache_;
 };
 
@@ -220,7 +241,7 @@ const RuntimeCapability* RuntimeCatalog::findCapability(const core::DeviceId& de
     return it == capability_index_.end() ? nullptr : &capabilities_[it->second];
 }
 
-RuntimeCatalogBuildResult buildRuntimeCatalog(const model::ModelCatalog& catalog,
+RuntimeCatalogBuildResult buildRuntimeCatalog(const DeviceTreeSnapshot& snapshot,
                                               const RuntimeCatalogOptions& options) {
     RuntimeCatalogBuildResult result;
     result.options = options;
@@ -239,63 +260,92 @@ RuntimeCatalogBuildResult buildRuntimeCatalog(const model::ModelCatalog& catalog
     }
     if (!issues.empty()) return result;
 
-    const model::AssetNode* root = nullptr;
-    for (const auto& asset : catalog.assets) {
-        const bool kind_matches = (options.scope.kind == ScopeKind::Unit &&
-                                   asset.asset_type == model::AssetType::EssUnit) ||
-                                  (options.scope.kind == ScopeKind::Station &&
-                                   asset.asset_type == model::AssetType::Station);
-        if (!kind_matches || asset.code != options.scope.code) continue;
+    PathResolver resolver(snapshot, issues);
+
+    // 作用域根：按 node_kind(Station/Unit) + code 唯一匹配。
+    const CatalogNode* root = nullptr;
+    for (const auto& node : snapshot.nodes) {
+        if (!rootKindMatches(node.kind, options.scope.kind) || node.code != options.scope.code) {
+            continue;
+        }
         if (root != nullptr) {
-            issues.emplace_back("作用域根资产不唯一: " + options.scope.code);
+            issues.emplace_back("作用域根节点不唯一: " + options.scope.code);
             return result;
         }
-        root = &asset;
+        root = &node;
     }
     if (root == nullptr) {
-        issues.emplace_back("找不到作用域根资产: " + options.scope.code);
+        issues.emplace_back("找不到作用域根节点: " + options.scope.code);
         return result;
     }
 
-    const std::string station_code = root->station_id.value();
-    std::unordered_map<std::string, core::DeviceId> device_by_asset;
-    for (const auto& device : catalog.devices) {
-        device_by_asset.emplace(device.asset_id.value(), device.device_id);
+    // 站根：通道状态记录固定使用站作用域。
+    const CatalogNode* station = root;
+    while (station->kind != NodeKind::Station) {
+        if (station->parent_node_id.empty()) {
+            issues.emplace_back("作用域根不在任何站根之下: " + options.scope.code);
+            return result;
+        }
+        station = resolver.lookup(station->parent_node_id);
+        if (station == nullptr) {
+            issues.emplace_back("父节点不存在: " + options.scope.code);
+            return result;
+        }
     }
-    PathResolver paths(catalog, root->asset_id.value());
+    const std::string station_code = station->code;
+
     std::vector<std::string> path;
     std::string reason;
 
-    for (const auto& device : catalog.devices) {
-        if (!paths.resolve(device.asset_id, path, reason)) {
-            issues.emplace_back("设备 " + device.device_id.value() + ": " + reason);
+    for (const auto& node : snapshot.nodes) {
+        // 设备与部件产生状态记录；站根/单元根是作用域运行记录，不单独建设备记录。
+        if (node.kind != NodeKind::Device && node.kind != NodeKind::Component) continue;
+        if (!resolver.resolve(node, *root, path, reason)) {
+            // 作用域根之外的节点（其他单元/其他站）不属于本目录，跳过；结构性问题仍报出。
+            if (reason.find("不在作用域根之下") == std::string::npos) {
+                issues.emplace_back("设备 " + node.node_id.value() + ": " + reason);
+            }
             continue;
         }
         if (path.empty()) {
-            issues.emplace_back("设备 " + device.device_id.value() +
-                                ": 设备资产不能同时是作用域根，状态记录会与作用域记录冲突");
+            issues.emplace_back("设备 " + node.node_id.value() +
+                                ": 设备节点不能同时是作用域根，状态记录会与作用域记录冲突");
             continue;
         }
         RuntimeDevice runtime;
-        runtime.device_id = device.device_id;
-        runtime.code = device.code.empty() ? path.back() : device.code;
+        runtime.device_id = node.node_id;
+        runtime.code = node.code;
         runtime.scope = options.scope;
         runtime.device_path = path;
-        runtime.enabled = device.enabled;
+        runtime.enabled = node.enabled;
         if (!result.catalog.addDevice(std::move(runtime))) {
-            issues.emplace_back("设备定义重复或编码非法: " + device.device_id.value());
+            issues.emplace_back("设备定义重复或编码非法: " + node.node_id.value());
         }
     }
 
-    catalog.for_each_point([&](const model::PointBase& point) {
-        if (!paths.resolve(point.asset_id, path, reason)) {
-            issues.emplace_back("点 " + point.point_id.value() + ": " + reason);
-            return;
+    for (const auto& point : snapshot.points) {
+        const CatalogNode* owner = resolver.lookup(point.owner_node_id);
+        if (owner == nullptr) {
+            issues.emplace_back("点 " + point.point_id.value() +
+                                ": 归属节点不存在: " + point.owner_node_id);
+            continue;
+        }
+        if (!model::point_type_matches_kind(point.point_type, point.kind)) {
+            issues.emplace_back("点 " + point.point_id.value() + ": point_type 与 kind 不自洽");
+            continue;
+        }
+        if (!resolver.resolve(*owner, *root, path, reason)) {
+            if (reason.find("不在作用域根之下") == std::string::npos) {
+                issues.emplace_back("点 " + point.point_id.value() + ": " + reason);
+            }
+            continue;
         }
         RuntimePoint runtime;
         runtime.point_id = point.point_id;
-        const auto owner = device_by_asset.find(point.asset_id.value());
-        if (owner != device_by_asset.end()) runtime.device_id = owner->second;
+        // 设备与部件节点都有稳定 ID；单元/站根点不挂设备。
+        if (owner->kind == NodeKind::Device || owner->kind == NodeKind::Component) {
+            runtime.device_id = owner->node_id;
+        }
         runtime.address.scope = options.scope;
         runtime.address.device_path = path;
         runtime.address.code = point.code;
@@ -304,7 +354,9 @@ RuntimeCatalogBuildResult buildRuntimeCatalog(const model::ModelCatalog& catalog
         runtime.value_type = point.value_type;
         runtime.unit = point.unit;
         runtime.stale_after_ms =
-            options.default_stale_after_ms == 0 ? 60000 : options.default_stale_after_ms;
+            point.stale_after_ms != 0
+                ? point.stale_after_ms
+                : (options.default_stale_after_ms == 0 ? 60000 : options.default_stale_after_ms);
         runtime.enabled = point.enabled;
         runtime.source = options.default_source;
         if (runtime.source.config_version.empty()) {
@@ -313,10 +365,9 @@ RuntimeCatalogBuildResult buildRuntimeCatalog(const model::ModelCatalog& catalog
         if (!result.catalog.addPoint(std::move(runtime))) {
             issues.emplace_back("点地址或点 ID 重复: " + point.point_id.value());
         }
-    });
+    }
 
-    for (const auto& channel : catalog.channels) {
-        if (channel.station_id.value() != station_code) continue;
+    for (const auto& channel : snapshot.channels) {
         RuntimeChannel runtime;
         runtime.channel_id = channel.channel_id;
         runtime.code = channel.code;

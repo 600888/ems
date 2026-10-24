@@ -1,0 +1,139 @@
+{
+  "schema": "ems-station-package/1",
+  "station": {
+    "code": "station001",
+    "name": "示例储能一站"
+  },
+  "devices": [
+    {
+      "code": "unit01",
+      "name": "储能单元 01",
+      "node_kind": "unit",
+      "parent_code": ""
+    },
+    {
+      "code": "pcs01",
+      "name": "PCS-1 储能变流器",
+      "node_kind": "device",
+      "parent_code": "unit01",
+      "device_type_code": "pcs",
+      "type_version": "pcs-v1",
+      "vendor": "示例厂商",
+      "model": "PCS-125K",
+      "firmware_version": "FW2.1.6",
+      "rated_power_kw": 125.0
+    },
+    {
+      "code": "bms01",
+      "name": "BMS-1 电池管理系统",
+      "node_kind": "device",
+      "parent_code": "unit01",
+      "device_type_code": "bms",
+      "type_version": "bms-v1",
+      "vendor": "示例厂商",
+      "model": "BMS-A1",
+      "firmware_version": "V3.02"
+    },
+    {
+      "code": "rack01",
+      "name": "电池簇 01",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "source_device_code": "bms01",
+      "device_type_code": "battery",
+      "type_version": "battery-v1"
+    },
+    {
+      "code": "rack02",
+      "name": "电池簇 02",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "source_device_code": "bms01",
+      "device_type_code": "battery",
+      "type_version": "battery-v1"
+    },
+    {
+      "code": "meter01",
+      "name": "关口电表",
+      "node_kind": "device",
+      "parent_code": "",
+      "device_type_code": "meter",
+      "type_version": "meter-v1",
+      "vendor": "示例厂商",
+      "model": "DTSD-1"
+    }
+  ],
+  "channels": [
+    {
+      "code": "mbpcs01",
+      "name": "PCS Modbus-TCP",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "192.168.10.21:502",
+      "poll_interval_ms": 1000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1
+    },
+    {
+      "code": "mbbms01",
+      "name": "BMS Modbus-TCP",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "192.168.10.22:502",
+      "poll_interval_ms": 1000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1
+    },
+    {
+      "code": "dlmeter01",
+      "name": "关口表 DLT645 串口",
+      "protocol": "dlt645",
+      "conn_mode": "serial",
+      "endpoint": "COM3",
+      "poll_interval_ms": 5000,
+      "timeout_ms": 3000,
+      "retry_times": 2,
+      "max_sessions": 1
+    }
+  ],
+  "bindings": [
+    {
+      "device_code": "pcs01",
+      "channel_code": "mbpcs01",
+      "device_address": "1",
+      "can_collect": 1,
+      "can_control": 1,
+      "can_forward": 0
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "mbbms01",
+      "device_address": "1",
+      "can_collect": 1,
+      "can_control": 0,
+      "can_forward": 0
+    },
+    {
+      "device_code": "meter01",
+      "channel_code": "dlmeter01",
+      "device_address": "000000000001",
+      "can_collect": 1,
+      "can_control": 0,
+      "can_forward": 0
+    }
+  ],
+  "point_files": [
+    {
+      "device_code": "pcs01",
+      "file": "pcs01.xlsx",
+      "address_base": "zero"
+    },
+    {
+      "device_code": "meter01",
+      "file": "meter01.xlsx",
+      "address_base": "zero"
+    }
+  ]
+}

@@ -210,10 +210,10 @@ Result<Record> SharedMemoryStore::read(const RecordKey& key, const CallContext& 
     }
 }
 
-Result<std::vector<RecordKey>> SharedMemoryStore::listAssets(const Scope& scope,
-                                                             const CallContext& ctx) {
+Result<std::vector<RecordKey>> SharedMemoryStore::listDeviceStates(const Scope& scope,
+                                                                   const CallContext& ctx) {
     constexpr auto effect = WriteEffect::NotApplicable;
-    if (!validate_record_key({scope, RecordKind::AssetState, {}, {}}).empty())
+    if (!validate_record_key({scope, RecordKind::DeviceState, {}, {}}).empty())
         return error(ErrorCode::InvalidArgument, effect, "invalid scope");
     try {
         auto guard = impl_->lock(ctx, effect);
@@ -222,7 +222,7 @@ Result<std::vector<RecordKey>> SharedMemoryStore::listAssets(const Scope& scope,
         for (const auto& item : *impl_->records) {
             if (core::has_expired(ctx))
                 return error(ErrorCode::DeadlineExceeded, effect, "enumeration deadline exceeded");
-            auto key = asset_key(scope, {item.first.data(), item.first.size()});
+            auto key = device_state_key(scope, {item.first.data(), item.first.size()});
             if (!key) continue;
             if (out.size() == 65536)
                 return error(ErrorCode::ResourceExhausted, effect, "enumeration limit exceeded");

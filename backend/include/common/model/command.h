@@ -61,10 +61,9 @@ inline const char* to_string(CommandStatus s) noexcept {
 
 /// 控制意图（尚未允许执行；策略仲裁后才产生命令）
 struct ControlIntent {
-    core::IntentId intent_id;       ///< 持久受理前生成，重试保持不变
-    std::string capability_code;    ///< 目标能力
-    core::AssetId target_asset_id;  ///< 目标资产
-    std::optional<core::DeviceId> target_device_id;
+    core::IntentId intent_id;                     ///< 持久受理前生成，重试保持不变
+    std::string capability_code;                  ///< 目标能力
+    core::DeviceId target_device_id;              ///< 目标设备树节点（设备/部件）
     ValueType requested_type{ValueType::Double};  ///< 请求值类型
     PointValue requested_value;                   ///< 请求值
     std::string actor;                            ///< 来源/操作者（审计上下文）
@@ -76,10 +75,9 @@ struct ControlIntent {
 
 /// 控制命令（仅策略产生；目标能力 + 所有权 + 期限）
 struct Command {
-    core::CommandId command_id;  ///< 持久受理前生成，重试保持不变
-    core::IntentId intent_id;    ///< 溯源意图
-    core::AssetId target_asset_id;
-    std::optional<core::DeviceId> target_device_id;
+    core::CommandId command_id;       ///< 持久受理前生成，重试保持不变
+    core::IntentId intent_id;         ///< 溯源意图
+    core::DeviceId target_device_id;  ///< 目标设备树节点（设备/部件）
     std::string capability_code;
     std::string expected_config_version;                  ///< 命令执行期望的配置版本
     core::OwnerEpoch owner_epoch;                         ///< 控制所有权代次

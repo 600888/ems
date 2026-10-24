@@ -111,9 +111,9 @@ Result<Record> RealtimeClient::read(const RecordKey& key, const CallContext& ctx
     return impl_->store->read(key, ctx);
 }
 
-Result<std::vector<RecordKey>> RealtimeClient::listAssets(const Scope& scope,
-                                                          const CallContext& ctx) {
-    return impl_->store->listAssets(scope, ctx);
+Result<std::vector<RecordKey>> RealtimeClient::listDeviceStates(const Scope& scope,
+                                                                const CallContext& ctx) {
+    return impl_->store->listDeviceStates(scope, ctx);
 }
 
 Result<WriteReceipt> RealtimeClient::compareExchange(const WriteRequest& request,

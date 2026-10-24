@@ -39,12 +39,12 @@ bool valid_code(std::string_view code, bool device = false);
 std::string physical_key(const RecordKey& key);
 
 /**
- * @brief 解析指定作用域的资产物理键，忽略测点、临时键和其他作用域。
+ * @brief 解析指定作用域的设备状态物理键，忽略测点、临时键和其他作用域。
  * @param[in] scope 逻辑作用域。
  * @param[in] physical 物理存储键。
- * @return 合法资产键；不匹配时为空。
+ * @return 合法设备状态键；不匹配时为空。
  */
-std::optional<RecordKey> asset_key(const Scope& scope, std::string_view physical);
+std::optional<RecordKey> device_state_key(const Scope& scope, std::string_view physical);
 
 /**
  * @brief 为同一逻辑记录生成 Redis 哈希标签。

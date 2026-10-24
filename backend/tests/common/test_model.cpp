@@ -12,8 +12,6 @@
 namespace ems::model {
 namespace {
 
-core::AssetId aid(const char* s) { return core::AssetId(s); }
-
 core::DeviceId did(const char* s) { return core::DeviceId(s); }
 
 core::PointId pid(const char* s) { return core::PointId(s); }
@@ -24,44 +22,35 @@ core::ChannelId cid(const char* s) { return core::ChannelId(s); }
 ModelCatalog build_valid_catalog() {
     ModelCatalog c;
 
-    AssetNode station;
-    station.asset_id = aid("st-1");
-    station.station_id = core::StationId("st-1");
+    // 设备树：站 → 单元 → 设备；两个单元同名 pcs01 不允许按 code 合并身份（C02）
+    Device station;
+    station.device_id = did("st-1");
+    station.parent_device_id = did("");
+    station.node_kind = DeviceNodeKind::Station;
     station.code = "st01";
-    station.asset_type = AssetType::Station;
-    c.assets.push_back(station);
+    c.devices.push_back(station);
 
-    // 两个单元同名 pcs01 不允许按 code 合并身份（C02）
     for (const char* unit : {"u-1", "u-2"}) {
-        AssetNode u;
-        u.asset_id = aid(unit);
-        u.station_id = core::StationId("st-1");
-        u.parent_asset_id = aid("st-1");
+        Device u;
+        u.device_id = did(unit);
+        u.parent_device_id = did("st-1");
+        u.node_kind = DeviceNodeKind::Unit;
         u.code = unit;
-        u.asset_type = AssetType::EssUnit;
-        c.assets.push_back(u);
-    }
-
-    for (const char* da : {"d-1", "d-2"}) {
-        AssetNode da_node;
-        da_node.asset_id = aid(da);
-        da_node.station_id = core::StationId("st-1");
-        da_node.parent_asset_id = aid("u-1");
-        da_node.code = da;
-        da_node.asset_type = AssetType::Device;
-        c.assets.push_back(da_node);
+        c.devices.push_back(u);
     }
 
     Device d1;
     d1.device_id = did("dev-1");
-    d1.asset_id = aid("d-1");
-    d1.code = "pcs01";  // d-2 也有同名 pcs01 设备，但 ID 不同
+    d1.parent_device_id = did("u-1");
+    d1.node_kind = DeviceNodeKind::Device;
+    d1.code = "pcs01";  // dev-2 也有同名 pcs01 设备，但 ID 不同
     d1.type_version_id = "pcs-type-v1";
     c.devices.push_back(d1);
 
     Device d2;
     d2.device_id = did("dev-2");
-    d2.asset_id = aid("d-2");
+    d2.parent_device_id = did("u-2");
+    d2.node_kind = DeviceNodeKind::Device;
     d2.code = "pcs01";
     d2.type_version_id = "pcs-type-v1";
     c.devices.push_back(d2);
@@ -74,7 +63,7 @@ ModelCatalog build_valid_catalog() {
 
     YkPoint cmd;
     cmd.point_id = pid("p-cmd");
-    cmd.asset_id = aid("d-1");
+    cmd.owner_device_id = did("dev-1");
     cmd.code = "charge_cmd";
     cmd.write_mode = WriteMode::Fixed;
     cmd.fixed_raw_value = 1;
@@ -83,14 +72,14 @@ ModelCatalog build_valid_catalog() {
 
     YxPoint fb;
     fb.point_id = pid("p-fb");
-    fb.asset_id = aid("d-1");
+    fb.owner_device_id = did("dev-1");
     fb.code = "charge_fb";
     fb.feedback_of = pid("p-cmd");  // 反馈点指回命令点
     c.add_point(fb);
 
     YcPoint tel;
     tel.point_id = pid("p-pow");
-    tel.asset_id = aid("d-1");
+    tel.owner_device_id = did("dev-1");
     tel.code = "active_power";
     tel.unit = "kW";
     c.add_point(tel);
@@ -212,48 +201,68 @@ TEST(ModelCatalog, MultiChannelAndSharedBusBindings) {
 }
 
 // ---------------------------------------------------------------------------
-// 校验：身份唯一 / 环 / 跨站 / 引用 / 绑定 / 反馈 / 路由（C03）
+// 校验：身份唯一 / 设备树环与层级 / 引用 / 绑定 / 反馈 / 路由（C03）
 // ---------------------------------------------------------------------------
 
 TEST(ModelCatalog, DuplicateIdentityReported) {
     auto c = build_valid_catalog();
-    AssetNode dup = c.assets.front();
-    c.assets.push_back(dup);  // 重复 asset_id
+    Device dup = c.devices.front();
+    c.devices.push_back(dup);  // 重复 device_id
     auto r = c.build_indexes();
     EXPECT_FALSE(r.ok());
     EXPECT_TRUE(has_code(r, validation_code::kDuplicateIdentity));
 }
 
-TEST(ModelCatalog, AssetCycleReported) {
+TEST(ModelCatalog, DeviceCycleReported) {
     auto c = build_valid_catalog();
-    c.assets[1].parent_asset_id = aid("d-1");  // u-1 → d-1 → u-1 成环
-    c.assets[3].parent_asset_id = aid("u-1");
+    c.devices[3].parent_device_id = did("dev-2");  // dev-1 → dev-2 → dev-1 成环
+    c.devices[4].parent_device_id = did("dev-1");
     auto r = c.build_indexes();
     EXPECT_FALSE(r.ok());
-    EXPECT_TRUE(has_code(r, validation_code::kAssetCycle));
+    EXPECT_TRUE(has_code(r, validation_code::kDeviceCycle));
 }
 
-TEST(ModelCatalog, CrossStationParentReported) {
+TEST(ModelCatalog, ParentKindRulesEnforced) {
     auto c = build_valid_catalog();
-    // 构造第二站，把 u-1 的父节点挂到第二站资产
-    AssetNode st2;
-    st2.asset_id = aid("st-2");
-    st2.station_id = core::StationId("st-2");
-    st2.code = "st02";
-    st2.asset_type = AssetType::Station;
-    c.assets.push_back(st2);
-    c.assets[1].parent_asset_id = aid("st-2");  // u-1（st-1）跨站挂接
+    c.devices[1].parent_device_id = did("u-2");  // 单元不能挂在单元下
+    // 设备不能挂在部件下：补一个部件节点作为非法父节点
+    Device rack;
+    rack.device_id = did("rack-1");
+    rack.parent_device_id = did("u-1");
+    rack.node_kind = DeviceNodeKind::Component;
+    rack.code = "rack01";
+    rack.type_version_id = "battery-v1";
+    c.devices.push_back(rack);
+    c.devices[3].parent_device_id = did("rack-1");
     auto r = c.build_indexes();
     EXPECT_FALSE(r.ok());
-    EXPECT_TRUE(has_code(r, validation_code::kCrossStationParent));
+    EXPECT_TRUE(has_code(r, validation_code::kInvalidValue));
+}
+
+TEST(ModelCatalog, UnitRequiresStationParent) {
+    auto c = build_valid_catalog();
+    c.devices[1].parent_device_id = did("");  // 只有站根可以没有父节点
+    auto r = c.build_indexes();
+    EXPECT_FALSE(r.ok());
+    EXPECT_TRUE(has_code(r, validation_code::kInvalidValue));
 }
 
 TEST(ModelCatalog, MissingReferenceReported) {
     auto c = build_valid_catalog();
-    c.devices[0].asset_id = aid("ghost-asset");
+    c.points_yc[0].owner_device_id = did("ghost-node");
     auto r = c.build_indexes();
     EXPECT_FALSE(r.ok());
     EXPECT_TRUE(has_code(r, validation_code::kMissingReference));
+}
+
+TEST(ModelCatalog, FindStationRootWalksParentChain) {
+    auto c = build_valid_catalog();
+    c.build_indexes();
+    const Device* root = c.find_station_root(did("dev-1"));
+    ASSERT_NE(root, nullptr);
+    EXPECT_EQ(root->device_id, did("st-1"));
+    EXPECT_EQ(root->node_kind, DeviceNodeKind::Station);
+    EXPECT_EQ(c.find_station_root(did("ghost-node")), nullptr);
 }
 
 TEST(ModelCatalog, DuplicateBindingReported) {
@@ -284,7 +293,7 @@ TEST(ModelCatalog, FourRemoteTypesAreDistinct) {
 
     YtPoint yt;
     yt.point_id = pid("p-set");
-    yt.asset_id = aid("d-1");
+    yt.owner_device_id = did("dev-1");
     yt.code = "set_active_power";
     yt.scale_factor = 0.1;
     c.add_point(yt);
@@ -321,7 +330,7 @@ TEST(ModelCatalog, MissingFeedbackPointReported) {
 
 TEST(ModelCatalog, MissingVersionReported) {
     auto c = build_valid_catalog();
-    c.devices[0].type_version_id = "ghost-type";
+    c.devices[3].type_version_id = "ghost-type";
     auto r = c.build_indexes();
     EXPECT_FALSE(r.ok());
     EXPECT_TRUE(has_code(r, validation_code::kVersionMismatch));
@@ -339,13 +348,13 @@ TEST(ModelCatalog, DuplicateRouteReported) {
 
 TEST(ModelCatalog, ReportCarriesObjectAndFieldAndReason) {
     auto c = build_valid_catalog();
-    c.devices[0].asset_id = aid("ghost-asset");
+    c.devices[3].parent_device_id = did("ghost-node");
     auto r = c.build_indexes();
     ASSERT_FALSE(r.issues.empty());
     const auto& issue = r.issues[0];
     EXPECT_FALSE(issue.code.empty());
     EXPECT_EQ(issue.object_id, "dev-1");
-    EXPECT_EQ(issue.field_path, "asset_id");
+    EXPECT_EQ(issue.field_path, "parent_device_id");
     EXPECT_FALSE(issue.reason.empty());
 }
 

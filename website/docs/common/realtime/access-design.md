@@ -38,7 +38,7 @@ Redis 继续作为默认部署后端；共享内存成为同机部署的可选�
 | [EMS 系统架构](../../architecture/system-design.md) | C++17 采集/实时数据库/存储/策略与 Drogon Web 五类进程；职责和控制闭环明确 | 实时数据库进程管理生命周期，各进程通过公共库直接访问后端 |
 | [数据采集架构](../../processes/collector/design.md) | 协议 I/O、通道调度与数据分发分离；采样有界缓冲、历史允许丢样 | 分发层注入业务门面，协议模块不选择存储后端 |
 | [设备模型与点表绑定](../../architecture/device-model.md) | 固有点位、厂家映射、启用状态和命令反馈分开 | 统一逻辑测点、类型和质量，不让物理存储决定业务模型 |
-| [Redis 键设计](redis-key-design.md) | station/unit 作用域、递归资产路径、稳定 ID、来源序号、配置版本 | 逻辑身份适用于全部后端，Redis 物理键只属于 Redis 适配器 |
+| [Redis 键设计](redis-key-design.md) | station/unit 作用域、设备树路径、稳定 ID、来源序号、配置版本 | 逻辑身份适用于全部后端，Redis 物理键只属于 Redis 适配器 |
 | [实时数据与配置](index.md) | 最新状态、可靠事件、配置权威和历史存储分别承担职责 | 共享内存替换实时状态访问时，其他职责保持独立 |
 
 原文中的 Redis 最新值方案作为默认部署实现保留；多后端抽象以本文为详细契约，相关总览同步更新。设计不要求复刻 Redis 全部命令，也不把所有数据库能力压进同一个基类。
@@ -182,12 +182,12 @@ struct Scope {
     ScopeKind kind;
     std::string code;
 };
-enum class RecordKind { Point, AssetState, ChannelState, CommandState };
+enum class RecordKind { Point, DeviceState, ChannelState, CommandState };
 struct RecordKey {
     Scope scope;
     RecordKind kind;
     std::vector<std::string> device_path;
-    std::string name;     // point/channel/command code；AssetState 为空
+    std::string name;     // point/channel/command code；DeviceState 为空
 };
 struct Revision {
     std::string opaque;
@@ -336,7 +336,7 @@ private:
 ### 5.1 补充契约
 
 1. `open/create` 校验配置、schema/layout、权限与必需能力，成功只返回非空、已就绪对象；失败通过 Error 返回，不返回半初始化对象。未知后端名返回 `Unsupported`，未知配置字段返回 `InvalidArgument`。
-2. `RecordKey` 的组合合法性由公共验证器控制：ChannelState 只允许 station 作用域且设备路径为空；CommandState 的 name 为命令 ID且路径为空；Point 允许根级测点；AssetState 的 name 为空。适配器拒绝非法输入。
+2. `RecordKey` 的组合合法性由公共验证器控制：ChannelState 只允许 station 作用域且设备路径为空；CommandState 的 name 为命令 ID且路径为空；Point 允许根级测点；DeviceState 的 name 为空。适配器拒绝非法输入。
 3. 成功读取必须带非空 revision；存在但没有有效 revision 的旧记录返回 `SchemaMismatch`，不能被当作不存在而覆盖。`erase` 对不存在记录返回 `NotFound/NotApplied`，对版本不符返回 `Conflict/NotApplied`。
 4. 单次操作在等待连接/锁之前以及实际提交前检查 deadline。超过 deadline 且未开始修改返回 `DeadlineExceeded/NotApplied`；请求可能提交但响应丢失返回 `Unknown`。读操作的 effect 固定为 `NotApplicable`。
 5. 默认批量实现将同一 deadline 传入所有单项；到期后后续调用必须立即返回，不能为每项重新分配完整超时。空批量返回空结果。超批量上限时每项返回 InvalidArgument 且不执行任何存储请求；生产门面在构建巨大请求前限制输入大小，优化后端保持相同行为。
@@ -384,11 +384,11 @@ private:
 | `getState / updateState` | 类型化状态地址、状态样本、CallContext | 各状态类型定义唯一写角色及事件顺序，按相同 CAS 流程更新 |
 | `getCommandState` | 已鉴权的作用域与 command_id | 查询状态投影；没有“写值即执行”的接口 |
 
-用于枚举资产/测点的目录来自当前配置版本，随后按地址批量读取；`IRealtimeStore` 不提供无限扫描或 `getAll()`。策略计算读取多点后检查配置组合、授权代次、采样时间窗口和质量覆盖率；若业务确实要求同一计算时刻的聚合，单独发布一个带输入版本的聚合状态记录，不把批量读当事务快照。
+用于枚举设备/测点的目录来自当前配置版本，随后按地址批量读取；`IRealtimeStore` 不提供无限扫描或 `getAll()`。策略计算读取多点后检查配置组合、授权代次、采样时间窗口和质量覆盖率；若业务确实要求同一计算时刻的聚合，单独发布一个带输入版本的聚合状态记录，不把批量读当事务快照。
 
 新鲜度以采样时间及源时钟质量判定，源时间不可用时按配置采用 ingest_time 并记录降级原因；陈旧阈值 `stale_after` 来自配置。检测到时间倒退或未来时间超过允许时钟偏差时标记时间质量异常，不把负年龄视为永久新鲜。存储层不因陈旧而删除最后值。
 
-Web 通过本进程门面调用 getPoint/getPoints/getState，向浏览器返回类型化数据、质量、新鲜度和配置版本，保留逐项失败信息，并在 Web 层按 station/资产鉴权及限制批量和预算。默认路径不再经过存储实时 gRPC。共享内存布局由库隐藏，C++ revision 对象不作为跨进程 ABI；JSON/管理诊断只传不透明文本。需要服务隔离的查询网关属于后续独立扩展。
+Web 通过本进程门面调用 getPoint/getPoints/getState，向浏览器返回类型化数据、质量、新鲜度和配置版本，保留逐项失败信息，并在 Web 层按 station/设备树节点鉴权及限制批量和预算。默认路径不再经过存储实时 gRPC。共享内存布局由库隐藏，C++ revision 对象不作为跨进程 ABI；JSON/管理诊断只传不透明文本。需要服务隔离的查询网关属于后续独立扩展。
 
 ## 6. 共享内存后端 `SharedMemoryStore`
 

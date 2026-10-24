@@ -5,7 +5,7 @@
 
 ## 1. 设计决策与实施入口
 
-公共模块保存多个业务模块共同使用的模型、接口和基础能力。**设备属于公共模块**：设备身份、资产关系、标准点、能力及绑定由公共模型统一定义；设备连接、采集任务和控制决策分别由采集、协议和策略模块实现。
+公共模块保存多个业务模块共同使用的模型、接口和基础能力。**设备属于公共模块**：设备身份、设备树、标准点、能力及绑定由公共模型统一定义；设备连接、采集任务和控制决策分别由采集、协议和策略模块实现。
 
 后端按公共、采集、协议、实时数据管理、历史数据、存储、Web、策略等逻辑模块组织。逻辑模块不等于操作系统进程：运行采集与上送、实时数据库、存储、策略和 Web 五类业务进程。历史模块组装在存储进程内；实时生命周期组装在 `ems-rtdb`，公共实时库仍由各进程直接调用，不把每次读写改成 RPC。管理边界见[实时数据库进程设计](../processes/data/design.md)。
 
@@ -16,7 +16,7 @@
 | 主题 | 权威位置 | 本文负责内容 |
 | --- | --- | --- |
 | 进程、数据库、控制闭环 | [系统架构](../architecture/system-design.md) | 公共模块如何支持这些职责 |
-| 资产、设备、固有点、能力、点表 | [设备模型](../architecture/device-model.md) | C++ 模型归属、接口及迁移 |
+| 设备树、固有点、能力、点表 | [设备模型](../architecture/device-model.md) | C++ 模型归属、接口及迁移 |
 | 通道、协议 profile、通信资源、绑定 | [设备、通道与协议](../architecture/channel-protocol.md) | 公共定义与协议实现的分界 |
 | 实时读写、CAS、共享内存和 Redis | [实时访问接口](realtime/access-design.md) | 集成关系与公共类型复用 |
 | code、实时物理键与字段 | [Redis 键设计](realtime/redis-key-design.md) | 编码器与跨进程验证 |
@@ -41,7 +41,7 @@
 | 子模块 | 公共职责 | 业务模块负责的部分 |
 | --- | --- | --- |
 | core | 错误、调用上下文、时间、稳定身份基础类型 | 业务错误的决策与恢复流程 |
-| model | 资产/设备/测点/能力/绑定定义，纯模型校验 | 设备会话、调度、协议 I/O、控制算法 |
+| model | 设备树/测点/能力/绑定定义，纯模型校验 | 设备会话、调度、协议 I/O、控制算法 |
 | codec | 模型与契约之间的显式编解码 | 厂家报文、寄存器字节序和协议帧解析 |
 | config | 版本配置读取、快照校验、本地不可变视图 | Web 编辑流程、存储进程发布编排、采集/策略应用 |
 | database | 连接池/事务、公共 ormpp Repository、历史目录/身份/隔离、时序接口及适配 | 历史采样/聚合规则、报表编排、鉴权、Drogon HTTP 层 |
@@ -63,7 +63,7 @@ backend/
   include/
     common/
       core/                  # result.h、call_context.h、identity.h、time.h
-      model/                 # asset.h、device.h、point.h、channel.h、binding.h
+      model/                 # device.h、point.h、channel.h、binding.h
                              # capability.h、command.h、alarm.h、validation.h
       codec/                 # model_codec.h、event_codec.h
       config/                # config_snapshot.h、i_config_provider.h
@@ -179,7 +179,8 @@ struct CallContext {
 
 | 类型/字段 | 约定 |
 | --- | --- |
-| StationId、AssetId、DeviceId、PointId 等 | 使用独立强类型包装稳定 ID 文本；旧数字 ID 转十进制文本，迁移不重新编号 |
+| StationId、EssUnitId、DeviceId、PointId 等 | 使用独立强类型包装稳定 ID 文本；旧数字 ID 转十进制文本，迁移不重新编号 |
+| DeviceId（设备树节点） | 站/单元/设备/部件统一使用 DeviceId，与 cfg_device.device_id 一致；没有资产概念 |
 | code | 可读业务编码，格式、保留字、作用域和改名规则引用 Redis 键专题；不是显示名称 |
 | ConfigVersion | 不可变配置版本标识，只比较相等；并发发布通过独立 activation revision 条件更新 |
 | revision | 实时记录 CAS 不透明令牌，禁止当序号排序 |
@@ -203,21 +204,19 @@ struct CallContext {
 
 | 模型 | 必需内容 | 归属与限制 |
 | --- | --- | --- |
-| AssetNode | asset_id、station_id、parent_asset_id、code、name、asset_type | 唯一主要父节点，无环，不能跨站挂接 |
-| Station / EssUnit | 对应 asset_id；站时区/接入点；单元额定能力 | 单元是调度资源，不固定等同一柜一 PCS |
-| Device | device_id、asset_id、type_version_id、model_version_id、厂家/固件信息 | code 从资产节点解析；不维护另一棵通道对象树 |
-| DeviceTypeDefinition | 类型版本、标准点目录、能力依赖 | PCS/BMS/电表等目录引用设备模型专题 |
-| StandardPointDefinition / Point | 标准语义、值类型、单位、点种类；实例 point_id、asset_id、状态 | telemetry/status/event/command 分开；命令和反馈分点 |
+| Device（设备树节点） | device_id、parent_device_id、node_kind（station/unit/device/component）、code、name、enabled | 站/单元/设备/部件统一一棵树（与 cfg_device 一致）；唯一父节点、无环；部件可有测点而无独立协议连接 |
+| DeviceTypeDefinition | 类型版本、标准点目录、能力依赖 | PCS/BMS/电表等目录引用设备模型专题；设备与部件节点引用类型版本 |
+| StandardPointDefinition / Point | 标准语义、值类型、单位、点种类；实例 point_id、owner_device_id、状态 | telemetry/status/event/command 分开；命令和反馈分点 |
 | CapabilityDefinition | capability_code、所需点/反馈、参数及单位约束 | 表达配置能力，不保证当前允许执行 |
 | ChannelConfig / ProtocolProfileRef | 通道身份、purpose、role、connection_mode、profile 版本、资源引用 | 不持有运行 session；资源和协议角色独立 |
 | DeviceChannelBinding | 设备/通道引用、操作集合、版本、设备协议地址 | 多对多；共享总线地址属于绑定，不属于设备全局属性 |
 | VendorPointRoute / PointBinding | 厂家点身份、南向路由、逻辑转换和绑定角色 | 标准点身份独立于通信路径 |
 | ForwardingPointMap | 标准点到北向协议地址及方向映射 | 与南向厂家点路由分开 |
 | DeviceState / ChannelState / UnitState | 时间、质量、版本及类型化状态字段 | 可复制运行快照，不是执行对象 |
-| ControlIntent / Command / CommandResult | 稳定身份、目标能力、期限、配置/所有权、审计上下文 | 状态值沿用系统架构；无执行方法 |
-| AlarmDefinition / AlarmEvent | 规则引用、资产、发生/恢复/确认事件和版本 | 状态机与规则引擎在策略模块 |
+| ControlIntent / Command / CommandResult | 稳定身份、目标设备、目标能力、期限、配置/所有权、审计上下文 | 状态值沿用系统架构；无执行方法 |
+| AlarmDefinition / AlarmEvent | 规则引用、所属设备节点、发生/恢复/确认事件和版本 | 状态机与规则引擎在策略模块 |
 
-资产关系和电气拓扑使用独立模型，不能把所有关系都压到 parent_asset_id。电池部件可以有测点而没有独立通信设备。标准采样引用逻辑 point_id；厂家原始值只作为明确的诊断载荷，不能污染标准单位/符号。
+设备树只表达包含关系（cfg_device.path 即实时库记录键的设备路径）；部件的采集通信设备由 source_device_id 在配置侧表达，不在树上重复挂接。标准采样引用逻辑 point_id；厂家原始值只作为明确的诊断载荷，不能污染标准单位/符号。
 
 ### 6.2 静态配置、快照与执行对象分离
 
@@ -247,7 +246,7 @@ UnitController              -> 策略模块：约束与控制决策
 | resolve_capability | device_id、capability_code → 启用点、命令与反馈定义 | 缺失/禁用依赖给出明确原因 |
 | validate_snapshot | 完整候选配置 → ValidationReport | 聚合有上限的字段错误，不返回首个 bool |
 
-`ValidationIssue` 至少含稳定错误码、对象 ID、字段路径、原因；`ValidationReport` 含 issues 和 truncated。校验覆盖身份唯一、资产无环、引用存在、类型/单位、范围、设备/通道多对多、协议声明操作能力、主来源唯一、命令反馈依赖和版本闭合。协议专有配置由受控 schema/校验器验证；通过静态校验不等于驱动已完成现场能力验收。
+`ValidationIssue` 至少含稳定错误码、对象 ID、字段路径、原因；`ValidationReport` 含 issues 和 truncated。校验覆盖身份唯一、设备树父链/成环/层级深度、引用存在、类型/单位、范围、设备/通道多对多、协议声明操作能力、主来源唯一、命令反馈依赖和版本闭合。协议专有配置由受控 schema/校验器验证；通过静态校验不等于驱动已完成现场能力验收。
 
 ## 7. 配置访问与版本生效
 
@@ -365,7 +364,7 @@ MySQL 不可用时停止受理和执行依赖持久状态的新常规控制；�
 
 ### 10.1 信封与载荷
 
-`EventEnvelope` 至少包含 schema_version、event_type、event_id、trace_id、producer_id、station_id/code、unit_id/code、asset_id、device_path、config_version、event_time、ingest_time。station 事件的 unit 字段为 null，根事件 device_path 为 `[]`；各事件 schema 明确允许为空的身份字段。
+`EventEnvelope` 至少包含 schema_version、event_type、event_id、trace_id、producer_id、station_id/code、unit_id/code、device_id、device_path、config_version、event_time、ingest_time。station 事件的 unit 字段为 null，根事件 device_path 为 `[]`；各事件 schema 明确允许为空的身份字段。
 
 | 事件类别 | 专属字段/责任 |
 | --- | --- |
@@ -373,7 +372,7 @@ MySQL 不可用时停止受理和执行依赖持久状态的新常规控制；�
 | control_intent | intent_id、目标能力、请求值、来源、actor、reason、期限；尚未允许执行 |
 | command | command_id、intent_id、目标、expected_config_version、owner_epoch、priority、expires_at；仅策略产生 |
 | command_result | command_id、状态、协议确认/设备反馈、原因；按状态机追加事件 |
-| alarm_event | alarm_id、生命周期事件、规则/资产/确认者及时间 |
+| alarm_event | alarm_id、生命周期事件、规则/所属设备/确认者及时间 |
 | config_changed / config_applied | scope、配置版本、发布 revision 或应用实例与结果 |
 
 type/schema 不支持时必须隔离并告警，不能反序列化为默认值继续执行。ZeroMQ 遥测首期载荷使用版本化 JSON；调用方通过受控 topic/scope 配置路由，不能在业务代码中拼物理帧。
@@ -458,7 +457,7 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | 当前路径/内容 | 目标归属 | 迁移重点 |
 | --- | --- | --- |
 | backend/src/models/base.h | common/core + common/model + codec | 拆分身份/枚举与 JSON 基类，保留旧枚举值转换表 |
-| backend/src/models/device.h、device_group.h | common/model/asset、device | 使用资产归属；设备通过 binding 引用通道 |
+| backend/src/models/device.h、device_group.h | common/model/device | 使用设备树归属；设备通过 binding 引用通道 |
 | backend/src/models/channel.h、slave.h | common/model/channel、binding | 从站地址迁到绑定，消除单设备通道假设；运行连接归采集 |
 | backend/src/models/point_runtime.hpp | common/model/point + realtime | 分离配置、实时值、厂家解码；保留值类型/质量/时间 |
 | backend/src/models/point_mapping.h | 对应标准绑定模型或策略派生点配置 | 现有公式映射不等于厂家点绑定，不能直接改名合并 |
@@ -502,7 +501,7 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 | --- | --- | --- |
 | C01 | 独立包含全部公开头，core/model 最小构建 | C++17 通过；无 Redis/MySQL/协议驱动隐式依赖 |
 | C02 | 同设备多通道、多设备共享总线、多单元同名 pcs01 | 稳定身份/绑定准确，不按全局 device_code 错误合并 |
-| C03 | 资产环、跨站父节点、缺失引用、禁用能力、命令缺反馈 | 校验给出对象/字段/原因，未配置或无效值不变成 0 |
+| C03 | 设备树成环、层级非法、缺失引用、禁用能力、命令缺反馈 | 校验给出对象/字段/原因，未配置或无效值不变成 0 |
 | C04 | int64/uint64 边界、null、坏质量、UTC 微秒、未知枚举 | C++/TypeScript fixtures 一致，无浮点精度损失 |
 | C05 | 事务中业务写成功、outbox 写失败；提交响应丢失 | 前者全部回滚；后者 Unknown，按原 ID 对账，无重复业务效果 |
 | C06 | 两发布者同基版本并发、快照缺失/校验失败、旧发布迟到 | 一方条件失败；不拼版本；旧发布不回退新 active |
@@ -533,10 +532,10 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 
 ### 2026-09-19 P0/P1 公共模块基线落地
 
-- 新增 `backend/include/common/`：core（result/call_context/identity/time，纯 C++17）、model（asset/device/point/channel/binding/capability/command/alarm/validation/catalog/model_view）、codec（model_codec/event_codec，nlohmann 为私有实现）、config、database、messaging、observability 接口头文件。
+- 新增 `backend/include/common/`：core（result/call_context/identity/time，纯 C++17）、model（device/point/channel/binding/capability/command/alarm/validation/catalog/model_view）、codec（model_codec/event_codec，nlohmann 为私有实现）、config、database、messaging、observability 接口头文件。
 - 新增 `backend/src/common/model/`（validation.cpp、model_view.cpp）、`backend/src/common/codec/`（model_codec.cpp、event_codec.cpp），实现纯校验与 JSON 编解码。
 - CMake targets：ems_common_core（INTERFACE）、ems_common_model（STATIC）、ems_messaging_api（INTERFACE）、ems_common_codec（STATIC）、ems_config_api/ems_database_api/ems_observability（INTERFACE）；公共目标统一 CXX_STANDARD 17。
-- 测试：`backend/tests/common/`（test_core/test_model/test_codec，60 用例）覆盖身份/结果/时间、资产环/跨站/引用/绑定/反馈校验、多对多与共享总线、64 位整数与事件信封往返；MinGW g++ C++17 全部通过（C01/C02/C03/C04 局部覆盖）。
+- 测试：`backend/tests/common/`（test_core/test_model/test_codec，60 用例）覆盖身份/结果/时间、设备树成环/层级/引用/绑定/反馈校验、多对多与共享总线、64 位整数与事件信封往返；MinGW g++ C++17 全部通过（C01/C02/C03/C04 局部覆盖）。
 - 未完成项：contracts 目录与黄金 fixtures、MySQL 迁移与 Repository 实现（P2）、实时后端（P3）、Streams 实现（P4）、Drogon Web 接入（P5）、Linux/ARM 工具链构建检查。旧 models/、db/、rtdb/ 迁移按第 14 节另行走。
 
 ### 2026-09-19 目录规范化与第二批实现

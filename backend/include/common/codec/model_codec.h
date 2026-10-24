@@ -14,7 +14,6 @@
 #pragma once
 
 #include <common/core/result.h>
-#include <common/model/asset.h>
 #include <common/model/binding.h>
 #include <common/model/device.h>
 #include <common/model/point.h>
@@ -39,20 +38,6 @@ core::Result<std::string> encode_point_value(model::ValueType type, const model:
  */
 core::Result<model::PointValue> decode_point_value(model::ValueType type,
                                                    const std::string& json_text);
-
-/**
- * @brief 将资产节点编码为 JSON。
- * @param[in] asset 资产对象。
- * @return 成功时包含结果；失败时包含错误信息。
- */
-core::Result<std::string> encode_asset(const model::AssetNode& asset);
-
-/**
- * @brief 从 JSON 解码资产节点。
- * @param[in] json_text JSON 文本。
- * @return 成功时包含结果；失败时包含错误信息。
- */
-core::Result<model::AssetNode> decode_asset(const std::string& json_text);
 
 /**
  * @brief 将设备编码为 JSON。

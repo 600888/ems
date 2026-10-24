@@ -5,11 +5,13 @@
  * 公共模型采用值对象、稳定 ID 引用和只读集合，不用双向 shared_ptr
  * 拼出可变对象图。聚合配置在构建时建立索引；发布后通过
  * shared_ptr<const ConfigSnapshot> 共享，读取者持有旧版本期间旧对象保持有效。
+ *
+ * 设备组织为单一设备树（cfg_device 一棵树，node_kind 区分站/单元/设备/
+ * 部件），没有资产概念。
  */
 #pragma once
 
 #include <common/core/identity.h>
-#include <common/model/asset.h>
 #include <common/model/binding.h>
 #include <common/model/capability.h>
 #include <common/model/channel.h>
@@ -30,10 +32,9 @@ namespace ems::model {
 class ModelCatalog {
    public:
     // ---- 数据集合（发布前可填充；build_indexes 后视作只读）----
-    std::vector<AssetNode> assets;
-    std::vector<EssUnitInfo> ess_units;
-    std::vector<DeviceTypeDefinition> device_types;
+    /// 设备树：站/单元/设备/部件统一在此，parent_device_id 自引用成树
     std::vector<Device> devices;
+    std::vector<DeviceTypeDefinition> device_types;
     /// 四遥点分四个集合保存，字段按类型拆分，不共用可空列
     std::vector<YcPoint> points_yc;
     std::vector<YxPoint> points_yx;
@@ -99,7 +100,7 @@ class ModelCatalog {
 
     /**
      * @brief 构建索引并执行纯模型校验（design.md 6.3 validate_snapshot）
-     * @return 聚合校验报告（身份唯一、资产无环、引用存在、类型/单位、
+     * @return 聚合校验报告（身份唯一、设备树成环/层级、引用存在、类型/单位、
      *         多对多绑定、能力依赖、路由引用、版本闭合等）
      */
     ValidationReport build_indexes();
@@ -111,18 +112,18 @@ class ModelCatalog {
     bool indexed() const noexcept { return indexed_; }
 
     /**
-     * @brief 按稳定资产 ID 查找；只查询内存索引。
-     * @param[in] id 对象标识。
-     * @return 匹配的对象指针；未找到时为空。
-     */
-    const AssetNode* find_asset(const core::AssetId& id) const;
-
-    /**
-     * @brief 按稳定设备 ID 查找；不存在返回 nullptr。
-     * @param[in] id 对象标识。
+     * @brief 按稳定节点 ID 查找设备树节点；不存在返回 nullptr。
+ * @param[in] id 对象标识。
      * @return 匹配的对象指针；未找到时为空。
      */
     const Device* find_device(const core::DeviceId& id) const;
+
+    /**
+     * @brief 从设备树节点向上找到其所属站根。
+     * @param[in] id 任意设备树节点 ID。
+     * @return 站根节点指针；节点不存在、父链断裂或成环时为空。
+     */
+    const Device* find_station_root(const core::DeviceId& id) const;
 
     /**
      * @brief 按稳定点 ID 查找；不存在返回 nullptr。
@@ -167,9 +168,9 @@ class ModelCatalog {
         const core::DeviceId& device_id, std::optional<BindingOp> op = std::nullopt) const;
 
     /// 设备的点列表（四遥混合，按 遥测/遥信/遥控/遥调 顺序）
-    /// @param[in] asset_id asset_id 的标识。
+    /// @param[in] owner_device_id 归属设备树节点 ID。
     /// @return 公共字段视图列表。
-    std::vector<const PointBase*> points_of_asset(const core::AssetId& asset_id) const;
+    std::vector<const PointBase*> points_of_device(const core::DeviceId& owner_device_id) const;
 
    private:
     /**
@@ -198,7 +199,6 @@ class ModelCatalog {
      */
     const PointBase* point_at(const PointSlot& slot) const;
 
-    std::unordered_map<std::string, std::size_t> asset_index_;
     std::unordered_map<std::string, std::size_t> device_index_;
     std::unordered_map<std::string, PointSlot> point_index_;
     std::unordered_map<std::string, std::size_t> channel_index_;
@@ -207,8 +207,8 @@ class ModelCatalog {
     std::unordered_map<std::string, std::size_t> device_type_index_;
     /// device_id → 绑定下标集合
     std::unordered_map<std::string, std::vector<std::size_t>> device_bindings_index_;
-    /// asset_id → 点索引项集合
-    std::unordered_map<std::string, std::vector<PointSlot>> asset_points_index_;
+    /// 归属节点 ID → 点索引项集合
+    std::unordered_map<std::string, std::vector<PointSlot>> device_points_index_;
     std::unordered_set<
         std::string> mutable issued_codes_;  ///< 校验去重（同对象同码同字段只报一次）
 

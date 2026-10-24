@@ -84,8 +84,13 @@ Json checked_rows(DeviceRequest& request, Json& job, Json rows) {
             if (offset < 0 || count < 1 || count > 4 || offset + count > 65536 ||
                 row.at("scale_factor").get<double>() == 0)
                 throw ApiError(422, "InvalidArgument", "import_value_bounds");
-            if (row.at("byte_order") != "" && row.at("byte_order") != "ab" &&
-                row.at("byte_order") != "ba")
+            // 字节序契约与公共解析器一致（point_table.cpp）：双寄存器点必须给出
+            // ABCD/BADC/CDAB/DCBA 之一，单寄存器与线圈点必须为空。
+            const auto wire = row.at("wire_type").get<std::string>();
+            const bool wide = wire == "i32" || wire == "u32" || wire == "f32";
+            const auto& order = row.at("byte_order");
+            if (wide ? (order != "ABCD" && order != "BADC" && order != "CDAB" && order != "DCBA")
+                     : (!order.is_string() || !order.get<std::string>().empty()))
                 throw ApiError(422, "Unsupported", "wire_layout_unsupported");
             if (!row.at("semantic_code").get<std::string>().empty()) {
                 DeviceQuery q;

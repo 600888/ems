@@ -92,7 +92,7 @@ class IConfigRepository {
 struct IntentRow {
     std::string intent_id;
     std::string capability_code;
-    std::string target_asset_id;
+    std::string target_device_id;  ///< 目标设备树节点
     std::string actor;
     std::string reason;
     std::string payload_json;
@@ -102,7 +102,7 @@ struct IntentRow {
 struct CommandRow {
     std::string command_id;
     std::string intent_id;
-    std::string target_asset_id;
+    std::string target_device_id;  ///< 目标设备树节点
     std::string expected_config_version;
     std::uint64_t owner_epoch{0};
     std::string status;  ///< model::to_string(CommandStatus)
@@ -173,7 +173,7 @@ class IControlRepository {
 struct AlarmEventRow {
     std::string event_id;
     std::string alarm_code;
-    std::string asset_id;
+    std::string device_id;  ///< 告警所属设备树节点
     std::string lifecycle;
     std::string acknowledged_by;
     std::string detail;

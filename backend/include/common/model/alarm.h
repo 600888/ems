@@ -36,9 +36,9 @@ struct AlarmDefinition {
 
 /// 告警事件
 struct AlarmEvent {
-    core::EventId event_id;  ///< 持久受理前生成
-    std::string alarm_code;  ///< 规则/定义引用
-    core::AssetId asset_id;
+    core::EventId event_id;    ///< 持久受理前生成
+    std::string alarm_code;    ///< 规则/定义引用
+    core::DeviceId device_id;  ///< 告警所属设备树节点
     AlarmLifecycle lifecycle{AlarmLifecycle::Occurred};
     std::string acknowledged_by;  ///< 确认者（lifecycle == Acknowledged 时有效）
     std::string detail;           ///< 脱敏详情

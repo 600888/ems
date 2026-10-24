@@ -207,14 +207,15 @@ Result<Record> RedisStore::read(const RecordKey& key, const CallContext& ctx) {
     });
 }
 
-Result<std::vector<RecordKey>> RedisStore::listAssets(const Scope& scope, const CallContext& ctx) {
+Result<std::vector<RecordKey>> RedisStore::listDeviceStates(const Scope& scope,
+                                                            const CallContext& ctx) {
     constexpr auto effect = WriteEffect::NotApplicable;
-    if (!validate_record_key({scope, RecordKind::AssetState, {}, {}}).empty())
+    if (!validate_record_key({scope, RecordKind::DeviceState, {}, {}}).empty())
         return error(ErrorCode::InvalidArgument, effect, "invalid scope");
     return impl_->run<std::vector<RecordKey>>(
         ctx, false, [&](redis::Redis& client) -> Result<std::vector<RecordKey>> {
             const auto pattern =
-                "ems:" + hash_tag({scope, RecordKind::AssetState, {}, {}}) + "*:rt:state";
+                "ems:" + hash_tag({scope, RecordKind::DeviceState, {}, {}}) + "*:rt:state";
             std::set<std::string> seen;
             std::vector<RecordKey> out;
             long long cursor = 0;
@@ -225,7 +226,7 @@ Result<std::vector<RecordKey>> RedisStore::listAssets(const Scope& scope, const 
                 std::vector<std::string> page;
                 cursor = client.scan(cursor, pattern, 128, std::back_inserter(page));
                 for (const auto& physical : page) {
-                    auto key = asset_key(scope, physical);
+                    auto key = device_state_key(scope, physical);
                     if (!key || !seen.insert(physical).second) continue;
                     if (out.size() == 65536)
                         return error(ErrorCode::ResourceExhausted, effect,

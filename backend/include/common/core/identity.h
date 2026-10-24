@@ -2,8 +2,10 @@
  * @file identity.h
  * @brief 稳定身份基础类型（website/docs/common/design.md 第 5.2 节）
  *
- * - StationId/AssetId/DeviceId/PointId 等为强类型包装的稳定 ID 文本；
+ * - StationId/EssUnitId/DeviceId/PointId 等为强类型包装的稳定 ID 文本；
  *   旧数字 ID 转十进制文本，迁移不重新编号。
+ * - 设备树节点（站/单元/设备/部件）统一使用 DeviceId，与 cfg_device.device_id
+ *   一致；没有资产概念。
  * - ConfigVersion 只比较相等；Revision 是 CAS 不透明令牌，禁止当序号排序。
  * - source_epoch/owner_epoch 分别表示样本来源授权代次、控制所有权代次，不可互换。
  * - sequence 为同一已授权来源代次内递增的 uint64，换来源不能直接比较。
@@ -86,8 +88,6 @@ struct StationIdTag {};
 
 struct EssUnitIdTag {};
 
-struct AssetIdTag {};
-
 struct DeviceIdTag {};
 
 struct PointIdTag {};
@@ -104,8 +104,7 @@ struct ConfigVersionTag {};
 
 using StationId = StrongId<StationIdTag>;          ///< 站
 using EssUnitId = StrongId<EssUnitIdTag>;          ///< 储能单元（调度资源）
-using AssetId = StrongId<AssetIdTag>;              ///< 资产节点
-using DeviceId = StrongId<DeviceIdTag>;            ///< 设备
+using DeviceId = StrongId<DeviceIdTag>;            ///< 设备树节点（站/单元/设备/部件共用）
 using PointId = StrongId<PointIdTag>;              ///< 标准点实例
 using ChannelId = StrongId<ChannelIdTag>;          ///< 通道
 using EventId = StrongId<EventIdTag>;              ///< 事件（持久受理前生成，重试不变）

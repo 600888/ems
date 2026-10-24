@@ -2,7 +2,7 @@
  * @file validation.cpp
  * @brief ModelCatalog 索引构建与纯模型校验实现（design.md 第 6.3 节）
  *
- * 校验覆盖：身份唯一、资产无环、不跨站挂接、引用存在、类型/单位、
+ * 校验覆盖：身份唯一、设备树父链/成环/层级深度、引用存在、类型/单位、
  * 设备/通道多对多、命令反馈依赖、路由引用、能力依赖、版本闭合。
  * 聚合有上限的字段错误，不返回首个 bool。
  */
@@ -18,39 +18,66 @@ namespace {
 /// 单类校验错误聚合上限（超过则置 truncated）
 constexpr std::size_t kMaxIssues = 256;
 
-/// 资产环检测：从根出发 DFS，沿 parent 链检测回边
-bool detect_asset_cycle(const ModelCatalog& catalog, std::vector<ValidationIssue>& issues) {
+/// 设备树最大深度（站根为 0，与 cfg_device.depth 0–8 一致）
+constexpr int kMaxTreeDepth = 8;
+
+/// 设备树环检测：从根出发 DFS，沿 parent 链检测回边
+bool detect_device_cycle(const ModelCatalog& catalog, std::vector<ValidationIssue>& issues) {
     std::unordered_map<std::string, int> color;  // 0=未访问 1=在栈 2=完成
     bool cyclic = false;
-    for (const auto& asset : catalog.assets) {
-        color[asset.asset_id.value()] = 0;
+    for (const auto& node : catalog.devices) {
+        color[node.device_id.value()] = 0;
     }
-    // 迭代 DFS：沿 parent_asset_id 走到根；路径上的节点若再次出现即成环
-    for (const auto& start : catalog.assets) {
-        if (color[start.asset_id.value()] != 0) continue;
-        std::vector<const AssetNode*> stack;
-        const AssetNode* cur = &start;
-        while (cur != nullptr && color[cur->asset_id.value()] == 0) {
-            color[cur->asset_id.value()] = 1;
+    // 迭代 DFS：沿 parent_device_id 走到根；路径上的节点若再次出现即成环
+    for (const auto& start : catalog.devices) {
+        if (color[start.device_id.value()] != 0) continue;
+        std::vector<const Device*> stack;
+        const Device* cur = &start;
+        while (cur != nullptr && color[cur->device_id.value()] == 0) {
+            color[cur->device_id.value()] = 1;
             stack.push_back(cur);
-            if (!cur->parent_asset_id.has_value()) {
+            if (cur->parent_device_id.empty()) {
                 cur = nullptr;
                 break;
             }
-            const AssetNode* parent = catalog.find_asset(*cur->parent_asset_id);
-            cur = parent;
+            cur = catalog.find_device(cur->parent_device_id);
         }
-        if (cur != nullptr && color[cur->asset_id.value()] == 1) {
+        if (cur != nullptr && color[cur->device_id.value()] == 1) {
             // 回到栈中节点：成环
             cyclic = true;
-            issues.push_back({validation_code::kAssetCycle, cur->asset_id.value(),
-                              "parent_asset_id", "资产引用成环"});
+            issues.push_back({validation_code::kDeviceCycle, cur->device_id.value(),
+                              "parent_device_id", "设备树引用成环"});
         }
         for (auto* n : stack) {
-            color[n->asset_id.value()] = 2;
+            color[n->device_id.value()] = 2;
         }
     }
     return cyclic;
+}
+
+/**
+ * @brief 判断子节点种类挂在父节点种类下是否合法。
+ *
+ * 站根下允许直接挂公共设备（如站级电表，对应键
+ * ems:rt:point:{station:<code>}:<设备code>:...）；单元下挂设备与部件。
+ * @param[in] child 子节点种类。
+ * @param[in] parent 父节点种类。
+ * @return true 表示层级组合合法。
+ */
+bool parent_kind_allows(DeviceNodeKind child, DeviceNodeKind parent) {
+    switch (child) {
+        case DeviceNodeKind::Station:
+            return false;  // 站根不能有父节点
+        case DeviceNodeKind::Unit:
+            return parent == DeviceNodeKind::Station;
+        case DeviceNodeKind::Device:
+            return parent == DeviceNodeKind::Station || parent == DeviceNodeKind::Unit ||
+                   parent == DeviceNodeKind::Device;
+        case DeviceNodeKind::Component:
+            return parent == DeviceNodeKind::Station || parent == DeviceNodeKind::Unit ||
+                   parent == DeviceNodeKind::Device || parent == DeviceNodeKind::Component;
+    }
+    return false;
 }
 
 }  // namespace
@@ -90,7 +117,6 @@ void ModelCatalog::add_issue(std::vector<ValidationIssue>& issues, const char* c
 }
 
 ValidationReport ModelCatalog::build_indexes() {
-    asset_index_.clear();
     device_index_.clear();
     point_index_.clear();
     channel_index_.clear();
@@ -98,36 +124,13 @@ ValidationReport ModelCatalog::build_indexes() {
     capability_index_.clear();
     device_type_index_.clear();
     device_bindings_index_.clear();
-    asset_points_index_.clear();
+    device_points_index_.clear();
     issued_codes_.clear();
 
     ValidationReport report;
     auto& issues = report.issues;
 
     // ---- 索引构建 + 身份唯一 ----
-    for (std::size_t i = 0; i < assets.size(); ++i) {
-        const auto& a = assets[i];
-        if (a.asset_id.empty()) {
-            add_issue(issues, validation_code::kInvalidValue, "", "asset_id", "资产 ID 为空");
-            continue;
-        }
-        if (!asset_index_.emplace(a.asset_id.value(), i).second) {
-            add_issue(issues, validation_code::kDuplicateIdentity, a.asset_id.value(), "asset_id",
-                      "资产 ID 重复");
-        }
-    }
-    for (std::size_t i = 0; i < device_types.size(); ++i) {
-        auto& t = device_types[i];
-        if (t.type_version_id.empty()) {
-            add_issue(issues, validation_code::kInvalidValue, "", "type_version_id",
-                      "设备类型版本 ID 为空");
-            continue;
-        }
-        if (!device_type_index_.emplace(t.type_version_id, i).second) {
-            add_issue(issues, validation_code::kDuplicateIdentity, t.type_version_id,
-                      "type_version_id", "设备类型版本重复");
-        }
-    }
     for (std::size_t i = 0; i < devices.size(); ++i) {
         const auto& d = devices[i];
         if (d.device_id.empty()) {
@@ -140,6 +143,18 @@ ValidationReport ModelCatalog::build_indexes() {
             continue;
         }
         device_bindings_index_.emplace(d.device_id.value(), std::vector<std::size_t>{});
+    }
+    for (std::size_t i = 0; i < device_types.size(); ++i) {
+        auto& t = device_types[i];
+        if (t.type_version_id.empty()) {
+            add_issue(issues, validation_code::kInvalidValue, "", "type_version_id",
+                      "设备类型版本 ID 为空");
+            continue;
+        }
+        if (!device_type_index_.emplace(t.type_version_id, i).second) {
+            add_issue(issues, validation_code::kDuplicateIdentity, t.type_version_id,
+                      "type_version_id", "设备类型版本重复");
+        }
     }
     {
         // 四遥点分散在四个集合，索引项记录（类型, 下标），统一去重与反查
@@ -155,7 +170,7 @@ ValidationReport ModelCatalog::build_indexes() {
                               "point_id", "点 ID 重复");
                     continue;
                 }
-                asset_points_index_[p.asset_id.value()].push_back(PointSlot{type, i});
+                device_points_index_[p.owner_device_id.value()].push_back(PointSlot{type, i});
             }
         };
         index_points(PointType::YC, points_yc);
@@ -203,40 +218,68 @@ ValidationReport ModelCatalog::build_indexes() {
         }
     }
 
-    // ---- 资产树：父节点存在、不跨站挂接、无环 ----
-    for (const auto& a : assets) {
-        if (!a.parent_asset_id.has_value()) continue;
-        auto it = asset_index_.find(a.parent_asset_id->value());
-        if (it == asset_index_.end()) {
-            add_issue(issues, validation_code::kMissingReference, a.asset_id.value(),
-                      "parent_asset_id", "父资产不存在: " + a.parent_asset_id->value());
-            continue;
-        }
-        const auto& parent = assets[it->second];
-        if (!(parent.station_id == a.station_id)) {
-            add_issue(issues, validation_code::kCrossStationParent, a.asset_id.value(),
-                      "parent_asset_id", "父资产属于其他站，不能跨站挂接");
-        }
-    }
-    detect_asset_cycle(*this, issues);
-
-    // ---- 引用存在：设备→资产；点→资产 ----
+    // ---- 设备树：父节点存在、层级规则、无环、深度 ----
     for (const auto& d : devices) {
         if (d.device_id.empty() || !device_index_.count(d.device_id.value())) continue;
-        if (!asset_index_.count(d.asset_id.value())) {
-            add_issue(issues, validation_code::kMissingReference, d.device_id.value(), "asset_id",
-                      "设备所属资产不存在: " + d.asset_id.value());
+        if (d.parent_device_id.empty()) {
+            if (d.node_kind != DeviceNodeKind::Station) {
+                add_issue(issues, validation_code::kInvalidValue, d.device_id.value(),
+                          "parent_device_id", "只有站根节点可以没有父节点");
+            }
+            continue;
         }
-        if (!device_type_index_.count(d.type_version_id)) {
-            add_issue(issues, validation_code::kVersionMismatch, d.device_id.value(),
-                      "type_version_id", "设备类型版本不存在: " + d.type_version_id);
+        if (d.node_kind == DeviceNodeKind::Station) {
+            add_issue(issues, validation_code::kInvalidValue, d.device_id.value(),
+                      "parent_device_id", "站根节点不能挂到其他节点下");
+            continue;
+        }
+        auto it = device_index_.find(d.parent_device_id.value());
+        if (it == device_index_.end()) {
+            add_issue(issues, validation_code::kMissingReference, d.device_id.value(),
+                      "parent_device_id", "父节点不存在: " + d.parent_device_id.value());
+            continue;
+        }
+        const auto& parent = devices[it->second];
+        if (!parent_kind_allows(d.node_kind, parent.node_kind)) {
+            add_issue(issues, validation_code::kInvalidValue, d.device_id.value(),
+                      "parent_device_id",
+                      std::string("父节点种类不允许: ") + to_string(parent.node_kind) + " 下挂 " +
+                          to_string(d.node_kind));
+        }
+    }
+    detect_device_cycle(*this, issues);
+
+    // ---- 深度：站根为 0，整树不超过 cfg_device.depth 上限 ----
+    if (issues.empty()) {
+        for (const auto& d : devices) {
+            const Device* cur = find_device(d.device_id);
+            int depth = 0;
+            while (cur != nullptr && !cur->parent_device_id.empty() && depth <= kMaxTreeDepth) {
+                cur = find_device(cur->parent_device_id);
+                ++depth;
+            }
+            if (depth > kMaxTreeDepth) {
+                add_issue(issues, validation_code::kInvalidValue, d.device_id.value(),
+                          "parent_device_id", "设备树深度超过 8 级");
+            }
+        }
+    }
+
+    // ---- 引用存在：设备/部件 → 类型版本；点 → 归属节点 ----
+    for (const auto& d : devices) {
+        if (d.device_id.empty() || !device_index_.count(d.device_id.value())) continue;
+        if (d.node_kind == DeviceNodeKind::Device || d.node_kind == DeviceNodeKind::Component) {
+            if (!device_type_index_.count(d.type_version_id)) {
+                add_issue(issues, validation_code::kVersionMismatch, d.device_id.value(),
+                          "type_version_id", "设备类型版本不存在: " + d.type_version_id);
+            }
         }
     }
     for_each_point([&](const PointBase& p) {
         if (p.point_id.empty() || !point_index_.count(p.point_id.value())) return;
-        if (!asset_index_.count(p.asset_id.value())) {
-            add_issue(issues, validation_code::kMissingReference, p.point_id.value(), "asset_id",
-                      "点所属资产不存在: " + p.asset_id.value());
+        if (!device_index_.count(p.owner_device_id.value())) {
+            add_issue(issues, validation_code::kMissingReference, p.point_id.value(),
+                      "owner_device_id", "点归属节点不存在: " + p.owner_device_id.value());
         }
         if (p.code.empty()) {
             add_issue(issues, validation_code::kInvalidValue, p.point_id.value(), "code",
@@ -358,14 +401,22 @@ ValidationReport ModelCatalog::build_indexes() {
     return report;
 }
 
-const AssetNode* ModelCatalog::find_asset(const core::AssetId& id) const {
-    auto it = asset_index_.find(id.value());
-    return it == asset_index_.end() ? nullptr : &assets[it->second];
-}
-
 const Device* ModelCatalog::find_device(const core::DeviceId& id) const {
     auto it = device_index_.find(id.value());
     return it == device_index_.end() ? nullptr : &devices[it->second];
+}
+
+const Device* ModelCatalog::find_station_root(const core::DeviceId& id) const {
+    const Device* cur = find_device(id);
+    if (cur == nullptr) return nullptr;
+    // 父链由 build_indexes 校验过无环；这里仍限制步数防御未索引/坏输入
+    for (int step = 0; step <= kMaxTreeDepth + 1 && cur != nullptr; ++step) {
+        if (cur->parent_device_id.empty()) {
+            return cur->node_kind == DeviceNodeKind::Station ? cur : nullptr;
+        }
+        cur = find_device(cur->parent_device_id);
+    }
+    return nullptr;
 }
 
 const PointBase* ModelCatalog::point_at(const PointSlot& slot) const {
@@ -425,10 +476,11 @@ std::vector<const DeviceChannelBinding*> ModelCatalog::bindings_of_device(
     return result;
 }
 
-std::vector<const PointBase*> ModelCatalog::points_of_asset(const core::AssetId& asset_id) const {
+std::vector<const PointBase*> ModelCatalog::points_of_device(
+    const core::DeviceId& owner_device_id) const {
     std::vector<const PointBase*> result;
-    auto it = asset_points_index_.find(asset_id.value());
-    if (it == asset_points_index_.end()) return result;
+    auto it = device_points_index_.find(owner_device_id.value());
+    if (it == device_points_index_.end()) return result;
     result.reserve(it->second.size());
     for (const auto& slot : it->second) {
         if (const auto* p = point_at(slot)) result.push_back(p);

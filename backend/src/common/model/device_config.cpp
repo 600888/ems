@@ -50,10 +50,16 @@ ValidationReport validate_device_point_draft(const ModelCatalog& catalog,
                   "设备不存在");
         return report;
     }
-    const AssetNode* device_asset = catalog.find_asset(device->asset_id);
-    if (device_asset == nullptr) {
-        add_issue(report, validation_code::kMissingReference, draft.device_id.value(), "asset_id",
-                  "设备资产节点不存在");
+    if (device->node_kind != DeviceNodeKind::Device &&
+        device->node_kind != DeviceNodeKind::Component) {
+        add_issue(report, validation_code::kInvalidValue, draft.device_id.value(), "node_kind",
+                  "固有点配置目标必须是设备或部件节点");
+        return report;
+    }
+    const Device* station_root = catalog.find_station_root(device->device_id);
+    if (station_root == nullptr) {
+        add_issue(report, validation_code::kMissingReference, draft.device_id.value(),
+                  "parent_device_id", "设备不在任何站根之下");
         return report;
     }
     const DeviceTypeDefinition* type = catalog.find_device_type(device->type_version_id);
@@ -129,9 +135,9 @@ ValidationReport validate_device_point_draft(const ModelCatalog& catalog,
             add_issue(report, validation_code::kMissingReference, id, "point_id", "点实例不存在");
             continue;
         }
-        if (point->asset_id != device->asset_id) {
-            add_issue(report, validation_code::kInvalidValue, id, "asset_id",
-                      "首期固有点必须位于设备资产节点");
+        if (point->owner_device_id != device->device_id) {
+            add_issue(report, validation_code::kInvalidValue, id, "owner_device_id",
+                      "首期固有点必须位于目标设备节点");
         }
         if (point->code != config.standard_code) {
             add_issue(report, validation_code::kInvalidValue, id, "code",
@@ -191,7 +197,8 @@ ValidationReport validate_device_point_draft(const ModelCatalog& catalog,
             if (binding == nullptr || channel == nullptr || binding->device_id != draft.device_id ||
                 !binding->enabled || !channel->enabled || !has_operation(*binding, required_op) ||
                 !purpose_allows(channel->purpose, required_op) ||
-                channel->station_id != device_asset->station_id || route.vendor_address.empty() ||
+                channel->station_id.value() != station_root->device_id.value() ||
+                route.vendor_address.empty() ||
                 route.writable != (required_op == BindingOp::Control)) {
                 add_issue(report, validation_code::kInvalidValue, route.route_id, "binding_id",
                           "固有点路由的设备、通道、操作或读写权限不匹配");

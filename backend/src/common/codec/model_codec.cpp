@@ -195,46 +195,14 @@ core::Result<model::PointValue> decode_point_value(model::ValueType type,
     return schema_error("未知 ValueType");
 }
 
-// ---- AssetNode ----
-
-core::Result<std::string> encode_asset(const model::AssetNode& a) {
-    json j;
-    j["asset_id"] = id_to_json(a.asset_id.value());
-    j["station_id"] = id_to_json(a.station_id.value());
-    j["parent_asset_id"] = a.parent_asset_id.has_value()
-                               ? json(id_to_json(a.parent_asset_id->value()))
-                               : json(nullptr);
-    j["code"] = a.code;
-    j["name"] = a.name;
-    j["asset_type"] = static_cast<int>(a.asset_type);
-    return j.dump();
-}
-
-core::Result<model::AssetNode> decode_asset(const std::string& json_text) {
-    json j = json::parse(json_text, nullptr, false);
-    if (j.is_discarded()) return schema_error("AssetNode JSON 解析失败");
-    bool ok = true;
-    model::AssetNode a;
-    a.asset_id = core::AssetId(require_str(j, "asset_id", ok));
-    a.station_id = core::StationId(require_str(j, "station_id", ok));
-    if (!ok) return schema_error("AssetNode 缺少必需字段 asset_id/station_id");
-    if (j.contains("parent_asset_id") && !j["parent_asset_id"].is_null()) {
-        a.parent_asset_id = core::AssetId(json_to_id(j, "parent_asset_id"));
-    }
-    a.code = j.value("code", std::string{});
-    a.name = j.value("name", std::string{});
-    if (j.contains("asset_type") && j["asset_type"].is_number_integer()) {
-        a.asset_type = static_cast<model::AssetType>(j["asset_type"].get<int>());
-    }
-    return a;
-}
-
 // ---- Device ----
 
 core::Result<std::string> encode_device(const model::Device& d) {
     json j;
     j["device_id"] = id_to_json(d.device_id.value());
-    j["asset_id"] = id_to_json(d.asset_id.value());
+    j["parent_device_id"] =
+        d.parent_device_id.empty() ? json(nullptr) : json(id_to_json(d.parent_device_id.value()));
+    j["node_kind"] = static_cast<int>(d.node_kind);
     j["code"] = d.code;
     j["name"] = d.name;
     j["type_version_id"] = d.type_version_id;
@@ -251,8 +219,13 @@ core::Result<model::Device> decode_device(const std::string& json_text) {
     bool ok = true;
     model::Device d;
     d.device_id = core::DeviceId(require_str(j, "device_id", ok));
-    d.asset_id = core::AssetId(require_str(j, "asset_id", ok));
-    if (!ok) return schema_error("Device 缺少必需字段 device_id/asset_id");
+    if (!ok) return schema_error("Device 缺少必需字段 device_id");
+    if (j.contains("parent_device_id") && !j["parent_device_id"].is_null()) {
+        d.parent_device_id = core::DeviceId(json_to_id(j, "parent_device_id"));
+    }
+    if (j.contains("node_kind") && j["node_kind"].is_number_integer()) {
+        d.node_kind = static_cast<model::DeviceNodeKind>(j["node_kind"].get<int>());
+    }
     d.code = j.value("code", std::string{});
     d.name = j.value("name", std::string{});
     d.type_version_id = j.value("type_version_id", std::string{});
@@ -268,7 +241,7 @@ core::Result<model::Device> decode_device(const std::string& json_text) {
 core::Result<std::string> encode_point(const model::PointBase& p) {
     json j;
     j["point_id"] = id_to_json(p.point_id.value());
-    j["asset_id"] = id_to_json(p.asset_id.value());
+    j["owner_device_id"] = id_to_json(p.owner_device_id.value());
     j["code"] = p.code;
     j["name"] = p.name;
     j["point_type"] = point_type_name(p.point_type);
@@ -349,8 +322,8 @@ core::Result<model::AnyPoint> decode_point(const std::string& json_text) {
     model::AnyPoint point = model::make_point(type);
     model::PointBase* base = &model::as_base(point);
     base->point_id = core::PointId(require_str(j, "point_id", ok));
-    base->asset_id = core::AssetId(require_str(j, "asset_id", ok));
-    if (!ok) return schema_error("Point 缺少必需字段 point_id/asset_id");
+    base->owner_device_id = core::DeviceId(require_str(j, "owner_device_id", ok));
+    if (!ok) return schema_error("Point 缺少必需字段 point_id/owner_device_id");
     base->code = j.value("code", std::string{});
     base->name = j.value("name", std::string{});
     base->kind = kind;

@@ -78,7 +78,7 @@ std::string physical_key(const RecordKey& k) {
     switch (k.kind) {
         case RecordKind::Point:
             return s + ':' + k.name;
-        case RecordKind::AssetState:
+        case RecordKind::DeviceState:
             return s + ":rt:state";
         case RecordKind::ChannelState:
             return s + ":channel:" + k.name + ":rt:state";
@@ -88,8 +88,8 @@ std::string physical_key(const RecordKey& k) {
     return {};
 }
 
-std::optional<RecordKey> asset_key(const Scope& scope, std::string_view physical) {
-    RecordKey key{scope, RecordKind::AssetState, {}, {}};
+std::optional<RecordKey> device_state_key(const Scope& scope, std::string_view physical) {
+    RecordKey key{scope, RecordKind::DeviceState, {}, {}};
     const auto prefix = "ems:" + hash_tag(key);
     constexpr std::string_view suffix = ":rt:state";
     if (physical.size() < prefix.size() + suffix.size() ||

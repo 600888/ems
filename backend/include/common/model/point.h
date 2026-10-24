@@ -279,7 +279,7 @@ struct StandardPointDefinition {
  */
 struct PointBase {
     core::PointId point_id;                   ///< 稳定点 ID
-    core::AssetId asset_id;                   ///< 所属设备节点；部件节点的点由上位通信设备采集
+    core::DeviceId owner_device_id;           ///< 点归属设备树节点（设备/部件/单元根）
     std::string code;                         ///< 业务编码（非显示名称）
     std::string name;                         ///< 显示名称
     PointType point_type{PointType::YC};      ///< 四遥分类
@@ -371,18 +371,18 @@ inline AnyPoint make_point(PointType type) {
  * @brief 按类型目录的固有点定义创建一个点实例。
  * @param[in] definition 固有点定义（提供四遥分类、值类型、单位）。
  * @param[in] point_id 稳定点 ID。
- * @param[in] asset_id 所属设备节点 ID。
+ * @param[in] owner_device_id 归属设备树节点 ID（设备/部件/单元根）。
  * @param[in] code 业务编码。
  * @return 已填好身份与类型字段的点实例。
  */
 inline AnyPoint make_standard_point(const StandardPointDefinition& definition,
-                                    core::PointId point_id, core::AssetId asset_id,
+                                    core::PointId point_id, core::DeviceId owner_device_id,
                                     std::string code) {
     AnyPoint point = make_point(definition.point_type);
     std::visit(
         [&](auto& p) {
             p.point_id = std::move(point_id);
-            p.asset_id = std::move(asset_id);
+            p.owner_device_id = std::move(owner_device_id);
             p.code = std::move(code);
             p.name = definition.semantic_code;
             p.value_type = definition.value_type;

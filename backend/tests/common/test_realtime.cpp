@@ -126,10 +126,10 @@ TEST(RealtimeKey, CommandStateRequiresEmptyPathAndId) {
     EXPECT_FALSE(validate_record_key(k).empty());
 }
 
-TEST(RealtimeKey, AssetStateForbidsName) {
+TEST(RealtimeKey, DeviceStateForbidsName) {
     RecordKey k;
     k.scope = Scope{ScopeKind::Unit, "u1"};
-    k.kind = RecordKind::AssetState;
+    k.kind = RecordKind::DeviceState;
     EXPECT_TRUE(validate_record_key(k).empty());
     k.name = "x";
     EXPECT_FALSE(validate_record_key(k).empty());

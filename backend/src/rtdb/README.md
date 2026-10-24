@@ -12,7 +12,8 @@
 
 类型化门面 `ems::rtdb::RealtimeService`（`rtdb/client/realtime_service.h`）在同一动态库内
 提供测点/设备/通道状态、来源授权核对、序号与重复判断、新鲜度、作用域配置版本记录和
-能力运行条件。运行目录由 `buildRuntimeCatalog()` 从已发布模型编译。管理 RPC、来源授权
+能力运行条件。运行目录由 `buildRuntimeCatalog()` 从配置服务投影的设备树快照编译
+（只有设备树，没有资产概念）。管理 RPC、来源授权
 协调流程、可信部署发现和受控迁移编排仍待实现，业务锁不能代替控制授权。
 
 ```text
@@ -152,7 +153,7 @@ auto client = ems::rtdb::createRtDb(config);
 旧 bool 门面通过 getLastError 提供说明；需要结构化错误/WriteEffect 时使用记录 API。
 本进程配置缓存沿用原模型，不是跨进程配置发布服务。
 
-旧逻辑字符串、文档和测点包装存放在作用域内的 business 资产路径下，逻辑键以可逆
+旧逻辑字符串、文档和测点包装存放在作用域内的 business 设备路径下，逻辑键以可逆
 十六进制路径编码，prefix+逻辑键总长最多 217 字节。这是兼容映射，不是来源授权门面。
 旧 Redis 原始键不会自动读入新布局，部署时须停写并显式迁移或重新采集，不能混跑旧写者。
 setHash 保留合并语义，replaceHash 和测点写入完整替换。文档 TTL 使用 expires_ms，

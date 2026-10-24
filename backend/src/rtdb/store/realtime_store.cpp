@@ -15,7 +15,7 @@ std::string validate_record_key(const RecordKey& key) {
     if (key.device_path.size() > 8) return "device path depth exceeded";
     for (const auto& part : key.device_path)
         if (!detail::valid_code(part, true)) return "invalid/reserved device path code";
-    if (key.kind != RecordKind::AssetState && key.kind != RecordKind::CommandState &&
+    if (key.kind != RecordKind::DeviceState && key.kind != RecordKind::CommandState &&
         !detail::valid_code(key.name))
         return "invalid point/channel code";
     if (key.kind == RecordKind::CommandState) {
@@ -56,10 +56,10 @@ std::string validate_record_key(const RecordKey& key) {
                 return "Point 设备路径超过最大深度";
             }
             break;
-        case RecordKind::AssetState:
-            // AssetState 的 name 为空
+        case RecordKind::DeviceState:
+            // DeviceState 的 name 为空（设备状态记录与作用域运行记录共用）
             if (!key.name.empty()) {
-                return "AssetState 不允许 name 字段";
+                return "DeviceState 不允许 name 字段";
             }
             break;
         default:

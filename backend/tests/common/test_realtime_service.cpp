@@ -88,96 +88,77 @@ class MemoryStore final : public RealtimeStoreBase {
     std::uint64_t counter_{0};
 };
 
-core::AssetId assetId(const char* value) { return core::AssetId{value}; }
+core::DeviceId nodeId(const char* value) { return core::DeviceId{value}; }
 
-model::ModelCatalog makeCatalog(bool power_enabled = true) {
-    model::ModelCatalog catalog;
+/// 设备树快照：站根 → 单元 → PCS（设备）+ 电池簇（部件），对应 cfg_device 树投影。
+DeviceTreeSnapshot makeTree(bool power_enabled = true) {
+    DeviceTreeSnapshot snapshot;
 
-    model::AssetNode station;
-    station.asset_id = assetId("st1");
-    station.station_id = core::StationId{"st1"};
+    CatalogNode station;
+    station.node_id = nodeId("st1");
+    station.parent_node_id = "";
+    station.kind = NodeKind::Station;
     station.code = "st1";
-    station.name = "测试站";
-    station.asset_type = model::AssetType::Station;
-    catalog.assets.push_back(station);
+    snapshot.nodes.push_back(station);
 
-    model::AssetNode unit;
-    unit.asset_id = assetId("unit01");
-    unit.station_id = core::StationId{"st1"};
-    unit.parent_asset_id = assetId("st1");
+    CatalogNode unit;
+    unit.node_id = nodeId("unit01");
+    unit.parent_node_id = "st1";
+    unit.kind = NodeKind::Unit;
     unit.code = "unit01";
-    unit.name = "储能单元 01";
-    unit.asset_type = model::AssetType::EssUnit;
-    catalog.assets.push_back(unit);
+    snapshot.nodes.push_back(unit);
 
-    model::AssetNode pcs_asset;
-    pcs_asset.asset_id = assetId("pcs_asset");
-    pcs_asset.station_id = core::StationId{"st1"};
-    pcs_asset.parent_asset_id = assetId("unit01");
-    pcs_asset.code = "pcs01";
-    pcs_asset.name = "储能变流器 01";
-    pcs_asset.asset_type = model::AssetType::Device;
-    catalog.assets.push_back(pcs_asset);
+    CatalogNode pcs;
+    pcs.node_id = nodeId("dev1");
+    pcs.parent_node_id = "unit01";
+    pcs.kind = NodeKind::Device;
+    pcs.code = "pcs01";
+    snapshot.nodes.push_back(pcs);
 
-    model::AssetNode rack;
-    rack.asset_id = assetId("rack01");
-    rack.station_id = core::StationId{"st1"};
-    rack.parent_asset_id = assetId("unit01");
+    CatalogNode rack;
+    rack.node_id = nodeId("rack01");
+    rack.parent_node_id = "unit01";
+    rack.kind = NodeKind::Component;
     rack.code = "rack01";
-    rack.name = "电池簇 01";
-    rack.asset_type = model::AssetType::Part;
-    catalog.assets.push_back(rack);
+    snapshot.nodes.push_back(rack);
 
-    model::Device device;
-    device.device_id = core::DeviceId{"dev1"};
-    device.asset_id = assetId("pcs_asset");
-    device.code = "pcs01";
-    device.name = "储能变流器 01";
-    device.type_version_id = "pcs-v1";
-    device.model_version_id = "pcs-125k-v23";
-    device.vendor = "示例厂商";
-    device.firmware_version = "FW2.1.6";
-    device.enabled = true;
-    catalog.devices.push_back(device);
-
-    model::YcPoint power;
+    CatalogPoint power;
     power.point_id = core::PointId{"p_power"};
-    power.asset_id = assetId("pcs_asset");
+    power.owner_node_id = "dev1";
     power.code = "active_power";
-    power.name = "有功功率";
+    power.point_type = model::PointType::YC;
+    power.kind = model::PointKind::Telemetry;
     power.value_type = model::ValueType::Double;
     power.unit = "kW";
     power.enabled = power_enabled;
-    catalog.add_point(power);
+    snapshot.points.push_back(power);
 
-    model::YxPoint status;
+    CatalogPoint status;
     status.point_id = core::PointId{"p_run"};
-    status.asset_id = assetId("pcs_asset");
+    status.owner_node_id = "dev1";
     status.code = "run_state";
-    status.name = "运行状态";
+    status.point_type = model::PointType::YX;
+    status.kind = model::PointKind::Status;
     status.value_type = model::ValueType::String;
-    status.enabled = true;
-    catalog.add_point(status);
+    snapshot.points.push_back(status);
 
-    model::YcPoint soc;
+    CatalogPoint soc;
     soc.point_id = core::PointId{"p_soc"};
-    soc.asset_id = assetId("rack01");
+    soc.owner_node_id = "rack01";
     soc.code = "soc";
-    soc.name = "SOC";
+    soc.point_type = model::PointType::YC;
+    soc.kind = model::PointKind::Telemetry;
     soc.value_type = model::ValueType::Double;
     soc.unit = "%";
-    soc.enabled = true;
-    catalog.add_point(soc);
+    snapshot.points.push_back(soc);
 
-    model::ChannelConfig channel;
+    CatalogChannel channel;
     channel.channel_id = core::ChannelId{"ch01"};
-    channel.station_id = core::StationId{"st1"};
     channel.code = "ch01";
-    channel.name = "主采集";
     channel.enabled = true;
-    catalog.channels.push_back(channel);
+    snapshot.channels.push_back(channel);
 
-    return catalog;
+    return snapshot;
 }
 
 RuntimeCatalogOptions makeOptions() {
@@ -221,7 +202,7 @@ model::PointSample sample(double value, std::uint64_t sequence, core::UtcMicros 
 class RealtimeServiceTest : public ::testing::Test {
    protected:
     void SetUp() override {
-        auto built = buildRuntimeCatalog(makeCatalog(), makeOptions());
+        auto built = buildRuntimeCatalog(makeTree(), makeOptions());
         ASSERT_TRUE(built.ok()) << (built.issues.empty() ? "" : built.issues.front());
         built.catalog.addCapability(
             RuntimeCapability{core::DeviceId{"dev1"},
@@ -244,18 +225,21 @@ class RealtimeServiceTest : public ::testing::Test {
     core::UtcMicros now_{0};
 };
 
-TEST_F(RealtimeServiceTest, CatalogResolvesAssetPathsWithoutInventingDevices) {
+TEST_F(RealtimeServiceTest, CatalogResolvesDevicePathsWithoutInventingDevices) {
     EXPECT_EQ(3u, catalog_->pointCount());
-    EXPECT_EQ(1u, catalog_->deviceCount());
+    EXPECT_EQ(2u, catalog_->deviceCount());  // 设备 pcs01 与部件 rack01 都是 cfg_device 节点
     EXPECT_EQ(1u, catalog_->channelCount());
     ASSERT_NE(nullptr, catalog_->findPoint(powerAddress()));
     ASSERT_NE(nullptr, catalog_->findPoint(socAddress()));
     const RuntimePoint* soc = catalog_->findPoint(socAddress());
     ASSERT_NE(nullptr, soc);
-    EXPECT_TRUE(soc->device_id.empty());  // 部件点不虚构通信设备
+    // 部件也是设备树节点：点挂部件节点，不虚构额外的通信设备
+    EXPECT_EQ(core::DeviceId{"rack01"}, soc->device_id);
+    ASSERT_NE(nullptr, catalog_->findDevice(core::DeviceId{"rack01"}));
     EXPECT_EQ(std::vector<std::string>({"rack01"}), soc->address.device_path);
     ASSERT_NE(nullptr, catalog_->findChannel(core::ChannelId{"ch01"}));
     EXPECT_EQ(ScopeKind::Station, catalog_->findChannel(core::ChannelId{"ch01"})->scope.kind);
+    EXPECT_EQ("st1", catalog_->findChannel(core::ChannelId{"ch01"})->scope.code);
 }
 
 TEST_F(RealtimeServiceTest, AppliesAndReadsTypedPointSample) {
@@ -343,7 +327,7 @@ TEST_F(RealtimeServiceTest, AuthorizePointSwitchesSourceAndRejectsOldSamples) {
 }
 
 TEST_F(RealtimeServiceTest, DisabledPointIsNotWritable) {
-    auto built = buildRuntimeCatalog(makeCatalog(false), makeOptions());
+    auto built = buildRuntimeCatalog(makeTree(false), makeOptions());
     ASSERT_TRUE(built.ok());
     auto catalog = std::make_shared<const RuntimeCatalog>(built.catalog);
     RealtimeService service(store_, catalog, [this] { return now_; });

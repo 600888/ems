@@ -50,7 +50,7 @@ struct RtDb::Impl {
 
     RecordKey key(const std::string& logical) const {
         RecordKey out{
-            {ScopeKind::Station, config.scope_code}, RecordKind::AssetState, {"business"}, {}};
+            {ScopeKind::Station, config.scope_code}, RecordKind::DeviceState, {"business"}, {}};
         const auto bytes = config.prefix + logical;
         constexpr char hex[] = "0123456789abcdef";
         for (std::size_t pos = 0; pos < bytes.size(); pos += 31) {
@@ -211,7 +211,7 @@ bool RtDb::initialize(const RtDbConfig& config) {
     impl_->config = config;
     if (config.timeoutMs <= 0 ||
         !validate_record_key(
-             {{ScopeKind::Station, config.scope_code}, RecordKind::AssetState, {}, {}})
+             {{ScopeKind::Station, config.scope_code}, RecordKind::DeviceState, {}, {}})
              .empty()) {
         impl_->error = "invalid business client configuration";
         return false;
@@ -348,7 +348,8 @@ std::vector<std::string> RtDb::keys(const std::string& pattern) {
     std::vector<std::string> out;
     if (!impl_->ready()) return out;
     const auto ctx = impl_->context();
-    auto listed = impl_->client->listAssets({ScopeKind::Station, impl_->config.scope_code}, ctx);
+    auto listed =
+        impl_->client->listDeviceStates({ScopeKind::Station, impl_->config.scope_code}, ctx);
     if (!core::is_ok(listed)) {
         impl_->fail(core::error_of(listed));
         return {};

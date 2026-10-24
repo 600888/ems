@@ -58,12 +58,13 @@ class EMS_RTDB_API SharedMemoryStore final : public RealtimeStoreBase {
     Result<Record> read(const RecordKey& key, const CallContext& ctx) override;
 
     /**
-     * @brief 在段级锁内枚举指定作用域的资产记录键。
+     * @brief 在段级锁内枚举指定作用域的设备状态记录键。
      * @param[in] scope 逻辑作用域。
      * @param[in] ctx 调用预算。
      * @return 至多 65536 个键；超时或超限时返回错误。
      */
-    Result<std::vector<RecordKey>> listAssets(const Scope& scope, const CallContext& ctx) override;
+    Result<std::vector<RecordKey>> listDeviceStates(const Scope& scope,
+                                                    const CallContext& ctx) override;
 
     /**
      * @copydoc IRealtimeStore::compareExchange

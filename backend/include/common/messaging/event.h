@@ -3,7 +3,7 @@
  * @brief 事件信封与事件类型（design.md 第 10.1 节）
  *
  * EventEnvelope 至少包含 schema_version、event_type、event_id、trace_id、
- * producer_id、station_id/code、unit_id/code、asset_id、device_path、
+ * producer_id、station_id/code、unit_id/code、device_id、device_path、
  * config_version、event_time、ingest_time。station 事件的 unit 字段为 null，
  * 根事件 device_path 为 []；各事件 schema 明确允许为空的身份字段。
  *
@@ -70,7 +70,7 @@ struct EventEnvelope {
 
     std::optional<core::StationId> station_id;  ///< 允许为空（按事件 schema）
     std::optional<core::EssUnitId> unit_id;     ///< station 事件为 null
-    std::optional<core::AssetId> asset_id;      ///< 允许为空（按事件 schema）
+    std::optional<core::DeviceId> device_id;    ///< 事件所属设备树节点；允许为空
     std::vector<std::string> device_path;       ///< 根事件为 []
 
     std::string config_version;                            ///< 产生事件时的配置版本

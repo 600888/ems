@@ -60,7 +60,7 @@ struct FakeRepository final : IHistoryCatalogRepository, IHistoryEventRepository
                                          "snapshot pending");
         }
         return PointSnapshot{
-            kind,    scope, version, point, "asset-1", "p1", "Power", "kW", ValueType::Integer,
+            kind,    scope, version, point, "dev-1", "p1", "Power", "kW", ValueType::Integer,
             "p_123", true};
     }
 

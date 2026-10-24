@@ -105,7 +105,8 @@ TEST(PointValueCodec, DecodeBadPayloadIsSchemaMismatch) {
 TEST(ModelCodec, DeviceRoundtrip) {
     model::Device d;
     d.device_id = core::DeviceId::from_number(12345);
-    d.asset_id = core::AssetId("d-1");
+    d.parent_device_id = core::DeviceId("u-1");
+    d.node_kind = model::DeviceNodeKind::Device;
     d.code = "pcs01";
     d.name = "PCS 一号";
     d.type_version_id = "pcs-type-v1";
@@ -117,16 +118,30 @@ TEST(ModelCodec, DeviceRoundtrip) {
     auto text = expect_ok(codec::encode_device(d));
     auto back = expect_ok(codec::decode_device(text));
     EXPECT_EQ(back.device_id, d.device_id);
-    EXPECT_EQ(back.asset_id, d.asset_id);
+    EXPECT_EQ(back.parent_device_id, d.parent_device_id);
+    EXPECT_EQ(back.node_kind, model::DeviceNodeKind::Device);
     EXPECT_EQ(back.code, d.code);
     EXPECT_EQ(back.name, d.name);
     EXPECT_FALSE(back.enabled);
 }
 
+TEST(ModelCodec, StationRootRoundtripWithoutParent) {
+    model::Device station;
+    station.device_id = core::DeviceId("st-1");
+    station.parent_device_id = core::DeviceId("");  // 站根 parent 为空
+    station.node_kind = model::DeviceNodeKind::Station;
+    station.code = "st01";
+
+    auto text = expect_ok(codec::encode_device(station));
+    auto back = expect_ok(codec::decode_device(text));
+    EXPECT_TRUE(back.parent_device_id.empty());
+    EXPECT_EQ(back.node_kind, model::DeviceNodeKind::Station);
+}
+
 TEST(ModelCodec, PointRoundtripWithFeedback) {
     model::YxPoint p;
     p.point_id = core::PointId("p-fb");
-    p.asset_id = core::AssetId("d-1");
+    p.owner_device_id = core::DeviceId("dev-1");
     p.code = "pcs01.charge_fb";
     p.value_type = model::ValueType::Bool;
     p.feedback_of = core::PointId("p-cmd");
@@ -137,6 +152,7 @@ TEST(ModelCodec, PointRoundtripWithFeedback) {
     const auto* base = &model::as_base(back);
     ASSERT_TRUE(base->feedback_of.has_value());
     EXPECT_EQ(*base->feedback_of, core::PointId("p-cmd"));
+    EXPECT_EQ(base->owner_device_id, core::DeviceId("dev-1"));
     EXPECT_EQ(base->kind, model::PointKind::Status);
     EXPECT_EQ(base->point_type, model::PointType::YX);
     EXPECT_TRUE(std::get<model::YxPoint>(back).soe);
@@ -145,7 +161,7 @@ TEST(ModelCodec, PointRoundtripWithFeedback) {
 TEST(ModelCodec, PointTypeSurvivesRoundtrip) {
     model::YtPoint p;
     p.point_id = core::PointId("p-yt");
-    p.asset_id = core::AssetId("d-1");
+    p.owner_device_id = core::DeviceId("dev-1");
     p.code = "set_active_power";
     p.scale_factor = 0.1;
     p.range_max = 500.0;
@@ -162,22 +178,9 @@ TEST(ModelCodec, PointTypeSurvivesRoundtrip) {
 TEST(ModelCodec, LegacyPointWithoutPointTypeDerivesFromKind) {
     // 旧快照没有 point_type：Command 只能推出遥控，遥调需重新发布
     const std::string legacy =
-        R"({"point_id":"p-legacy","asset_id":"d-1","code":"start","kind":"Command"})";
+        R"({"point_id":"p-legacy","owner_device_id":"dev-1","code":"start","kind":"Command"})";
     auto back = expect_ok(codec::decode_point(legacy));
     EXPECT_EQ(model::as_base(back).point_type, model::PointType::YK);
-}
-
-TEST(ModelCodec, AssetRoundtripNullParent) {
-    model::AssetNode a;
-    a.asset_id = core::AssetId("st-1");
-    a.station_id = core::StationId("st-1");
-    a.code = "st01";
-    a.asset_type = model::AssetType::Station;
-
-    auto text = expect_ok(codec::encode_asset(a));
-    auto back = expect_ok(codec::decode_asset(text));
-    EXPECT_FALSE(back.parent_asset_id.has_value());  // 根节点 parent 为 null
-    EXPECT_EQ(back.asset_type, model::AssetType::Station);
 }
 
 TEST(ModelCodec, BindingRoundtrip) {
@@ -238,7 +241,7 @@ TEST(ModelCodec, ImportedVendorRouteRejectsBadScaleType) {
 
 TEST(ModelCodec, DecodeMissingRequiredFieldIsSchemaMismatch) {
     // 缺 device_id
-    auto r = codec::decode_device("{\"asset_id\":\"d-1\"}");
+    auto r = codec::decode_device("{\"code\":\"pcs01\"}");
     ASSERT_FALSE(core::is_ok(r));
     EXPECT_EQ(core::error_of(r).code, core::ErrorCode::SchemaMismatch);
 }
@@ -262,7 +265,7 @@ TEST(EventCodec, EnvelopeRoundtrip) {
     e.producer_id = "collector-01";
     e.station_id = core::StationId("st-1");
     e.unit_id = core::EssUnitId("u-1");
-    e.asset_id = core::AssetId("d-1");
+    e.device_id = core::DeviceId("dev-1");
     e.device_path = {"pcs01"};
     e.config_version = "cv-7";
     e.event_time = 1726723200123456LL;
@@ -278,6 +281,8 @@ TEST(EventCodec, EnvelopeRoundtrip) {
     ASSERT_TRUE(back.station_id.has_value());
     EXPECT_EQ(*back.station_id, core::StationId("st-1"));
     ASSERT_TRUE(back.unit_id.has_value());
+    ASSERT_TRUE(back.device_id.has_value());
+    EXPECT_EQ(*back.device_id, core::DeviceId("dev-1"));
     ASSERT_EQ(back.device_path.size(), 1u);
     EXPECT_EQ(back.device_path[0], "pcs01");
     EXPECT_NE(back.payload_json.find("p-pow"), std::string::npos);
@@ -292,6 +297,7 @@ TEST(EventCodec, StationEventAllowsNullUnitAndEmptyPath) {
     auto text = expect_ok(codec::encode_event(e));
     auto back = expect_ok(codec::decode_event(text));
     EXPECT_FALSE(back.unit_id.has_value());
+    EXPECT_FALSE(back.device_id.has_value());
     EXPECT_TRUE(back.device_path.empty());
 }
 

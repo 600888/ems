@@ -58,17 +58,17 @@ struct Fixture {
     Fixture() {
         model::PcsDeviceModel pcs;
         auto type = pcs.definition();
-        model::AssetNode asset;
-        asset.asset_id = core::AssetId("pcs-asset");
-        asset.station_id = core::StationId("station-1");
-        asset.code = "pcs01";
-        asset.asset_type = model::AssetType::Device;
-        catalog.assets.push_back(asset);
+        model::Device station;
+        station.device_id = core::DeviceId("station-1");
+        station.parent_device_id = core::DeviceId("");
+        station.node_kind = model::DeviceNodeKind::Station;
+        station.code = "station01";
+        catalog.devices.push_back(station);
         draft.device_id = core::DeviceId("pcs-1");
         draft.capabilities = pcs.capabilities();
         for (const auto& definition : type.standard_points) {
             auto point = model::make_standard_point(
-                definition, core::PointId("point-" + definition.semantic_code), asset.asset_id,
+                definition, core::PointId("point-" + definition.semantic_code), draft.device_id,
                 definition.semantic_code);
             const core::PointId point_id = model::as_base(point).point_id;
             catalog.add_point(std::move(point));
@@ -81,13 +81,15 @@ struct Fixture {
         catalog.device_types.push_back(std::move(type));
         model::Device device;
         device.device_id = draft.device_id;
-        device.asset_id = asset.asset_id;
+        device.parent_device_id = core::DeviceId("station-1");
+        device.node_kind = model::DeviceNodeKind::Device;
+        device.code = "pcs01";
         device.type_version_id = "pcs-v1";
         catalog.devices.push_back(device);
 
         model::ChannelConfig channel;
         channel.channel_id = core::ChannelId("channel-1");
-        channel.station_id = asset.station_id;
+        channel.station_id = core::StationId("station-1");
         channel.purpose = model::ChannelPurpose::Both;
         channel.profile.protocol = "modbus_tcp";
         catalog.channels.push_back(channel);

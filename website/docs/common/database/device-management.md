@@ -367,6 +367,47 @@ SELECT p.point_id FROM cfg_point_yt p JOIN cfg_binding b ON b.can_control=1 /* .
 
 采集与控制取点集合天然分离：YK/YT 不会被误编进周期采集计划。
 
+### 7.5 点表导入的两条路径
+
+点表 Excel 只描述"设备的点"，**层级关系与每设备通讯参数是 Excel 携带不了的**，由两条互补路径覆盖：
+
+**路径 A：整站打包导入（`POST /api/station-imports/create`）**
+
+上传一个 zip 包（打包文件夹），内含 `manifest.json` + 每个要导点的设备一个 xlsx：
+
+```text
+station-package.zip
+├── manifest.json      // 层级关系 + 通讯参数 + 文件映射（schema: ems-station-package/1）
+├── pcs01.xlsx         // 与单设备导入完全相同的点表列格式
+└── meter01.xlsx
+```
+
+`manifest.json` 结构（字段校验在 `station_package_parser`，code 规则与界面创建一致）：
+
+| 段 | 字段 | 说明 |
+| --- | --- | --- |
+| `schema` | `ems-station-package/1` | 版本不匹配整包拒绝 |
+| `station.code` | 必填 | 必须与已初始化站根一致（站根不可通过 API 创建） |
+| `devices[]` | `code/name/node_kind/parent_code`；device/component 另需 `device_type_code/type_version/vendor/model/firmware_version/rated_power_kw`；component 必填 `source_device_code` | 顺序即创建顺序，`parent_code` 只能引用已定义节点（天然无环）；`unit` 挂站根下（parent_code 为空） |
+| `channels[]` | `code/name/protocol/conn_mode/endpoint/poll_interval_ms/timeout_ms/retry_times/max_sessions` | 协议白名单与界面一致（modbus/iec104/dlt645） |
+| `bindings[]` | `device_code/channel_code/device_address/profile_version/can_collect/can_control/can_forward` | 目标必须是 `device` 节点；同设备同通道唯一 |
+| `point_files[]` | `device_code/file/address_base/binding_code` | `binding_code` 省略时取该设备唯一的采集绑定，多个则必须显式指定 |
+
+编排语义（`station_import_action`）：
+
+1. zip 用 miniz 解包，解压预算与文件数上限同 xlsx 检查（防压缩炸弹），拒绝目录穿越；
+2. manifest 结构校验（引用闭合、类型存在）硬错误**整包拒绝**，不产生部分生效；
+3. 一个工程事务内：建设备树 → 建通道/绑定 → 对每个点表文件走**既有单设备导入**（`cfg_import_job`，`status=parsed`，含地址占用预检）；
+4. 所有稳定 ID 由包摘要确定性派生（`dev-/ch-/bnd-` + SHA-256 前缀），**重复上传同一包 = 精确重放**；
+5. 返回每个设备的 `import_job_id/preview_hash/行数统计`；确认与落库**不自动执行**，逐设备走既有 `update-row → validate → apply`（地址重叠等 warning 必须人工逐行确认，与单设备导入同一套流程）。
+
+**路径 B：单设备导入（已有能力，前端串联即可）**
+
+界面上新建设备（`/api/devices/create`）→ 配置通讯参数（`/api/channels/create` + `/api/bindings/create`）→ 上传该设备 Excel（`/api/point-imports/create`，multipart：`metadata` + 单个 xlsx）→ 逐行确认（`update-row`/`validate`）→ 应用（`apply`）。后端已完整实现，无需改动；前端需要做的是把三步串成向导。
+
+**两条路径共用**：xlsx 列白名单与解析器（`parse_vendor_xlsx`）、`cfg_import_job/cfg_import_row` 逐行确认模型、地址占用与冲突校验、按 `vendor_key` 幂等更新点行。
+
+
 ## 8. 不变量与校验分层
 
 | 不变量 | 数据库保证 | 服务/保存校验 |

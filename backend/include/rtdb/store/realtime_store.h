@@ -47,15 +47,15 @@ struct Scope {
     std::string code;
 };
 
-/// 记录种类：测点 / 资产状态 / 通道状态 / 命令状态投影
-enum class RecordKind { Point, AssetState, ChannelState, CommandState };
+/// 记录种类：测点 / 设备状态 / 通道状态 / 命令状态投影
+enum class RecordKind { Point, DeviceState, ChannelState, CommandState };
 
 /// 逻辑身份：作用域 + 种类 + 设备路径 + 资源 code（不传 Redis 原始键/共享段 offset）
 struct RecordKey {
     Scope scope;
     RecordKind kind{RecordKind::Point};
-    std::vector<std::string> device_path;  ///< 递归资产路径；根为空
-    std::string name;                      ///< point/channel/command code；AssetState 为空
+    std::vector<std::string> device_path;  ///< 相对作用域根的设备路径；根为空
+    std::string name;                      ///< point/channel/command code；DeviceState 为空
 };
 
 /// 存储记录版本（CAS 不透明令牌；只能判等，不得当序号排序）
@@ -149,12 +149,13 @@ class IRealtimeStore {
     virtual Result<Record> read(const RecordKey& key, const CallContext& ctx) = 0;
 
     /**
-     * @brief 枚举作用域内的资产记录键；并发修改时不保证整体快照。
+     * @brief 枚举作用域内的设备状态记录键；并发修改时不保证整体快照。
      * @param[in] scope 待枚举的逻辑作用域。
      * @param[in] ctx 调用预算。
      * @return 最多 65536 个去重键；超限返回 ResourceExhausted，不返回截断结果。
      */
-    virtual Result<std::vector<RecordKey>> listAssets(const Scope& scope, const CallContext& ctx) {
+    virtual Result<std::vector<RecordKey>> listDeviceStates(const Scope& scope,
+                                                            const CallContext& ctx) {
         return Error{ErrorCode::Unsupported, WriteEffect::NotApplicable, "enumeration unsupported"};
     }
 

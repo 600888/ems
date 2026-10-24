@@ -15,8 +15,8 @@ namespace ems::model {
 /// 单条校验问题
 struct ValidationIssue {
     std::string code;        ///< 稳定错误码（契约的一部分）
-    std::string object_id;   ///< 问题对象 ID（asset/device/point/binding...）
-    std::string field_path;  ///< 字段路径，如 parent_asset_id
+    std::string object_id;   ///< 问题对象 ID（device/point/binding...）
+    std::string field_path;  ///< 字段路径，如 parent_device_id
     std::string reason;      ///< 人类可读原因
 };
 
@@ -41,8 +41,7 @@ struct ValidationReport {
 /// 常用稳定错误码（契约，只增不改义）
 namespace validation_code {
 inline constexpr const char* kDuplicateIdentity = "DuplicateIdentity";    ///< 身份不唯一
-inline constexpr const char* kAssetCycle = "AssetCycle";                  ///< 资产成环
-inline constexpr const char* kCrossStationParent = "CrossStationParent";  ///< 跨站挂接
+inline constexpr const char* kDeviceCycle = "DeviceCycle";                ///< 设备树成环
 inline constexpr const char* kMissingReference = "MissingReference";      ///< 引用不存在
 inline constexpr const char* kInvalidValue = "InvalidValue";              ///< 类型/单位/范围非法
 inline constexpr const char* kDuplicateBinding = "DuplicateBinding";      ///< 设备/通道重复绑定

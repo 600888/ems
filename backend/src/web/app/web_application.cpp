@@ -89,7 +89,8 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
     reply->trace = random_token();
     reply->health = state->health;
     const auto path = request->path();
-    const bool upload = path == "/api/point-imports/create";
+    const bool upload =
+        path == "/api/point-imports/create" || path == "/api/station-imports/create";
     if (!upload && request->body().size() > 1024 * 1024) {
         reply->error(ApiError(413, "ResourceExhausted", "json_size"));
         return;
@@ -133,7 +134,9 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
                     parameters.at("metadata").size() > 64 * 1024 || parser.getFiles().size() != 1)
                     throw ApiError(400, "InvalidArgument", "multipart_file_and_metadata_required");
                 const auto& part = parser.getFiles().front();
-                if (part.getItemName() != "file" || part.fileLength() > 20 * 1024 * 1024)
+                if (part.getItemName() != "file" ||
+                    part.fileLength() > (path == "/api/station-imports/create" ? 64 * 1024 * 1024
+                                                                               : 20 * 1024 * 1024))
                     throw ApiError(413, "ResourceExhausted", "upload_size");
                 body = Json::parse(parameters.at("metadata"));
                 file.filename = part.getFileName();

@@ -27,7 +27,7 @@ CREATE TABLE IF NOT EXISTS history_point_snapshot (
     scope_id VARCHAR(64) NOT NULL,
     config_version BIGINT UNSIGNED NOT NULL,
     point_id VARCHAR(64) NOT NULL,
-    asset_id VARCHAR(64) NOT NULL,
+    owner_device_id VARCHAR(64) NOT NULL,
     point_code VARCHAR(128) NOT NULL,
     display_name VARCHAR(256) NOT NULL,
     point_kind VARCHAR(16) NOT NULL,

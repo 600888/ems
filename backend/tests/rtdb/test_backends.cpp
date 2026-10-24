@@ -223,7 +223,7 @@ TEST(KeyEncoding, PhysicalKeysAndInvalidIdentity) {
     bad.kind = static_cast<RecordKind>(99);
     EXPECT_FALSE(validate_record_key(bad).empty());
     bad = key();
-    bad.kind = RecordKind::AssetState;
+    bad.kind = RecordKind::DeviceState;
     bad.name = "";
     bad.device_path.resize(9, "rack01");
     EXPECT_FALSE(validate_record_key(bad).empty());

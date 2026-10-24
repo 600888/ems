@@ -222,11 +222,11 @@ RecordKey pointKey(const PointAddress& address) {
 }
 
 RecordKey scopeRuntimeKey(const Scope& scope) {
-    return RecordKey{scope, RecordKind::AssetState, {}, {}};
+    return RecordKey{scope, RecordKind::DeviceState, {}, {}};
 }
 
 RecordKey deviceStateKey(const RuntimeDevice& device) {
-    return RecordKey{device.scope, RecordKind::AssetState, device.device_path, {}};
+    return RecordKey{device.scope, RecordKind::DeviceState, device.device_path, {}};
 }
 
 RecordKey channelStateKey(const RuntimeChannel& channel) {
