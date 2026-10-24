@@ -171,24 +171,40 @@ cmake --build --preset linux-arm-native
 
 ## 代码格式化
 
-`backend/` 下的 C/C++ 代码统一使用 clang-format（基于 Google 风格，缩进 4 空格、列宽 100）。规则见根目录 `.clang-format`，详细说明见 [代码格式化规范](website/docs/reference/code-format.md)。
+在仓库根目录运行以下命令，Windows PowerShell、Linux 和 macOS 使用同一入口。需要 Python 3.9+ 和现有前端所需的 Node.js/npm。
 
 ```bash
-# 安装固定版本（Windows / macOS / Linux 通用）
-python -m pip install clang-format==22.1.8
+# 安装固定版本工具到工作区，不依赖系统 PATH 中的 clang-format 版本
+python -m pip install --target .cache/format-tools -r scripts/requirements-format.txt
+npm --prefix frontend ci
 
-# 格式化 / 检查
-./scripts/format.sh            # 就地格式化
-./scripts/format.sh --check    # 仅检查，CI 用
+# 格式化全部自有源码
+python scripts/format.py
+
+# 仅检查，不修改文件；不符合规则时返回非 0
+python scripts/format.py --check
+
+# 预览格式差异，不修改文件
+python scripts/format.py --diff
+
+# 按语言或目录处理
+python scripts/format.py --scope cpp
+python scripts/format.py --scope cmake
+python scripts/format.py --scope web
+python scripts/format.py backend/src/web
+python scripts/format.py --check frontend/src
 ```
 
-也可以在 `backend/build` 下使用 CMake 目标：`make format`、`make format-check`。
+| 代码 | 规则与工具 | 处理范围 |
+| --- | --- | --- |
+| C/C++ | `.clang-format`，clang-format 22.1.8；Google 风格、4 空格、100 列 | `backend/include`、`src`、`tests`、`examples` |
+| CMake | `.cmake-format.yaml`，cmakelang 0.6.13；4 空格、100 列 | 自有 `CMakeLists.txt` 和 `.cmake`，包括接入依赖的 `backend/third_party/CMakeLists.txt` |
+| Vue / TypeScript / JavaScript / CSS / HTML | `.prettierrc.json`，Prettier 3.6.2；2 空格、100 列、单引号、无分号 | `frontend/src`、前端 Vite/HTML 入口、`website/theme` 和 Rspress 配置 |
 
-`backend/third_party/` 下的第三方代码不参与格式化。
+工具会跳过第三方依赖、构建产物、`node_modules` 和缓存，即使显式指定这些目录也不会格式化其中的源码。SQL、业务 JSON、Markdown 文档及图片不在自动格式化范围内。格式化保留逻辑间的空行与中文注释，不替代关键逻辑注释和头文件 Doxygen 要求。
 
-CMake 文件按功能块分隔空行，统一 4 空格缩进和 100 列，规则见 `.cmake-format.yaml`。
-可使用 `cmake-format -i -c .cmake-format.yaml -- <自有 CMake 文件>` 格式化；
-不要对 `backend/third_party/` 内的第三方子项目执行格式整改。
+仅处理前端也可以运行 `npm --prefix frontend run format` 或 `npm --prefix frontend run format:check`。
+既有 `./scripts/format.sh` 与 CMake 的 `format` / `format-check` 目标仍仅处理 C/C++，需自行准备匹配版本的 clang-format；全项目格式化推荐使用上面的 Python 入口。详细规则见 [代码格式化规范](website/docs/reference/code-format.md)。
 
 ## 头文件目录
 

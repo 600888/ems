@@ -1,8 +1,10 @@
 # 设备管理数据库表设计
 
-> 日期：2026-10-24｜状态：表结构已落为 `003` 迁移，仓储已实现，Web 接口待实现
+> 日期：2026-10-24｜状态：表结构已落为 `003` 迁移，仓储与首期 Web 接口已实现
 > 依据：`.pen/device_manage.pen` 全部 9 个页面、[公共模型设计](../design)、[实时访问接口设计](../realtime/access-design)
 > 迁移：`backend/data/migrations/003_device_management_mysql.sql` + `backend/data/seeds/device_management_seed.sql`（旧 42 表设计已被本设计取代，脚本原地改写）
+
+Web 用例与保存边界见[设备模块设计](../../processes/web/device/index.md)，HTTP 载荷见[设备模块 API](../../processes/web/device/api.md)。下文定义持久化模型；本次已补齐公共分页/锁查询、模板读取和导入仓储；运行及测试边界见[构建运行](../../processes/web/running.md)。
 
 ## 0. 本次重构结论
 
@@ -286,7 +288,9 @@ erDiagram
 
 `cfg_import_row`：逐行 `vendor_key/vendor_name`、`point_type`（决定写入哪张点表）、`target_device_path`（空即“目标节点缺失”）、`semantic_code`、地址与取值列、`parse_status/parse_code/parse_message`、`confirm_state(none/accepted/fixed/rejected)` 与确认留痕、`resolved_point_id`。
 
-**地址冲突不落表**：保存/预览时按 `(binding_id, address_space)` 实时展开 `[offset, offset+register_count)` 求重叠。读-读允许；写-写仅当同一 `write_group_key` 才合法；读写交叉报错。冲突项写进对应 `import_row.parse_status='warning'` + `parse_code='address_overlap'`，用户逐项确认后 `confirm_state` 才有值；未确认的 warning 阻止保存。
+**地址占用不单独落表**：保存/预览时按 `(binding_id, address_space)` 实时展开 `[offset, offset+register_count)` 求重叠，并核对位段；共享通道还应检查相同设备地址的跨绑定冲突。读-读允许；写-写仅当同一非空 `write_group_key` 且执行端支持互斥才合法，其他写冲突是 error，不能确认绕过。读写交叉作为可确认 warning 写入 `import_row.parse_code='address_overlap'`，必须逐项说明并确认；无对应导入确认的手工重叠首期拒绝。未排除行的未确认 warning 和任何 error 都阻止应用。
+
+任务预览不等于工程配置，不增加 `config_revision`。当前逐行结构不能无损持久化所有 YK/反馈、YX 枚举与 YT 专有字段，首期导入仅接受可完整表达的列，其余返回 Unsupported；完整文件支持须原地扩展既有 DDL、行结构和 ORM，不能只在 Web 内存接受后遗失。
 
 ### 6.12 `ops_comm_stat_5m` / `ops_state_log`
 
@@ -299,15 +303,20 @@ erDiagram
 
 ```text
 BEGIN;
-  -- 1. 校验：字段合法性、四遥与表一致、固有点必需项已映射、地址区间不重叠
-  -- 2. 直接写工程表（INSERT/UPDATE/DELETE），不做版本复制
-  -- 3. 递增站根修订号，消费者据此热加载
+  -- 1. 先锁站根，检查请求 expected_config_revision，不符则结束事务
+  SELECT config_revision FROM cfg_device
+   WHERE node_kind = 'station' AND device_id = ? FOR UPDATE;
+  -- 2. 在锁内读取当前记录、授权并校验候选修改；启用设备强制完整性检查
+  -- 3. 直接写工程表（INSERT/UPDATE/DELETE），不做版本复制
+  -- 4. 工程实际变化时递增一次；多行保存也只递增一次
   UPDATE cfg_device SET config_revision = config_revision + 1
    WHERE node_kind = 'station' AND device_id = ?;
 COMMIT;
 ```
 
-校验失败整事务回滚，页面展示逐项问题；没有“草稿”中间态。
+校验失败整事务回滚，页面展示逐项问题；没有“草稿”中间态。新建通信设备默认停用，可先保存档案再配置真实绑定和点；结构、引用始终强制校验，启用或修改已启用路径时要求必需固有点已映射或明确禁用。无变化保存不增加 revision；全体工程写入者遵循先锁站根、再读校验、再写入的顺序，仅在末尾递增不足以避免并发校验竞态。
+
+当前四遥表的 `binding_id` 为非空外键，禁用行也必须有真实绑定；未建绑定的固有点只能表示未配置。若要求不接通道就声明某项不支持，需先同步调整既有四表、行结构与 ORM 的来源可空语义，不能插入占位绑定。
 
 ### 7.2 热加载
 
@@ -324,15 +333,18 @@ COMMIT;
 ### 7.3 重复导入与稳定身份
 
 ```text
-1. 计算 idempotency_key；已存在则直接返回原任务。
+1. 计算 idempotency_key；已存在则核对 source_kind/address_base，相同返回原任务，不同返回 Conflict。
 2. 解析文件写 cfg_import_row，不写点表。
 3. 目标节点按 path 匹配（禁止按重名）；未命中即 parse_status='error'。
 4. 厂家点按 (binding_id, vendor_key) 命中 -> 复用 point_id 并 UPDATE；
    未命中 -> 分配新 point_id 并 INSERT。
-5. 地址冲突逐项确认后写入点表，回填 resolved_point_id。
+5. 可确认 warning 逐项确认、error 全部修正后，锁站根再锁任务，重查工程与预览哈希并写点表。
+6. 同事务回填 resolved_point_id、置 applied 并递增站根一次；applied 重放不重新写点。
 ```
 
 稳定身份只靠唯一键：`(path)`+`code`、`(binding_id, vendor_key)`、`(owner_device_id, semantic_code)`。
+
+首期仅合并新增/更新，文件缺席的旧点保留，删除须显式操作。预览内容哈希动态计算用于并发编辑检查，不增加配置版本列；当前任务表未存原提交 revision，重放只能返回当前工程计数，不伪造原提交计数。
 
 ### 7.4 运行侧取点
 

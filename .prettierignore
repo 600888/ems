@@ -1,0 +1,9 @@
+**/node_modules/**
+**/third_party/**
+**/build/**
+**/doc_build/**
+**/dist/**
+**/.rspress/**
+.cache/**
+tmp/**
+**/package-lock.json

@@ -1,6 +1,6 @@
 # 代码格式化规范（clang-format）
 
-本文说明 `backend/` 下 C/C++ 代码的格式化规则、工具链接入方式和已知边界。规则以仓库根目录 `.clang-format` 为准，本文只解释取舍与用法。
+本文说明 `backend/` 下 C/C++ 代码的格式化规则、工具链接入方式和已知边界。规则以仓库根目录 `.clang-format` 为准。全项目入口同时处理自有 CMake 和前端源码，用法以仓库根目录 README 的“代码格式化”为准。
 
 ## 适用范围
 
@@ -25,7 +25,22 @@ python -m pip install clang-format==22.1.8
 
 ## 使用方式
 
-### 脚本（推荐，跨平台）
+### 全项目入口（Windows / Linux / macOS）
+
+在仓库根目录执行：
+
+```bash
+python -m pip install --target .cache/format-tools -r scripts/requirements-format.txt
+npm --prefix frontend ci
+python scripts/format.py
+python scripts/format.py --check
+python scripts/format.py --diff
+python scripts/format.py --scope cpp backend/src/web
+```
+
+入口只收集自有源码，跳过依赖、构建与缓存目录；CMake 使用 `.cmake-format.yaml`，Vue/TS/CSS 使用 `.prettierrc.json`。仅格式化前端可执行 `npm --prefix frontend run format`。
+
+### 既有 Bash 脚本（仅 C/C++）
 
 ```bash
 ./scripts/format.sh                    # 就地格式化全部自有代码
@@ -78,7 +93,7 @@ git diff --name-only --cached --diff-filter=ACM \
 
 ## 格式化是有损的吗
 
-不是。clang-format 只在 token 之间调整空白、调整头文件顺序、补全命名空间行尾注释，以及在必要时为跨行宏补续行反斜杠。已对全部 143 个自有文件逐文件比对 token 序列，确认除上述类别外没有任何 token 增删或改动。
+clang-format 会调整空白、头文件顺序、命名空间行尾注释，以及在必要时为跨行宏补续行反斜杠。格式化后仍应执行对应构建和检查，尤其注意依赖包含顺序的旧代码。
 
 可以接受的少数非空白改动：
 

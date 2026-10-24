@@ -2,6 +2,23 @@
   {
     "type": "file",
     "name": "index",
-    "label": "Web 后端与前端协作"
+    "label": "Web 进程总览"
+  },
+  {
+    "type": "file",
+    "name": "design",
+    "label": "Web 进程设计"
+  },
+  {
+    "type": "file",
+    "name": "running",
+    "label": "构建、运行与验证"
+  },
+  {
+    "type": "dir",
+    "name": "device",
+    "label": "设备管理模块",
+    "collapsible": true,
+    "collapsed": false
   }
 ]

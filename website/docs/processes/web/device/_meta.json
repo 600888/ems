@@ -1,0 +1,12 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "设备模块设计"
+  },
+  {
+    "type": "file",
+    "name": "api",
+    "label": "设备模块 API"
+  }
+]

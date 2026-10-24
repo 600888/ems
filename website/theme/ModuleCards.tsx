@@ -1,4 +1,4 @@
-import { Link } from '@rspress/core/theme-original';
+import { Link } from '@rspress/core/theme-original'
 
 const modules = [
   {
@@ -49,20 +49,40 @@ const modules = [
     tags: 'Rspress · Markdown · Mermaid',
     icon: 'book',
   },
-];
+]
 
 function ModuleIcon({ name }: { name: string }) {
   return (
-    <svg viewBox="0 0 24 24" width="25" height="25" fill="none" stroke="currentColor"
-      strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      {name === 'grid' ? <><rect x="4" y="4" width="16" height="16" rx="2.5" />
-        <path d="M4 10h16M10 4v16" /></> : name === 'network' ? <>
-        <circle cx="12" cy="12" r="9" /><ellipse cx="12" cy="12" rx="4" ry="9" />
-        <path d="M3 12h18M5 6h14M5 18h14" /></> : <>
-        <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5V5.5Z" />
-        <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5" /></>}
+    <svg
+      viewBox="0 0 24 24"
+      width="25"
+      height="25"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
+      {name === 'grid' ? (
+        <>
+          <rect x="4" y="4" width="16" height="16" rx="2.5" />
+          <path d="M4 10h16M10 4v16" />
+        </>
+      ) : name === 'network' ? (
+        <>
+          <circle cx="12" cy="12" r="9" />
+          <ellipse cx="12" cy="12" rx="4" ry="9" />
+          <path d="M3 12h18M5 6h14M5 18h14" />
+        </>
+      ) : (
+        <>
+          <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H19v15H6.5A2.5 2.5 0 0 0 4 20.5V5.5Z" />
+          <path d="M4 20.5A2.5 2.5 0 0 1 6.5 18H19v3H6.5" />
+        </>
+      )}
     </svg>
-  );
+  )
 }
 
 export function ModuleCards() {
@@ -71,15 +91,20 @@ export function ModuleCards() {
       {modules.map((module, index) => (
         <Link key={module.href} href={module.href} className="module-card">
           <div className="module-card-top">
-            <span className="module-icon"><ModuleIcon name={module.icon} /></span>
+            <span className="module-icon">
+              <ModuleIcon name={module.icon} />
+            </span>
             <span className="module-number">{String(index + 1).padStart(2, '0')}</span>
           </div>
           <span className="module-en">{module.en}</span>
-          <strong className="module-title">{module.label}<span aria-hidden="true">↗</span></strong>
+          <strong className="module-title">
+            {module.label}
+            <span aria-hidden="true">↗</span>
+          </strong>
           <span className="module-description">{module.description}</span>
           <span className="module-tags">{module.tags}</span>
         </Link>
       ))}
     </div>
-  );
+  )
 }
