@@ -1,0 +1,1151 @@
+<!doctype html>
+<html lang="zh">
+  <head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>设备管理数据库表设计 - EMS 设计文档</title>
+<script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
+<link href="/ems/static/css/styles.3c463aa6ae.css" rel="stylesheet">
+<link rel="preload" href="/ems/static/js/async/route-fdbf579fa74e.56c689f383.js" as="script">
+<script defer src="/ems/static/js/styles.560b9eab4d.js"></script>
+<script defer src="/ems/static/js/lib-react.0685ac4d75.js"></script>
+<script defer src="/ems/static/js/lib-router.de7486675c.js"></script>
+<script defer src="/ems/static/js/m3.da04ef77ed.js"></script>
+<script defer src="/ems/static/js/index.463880253f.js"></script>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Rspress v2.0.21">
+<link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="设备管理数据库表设计 - EMS 设计文档">
+<meta name="description" content="日期：2026-10-24｜状态：表结构已落为 003 迁移，仓储与首期 Web 接口已实现 依据：.pen/device_manage.pen 全部 9 个页面、公共模型设计、实时访问接口设计 迁移：backend/data/migrations/003_device_management_mysql.sql + backend/data/seeds/device_management_seed.sql（旧 42 表设计已被本设计取代，脚本原地改写） Web 用例与保存边界见设备模块设计，HTTP 载荷见设备模块 API。下文定义持久化模型；本次已补齐公共分页/锁查询、模板读取和导入仓储；运行及测试边界见构建运行。">
+<meta property="og:description" content="日期：2026-10-24｜状态：表结构已落为 003 迁移，仓储与首期 Web 接口已实现 依据：.pen/device_manage.pen 全部 9 个页面、公共模型设计、实时访问接口设计 迁移：backend/data/migrations/003_device_management_mysql.sql + backend/data/seeds/device_management_seed.sql（旧 42 表设计已被本设计取代，脚本原地改写） Web 用例与保存边界见设备模块设计，HTTP 载荷见设备模块 API。下文定义持久化模型；本次已补齐公共分页/锁查询、模板读取和导入仓储；运行及测试边界见构建运行。"></head>
+
+  <body>
+    <div id="__rspress_root"><link rel="preload" as="image" href="/ems/logo.svg"/><header class="rp-nav"><div class="rp-nav__left"><div class="rp-nav__title"><a href="/ems/" class="rp-nav__title__link rp-link"><div class="rp-nav__title__logo"><img src="/ems/logo.svg" alt="logo" id="logo" class="rspress-logo rp-nav__title__logo-image"/></div><span>EMS</span></a></div><ul class="rp-nav-menu rp-nav-menu--left"><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/" class="rp-nav-menu__item__container rp-link">首页</a></li><li class="rp-nav-menu__item"><a href="/ems/architecture/" class="rp-nav-menu__item__container rp-link">架构</a></li><li class="rp-nav-menu__item"><a href="/ems/processes/" class="rp-nav-menu__item__container rp-link">进程</a></li><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/common/" class="rp-nav-menu__item__container rp-link">公共模块</a></li><li class="rp-nav-menu__item"><a href="/ems/decisions/" class="rp-nav-menu__item__container rp-link">技术决策</a></li><li class="rp-nav-menu__item"><a href="/ems/reference/" class="rp-nav-menu__item__container rp-link">开发参考</a></li><li class="rp-nav-menu__item"><a href="/ems/guide/" class="rp-nav-menu__item__container rp-link">文档维护</a></li></ul></div><div class="rp-nav__right"><button class="rp-search-button"><div class="rp-search-button__content"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21" class="rp-search-button__icon"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg><span class="rp-search-button__word">搜索</span></div><div class="rp-search-button__hotkey" style="opacity:0"><span></span><span>K</span></div></button><div class="rp-search-button--mobile"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg></div><div class="rp-nav__others"><div class="rp-nav-menu__divider"></div><div class="rp-switch-appearance"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="rp-switch-appearance__icon rp-switch-appearance__icon--sun"><path fill="currentColor" d="m7.001 15.848-1.226 1.226a.58.58 0 0 0 0 .818.58.58 0 0 0 .818 0l1.226-1.226a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0m-.352-8.735a.584.584 0 0 0 .825-.825L6.237 5.051a.584.584 0 0 0-.825.825zM5.011 11.07h-1.75a.584.584 0 0 0 0 1.167h1.75c.324 0 .584-.26.584-.583a.585.585 0 0 0-.584-.584m7.003-5.835c.324 0 .584-.26.584-.584V2.9a.58.58 0 0 0-.584-.584.58.58 0 0 0-.583.583V4.65c0 .323.262.584.583.584m5.616 1.621 1.226-1.225a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0l-1.226 1.225a.58.58 0 0 0 0 .818.576.576 0 0 0 .818 0m3.138 4.214h-1.75a.58.58 0 0 0-.584.584c0 .324.26.584.583.584h1.751a.584.584 0 1 0 0-1.167m-3.389 5.124a.584.584 0 0 0-.825.825l1.238 1.238a.584.584 0 0 0 .825-.826zm-5.365-9.795a5.256 5.256 0 0 0-5.257 5.258 5.256 5.256 0 0 0 5.257 5.257 5.256 5.256 0 0 0 5.257-5.257 5.256 5.256 0 0 0-5.257-5.258m0 11.675a.58.58 0 0 0-.583.583v1.751a.582.582 0 1 0 1.167 0v-1.75a.584.584 0 0 0-.584-.584"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="currentColor" viewBox="0 0 19 19" class="rp-switch-appearance__icon rp-switch-appearance__icon--moon"><path fill="currentColor" d="M9.166 0a9.2 9.2 0 0 1 1.857.188.834.834 0 0 1 .042 1.623 4.47 4.47 0 1 0 5.457 5.457l.048-.135a.834.834 0 0 1 1.575.177q.186.902.188 1.856A9.168 9.168 0 1 1 9.166 0"></path></svg></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__sm"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg></button><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__md"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"><div class="rp-nav-menu__others-mobile__container"><div class="rp-nav-hamburger__md__hover-group"><div class="rp-nav-screen-appearance"><div class="rp-nav-screen-appearance__left">主题</div><div class="rp-nav-screen-appearance__right"></div></div><div class="rp-nav-screen-divider"></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div></div></ul></button></div></header><div class="rp-doc-layout__menu"><div class="rp-sidebar-menu"><button type="button" class="rp-sidebar-menu__left"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M4 6h24v2H4zm0 18h24v2H4zm0-12h24v2H4zm0 6h24v2H4z"></path></svg><span>菜单</span></button><button type="button" class="rp-sidebar-menu__right"><span class="rp-sidebar-menu__right__text">目录</span><svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-sidebar-menu__right__icon" style="transform:rotate(0deg);transition:transform 0.2s ease-out"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button></div></div><div class="rp-doc-layout__container"><aside class="rp-doc-layout__sidebar rp-scrollbar"><a href="/ems/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">返回文档首页</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-divider" style="padding-left:12px"></div><div class="rp-sidebar-section-header"><div class="rp-sidebar-section-header__left"><span>公共模块</span></div><div class="rp-sidebar-section-header__right"></div></div><a href="/ems/common/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">公共模块概览</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/design" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">公共模块设计与实施</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">数据库设计</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/common/database/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">公共数据库访问层</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/database/device-management" class="rp-sidebar-item rp-sidebar-item--active rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">设备管理数据库设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">实时数据访问</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/common/realtime/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">实时数据与配置</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/access-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">C++17 多后端访问接口</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/service-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">类型化实时业务门面</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/zeromq-messaging-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">ZeroMQ 消息与命令设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/redis-key-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">Redis 键设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div></aside><div class="rp-doc-layout__doc"><main class="rp-doc-layout__doc-container"><div class="rp-doc rspress-doc"><!--$--><h1 class="rp-toc-include" id="设备管理数据库表设计"><a href="#设备管理数据库表设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>设备管理数据库表设计<!-- --> </h1>
+<blockquote>
+<p>日期：2026-10-24｜状态：表结构已落为 <code>003</code> 迁移，仓储与首期 Web 接口已实现
+依据：<code>.pen/device_manage.pen</code> 全部 9 个页面、<a href="/ems/common/design" class="rp-link">公共模型设计</a>、<a href="/ems/common/realtime/access-design" class="rp-link">实时访问接口设计</a>
+迁移：<code>backend/data/migrations/003_device_management_mysql.sql</code> + <code>backend/data/seeds/device_management_seed.sql</code>（旧 42 表设计已被本设计取代，脚本原地改写）</p>
+</blockquote>
+<p>Web 用例与保存边界见<a href="/ems/processes/web/device/" class="rp-link">设备模块设计</a>，HTTP 载荷见<a href="/ems/processes/web/device/api" class="rp-link">设备模块 API</a>。下文定义持久化模型；本次已补齐公共分页/锁查询、模板读取和导入仓储；运行及测试边界见<a href="/ems/processes/web/running" class="rp-link">构建运行</a>。</p>
+<h2 class="rp-toc-include" id="0-本次重构结论"><a href="#0-本次重构结论" class="rp-header-anchor rp-link" aria-hidden="true">#</a>0. 本次重构结论</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>问题</th><th>前版做法</th><th>本文做法</th></tr></thead><tbody><tr><td>资产与设备两套概念</td><td><code>cfg_asset</code> + <code>cfg_device</code> 双主键，部件点还要 <code>device_id NULL</code></td><td>只有一张 <code>cfg_device</code> 设备树，<code>node_kind</code> 区分组织节点与设备节点</td></tr><tr><td>四遥被拆散</td><td><code>point_kind=telemetry/status/event/command</code>，遥调并入 command</td><td><code>cfg_point_yc/yx/yk/yt</code> 四张表，代码对应 <code>YcPoint/YxPoint/YkPoint/YtPoint</code> 四类</td></tr><tr><td>一个物理量写三张表</td><td>厂家点 + 标准点 + 路由 + 转换</td><td>每类一张表：<code>semantic_code</code> 为空即扩展点，转换/命令/反馈内联为列</td></tr><tr><td>派生状态建表</td><td>固有点三态、能力、地址占用各建表</td><td>三态由点行推出；能力由 <code>capability_codes_json</code> 聚合；地址区间保存时即时计算</td></tr><tr><td>版本体系</td><td><code>cfg_version</code> + 草稿/复制/发布/快照/回执/差异</td><td><strong>开发阶段不需要版本</strong>：表可原地改，保存即生效，热加载靠站根 <code>config_revision</code></td></tr></tbody></table></div>
+<p><strong>表数：14。</strong></p>
+<h2 class="rp-toc-include" id="1-目标与边界"><a href="#1-目标与边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1. 目标与边界</h2>
+<p><strong>范围内</strong></p>
+<ul>
+<li>一棵设备树：站 → 储能单元 → 通信设备 → 部件（电池系统/簇/包/电芯），以及站级公共设备。</li>
+<li>设备类型、固有点目录（四遥）、型号模板复用。</li>
+<li>通道（连接）与设备-通道绑定，采集/控制/转发角色。</li>
+<li>四遥点：协议地址、取值转换、命令写入规则、反馈判据、固有点映射。</li>
+<li>点表导入（逐行预览、地址基准、逐项确认、幂等重放）。</li>
+<li>配置保存后热加载：<code>config_revision</code> 单调递增，消费者轮询比对。</li>
+<li>与实时库配套的 5 分钟通信统计、设备/通道状态变化历史。</li>
+</ul>
+<p><strong>范围外</strong></p>
+<ul>
+<li>历史数据（TDengine 超级表，见 <code>002_storage_taos.sql</code>）与告警业务表。</li>
+<li>用户、角色、操作审计：归统一审计/权限模块，本设计不建 <code>audit_log</code>。</li>
+<li>北向转发映射（原 <code>cfg_forward_map</code>）：归通信管理模块，等该模块设计确认后再建表。</li>
+<li>采集驱动、策略算法、控制仲裁本身的行为。</li>
+<li>旧四遥表删除：过渡期保留只读，按第 9 节迁移。</li>
+</ul>
+<h2 class="rp-toc-include" id="2-三个核心约定"><a href="#2-三个核心约定" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2. 三个核心约定</h2>
+<h3 class="rp-toc-include" id="21-只有设备没有资产"><a href="#21-只有设备没有资产" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.1 只有设备，没有资产</h3>
+<p>设计图上不存在“资产”入口，也没有“资产详情”页面。因此删除 <code>cfg_asset</code>、<code>cfg_ess_unit</code>，不再有 <code>asset_id</code>/<code>asset_type</code>/<code>asset_path</code>：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th><code>node_kind</code></th><th>含义</th><th>能否绑通道</th><th>能否挂点</th><th>页面表现</th></tr></thead><tbody><tr><td><code>station</code></td><td>站根节点，全树唯一；承载站点级默认值</td><td>否</td><td>否</td><td>层级树根</td></tr><tr><td><code>unit</code></td><td>储能单元</td><td>否</td><td>否</td><td>“储能单元 01 · 12 项”</td></tr><tr><td><code>device</code></td><td>通信设备（PCS/BMS/空调/消防/电表/保护/环控）</td><td>是</td><td>是</td><td>有“通道绑定”“点表导入”页签</td></tr><tr><td><code>component</code></td><td>部件（电池系统/簇/包/电芯）</td><td>否</td><td>是</td><td>类型列显示“层级”，详情显示“经 bms01 采集”</td></tr></tbody></table></div>
+<ul>
+<li>部件节点不能自己通信，<code>source_device_id</code> 指向采集它的通信设备，正是页面 08 的 <code>bms01 → rack01</code>。</li>
+<li><code>device_id</code> 是文本稳定 ID，跨重复导入不变；数字自增主键只用于连接，不对外。</li>
+<li>站点级默认值放在站根行：<code>timezone</code>、<code>default_stale_after_ms</code>、<code>config_revision</code>。不单独建 <code>cfg_scope</code>。</li>
+</ul>
+<h3 class="rp-toc-include" id="22-四遥是点的唯一分类四张表--四个类型"><a href="#22-四遥是点的唯一分类四张表--四个类型" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.2 四遥是点的唯一分类，四张表 + 四个类型</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>表</th><th>C++ 类型</th><th>语义</th><th>特有字段</th></tr></thead><tbody><tr><td><code>cfg_point_yc</code></td><td><code>model::YcPoint</code></td><td>遥测（上行模拟量）</td><td>倍率、偏移、量程、死区</td></tr><tr><td><code>cfg_point_yx</code></td><td><code>model::YxPoint</code></td><td>遥信（上行离散量，含 SOE）</td><td><code>soe</code>、<code>invert</code>、枚举码表</td></tr><tr><td><code>cfg_point_yk</code></td><td><code>model::YkPoint</code></td><td>遥控（下行离散量）</td><td><code>write_mode</code>、固定值、脉冲、写组</td></tr><tr><td><code>cfg_point_yt</code></td><td><code>model::YtPoint</code></td><td>遥调（下行模拟设定）</td><td>工程值换算、可写量程、写组</td></tr></tbody></table></div>
+<ul>
+<li>方向由表决定，不存在 <code>access_mode</code> 列，因此不会有“遥测点可写”这种数据。</li>
+<li>遥信变位/事件顺序记录不是第五类：仍属遥信，用 <code>soe</code> 标记，告警业务另表处理。</li>
+<li>页面 05 的分页签是“遥测/遥信/遥控/遥调”；原来的“事件 N”归入遥信并显示 SOE 角标。</li>
+<li>固有点目录 <code>cfg_type_point</code> 仍是一张表：四种类型的目录字段完全同构，拆开只是复制四份；能力归属用 <code>capability_codes_json</code> 表达多对多。</li>
+</ul>
+<p><strong>代码侧与表一一对应</strong>：</p>
+<ul>
+<li>四个类型共享 <code>model::PointBase</code>（点 ID、设备节点、编码、名称、四遥分类、记录种类、值类型、单位、启用、反馈引用），基类构造函数 protected，只有四个具体类型能创建，<code>point_type</code> 与 <code>kind</code> 不可能不自洽。</li>
+<li><code>ModelCatalog</code> 持有 <code>points_yc/points_yx/points_yk/points_yt</code> 四个集合，<code>for_each_point</code> 遍历，<code>find_point</code> 返回 <code>const PointBase*</code>；索引存“类型 + 下标”，目录拷贝后索引仍有效。</li>
+<li>运行目录 <code>RuntimePoint</code> 保持单一结构但带 <code>point_type</code>：实时记录对四遥是同构的（值、质量、序号、时间），拆开只会让 <code>findPoint</code> 返回变体。</li>
+</ul>
+<h3 class="rp-toc-include" id="23-直接改工程表不做版本"><a href="#23-直接改工程表不做版本" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2.3 直接改工程表，不做版本</h3>
+<p>开发阶段配置还在反复调整，不需要草稿/发布/快照/回滚。约定：</p>
+<ul>
+<li>页面“保存”直接 <code>INSERT/UPDATE/DELETE</code> 工程表，事务提交即生效。</li>
+<li>每次保存成功后，站根 <code>cfg_device.config_revision + 1</code>（同一事务内）。采集、策略、实时库等消费者按固定周期读该值，发现变化就重编运行目录并热切换，不重启进程。</li>
+<li><code>config_revision</code> 是缓存失效令牌，不是业务版本号：不提供历史查询、差异对比、回滚到旧版本。需要追溯时查统一审计日志。</li>
+<li>页面 06 从“发布 v13 / 差异预览 / 应用回执”收敛为“保存校验结果 + 各服务已加载的 revision”：校验不通过拒绝保存，不再有“草稿不影响运行”的状态。</li>
+</ul>
+<h2 class="rp-toc-include" id="3-与设计图页面的对应"><a href="#3-与设计图页面的对应" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3. 与设计图页面的对应</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>设计页面</th><th>页面要求</th><th>承载表</th></tr></thead><tbody><tr><td>01 层级总览</td><td>站→单元→设备/部件；设备与部件同列表；固有点覆盖率、最近通信</td><td><code>cfg_device</code>、<code>cfg_type_point</code>、<code>cfg_point_*</code>、<code>ops_comm_stat_5m</code>、<code>ops_state_log</code></td></tr><tr><td>02 设备详情</td><td>档案、所属单元、父级节点、设备能力、接入诊断</td><td><code>cfg_device</code>、<code>cfg_device_type</code>、<code>cfg_type_point</code>、<code>cfg_point_*</code></td></tr><tr><td>03 通道绑定</td><td>同设备多绑定、采集/控制角色、协议/Profile、Unit ID、5 分钟健康度</td><td><code>cfg_channel</code>、<code>cfg_binding</code>、<code>ops_comm_stat_5m</code></td></tr><tr><td>04 点表导入</td><td>地址基准、逐行预览、目标节点、地址冲突逐项确认</td><td><code>cfg_import_job</code>、<code>cfg_import_row</code>、<code>cfg_point_*</code>、<code>cfg_binding</code></td></tr><tr><td>05 固有点位</td><td>四遥分页、启用/禁用、厂家来源、转换/写入、反馈规则</td><td><code>cfg_type_point</code>、<code>cfg_point_*</code>、<code>cfg_device_type</code></td></tr><tr><td>06 配置校验</td><td>保存前离线校验、地址冲突、服务热加载状态</td><td>各配置表 + 站根 <code>config_revision</code></td></tr><tr><td>07 新建设备</td><td>节点性质（通信设备/层级节点）、父级、类型、模板</td><td><code>cfg_device</code>、<code>cfg_device_type</code>、<code>cfg_template</code></td></tr><tr><td>08 层级详情</td><td>部件概况、子节点列表、采集来源、pack/cell 固有点</td><td><code>cfg_device</code>、<code>cfg_point_*</code>、<code>cfg_binding</code></td></tr><tr><td>09 规范页</td><td>code 唯一、层级上限、禁用必须说明、地址不重叠</td><td>唯一键与 CHECK</td></tr></tbody></table></div>
+<p>页面 07 的“节点性质”直接落为 <code>node_kind</code>：选“层级节点”即 <code>component</code>，必须选父级并指定采集设备；选“通信设备”即 <code>device</code>，保存后才出现通道绑定入口。</p>
+<h2 class="rp-toc-include" id="4-表总览14-张"><a href="#4-表总览14-张" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4. 表总览（14 张）</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>域</th><th>表</th><th>说明</th></tr></thead><tbody><tr><td>设备</td><td><code>cfg_device</code></td><td>设备树（站/单元/设备/部件）+ 站点默认值与 <code>config_revision</code></td></tr><tr><td>设备</td><td><code>cfg_device_type</code></td><td>设备类型（复合主键含类型版本）</td></tr><tr><td>设备</td><td><code>cfg_type_point</code></td><td>类型固有点目录（四遥 + 能力编码数组）</td></tr><tr><td>设备</td><td><code>cfg_template</code></td><td>型号模板（默认四遥点表，<code>points_json</code>）</td></tr><tr><td>通道</td><td><code>cfg_channel</code></td><td>通道/连接（同一行被多次绑定即共享）</td></tr><tr><td>通道</td><td><code>cfg_binding</code></td><td>设备-通道绑定与角色标志</td></tr><tr><td>点</td><td><code>cfg_point_yc</code></td><td>遥测：倍率、量程、死区</td></tr><tr><td>点</td><td><code>cfg_point_yx</code></td><td>遥信：SOE、取反、码表</td></tr><tr><td>点</td><td><code>cfg_point_yk</code></td><td>遥控：固定值、脉冲、写组、反馈判据</td></tr><tr><td>点</td><td><code>cfg_point_yt</code></td><td>遥调：工程值换算、可写量程、反馈判据</td></tr><tr><td>导入</td><td><code>cfg_import_job</code></td><td>导入任务与幂等键</td></tr><tr><td>导入</td><td><code>cfg_import_row</code></td><td>逐行解析与逐项确认</td></tr><tr><td>运行</td><td><code>ops_comm_stat_5m</code></td><td>绑定维度 5 分钟通信统计</td></tr><tr><td>运行</td><td><code>ops_state_log</code></td><td>设备/通道/绑定状态变化历史</td></tr></tbody></table></div>
+<h2 class="rp-toc-include" id="5-逻辑模型"><a href="#5-逻辑模型" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5. 逻辑模型</h2>
+<div></div>
+<p>要点：</p>
+<ul>
+<li><code>cfg_device</code> 自引用成树，根 <code>parent_device_id</code> 为空串且 <code>node_kind=&#x27;station&#x27;</code>，深度 ≤ 8（与实时库 <code>RecordKey.device_path</code> 上限一致）。</li>
+<li>四张点表都同时挂两个维度：<code>owner_device_id</code>（点归属节点，可以是部件）+ <code>binding_id</code>（实际采集来源）。部件点因此不需要虚构通信设备，也不需要路由表。</li>
+<li>一个设备可有多条绑定（采集口与控制口分开），但同一设备+同一通道只允许一行；采集/控制/转发用标志位表达。</li>
+</ul>
+<h2 class="rp-toc-include" id="6-核心表字段语义"><a href="#6-核心表字段语义" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6. 核心表字段语义</h2>
+<p>完整列定义以 <code>003</code> 迁移为准，这里只写有决策含义的字段。</p>
+<h3 class="rp-toc-include" id="61-cfg_device设备树"><a href="#61-cfg_device设备树" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.1 <code>cfg_device</code>（设备树）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody><tr><td><code>device_id</code></td><td>稳定设备 ID，全树唯一</td></tr><tr><td><code>parent_device_id</code></td><td>父节点；站根为空串（不用 NULL，唯一键才能约束根节点）</td></tr><tr><td><code>node_kind</code></td><td><code>station/unit/device/component</code></td></tr><tr><td><code>code</code></td><td>同父节点下唯一</td></tr><tr><td><code>path</code></td><td>相对站根的路径，如 <code>/unit01/battery01/rack01</code>；实时库记录键的来源</td></tr><tr><td><code>depth</code></td><td>0–8，CHECK 约束</td></tr><tr><td><code>device_type_code/type_version</code></td><td>类型引用；<code>device/component</code> 必填，站与单元为空</td></tr><tr><td><code>template_id</code></td><td>创建时套用的型号模板，仅记录来源</td></tr><tr><td><code>source_device_id</code></td><td><code>component</code> 必填，指向采集它的通信设备</td></tr><tr><td><code>vendor/model/firmware_version/rated_power_kw</code></td><td>设备档案字段</td></tr><tr><td><code>timezone/default_stale_after_ms/config_revision</code></td><td><strong>仅站根使用</strong>：时区、点默认时效、热加载令牌</td></tr><tr><td><code>enabled</code></td><td>配置启用，与运行在线状态无关</td></tr><tr><td><code>legacy_ref</code></td><td>旧四遥表数字 ID</td></tr></tbody></table></div>
+<p>唯一键：<code>(device_id)</code>、<code>(parent_device_id, code)</code>、<code>(path)</code>。</p>
+<h3 class="rp-toc-include" id="62-cfg_device_type设备类型"><a href="#62-cfg_device_type设备类型" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.2 <code>cfg_device_type</code>（设备类型）</h3>
+<p><code>(type_code, type_version)</code> 复合主键，如 <code>pcs</code> + <code>pcs-v1</code>；<code>category</code> 供页面分组；<code>status</code> 支持停用。不随设备复制。</p>
+<h3 class="rp-toc-include" id="63-cfg_type_point类型固有点目录"><a href="#63-cfg_type_point类型固有点目录" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.3 <code>cfg_type_point</code>（类型固有点目录）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody><tr><td><code>(type_code, type_version, semantic_code)</code></td><td>主键；如 <code>active_power</code>、<code>run_state</code>、<code>start</code></td></tr><tr><td><code>point_type</code></td><td><code>yc/yx/yk/yt</code>，决定映射行必须落在哪张点表</td></tr><tr><td><code>value_type/unit</code></td><td>与实例比对，不一致拒绝保存</td></tr><tr><td><code>required</code></td><td>属于任一能力即为必需；必需固有点未映射时阻止保存</td></tr><tr><td><code>capability_codes_json</code></td><td>所属能力数组，如 <code>[&quot;monitor_power&quot;,&quot;set_active_power&quot;]</code></td></tr><tr><td><code>writable</code></td><td>仅 <code>yk/yt</code> 允许为真，CHECK 约束</td></tr><tr><td><code>stale_after_ms</code></td><td>0 表示继承站默认</td></tr></tbody></table></div>
+<p><strong>能力不单独建表</strong>，页面 02 的能力状态由固有点聚合：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>页面状态</th><th>判定</th></tr></thead><tbody><tr><td>可用</td><td><code>capability_codes_json</code> 含该能力的全部 <code>required=1</code> 固有点均为“已启用”</td></tr><tr><td>不可用</td><td>任一必需固有点为“已禁用”，展示其 <code>disabled_reason</code></td></tr><tr><td>未配置</td><td>存在必需固有点没有任何映射行</td></tr></tbody></table></div>
+<h3 class="rp-toc-include" id="64-cfg_template型号模板"><a href="#64-cfg_template型号模板" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.4 <code>cfg_template</code>（型号模板）</h3>
+<p><code>(template_id, template_version)</code> 主键，<code>points_json</code> 保存默认四遥点表与映射。模板是“复制源”，不参与运行期联表，所以用 JSON 一次存全。套用模板时由服务按固有点类型生成对应点表的行；模板里的地址只是建议值，绑定通道不同需重填。</p>
+<h3 class="rp-toc-include" id="65-cfg_channel通道"><a href="#65-cfg_channel通道" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.5 <code>cfg_channel</code>（通道）</h3>
+<p><code>channel_id</code> 稳定 ID，<code>code</code> 唯一；<code>protocol</code> + <code>conn_mode</code> + <code>endpoint</code> + <code>serial_json</code> 描述连接；<code>poll_interval_ms/timeout_ms/retry_times</code> 是采集参数；<code>max_sessions</code> 表达共享连接上限。</p>
+<p><strong>共享通信资源不单独建表</strong>：一条通道就是一条物理连接，多个设备绑同一通道即共享，绑定表已能回答“谁在共用”。</p>
+<h3 class="rp-toc-include" id="66-cfg_binding设备-通道绑定"><a href="#66-cfg_binding设备-通道绑定" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.6 <code>cfg_binding</code>（设备-通道绑定）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody><tr><td><code>binding_id</code></td><td>稳定绑定 ID，<code>ops_comm_stat_5m</code> 的统计维度</td></tr><tr><td><code>device_id</code> + <code>channel_id</code></td><td>联合唯一</td></tr><tr><td><code>device_address</code></td><td>Unit ID / 公共地址 / 从站号</td></tr><tr><td><code>profile_version</code></td><td>协议 Profile，如 <code>mbtcp-v3</code></td></tr><tr><td><code>can_collect/can_control/can_forward</code></td><td>角色标志，三者至少一个，CHECK 约束</td></tr><tr><td><code>enabled</code></td><td>绑定级开关</td></tr></tbody></table></div>
+<p>页面 03 的“主采集 · ch01”“控制下发 · ch01”两行是<strong>同一绑定的两个角色视图</strong>，不再按角色重复建行。采集与控制若走不同连接，绑两条不同通道即可。</p>
+<h3 class="rp-toc-include" id="67-四遥点公共列"><a href="#67-四遥点公共列" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.7 四遥点公共列</h3>
+<p>四张表前 17 列同义：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody><tr><td><code>point_id</code></td><td>稳定点 ID；四表之间也全局唯一（服务校验，单表唯一键表达不了）</td></tr><tr><td><code>owner_device_id</code></td><td>点归属节点；部件点填 rack/pack/cell</td></tr><tr><td><code>binding_id</code></td><td>实际采集来源绑定；部件点填 BMS 的绑定</td></tr><tr><td><code>code/name</code></td><td>业务编码与显示名；<code>code</code> 同归属节点唯一</td></tr><tr><td><code>semantic_code</code></td><td>非空=固有点映射；空=厂家扩展点（只采集诊断）</td></tr><tr><td><code>vendor_key</code></td><td>厂家点稳定键，重复导入据此更新；<code>(binding_id, vendor_key)</code> 唯一</td></tr><tr><td><code>origin</code></td><td><code>type/template/vendor/component</code></td></tr><tr><td><code>address_space/address_offset/bit_offset/register_count</code></td><td>Modbus 地址；非寄存器协议为空</td></tr><tr><td><code>protocol_address_json</code></td><td>IEC104 <code>casdu/ioa</code>、DLT645 <code>data_id</code>、IEC61850 <code>object_ref</code></td></tr><tr><td><code>wire_type/byte_order</code></td><td>原始数据类型与字节序</td></tr><tr><td><code>enabled/disabled_reason</code></td><td>禁用必须有原因，CHECK 约束</td></tr><tr><td><code>stale_after_ms</code></td><td>0 表示继承站默认</td></tr><tr><td><code>source_import_row_id/legacy_ref</code></td><td>导入行追溯与旧表映射</td></tr></tbody></table></div>
+<p>协议取自 <code>cfg_binding → cfg_channel.protocol</code>，点表不重复存 <code>protocol</code>。</p>
+<p><strong>空值语义</strong>：<code>semantic_code</code>、<code>vendor_key</code> 用空串而非 NULL，唯一性靠函数索引 <code>NULLIF(col,&#x27;&#x27;)</code>——“空”不参与唯一，同一设备可以有多条扩展点。这是为适配 ormpp 行映射（它只对算术类型清 NULL 值）而做的显式取舍。</p>
+<h3 class="rp-toc-include" id="68-cfg_point_yc遥测"><a href="#68-cfg_point_yc遥测" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.8 <code>cfg_point_yc</code>（遥测）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody><tr><td><code>value_type</code></td><td><code>double/int64/uint64</code>，CHECK 限定</td></tr><tr><td><code>scale_factor/offset_value</code></td><td>标准值 = 原始值 × scale + offset，<code>scale_factor &lt;&gt; 0</code></td></tr><tr><td><code>range_min/range_max</code></td><td>工程值量程，越限进 <code>OutOfRange</code> 质量</td></tr><tr><td><code>deadband</code></td><td>变化死区，0 表示逐点上报</td></tr><tr><td><code>unit/decimals</code></td><td>工程单位与显示精度</td></tr></tbody></table></div>
+<p>表上没有 <code>write_mode</code>、<code>pulse_width_ms</code>，从结构上排除“遥测点可写”。</p>
+<h3 class="rp-toc-include" id="69-cfg_point_yx遥信"><a href="#69-cfg_point_yx遥信" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.9 <code>cfg_point_yx</code>（遥信）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>说明</th></tr></thead><tbody><tr><td><code>value_type</code></td><td><code>bool</code>（单点）、<code>int64</code>（状态字）或 <code>string</code>（枚举标签）</td></tr><tr><td><code>soe</code></td><td>记录变位；事件不是第五类遥，仍属遥信</td></tr><tr><td><code>invert</code></td><td>原始位取反（常闭接点）</td></tr><tr><td><code>enum_json</code></td><td>码表 <code>[{raw,label,severity}]</code></td></tr><tr><td><code>unknown_policy</code></td><td><code>retain_raw/uncertain/invalid</code>，默认保留原码</td></tr><tr><td><code>feedback_of_point_id</code></td><td>反馈点指回遥控/遥调点</td></tr></tbody></table></div>
+<h3 class="rp-toc-include" id="610-cfg_point_yk遥控与-cfg_point_yt遥调"><a href="#610-cfg_point_yk遥控与-cfg_point_yt遥调" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.10 <code>cfg_point_yk</code>（遥控）与 <code>cfg_point_yt</code>（遥调）</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>YK</th><th>YT</th></tr></thead><tbody><tr><td><code>value_type</code></td><td><code>bool/int64</code></td><td><code>double/int64</code></td></tr><tr><td><code>write_mode</code></td><td><code>fixed/direct</code></td><td>固定 <code>scaled</code>（不存列）</td></tr><tr><td><code>fixed_raw_value</code></td><td><code>fixed</code> 模式必写</td><td>—</td></tr><tr><td><code>pulse_width_ms</code></td><td>脉冲宽度，0 表示保持</td><td>—</td></tr><tr><td><code>scale_factor/offset_value</code></td><td>—</td><td>原码 = (工程值 - offset) / scale</td></tr><tr><td><code>range_min/range_max</code></td><td>—</td><td>可写工程值上下限</td></tr><tr><td><code>min_interval_ms</code></td><td>最小指令间隔</td><td>最小调节间隔</td></tr><tr><td><code>write_group_key</code></td><td>共享写寄存器组，同组互斥</td><td>同左</td></tr><tr><td><code>feedback_json</code></td><td>多判据 <code>[{point_code,criterion,expected,tolerance,order,required}]</code></td><td>同左</td></tr><tr><td><code>feedback_timeout_ms/failure_policy</code></td><td>反馈超时与失败策略</td><td>同左</td></tr></tbody></table></div>
+<p>遥信反馈点通过 <code>cfg_point_yx.feedback_of_point_id</code> 指回本表，或由 <code>feedback_json</code> 声明多判据；保存校验要求引用存在且指向命令点。</p>
+<h3 class="rp-toc-include" id="611-cfg_import_job--cfg_import_row"><a href="#611-cfg_import_job--cfg_import_row" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.11 <code>cfg_import_job</code> / <code>cfg_import_row</code></h3>
+<p><code>cfg_import_job</code>：<code>import_job_id</code>、<code>device_id</code>、<code>binding_id</code>、<code>source_kind</code>、<code>file_name</code>、<code>file_sha256</code>、<code>address_base(zero/one)</code>、<code>idempotency_key</code>（<code>SHA-256(device|binding|sha256)</code>，唯一）、<code>status(parsed/confirmed/applied/failed)</code>、行数统计、提交人与时间。</p>
+<p><code>cfg_import_row</code>：逐行 <code>vendor_key/vendor_name</code>、<code>point_type</code>（决定写入哪张点表）、<code>target_device_path</code>（空即“目标节点缺失”）、<code>semantic_code</code>、地址与取值列、<code>parse_status/parse_code/parse_message</code>、<code>confirm_state(none/accepted/fixed/rejected)</code> 与确认留痕、<code>resolved_point_id</code>。</p>
+<p><strong>地址占用不单独落表</strong>：保存/预览时按 <code>(binding_id, address_space)</code> 实时展开 <code>[offset, offset+register_count)</code> 求重叠，并核对位段；共享通道还应检查相同设备地址的跨绑定冲突。读-读允许；写-写仅当同一非空 <code>write_group_key</code> 且执行端支持互斥才合法，其他写冲突是 error，不能确认绕过。读写交叉作为可确认 warning 写入 <code>import_row.parse_code=&#x27;address_overlap&#x27;</code>，必须逐项说明并确认；无对应导入确认的手工重叠首期拒绝。未排除行的未确认 warning 和任何 error 都阻止应用。</p>
+<p>任务预览不等于工程配置，不增加 <code>config_revision</code>。当前逐行结构不能无损持久化所有 YK/反馈、YX 枚举与 YT 专有字段，首期导入仅接受可完整表达的列，其余返回 Unsupported；完整文件支持须原地扩展既有 DDL、行结构和 ORM，不能只在 Web 内存接受后遗失。</p>
+<h3 class="rp-toc-include" id="612-ops_comm_stat_5m--ops_state_log"><a href="#612-ops_comm_stat_5m--ops_state_log" class="rp-header-anchor rp-link" aria-hidden="true">#</a>6.12 <code>ops_comm_stat_5m</code> / <code>ops_state_log</code></h3>
+<ul>
+<li><code>ops_comm_stat_5m</code>：<code>(binding_id, window_start)</code> 主键，请求/成功/超时/错误计数、平均与 p95 时延、最近有效数据时间。采集进程 5 分钟一窗，保留 30 天。</li>
+<li><code>ops_state_log</code>：<code>object_kind(device/channel/binding)</code> + <code>object_id</code> + <code>state</code> + <code>since</code>，只在状态变化时写，保留 90 天。最新状态仍在实时库，本表只做追溯。</li>
+</ul>
+<h2 class="rp-toc-include" id="7-关键流程"><a href="#7-关键流程" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7. 关键流程</h2>
+<h3 class="rp-toc-include" id="71-保存配置"><a href="#71-保存配置" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.1 保存配置</h3>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>BEGIN;</span></span>
+<span class="line"><span>  -- 1. 先锁站根，检查请求 expected_config_revision，不符则结束事务</span></span>
+<span class="line"><span>  SELECT config_revision FROM cfg_device</span></span>
+<span class="line"><span>   WHERE node_kind = &#x27;station&#x27; AND device_id = ? FOR UPDATE;</span></span>
+<span class="line"><span>  -- 2. 在锁内读取当前记录、授权并校验候选修改；启用设备强制完整性检查</span></span>
+<span class="line"><span>  -- 3. 直接写工程表（INSERT/UPDATE/DELETE），不做版本复制</span></span>
+<span class="line"><span>  -- 4. 工程实际变化时递增一次；多行保存也只递增一次</span></span>
+<span class="line"><span>  UPDATE cfg_device SET config_revision = config_revision + 1</span></span>
+<span class="line"><span>   WHERE node_kind = &#x27;station&#x27; AND device_id = ?;</span></span>
+<span class="line"><span>COMMIT;</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>校验失败整事务回滚，页面展示逐项问题；没有“草稿”中间态。新建通信设备默认停用，可先保存档案再配置真实绑定和点；结构、引用始终强制校验，启用或修改已启用路径时要求必需固有点已映射或明确禁用。无变化保存不增加 revision；全体工程写入者遵循先锁站根、再读校验、再写入的顺序，仅在末尾递增不足以避免并发校验竞态。</p>
+<p>当前四遥表的 <code>binding_id</code> 为非空外键，禁用行也必须有真实绑定；未建绑定的固有点只能表示未配置。若要求不接通道就声明某项不支持，需先同步调整既有四表、行结构与 ORM 的来源可空语义，不能插入占位绑定。</p>
+<h3 class="rp-toc-include" id="72-热加载"><a href="#72-热加载" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.2 热加载</h3>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>消费者（采集/策略/实时库）每 N 秒：</span></span>
+<span class="line"><span>  SELECT config_revision FROM cfg_device WHERE node_kind=&#x27;station&#x27; LIMIT 1;</span></span>
+<span class="line"><span>  与内存中的已加载值比较：</span></span>
+<span class="line"><span>    相同 -&gt; 不做任何事</span></span>
+<span class="line"><span>    不同 -&gt; 重新编译运行目录 -&gt; 校验通过后原子切换 -&gt; 记录已加载 revision</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>运行目录构建失败时保留旧目录继续运行并上报告警，不部分生效。消费者读取配置的查询必须在一个事务内完成，避免读到“保存到一半”的中间状态。</p>
+<h3 class="rp-toc-include" id="73-重复导入与稳定身份"><a href="#73-重复导入与稳定身份" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.3 重复导入与稳定身份</h3>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>1. 计算 idempotency_key；已存在则核对 source_kind/address_base，相同返回原任务，不同返回 Conflict。</span></span>
+<span class="line"><span>2. 解析文件写 cfg_import_row，不写点表。</span></span>
+<span class="line"><span>3. 目标节点按 path 匹配（禁止按重名）；未命中即 parse_status=&#x27;error&#x27;。</span></span>
+<span class="line"><span>4. 厂家点按 (binding_id, vendor_key) 命中 -&gt; 复用 point_id 并 UPDATE；</span></span>
+<span class="line"><span>   未命中 -&gt; 分配新 point_id 并 INSERT。</span></span>
+<span class="line"><span>5. 可确认 warning 逐项确认、error 全部修正后，锁站根再锁任务，重查工程与预览哈希并写点表。</span></span>
+<span class="line"><span>6. 同事务回填 resolved_point_id、置 applied 并递增站根一次；applied 重放不重新写点。</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>稳定身份只靠唯一键：<code>(path)</code>+<code>code</code>、<code>(binding_id, vendor_key)</code>、<code>(owner_device_id, semantic_code)</code>。</p>
+<p>首期仅合并新增/更新，文件缺席的旧点保留，删除须显式操作。预览内容哈希动态计算用于并发编辑检查，不增加配置版本列；当前任务表未存原提交 revision，重放只能返回当前工程计数，不伪造原提交计数。</p>
+<h3 class="rp-toc-include" id="74-运行侧取点"><a href="#74-运行侧取点" class="rp-header-anchor rp-link" aria-hidden="true">#</a>7.4 运行侧取点</h3>
+<div class="rp-codeblock language-sql"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="sql"><code><span class="line"><span style="color:var(--shiki-token-comment)">-- 采集计划：遥测 + 遥信</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">SELECT</span><span style="color:var(--shiki-foreground)"> p.</span><span style="color:var(--shiki-token-keyword)">*</span><span style="color:var(--shiki-foreground)">, </span><span style="color:var(--shiki-token-string-expression)">&#x27;yc&#x27;</span><span style="color:var(--shiki-token-keyword)"> AS</span><span style="color:var(--shiki-foreground)"> point_type </span><span style="color:var(--shiki-token-keyword)">FROM</span><span style="color:var(--shiki-foreground)"> cfg_point_yc p</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  JOIN</span><span style="color:var(--shiki-foreground)"> cfg_binding b </span><span style="color:var(--shiki-token-keyword)">ON</span><span style="color:var(--shiki-foreground)"> b.binding_id </span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-foreground)"> p.binding_id</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  JOIN</span><span style="color:var(--shiki-foreground)"> cfg_channel c </span><span style="color:var(--shiki-token-keyword)">ON</span><span style="color:var(--shiki-foreground)"> c.channel_id </span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-foreground)"> b.channel_id</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  JOIN</span><span style="color:var(--shiki-foreground)"> cfg_device d  </span><span style="color:var(--shiki-token-keyword)">ON</span><span style="color:var(--shiki-foreground)"> d.device_id  </span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-foreground)"> p.owner_device_id</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">  JOIN</span><span style="color:var(--shiki-foreground)"> cfg_device sd </span><span style="color:var(--shiki-token-keyword)">ON</span><span style="color:var(--shiki-foreground)"> sd.device_id </span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-foreground)"> d.source_device_id</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)"> WHERE</span><span style="color:var(--shiki-foreground)"> p.enabled</span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-token-constant)">1</span><span style="color:var(--shiki-token-keyword)"> AND</span><span style="color:var(--shiki-foreground)"> b.enabled</span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-token-constant)">1</span><span style="color:var(--shiki-token-keyword)"> AND</span><span style="color:var(--shiki-foreground)"> c.enabled</span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-token-constant)">1</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">   AND</span><span style="color:var(--shiki-foreground)"> d.enabled</span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-token-constant)">1</span><span style="color:var(--shiki-token-keyword)"> AND</span><span style="color:var(--shiki-foreground)"> (d.source_device_id</span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-token-string-expression)">&#x27;&#x27;</span><span style="color:var(--shiki-token-keyword)"> OR</span><span style="color:var(--shiki-foreground)"> sd.enabled</span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-token-constant)">1</span><span style="color:var(--shiki-foreground)">)</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">UNION ALL</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">SELECT</span><span style="color:var(--shiki-foreground)"> p.</span><span style="color:var(--shiki-token-keyword)">*</span><span style="color:var(--shiki-foreground)">, </span><span style="color:var(--shiki-token-string-expression)">&#x27;yx&#x27;</span><span style="color:var(--shiki-token-keyword)"> FROM</span><span style="color:var(--shiki-foreground)"> cfg_point_yx p </span><span style="color:var(--shiki-token-comment)">/* 同构 JOIN */</span><span style="color:var(--shiki-foreground)">;</span></span>
+<span class="line"></span>
+<span class="line"><span style="color:var(--shiki-token-comment)">-- 控制能力：遥控 + 遥调，只取 can_control 的绑定</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">SELECT</span><span style="color:var(--shiki-foreground)"> p.point_id </span><span style="color:var(--shiki-token-keyword)">FROM</span><span style="color:var(--shiki-foreground)"> cfg_point_yk p </span><span style="color:var(--shiki-token-keyword)">JOIN</span><span style="color:var(--shiki-foreground)"> cfg_binding b </span><span style="color:var(--shiki-token-keyword)">ON</span><span style="color:var(--shiki-foreground)"> b.can_control</span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-token-constant)">1</span><span style="color:var(--shiki-token-comment)"> /* ... */</span><span style="color:var(--shiki-foreground)">;</span></span>
+<span class="line"><span style="color:var(--shiki-token-keyword)">SELECT</span><span style="color:var(--shiki-foreground)"> p.point_id </span><span style="color:var(--shiki-token-keyword)">FROM</span><span style="color:var(--shiki-foreground)"> cfg_point_yt p </span><span style="color:var(--shiki-token-keyword)">JOIN</span><span style="color:var(--shiki-foreground)"> cfg_binding b </span><span style="color:var(--shiki-token-keyword)">ON</span><span style="color:var(--shiki-foreground)"> b.can_control</span><span style="color:var(--shiki-token-keyword)">=</span><span style="color:var(--shiki-token-constant)">1</span><span style="color:var(--shiki-token-comment)"> /* ... */</span><span style="color:var(--shiki-foreground)">;</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>采集与控制取点集合天然分离：YK/YT 不会被误编进周期采集计划。</p>
+<h2 class="rp-toc-include" id="8-不变量与校验分层"><a href="#8-不变量与校验分层" class="rp-header-anchor rp-link" aria-hidden="true">#</a>8. 不变量与校验分层</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>不变量</th><th>数据库保证</th><th>服务/保存校验</th></tr></thead><tbody><tr><td>设备 ID 全局唯一</td><td><code>uq_device_id</code></td><td>—</td></tr><tr><td>同父节点 code 唯一</td><td><code>uq_device_sibling</code></td><td>—</td></tr><tr><td>路径唯一且深度 ≤ 8</td><td><code>uq_device_path</code>、<code>ck_device_depth</code></td><td>无环、不跨站</td></tr><tr><td>部件必须有采集设备</td><td><code>ck_device_component</code></td><td>指向 <code>node_kind=&#x27;device&#x27;</code> 且启用</td></tr><tr><td>同设备同通道单绑定</td><td><code>uq_binding_pair</code></td><td>角色至少一个（CHECK）</td></tr><tr><td>点 code 同归属节点唯一</td><td>四表各 <code>uq_*_code</code></td><td>—</td></tr><tr><td>厂家点键同绑定唯一</td><td>四表各 <code>uq_*_vendor_key</code>（函数索引）</td><td>—</td></tr><tr><td>固有点每设备仅一行</td><td>四表各 <code>uq_*_semantic</code>（函数索引）</td><td>—</td></tr><tr><td>点 ID 跨四表唯一</td><td>单表唯一键表达不了</td><td>保存前按 <code>point_id</code> 合并去重</td></tr><tr><td>遥控固定值必须有写入值</td><td><code>fixed_raw_value NOT NULL</code></td><td>保存前按 <code>write_mode</code> 校验</td></tr><tr><td>遥测/遥调倍率非零</td><td><code>ck_yc_scale</code>、<code>ck_yt_scale</code></td><td>—</td></tr><tr><td>类型目录与实例类型一致</td><td>—</td><td>比对 <code>cfg_type_point.point_type</code> 与目标表</td></tr><tr><td>禁用必须说明</td><td>四表各 <code>ck_*_reason</code></td><td>页面逐项校验</td></tr><tr><td>必需固有点均已映射</td><td>—</td><td>保存校验（<code>required=1</code>）</td></tr><tr><td>地址区间不重叠</td><td>无法用唯一键表达</td><td>保存校验 + 逐项确认</td></tr></tbody></table></div>
+<h2 class="rp-toc-include" id="9-旧四遥表迁移"><a href="#9-旧四遥表迁移" class="rp-header-anchor rp-link" aria-hidden="true">#</a>9. 旧四遥表迁移</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>旧表</th><th>新结构</th><th>规则</th></tr></thead><tbody><tr><td><code>device</code></td><td><code>cfg_device(node_kind=&#x27;device&#x27;)</code></td><td><code>group_id</code> 映射为父节点；旧 ID 写 <code>legacy_ref</code>；另建一行站根与单元节点</td></tr><tr><td><code>channel</code></td><td><code>cfg_channel</code> + <code>cfg_binding</code></td><td>每通道一条；<code>device_id</code> 转成绑定，<code>rtu_addr</code> 转 <code>device_address</code></td></tr><tr><td><code>point_yc</code></td><td><code>cfg_point_yc</code></td><td><code>func_code/reg_addr/slave_id</code> → 地址列；<code>mul_coe/add_coe</code> → 倍率偏移；<code>min/max_limit</code> → 量程</td></tr><tr><td><code>point_yx</code></td><td><code>cfg_point_yx</code></td><td><code>bit</code> → <code>bit_offset</code>；<code>reverse_flag</code> → <code>invert</code></td></tr><tr><td><code>point_yk</code></td><td><code>cfg_point_yk</code></td><td><code>command_type</code> → <code>write_mode</code>；<code>related_yx_id</code> → 反馈点 <code>feedback_of_point_id</code></td></tr><tr><td><code>point_yt</code></td><td><code>cfg_point_yt</code></td><td><code>write_mode</code> 固定 <code>scaled</code>；<code>related_yc_id</code> → <code>feedback_json</code> 首条判据</td></tr></tbody></table></div>
+<p>迁移期间旧表只读；采集切到新结构后保留一个验证周期再下线。<code>ems_point_import</code> 工具改为按类型写四张点表。</p>
+<h2 class="rp-toc-include" id="10-与实时库的契约"><a href="#10-与实时库的契约" class="rp-header-anchor rp-link" aria-hidden="true">#</a>10. 与实时库的契约</h2>
+<p>实时库不读 <code>cfg_*</code>，只接收配置服务编译出的运行目录（<code>runtime_catalog.h</code>）：</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>配置字段</th><th>运行目录字段</th><th>使用方式</th></tr></thead><tbody><tr><td><code>cfg_device.path</code></td><td><code>PointAddress.device_path</code></td><td>组成 <code>RecordKey</code>，最多 8 级</td></tr><tr><td>四张点表的 <code>point_id/code/value_type/unit</code></td><td><code>RuntimePoint</code></td><td>类型校验与快照返回</td></tr><tr><td>点所在表（<code>cfg_point_yc/yx/yk/yt</code>）</td><td><code>RuntimePoint.point_type</code></td><td><code>YC/YX/YK/YT</code>；控制侧据此区分“固定值写入”与“工程值缩放写入”</td></tr><tr><td><code>point_type</code> 映射</td><td><code>RuntimePoint.kind</code></td><td><code>YC→Telemetry</code>、<code>YX→Status</code>、<code>YK/YT→Command</code></td></tr><tr><td>四表 <code>stale_after_ms</code> / 站根 <code>default_stale_after_ms</code></td><td><code>RuntimePoint.stale_after_ms</code></td><td>计算 <code>stale</code>，不删除最后值</td></tr><tr><td>点/绑定/通道/设备 <code>enabled</code></td><td>目录是否包含该点</td><td>禁用项不进入采集计划</td></tr><tr><td>站根 <code>config_revision</code></td><td><code>RuntimeCatalog::configVersion()</code></td><td>转成文本如 <code>r37</code>，拒绝旧 revision 样本</td></tr><tr><td><code>cfg_binding.binding_id</code></td><td>来源标识</td><td>样本来源判定</td></tr></tbody></table></div>
+<p><code>RuntimePoint.point_type</code> 与 <code>PointSnapshot.point_type</code> 已在代码中落地（<code>common/model/point.h</code>、<code>rtdb/model/runtime_catalog.h</code>、<code>rtdb/client/realtime_service.h</code>）。</p>
+<h2 class="rp-toc-include" id="11-实施顺序与验收"><a href="#11-实施顺序与验收" class="rp-header-anchor rp-link" aria-hidden="true">#</a>11. 实施顺序与验收</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>阶段</th><th>内容</th><th>验收</th></tr></thead><tbody><tr><td>1</td><td>执行 <code>003</code> 迁移与种子</td><td>空库可重复执行；<code>SHOW CREATE TABLE</code> 无隐式截断；种子幂等</td></tr><tr><td>2</td><td>配置仓储：整树读取、CRUD、递增 <code>config_revision</code></td><td>保存后 revision +1；校验失败整事务回滚</td></tr><tr><td>3</td><td>设备树与通道绑定</td><td>四类节点可建；部件必须指定采集设备；部件点可归属 rack/pack/cell</td></tr><tr><td>4</td><td>点表导入与固有点映射</td><td>重复文件返回同一任务；目标节点按 path 匹配；四遥分类正确</td></tr><tr><td>5</td><td>地址冲突与逐项确认</td><td>重叠区间必须逐项确认；同 <code>write_group_key</code> 的写区间不报错</td></tr><tr><td>6</td><td>热加载与运行统计</td><td>消费者 revision 变化后重建目录；5 分钟成功率、平均时延可查</td></tr></tbody></table></div>
+<p><strong>改名连带修改</strong>：本文重写时已同步 <code>runtime_catalog.h</code> 的表名与措辞注释、<code>realtime/service-design.md</code> 的旧表引用。仍需随实现同步：Web 接口与热加载消费端。</p>
+<h2 class="rp-toc-include" id="附录-a枚举字典"><a href="#附录-a枚举字典" class="rp-header-anchor rp-link" aria-hidden="true">#</a>附录 A：枚举字典</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>枚举</th><th>取值</th></tr></thead><tbody><tr><td><code>cfg_device.node_kind</code></td><td><code>station</code>、<code>unit</code>、<code>device</code>、<code>component</code></td></tr><tr><td><code>cfg_device_type.category</code></td><td><code>pcs</code>、<code>bms</code>、<code>hvac</code>、<code>env</code>、<code>fire</code>、<code>meter</code>、<code>relay</code>、<code>battery</code>、<code>rack</code>、<code>pack</code>、<code>cell</code></td></tr><tr><td><code>cfg_type_point.point_type</code></td><td><code>yc</code>（遥测）、<code>yx</code>（遥信）、<code>yk</code>（遥控）、<code>yt</code>（遥调）</td></tr><tr><td>点表类型</td><td>由表名决定：<code>cfg_point_yc/yx/yk/yt</code>，不存列</td></tr><tr><td><code>cfg_point_yc</code>.value_type</td><td><code>double</code>、<code>int64</code>、<code>uint64</code></td></tr><tr><td><code>cfg_point_yx</code>.value_type</td><td><code>bool</code>、<code>int64</code>、<code>string</code></td></tr><tr><td><code>cfg_point_yk</code>.value_type</td><td><code>bool</code>、<code>int64</code></td></tr><tr><td><code>cfg_point_yt</code>.value_type</td><td><code>double</code>、<code>int64</code></td></tr><tr><td><code>cfg_point_yk.write_mode</code></td><td><code>fixed</code>、<code>direct</code>（遥调固定 <code>scaled</code>，不存列）</td></tr><tr><td>四表 <code>unknown_policy</code>（YX/YC 使用）</td><td><code>retain_raw</code>、<code>uncertain</code>、<code>invalid</code></td></tr><tr><td>四表 <code>address_space</code></td><td><code>coil</code>、<code>discrete_input</code>、<code>input_register</code>、<code>holding_register</code></td></tr><tr><td><code>cfg_point_yk/yt.failure_policy</code></td><td><code>reject</code>、<code>retry</code>、<code>escalate</code></td></tr><tr><td><code>cfg_import_job.status</code></td><td><code>parsed</code>、<code>confirmed</code>、<code>applied</code>、<code>failed</code></td></tr><tr><td><code>cfg_import_row.confirm_state</code></td><td><code>none</code>、<code>accepted</code>、<code>fixed</code>、<code>rejected</code></td></tr><tr><td><code>ops_state_log.object_kind</code></td><td><code>device</code>、<code>channel</code>、<code>binding</code></td></tr><tr><td>运行设备状态</td><td><code>unconfigured</code>、<code>online</code>、<code>alarm</code>、<code>fault</code>、<code>offline</code>（实时库字符串，不入配置表）</td></tr></tbody></table></div>
+<h2 class="rp-toc-include" id="附录-b删除表对照"><a href="#附录-b删除表对照" class="rp-header-anchor rp-link" aria-hidden="true">#</a>附录 B：删除表对照</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>前版表</th><th>去向</th></tr></thead><tbody><tr><td><code>cfg_asset</code> / <code>cfg_ess_unit</code></td><td>并入 <code>cfg_device</code>（<code>node_kind</code> 与站根字段）</td></tr><tr><td><code>cfg_scope</code> / <code>cfg_version</code> / <code>cfg_version_snapshot</code> / <code>cfg_scope_active</code> / <code>cfg_apply_receipt</code> / <code>cfg_validation_finding</code></td><td><strong>全部去掉</strong>：不做配置版本，改为站根 <code>config_revision</code> + 保存前校验</td></tr><tr><td><code>cfg_device_type_version</code></td><td>并入 <code>cfg_device_type</code> 复合主键</td></tr><tr><td><code>cfg_standard_point_def</code> / <code>cfg_capability_def</code> / <code>cfg_capability_requirement</code></td><td><code>cfg_type_point</code>（<code>capability_codes_json</code>）</td></tr><tr><td><code>cfg_model_template</code> / <code>_version</code> / <code>cfg_template_point</code></td><td><code>cfg_template</code>（<code>points_json</code>）</td></tr><tr><td><code>cfg_connection_resource</code></td><td><code>cfg_channel</code>（同一行被多次绑定即共享）</td></tr><tr><td><code>cfg_binding_operation</code></td><td><code>cfg_binding.can_collect/can_control/can_forward</code></td></tr><tr><td><code>cfg_device_standard_point</code></td><td>由四张点表的行状态推出三态</td></tr><tr><td><code>cfg_vendor_point</code> / <code>cfg_point_route</code></td><td>并入 <code>cfg_point_yc/yx/yk/yt</code>（<code>semantic_code</code> 空即扩展点）</td></tr><tr><td><code>cfg_value_conversion</code> / <code>cfg_enum_set</code> / <code>cfg_enum_item</code></td><td>内联为点表列与 <code>enum_json</code></td></tr><tr><td><code>cfg_command_rule</code> / <code>cfg_command_write_group</code> / <code>cfg_command_feedback</code></td><td>内联为 YK/YT 的写入列、<code>write_group_key</code>、<code>feedback_json</code></td></tr><tr><td><code>cfg_forward_map</code></td><td>移出本文，归通信管理模块</td></tr><tr><td><code>cfg_address_occupancy</code> / <code>cfg_address_confirmation</code></td><td>保存前即时计算 + <code>cfg_import_row.confirm_*</code></td></tr><tr><td><code>cfg_identity_binding</code> / <code>cfg_legacy_link</code></td><td>唯一键 + <code>legacy_ref</code></td></tr><tr><td><code>cfg_change_audit</code></td><td>统一审计模块（<code>audit_log</code>）</td></tr><tr><td><code>ops_device_state_log</code> / <code>ops_channel_state_log</code></td><td><code>ops_state_log</code>（<code>object_kind</code>）</td></tr></tbody></table></div>
+<h2 class="rp-toc-include" id="附录-c仍在权衡的点"><a href="#附录-c仍在权衡的点" class="rp-header-anchor rp-link" aria-hidden="true">#</a>附录 C：仍在权衡的点</h2>
+<ol>
+<li><strong>固有点目录仍是单表</strong>：<code>cfg_type_point</code> 四种类型字段完全同构，拆四张只会复制结构，且“按能力取必需固有点”要 UNION 四次。若后续出现类型专有字段（如 YK 默认固定值、YC 默认量程），再拆。</li>
+<li><strong>运行目录不拆四类</strong>：实时记录结构对四遥同构，拆 <code>RuntimePoint</code> 会让 <code>findPoint</code> 返回变体、快照构造分四份，收益仅为省一个 <code>point_type</code> 字段。当前用 <code>point_type</code> 标记，控制侧仍能区分 YK/YT。</li>
+<li><strong>一期不支持同点多通道冗余</strong>：双网采集若要在一期支持，需要“点多来源”，代价是重新引入路由表。当前按“两条点 + 上层择优”处理。</li>
+<li><strong>不做配置历史</strong>：直接改表意味着过期配置不可回放。若投运后需要审计级追溯，再引入版本或影子表；开发阶段以审计日志记录“谁在何时改了什么”即可。</li>
+</ol><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/common/database/device-management.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/10/24 12:08:18</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/common/database/" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>公共数据库访问层</span></span></a><a href="/ems/common/realtime/" class="rp-prev-next-page__item rp-prev-next-page__next rp-link"><span class="rp-prev-next-page__item__desc">下一页</span><span class="rp-prev-next-page__item__title"><span>实时数据与配置</span><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></span></a></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#0-本次重构结论" class="rp-toc-item rp-link" title="0. 本次重构结论" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">0. 本次重构结论</span></a><a href="#1-目标与边界" class="rp-toc-item rp-link" title="1. 目标与边界" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">1. 目标与边界</span></a><a href="#2-三个核心约定" class="rp-toc-item rp-link" title="2. 三个核心约定" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">2. 三个核心约定</span></a><a href="#21-只有设备没有资产" class="rp-toc-item rp-link" title="2.1 只有设备，没有资产" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.1 只有设备，没有资产</span></a><a href="#22-四遥是点的唯一分类四张表--四个类型" class="rp-toc-item rp-link" title="2.2 四遥是点的唯一分类，四张表 + 四个类型" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.2 四遥是点的唯一分类，四张表 + 四个类型</span></a><a href="#23-直接改工程表不做版本" class="rp-toc-item rp-link" title="2.3 直接改工程表，不做版本" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">2.3 直接改工程表，不做版本</span></a><a href="#3-与设计图页面的对应" class="rp-toc-item rp-link" title="3. 与设计图页面的对应" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">3. 与设计图页面的对应</span></a><a href="#4-表总览14-张" class="rp-toc-item rp-link" title="4. 表总览（14 张）" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">4. 表总览（14 张）</span></a><a href="#5-逻辑模型" class="rp-toc-item rp-link" title="5. 逻辑模型" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">5. 逻辑模型</span></a><a href="#6-核心表字段语义" class="rp-toc-item rp-link" title="6. 核心表字段语义" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">6. 核心表字段语义</span></a><a href="#61-cfg_device设备树" class="rp-toc-item rp-link" title="6.1 cfg_device（设备树）" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.1 <code>cfg_device</code>（设备树）</span></a><a href="#62-cfg_device_type设备类型" class="rp-toc-item rp-link" title="6.2 cfg_device_type（设备类型）" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.2 <code>cfg_device_type</code>（设备类型）</span></a><a href="#63-cfg_type_point类型固有点目录" class="rp-toc-item rp-link" title="6.3 cfg_type_point（类型固有点目录）" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.3 <code>cfg_type_point</code>（类型固有点目录）</span></a><a href="#64-cfg_template型号模板" class="rp-toc-item rp-link" title="6.4 cfg_template（型号模板）" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.4 <code>cfg_template</code>（型号模板）</span></a><a href="#65-cfg_channel通道" class="rp-toc-item rp-link" title="6.5 cfg_channel（通道）" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.5 <code>cfg_channel</code>（通道）</span></a><a href="#66-cfg_binding设备-通道绑定" class="rp-toc-item rp-link" title="6.6 cfg_binding（设备-通道绑定）" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.6 <code>cfg_binding</code>（设备-通道绑定）</span></a><a href="#67-四遥点公共列" class="rp-toc-item rp-link" title="6.7 四遥点公共列" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.7 四遥点公共列</span></a><a href="#68-cfg_point_yc遥测" class="rp-toc-item rp-link" title="6.8 cfg_point_yc（遥测）" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.8 <code>cfg_point_yc</code>（遥测）</span></a><a href="#69-cfg_point_yx遥信" class="rp-toc-item rp-link" title="6.9 cfg_point_yx（遥信）" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.9 <code>cfg_point_yx</code>（遥信）</span></a><a href="#610-cfg_point_yk遥控与-cfg_point_yt遥调" class="rp-toc-item rp-link" title="6.10 cfg_point_yk（遥控）与 cfg_point_yt（遥调）" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.10 <code>cfg_point_yk</code>（遥控）与 <code>cfg_point_yt</code>（遥调）</span></a><a href="#611-cfg_import_job--cfg_import_row" class="rp-toc-item rp-link" title="6.11 cfg_import_job / cfg_import_row" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.11 <code>cfg_import_job</code> / <code>cfg_import_row</code></span></a><a href="#612-ops_comm_stat_5m--ops_state_log" class="rp-toc-item rp-link" title="6.12 ops_comm_stat_5m / ops_state_log" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">6.12 <code>ops_comm_stat_5m</code> / <code>ops_state_log</code></span></a><a href="#7-关键流程" class="rp-toc-item rp-link" title="7. 关键流程" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">7. 关键流程</span></a><a href="#71-保存配置" class="rp-toc-item rp-link" title="7.1 保存配置" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.1 保存配置</span></a><a href="#72-热加载" class="rp-toc-item rp-link" title="7.2 热加载" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.2 热加载</span></a><a href="#73-重复导入与稳定身份" class="rp-toc-item rp-link" title="7.3 重复导入与稳定身份" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.3 重复导入与稳定身份</span></a><a href="#74-运行侧取点" class="rp-toc-item rp-link" title="7.4 运行侧取点" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">7.4 运行侧取点</span></a><a href="#8-不变量与校验分层" class="rp-toc-item rp-link" title="8. 不变量与校验分层" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">8. 不变量与校验分层</span></a><a href="#9-旧四遥表迁移" class="rp-toc-item rp-link" title="9. 旧四遥表迁移" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">9. 旧四遥表迁移</span></a><a href="#10-与实时库的契约" class="rp-toc-item rp-link" title="10. 与实时库的契约" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">10. 与实时库的契约</span></a><a href="#11-实施顺序与验收" class="rp-toc-item rp-link" title="11. 实施顺序与验收" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">11. 实施顺序与验收</span></a><a href="#附录-a枚举字典" class="rp-toc-item rp-link" title="附录 A：枚举字典" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">附录 A：枚举字典</span></a><a href="#附录-b删除表对照" class="rp-toc-item rp-link" title="附录 B：删除表对照" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">附录 B：删除表对照</span></a><a href="#附录-c仍在权衡的点" class="rp-toc-item rp-link" title="附录 C：仍在权衡的点" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">附录 C：仍在权衡的点</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/common/database/device-management.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+    <div id="__rspress_modal_container"></div>
+  </body>
+</html>
