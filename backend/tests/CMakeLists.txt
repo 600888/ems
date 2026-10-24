@@ -19,3 +19,7 @@ if(TARGET net_collect)
 endif()
 
 add_subdirectory(storage)
+
+if(EMS_BUILD_WEB)
+    add_subdirectory(web)
+endif()

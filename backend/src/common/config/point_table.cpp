@@ -533,8 +533,7 @@ PointTableLoadResult load_point_table(const model::ModelCatalog& catalog,
         const bool writable = row.access == "write";
         const model::BindingOp operation =
             writable ? model::BindingOp::Control : model::BindingOp::Collect;
-        if (!has_op(*binding, operation) ||
-            (writable != model::is_command(point->point_type))) {
+        if (!has_op(*binding, operation) || (writable != model::is_command(point->point_type))) {
             issue(result.issues, row.line, "access", "点种类与通道读写操作不匹配");
             continue;
         }

@@ -28,8 +28,8 @@ struct CfgDeviceRow {
     std::string node_kind;         ///< station/unit/device/component
     std::string code;              ///< 同父节点下唯一
     std::string name;
-    std::string path;              ///< 相对站根的路径，如 /unit01/battery01
-    int depth{0};                  ///< 0–8
+    std::string path;  ///< 相对站根的路径，如 /unit01/battery01
+    int depth{0};      ///< 0–8
     int sort_order{0};
     std::string device_type_code;  ///< 部件节点同样引用类型（电池簇/包/电芯）
     std::string type_version;
@@ -39,10 +39,10 @@ struct CfgDeviceRow {
     std::string model;
     std::string firmware_version;
     double rated_power_kw{0.0};
-    std::string timezone;                ///< 仅站根使用
-    int default_stale_after_ms{60000};   ///< 仅站根使用；0 表示不判陈旧
-    std::int64_t config_revision{0};     ///< 仅站根使用：每次保存 +1，供热加载轮询
-    int enabled{1};                      ///< 配置启用，与运行在线状态无关
+    std::string timezone;               ///< 仅站根使用
+    int default_stale_after_ms{60000};  ///< 仅站根使用；0 表示不判陈旧
+    std::int64_t config_revision{0};    ///< 仅站根使用：每次保存 +1，供热加载轮询
+    int enabled{1};                     ///< 配置启用，与运行在线状态无关
     std::string description;
     std::string legacy_ref;  ///< 旧四遥表数字 ID
     std::string created_at;

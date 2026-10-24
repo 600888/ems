@@ -25,11 +25,17 @@ endif()
 # 定位 clang-format
 # ---------------------------------------------------------------------------
 if(NOT CLANG_FORMAT_EXECUTABLE)
-    find_program(CLANG_FORMAT_EXECUTABLE
-        NAMES
-            clang-format
-            clang-format-21 clang-format-20 clang-format-19 clang-format-18
-            clang-format-17 clang-format-16 clang-format-15 clang-format-14
+    find_program(
+        CLANG_FORMAT_EXECUTABLE
+        NAMES clang-format
+              clang-format-21
+              clang-format-20
+              clang-format-19
+              clang-format-18
+              clang-format-17
+              clang-format-16
+              clang-format-15
+              clang-format-14
         DOC "clang-format executable used by the format / format-check targets"
     )
 endif()
@@ -57,17 +63,19 @@ if(_cf_version_output MATCHES "([0-9]+)\\.[0-9]+\\.[0-9]+")
     set(_cf_version "${CMAKE_MATCH_0}")
     set(_cf_major "${CMAKE_MATCH_1}")
     if(_cf_major LESS 18)
-        message(WARNING
-            "clang-format ${_cf_version} is too old; require >= 18. "
-            "The 'format' / 'format-check' targets will NOT be created. "
-            "Install with: python -m pip install clang-format==${EMS_CLANG_FORMAT_VERSION}")
+        message(
+            WARNING "clang-format ${_cf_version} is too old; require >= 18. "
+                    "The 'format' / 'format-check' targets will NOT be created. "
+                    "Install with: python -m pip install clang-format==${EMS_CLANG_FORMAT_VERSION}"
+        )
         return()
     endif()
     if(NOT _cf_version VERSION_EQUAL EMS_CLANG_FORMAT_VERSION)
-        message(WARNING
-            "clang-format ${_cf_version} differs from the pinned version "
-            "${EMS_CLANG_FORMAT_VERSION}; 'format-check' may report false violations. "
-            "Install with: python -m pip install clang-format==${EMS_CLANG_FORMAT_VERSION}")
+        message(
+            WARNING "clang-format ${_cf_version} differs from the pinned version "
+                    "${EMS_CLANG_FORMAT_VERSION}; 'format-check' may report false violations. "
+                    "Install with: python -m pip install clang-format==${EMS_CLANG_FORMAT_VERSION}"
+        )
     endif()
 endif()
 
@@ -84,8 +92,14 @@ foreach(_dir IN LISTS _ems_format_dirs)
     if(NOT IS_DIRECTORY "${_abs}")
         continue()
     endif()
-    file(GLOB_RECURSE _globbed
-        "${_abs}/*.h" "${_abs}/*.hpp" "${_abs}/*.c" "${_abs}/*.cc" "${_abs}/*.cpp"
+    file(
+        GLOB_RECURSE
+        _globbed
+        "${_abs}/*.h"
+        "${_abs}/*.hpp"
+        "${_abs}/*.c"
+        "${_abs}/*.cc"
+        "${_abs}/*.cpp"
     )
     list(APPEND _ems_format_files ${_globbed})
 endforeach()
@@ -96,24 +110,25 @@ if(NOT _ems_format_files)
 endif()
 
 list(LENGTH _ems_format_files _ems_format_count)
-message(STATUS "clang-format will process ${_ems_format_count} files (backend/third_party excluded)")
+message(
+    STATUS "clang-format will process ${_ems_format_count} files (backend/third_party excluded)"
+)
 
 # ---------------------------------------------------------------------------
 # 目标
 # ---------------------------------------------------------------------------
-add_custom_target(format
+add_custom_target(
+    format
     COMMAND "${CLANG_FORMAT_EXECUTABLE}" -i --style=file ${_ems_format_files}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Formatting ${_ems_format_count} C/C++ files with clang-format"
-    VERBATIM
-    USES_TERMINAL
+    VERBATIM USES_TERMINAL
 )
 
-add_custom_target(format-check
-    COMMAND "${CLANG_FORMAT_EXECUTABLE}" --style=file --dry-run --Werror
-            ${_ems_format_files}
+add_custom_target(
+    format-check
+    COMMAND "${CLANG_FORMAT_EXECUTABLE}" --style=file --dry-run --Werror ${_ems_format_files}
     WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
     COMMENT "Checking formatting of ${_ems_format_count} C/C++ files"
-    VERBATIM
-    USES_TERMINAL
+    VERBATIM USES_TERMINAL
 )

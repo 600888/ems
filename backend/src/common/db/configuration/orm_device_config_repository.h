@@ -48,8 +48,8 @@ class OrmDeviceConfigRepository final : public IDeviceConfigRepository {
      * @param[in] ctx 调用期限。
      * @return 全量记录或错误。
      */
-    core::Result<DeviceConfigRecords> load_configuration(
-        ITransaction& tx, const core::CallContext& ctx) override {
+    core::Result<DeviceConfigRecords> load_configuration(ITransaction& tx,
+                                                         const core::CallContext& ctx) override {
         return run<DeviceConfigRecords>(tx, ctx, [](auto& db) {
             DeviceConfigRecords records;
             records.devices = bounded<CfgDeviceRow>(db, kRowLimit);
@@ -213,13 +213,13 @@ class OrmDeviceConfigRepository final : public IDeviceConfigRepository {
      * @param[in] ctx 调用期限。
      * @return 递增后的修订号。
      */
-    core::Result<std::int64_t> bump_config_revision(
-        ITransaction& tx, const std::string& station_device_id,
-        const core::CallContext& ctx) override {
+    core::Result<std::int64_t> bump_config_revision(ITransaction& tx,
+                                                    const std::string& station_device_id,
+                                                    const core::CallContext& ctx) override {
         return run<std::int64_t>(tx, ctx, [&](auto& db) {
             require_key(station_device_id, "station_device_id is required");
-            auto rows = db.template query_s<CfgDeviceRow>("device_id=? FOR UPDATE",
-                                                          station_device_id);
+            auto rows =
+                db.template query_s<CfgDeviceRow>("device_id=? FOR UPDATE", station_device_id);
             if (rows.empty()) throw not_found("station device not found");
             auto row = rows.front();
             if (row.node_kind != "station") throw invalid("device is not a station root");

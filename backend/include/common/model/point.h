@@ -115,9 +115,7 @@ constexpr PointKind to_point_kind(PointType t) noexcept {
  * @param[in] t 四遥分类。
  * @return true 表示需要写入规则与反馈判据。
  */
-constexpr bool is_command(PointType t) noexcept {
-    return t == PointType::YK || t == PointType::YT;
-}
+constexpr bool is_command(PointType t) noexcept { return t == PointType::YK || t == PointType::YT; }
 
 /**
  * @brief 判断四遥分类是否为上行采集量（遥测或遥信）。
@@ -280,12 +278,12 @@ struct StandardPointDefinition {
  * value_type 三者始终自洽，避免出现“遥测点标记可写”这类组合。
  */
 struct PointBase {
-    core::PointId point_id;    ///< 稳定点 ID
-    core::AssetId asset_id;    ///< 所属设备节点；部件节点的点由上位通信设备采集
-    std::string code;          ///< 业务编码（非显示名称）
-    std::string name;          ///< 显示名称
-    PointType point_type{PointType::YC};  ///< 四遥分类
-    PointKind kind{PointKind::Telemetry};  ///< 记录种类，由 point_type 映射
+    core::PointId point_id;                   ///< 稳定点 ID
+    core::AssetId asset_id;                   ///< 所属设备节点；部件节点的点由上位通信设备采集
+    std::string code;                         ///< 业务编码（非显示名称）
+    std::string name;                         ///< 显示名称
+    PointType point_type{PointType::YC};      ///< 四遥分类
+    PointKind kind{PointKind::Telemetry};     ///< 记录种类，由 point_type 映射
     ValueType value_type{ValueType::Double};  ///< 值类型
     std::string unit;                         ///< 工程单位
     bool enabled{true};                       ///< 配置启用
@@ -326,7 +324,7 @@ struct YxPoint : PointBase {
 struct YkPoint : PointBase {
     YkPoint() noexcept : PointBase(PointType::YK, PointKind::Command, ValueType::Bool) {}
 
-    WriteMode write_mode{WriteMode::Direct};   ///< 写入方式
+    WriteMode write_mode{WriteMode::Direct};      ///< 写入方式
     std::optional<std::int64_t> fixed_raw_value;  ///< Fixed 模式必填
     std::uint32_t pulse_width_ms{0};              ///< 脉冲宽度，0 表示保持
     std::uint32_t min_interval_ms{0};             ///< 最小指令间隔
@@ -338,10 +336,10 @@ struct YkPoint : PointBase {
 struct YtPoint : PointBase {
     YtPoint() noexcept : PointBase(PointType::YT, PointKind::Command, ValueType::Double) {}
 
-    double scale_factor{1.0};      ///< 原码 = (工程值 - offset) / scale
-    double offset_value{0.0};      ///< 偏移
-    double range_min{-9999999.0};  ///< 可写下限（工程值）
-    double range_max{9999999.0};   ///< 可写上限（工程值）
+    double scale_factor{1.0};                 ///< 原码 = (工程值 - offset) / scale
+    double offset_value{0.0};                 ///< 偏移
+    double range_min{-9999999.0};             ///< 可写下限（工程值）
+    double range_max{9999999.0};              ///< 可写上限（工程值）
     std::uint32_t min_interval_ms{0};         ///< 最小调节间隔
     std::string write_group_key;              ///< 共享写寄存器组，同组互斥
     std::uint32_t feedback_timeout_ms{5000};  ///< 反馈超时

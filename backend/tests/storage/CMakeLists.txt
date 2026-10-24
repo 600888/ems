@@ -39,9 +39,7 @@ set_target_properties(
 
 add_test(NAME ems_telemetry_feed COMMAND test_ems_telemetry_feed)
 
-add_executable(
-    test_ems_time_series_factory test_time_series_factory.cpp
-)
+add_executable(test_ems_time_series_factory test_time_series_factory.cpp)
 
 target_include_directories(test_ems_time_series_factory PRIVATE ${CMAKE_SOURCE_DIR}/src/scd)
 

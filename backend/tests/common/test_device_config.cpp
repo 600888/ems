@@ -30,9 +30,9 @@ struct Fixture {
         PcsDeviceModel model;
         auto type = model.definition();
         for (const auto& definition : type.standard_points) {
-            auto point = make_standard_point(
-                definition, core::PointId("point-" + definition.semantic_code), asset.asset_id,
-                definition.semantic_code);
+            auto point =
+                make_standard_point(definition, core::PointId("point-" + definition.semantic_code),
+                                    asset.asset_id, definition.semantic_code);
             const core::PointId point_id = as_base(point).point_id;
             catalog.add_point(std::move(point));
 

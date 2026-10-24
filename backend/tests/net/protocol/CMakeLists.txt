@@ -2,17 +2,29 @@
 
 if(TARGET proto_dlt698)
     add_executable(test_dlt698_runtime dlt698_runtime_test.cpp)
-    target_include_directories(test_dlt698_runtime SYSTEM PRIVATE
-        "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include")
+    target_include_directories(
+        test_dlt698_runtime SYSTEM
+        PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
+    )
     target_link_libraries(test_dlt698_runtime PRIVATE ems_protocol_runtime ems_dlt698_stack)
-    target_compile_definitions(test_dlt698_runtime PRIVATE
-        EMS_DLT698_PLUGIN="$<TARGET_FILE:proto_dlt698>")
+    target_compile_definitions(
+        test_dlt698_runtime PRIVATE EMS_DLT698_PLUGIN="$<TARGET_FILE:proto_dlt698>"
+    )
     set_target_properties(test_dlt698_runtime PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
     if(MINGW)
         target_compile_options(test_dlt698_runtime PRIVATE -Wa,-mbig-obj)
     endif()
     add_dependencies(test_dlt698_runtime proto_dlt698)
-    foreach(scenario IN ITEMS lazy_load invalid_config client_read client_write server_buffer lifecycle connection_failures)
+    foreach(
+        scenario IN
+        ITEMS lazy_load
+              invalid_config
+              client_read
+              client_write
+              server_buffer
+              lifecycle
+              connection_failures
+    )
         add_test(NAME dlt698_${scenario} COMMAND test_dlt698_runtime ${scenario})
         set_tests_properties(dlt698_${scenario} PROPERTIES TIMEOUT 30)
     endforeach()

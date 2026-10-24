@@ -74,8 +74,7 @@ class ModelCatalog {
      * @param[in] point 任意四遥点。
      */
     void add_point(AnyPoint point) {
-        std::visit([this](auto&& p) { add_point(std::forward<decltype(p)>(p)); },
-                   std::move(point));
+        std::visit([this](auto&& p) { add_point(std::forward<decltype(p)>(p)); }, std::move(point));
     }
 
     /**

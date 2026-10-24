@@ -54,7 +54,7 @@ extern "C" {
 typedef struct EmPluginInfo {
     int api_version;  // 必须等于 EMS_PLUGIN_API_VERSION
     const char*
-        protocol_name;        // 协议名称: "ModbusTCP", "ModbusRTU", "IEC104", "DLT645", "DLT698", ...
+        protocol_name;  // 协议名称: "ModbusTCP", "ModbusRTU", "IEC104", "DLT645", "DLT698", ...
     const char* description;  // 简要描述
     const char* version;      // 插件版本号, 如 "1.0.0"
 } EmPluginInfo;

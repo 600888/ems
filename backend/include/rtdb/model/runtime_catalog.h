@@ -79,9 +79,9 @@ struct SourcePolicy {
 /// 遥控与遥调都存为 Command，控制侧必须读 point_type 才能区分“固定值写入”
 /// 与“工程值缩放写入”，不能只看 kind。
 struct RuntimePoint {
-    core::PointId point_id;    ///< 稳定点 ID
-    core::DeviceId device_id;  ///< 所属通信设备；部件点为空
-    PointAddress address;      ///< 实时记录地址
+    core::PointId point_id;                                 ///< 稳定点 ID
+    core::DeviceId device_id;                               ///< 所属通信设备；部件点为空
+    PointAddress address;                                   ///< 实时记录地址
     model::PointType point_type{model::PointType::YC};      ///< 四遥分类
     model::PointKind kind{model::PointKind::Telemetry};     ///< 记录种类
     model::ValueType value_type{model::ValueType::Double};  ///< 值类型

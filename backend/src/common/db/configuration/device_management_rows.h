@@ -100,63 +100,65 @@ constexpr std::string_view get_alias_struct_name(OpsStateLogRow*) { return "ops_
 
 // 字段顺序必须与 DDL 列顺序一致（SELECT * 按位置映射）
 
-YLT_REFL(CfgDeviceRow, id, device_id, parent_device_id, node_kind, code, name, path, depth, sort_order,
-         device_type_code, type_version, template_id, source_device_id, vendor, model,
+YLT_REFL(CfgDeviceRow, id, device_id, parent_device_id, node_kind, code, name, path, depth,
+         sort_order, device_type_code, type_version, template_id, source_device_id, vendor, model,
          firmware_version, rated_power_kw, timezone, default_stale_after_ms, config_revision,
          enabled, description, legacy_ref, created_at, updated_at)
 
-YLT_REFL(CfgDeviceTypeRow, type_code, type_version, name, category, status, description, created_at, updated_at)
+YLT_REFL(CfgDeviceTypeRow, type_code, type_version, name, category, status, description, created_at,
+         updated_at)
 
-YLT_REFL(CfgTypePointRow, type_code, type_version, semantic_code, name, point_type, value_type, unit, required,
-         capability_codes_json, writable, stale_after_ms, sort_order)
+YLT_REFL(CfgTypePointRow, type_code, type_version, semantic_code, name, point_type, value_type,
+         unit, required, capability_codes_json, writable, stale_after_ms, sort_order)
 
-YLT_REFL(CfgTemplateRow, template_id, template_version, device_type_code, type_version, vendor, model, status,
-         points_json, description, created_at, updated_at)
+YLT_REFL(CfgTemplateRow, template_id, template_version, device_type_code, type_version, vendor,
+         model, status, points_json, description, created_at, updated_at)
 
-YLT_REFL(CfgChannelRow, id, channel_id, code, name, protocol, conn_mode, endpoint, serial_json, poll_interval_ms,
-         timeout_ms, retry_times, max_sessions, enabled, description, created_at, updated_at)
+YLT_REFL(CfgChannelRow, id, channel_id, code, name, protocol, conn_mode, endpoint, serial_json,
+         poll_interval_ms, timeout_ms, retry_times, max_sessions, enabled, description, created_at,
+         updated_at)
 
-YLT_REFL(CfgBindingRow, id, binding_id, device_id, channel_id, device_address, profile_version, can_collect,
-         can_control, can_forward, enabled, description, created_at, updated_at)
+YLT_REFL(CfgBindingRow, id, binding_id, device_id, channel_id, device_address, profile_version,
+         can_collect, can_control, can_forward, enabled, description, created_at, updated_at)
 
-YLT_REFL(CfgPointYcRow, id, point_id, owner_device_id, binding_id, code, name, semantic_code, vendor_key, origin,
-         address_space, address_offset, bit_offset, register_count, protocol_address_json,
-         wire_type, byte_order, value_type, unit, decimals, scale_factor, offset_value, range_min,
-         range_max, deadband, enabled, disabled_reason, stale_after_ms, source_import_row_id,
-         legacy_ref, description, created_at, updated_at)
+YLT_REFL(CfgPointYcRow, id, point_id, owner_device_id, binding_id, code, name, semantic_code,
+         vendor_key, origin, address_space, address_offset, bit_offset, register_count,
+         protocol_address_json, wire_type, byte_order, value_type, unit, decimals, scale_factor,
+         offset_value, range_min, range_max, deadband, enabled, disabled_reason, stale_after_ms,
+         source_import_row_id, legacy_ref, description, created_at, updated_at)
 
-YLT_REFL(CfgPointYxRow, id, point_id, owner_device_id, binding_id, code, name, semantic_code, vendor_key, origin,
-         address_space, address_offset, bit_offset, register_count, protocol_address_json,
-         wire_type, byte_order, value_type, unit, soe, invert, enum_json, unknown_policy,
-         feedback_of_point_id, enabled, disabled_reason, stale_after_ms, source_import_row_id,
-         legacy_ref, description, created_at, updated_at)
+YLT_REFL(CfgPointYxRow, id, point_id, owner_device_id, binding_id, code, name, semantic_code,
+         vendor_key, origin, address_space, address_offset, bit_offset, register_count,
+         protocol_address_json, wire_type, byte_order, value_type, unit, soe, invert, enum_json,
+         unknown_policy, feedback_of_point_id, enabled, disabled_reason, stale_after_ms,
+         source_import_row_id, legacy_ref, description, created_at, updated_at)
 
-YLT_REFL(CfgPointYkRow, id, point_id, owner_device_id, binding_id, code, name, semantic_code, vendor_key, origin,
-         address_space, address_offset, bit_offset, register_count, protocol_address_json,
-         wire_type, byte_order, value_type, unit, write_mode, fixed_raw_value, pulse_width_ms,
-         min_interval_ms, write_group_key, feedback_json, feedback_timeout_ms, failure_policy,
-         enabled, disabled_reason, stale_after_ms, source_import_row_id, legacy_ref, description,
-         created_at, updated_at)
+YLT_REFL(CfgPointYkRow, id, point_id, owner_device_id, binding_id, code, name, semantic_code,
+         vendor_key, origin, address_space, address_offset, bit_offset, register_count,
+         protocol_address_json, wire_type, byte_order, value_type, unit, write_mode,
+         fixed_raw_value, pulse_width_ms, min_interval_ms, write_group_key, feedback_json,
+         feedback_timeout_ms, failure_policy, enabled, disabled_reason, stale_after_ms,
+         source_import_row_id, legacy_ref, description, created_at, updated_at)
 
-YLT_REFL(CfgPointYtRow, id, point_id, owner_device_id, binding_id, code, name, semantic_code, vendor_key, origin,
-         address_space, address_offset, bit_offset, register_count, protocol_address_json,
-         wire_type, byte_order, value_type, unit, decimals, scale_factor, offset_value, range_min,
-         range_max, min_interval_ms, write_group_key, feedback_json, feedback_timeout_ms,
-         failure_policy, enabled, disabled_reason, stale_after_ms, source_import_row_id,
-         legacy_ref, description, created_at, updated_at)
+YLT_REFL(CfgPointYtRow, id, point_id, owner_device_id, binding_id, code, name, semantic_code,
+         vendor_key, origin, address_space, address_offset, bit_offset, register_count,
+         protocol_address_json, wire_type, byte_order, value_type, unit, decimals, scale_factor,
+         offset_value, range_min, range_max, min_interval_ms, write_group_key, feedback_json,
+         feedback_timeout_ms, failure_policy, enabled, disabled_reason, stale_after_ms,
+         source_import_row_id, legacy_ref, description, created_at, updated_at)
 
-YLT_REFL(CfgImportJobRow, import_job_id, device_id, binding_id, source_kind, file_name, file_sha256, file_bytes,
-         address_base, status, row_total, row_ok, row_warning, row_error, idempotency_key,
-         submitted_by, submitted_at, finished_at, error_code, error_message)
+YLT_REFL(CfgImportJobRow, import_job_id, device_id, binding_id, source_kind, file_name, file_sha256,
+         file_bytes, address_base, status, row_total, row_ok, row_warning, row_error,
+         idempotency_key, submitted_by, submitted_at, finished_at, error_code, error_message)
 
-YLT_REFL(CfgImportRow, id, import_job_id, line_no, vendor_key, vendor_name, point_type, target_device_path,
-         semantic_code, address_space, address_offset, bit_offset, register_count,
-         protocol_address_json, wire_type, byte_order, value_type, scale_factor, offset_value,
-         unit, parse_status, parse_code, parse_message, confirm_state, confirm_note, confirm_by,
-         confirm_at, resolved_point_id)
+YLT_REFL(CfgImportRow, id, import_job_id, line_no, vendor_key, vendor_name, point_type,
+         target_device_path, semantic_code, address_space, address_offset, bit_offset,
+         register_count, protocol_address_json, wire_type, byte_order, value_type, scale_factor,
+         offset_value, unit, parse_status, parse_code, parse_message, confirm_state, confirm_note,
+         confirm_by, confirm_at, resolved_point_id)
 
-YLT_REFL(OpsCommStat5mRow, binding_id, window_start, request_total, success_total, timeout_total, error_total,
-         avg_latency_ms, p95_latency_ms, last_valid_at, last_error_code)
+YLT_REFL(OpsCommStat5mRow, binding_id, window_start, request_total, success_total, timeout_total,
+         error_total, avg_latency_ms, p95_latency_ms, last_valid_at, last_error_code)
 
 YLT_REFL(OpsStateLogRow, id, object_kind, object_id, state, since, reason)
 
@@ -199,5 +201,7 @@ inline const auto cfg_point_yt_row_key =
     ormpp::add_conflict_key_field(ylt::reflection::type_string<CfgPointYtRow>(), "point_id");
 inline const auto cfg_import_job_row_key =
     ormpp::add_conflict_key_field(ylt::reflection::type_string<CfgImportJobRow>(), "import_job_id");
+inline const auto cfg_import_row_key =
+    ormpp::add_conflict_key_field(ylt::reflection::type_string<CfgImportRow>(), "id");
 
 }  // namespace ems::database

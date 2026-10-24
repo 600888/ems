@@ -24,8 +24,10 @@ if(NOT TARGET gtest)
     add_subdirectory(../../third_party/googletest googletest EXCLUDE_FROM_ALL)
 endif()
 
-add_executable(test_realtime_backends test_backends.cpp test_business.cpp point_import_test.cpp
-               ../../src/rtdb/store/store_detail.cpp)
+add_executable(
+    test_realtime_backends test_backends.cpp test_business.cpp point_import_test.cpp
+                           ../../src/rtdb/store/store_detail.cpp
+)
 set_target_properties(test_realtime_backends PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
 
 target_include_directories(test_realtime_backends PRIVATE ../../src/rtdb/store)
@@ -37,10 +39,13 @@ if(MSVC)
 endif()
 if(WIN32)
     target_link_libraries(test_realtime_backends PRIVATE bcrypt)
-    add_custom_command(TARGET test_realtime_backends POST_BUILD
+    add_custom_command(
+        TARGET test_realtime_backends
+        POST_BUILD
         COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:test_realtime_backends>
                 $<TARGET_FILE_DIR:test_realtime_backends>
-        COMMAND_EXPAND_LISTS)
+        COMMAND_EXPAND_LISTS
+    )
 endif()
 
 if(EMS_REALTIME_WITH_SHM)
@@ -71,8 +76,9 @@ endif()
 
 add_test(NAME realtime_backends COMMAND test_realtime_backends)
 if(EMS_REALTIME_WITH_SHM)
-    add_executable(test_rtdb_dispatcher test_dispatcher.cpp
-                   ../../src/net/collect/data_dispatcher.cpp)
+    add_executable(
+        test_rtdb_dispatcher test_dispatcher.cpp ../../src/net/collect/data_dispatcher.cpp
+    )
     target_link_libraries(test_rtdb_dispatcher PRIVATE ems::rtdb gtest_main Threads::Threads)
     target_include_directories(test_rtdb_dispatcher PRIVATE ../../third_party)
     target_compile_definitions(test_rtdb_dispatcher PRIVATE EMS_REALTIME_TEST_SHM)
@@ -83,19 +89,31 @@ if(EMS_REALTIME_WITH_SHM)
         target_compile_definitions(test_rtdb_dispatcher PRIVATE EMS_NOTIFICATION_WITH_REDIS)
     endif()
     if(WIN32)
-        add_custom_command(TARGET test_rtdb_dispatcher POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    $<TARGET_RUNTIME_DLLS:test_rtdb_dispatcher>
-                    $<TARGET_FILE_DIR:test_rtdb_dispatcher> COMMAND_EXPAND_LISTS)
+        add_custom_command(
+            TARGET test_rtdb_dispatcher
+            POST_BUILD
+            COMMAND
+                ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:test_rtdb_dispatcher>
+                $<TARGET_FILE_DIR:test_rtdb_dispatcher>
+            COMMAND_EXPAND_LISTS
+        )
     endif()
     add_test(NAME rtdb_dispatcher COMMAND test_rtdb_dispatcher)
 endif()
 if(WIN32)
     file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/test-temp")
-    set_tests_properties(realtime_backends PROPERTIES ENVIRONMENT
-        "TEMP=${CMAKE_CURRENT_BINARY_DIR}/test-temp;TMP=${CMAKE_CURRENT_BINARY_DIR}/test-temp")
+    set_tests_properties(
+        realtime_backends
+        PROPERTIES
+            ENVIRONMENT
+            "TEMP=${CMAKE_CURRENT_BINARY_DIR}/test-temp;TMP=${CMAKE_CURRENT_BINARY_DIR}/test-temp"
+    )
     if(TARGET test_rtdb_dispatcher)
-        set_tests_properties(rtdb_dispatcher PROPERTIES ENVIRONMENT
-            "TEMP=${CMAKE_CURRENT_BINARY_DIR}/test-temp;TMP=${CMAKE_CURRENT_BINARY_DIR}/test-temp")
+        set_tests_properties(
+            rtdb_dispatcher
+            PROPERTIES
+                ENVIRONMENT
+                "TEMP=${CMAKE_CURRENT_BINARY_DIR}/test-temp;TMP=${CMAKE_CURRENT_BINARY_DIR}/test-temp"
+        )
     endif()
 endif()

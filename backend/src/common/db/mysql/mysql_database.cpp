@@ -13,6 +13,7 @@
 #include <utility>
 
 #include "../configuration/orm_device_config_repository.h"
+#include "../configuration/orm_device_management_store.h"
 #include "../configuration/orm_repository.h"
 #include "../runtime/transaction_database.h"
 
@@ -599,7 +600,17 @@ core::Result<MySqlDatabaseContext> connect_mysql_database(const MySqlConnectionO
                                       core::WriteEffect::NotApplied,
                                       "device configuration operation");
         });
-    return MySqlDatabaseContext{pool, repositories, repositories, configuration, device_config};
+    auto management = std::make_shared<detail::OrmDeviceManagementStore<MySqlConnection>>(
+        [repositories](ITransaction& transaction, const core::CallContext& context) {
+            return repositories->session(transaction, context);
+        },
+        [pool](ITransaction& transaction) { pool->invalidate(transaction); },
+        [](MySqlConnection& driver) {
+            return mysql_error_result(driver.orm.get_last_error_code(),
+                                      core::WriteEffect::NotApplied, "device management operation");
+        });
+    return MySqlDatabaseContext{pool,          repositories,  repositories,
+                                configuration, device_config, management};
 }
 
 }  // namespace ems::database

@@ -10,6 +10,12 @@
 
 SET NAMES utf8mb4;
 
+-- 新工程必须有且只有一个站根；已有站根不覆盖，不创建第二个根。
+INSERT INTO cfg_device
+    (device_id, parent_device_id, node_kind, code, name, path, depth, enabled)
+SELECT 'station', '', 'station', 'station', '储能站', '/', 0, 1
+WHERE NOT EXISTS (SELECT 1 FROM cfg_device WHERE node_kind = 'station');
+
 -- 一、设备类型
 INSERT INTO cfg_device_type (type_code, type_version, name, category, status, description) VALUES
     ('pcs', 'pcs-v1', '储能变流器', 'pcs', 'active', ''),

@@ -8,8 +8,9 @@ add_library(
 target_include_directories(ems_storage_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 target_include_directories(
-    ems_storage_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-                             ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include
+    ems_storage_core
+    PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
+            ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include
 )
 
 target_link_libraries(
@@ -31,14 +32,9 @@ if(EMS_STORAGE_WITH_NATIVE AND TARGET ems_zmq_messaging)
     get_target_property(_ems_mysql_available ems_database_mysql EMS_MYSQL_AVAILABLE)
     if(_ems_mysql_available)
 
-        add_library(
-            ems_storage_native STATIC zmq_telemetry.cpp native_adapters.h
-        )
+        add_library(ems_storage_native STATIC zmq_telemetry.cpp native_adapters.h)
 
-        target_include_directories(
-            ems_storage_native
-            PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-        )
+        target_include_directories(ems_storage_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
         target_link_libraries(
             ems_storage_native

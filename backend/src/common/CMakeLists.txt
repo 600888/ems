@@ -99,7 +99,8 @@ add_library(ems_common_codec STATIC codec/model_codec.cpp codec/event_codec.cpp)
 target_include_directories(ems_common_codec PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 target_include_directories(
-    ems_common_codec PRIVATE ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include
+    ems_common_codec
+    PRIVATE ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include
 )
 
 target_link_libraries(ems_common_codec PUBLIC ems_common_model ems_messaging_api)
@@ -166,7 +167,11 @@ target_include_directories(ems_config_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 target_include_directories(ems_config_core PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
-target_link_libraries(ems_config_core PUBLIC ems_config_api PRIVATE ems_excel)
+target_link_libraries(
+    ems_config_core
+    PUBLIC ems_config_api
+    PRIVATE ems_excel
+)
 
 set_target_properties(
     ems_config_core

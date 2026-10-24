@@ -19,7 +19,8 @@ target_link_libraries(
     data_collect_example
     PRIVATE net_collect
             net_para_loader
-            ems_database_mysql ems_database_configuration
+            ems_database_mysql
+            ems_database_configuration
             rtdb
             ems_models
             redis++

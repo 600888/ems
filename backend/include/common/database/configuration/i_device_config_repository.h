@@ -148,8 +148,9 @@ class IDeviceConfigRepository {
      * @param[in] ctx 调用期限。
      * @return 递增后的修订号；站根不存在返回 NotFound。
      */
-    virtual core::Result<std::int64_t> bump_config_revision(
-        ITransaction& tx, const std::string& station_device_id, const core::CallContext& ctx) = 0;
+    virtual core::Result<std::int64_t> bump_config_revision(ITransaction& tx,
+                                                            const std::string& station_device_id,
+                                                            const core::CallContext& ctx) = 0;
 };
 
 }  // namespace ems::database
