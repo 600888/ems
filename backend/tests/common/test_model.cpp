@@ -72,29 +72,28 @@ ModelCatalog build_valid_catalog() {
     type.capability_codes = {"charge"};
     c.device_types.push_back(type);
 
-    Point cmd;
+    YkPoint cmd;
     cmd.point_id = pid("p-cmd");
     cmd.asset_id = aid("d-1");
     cmd.code = "charge_cmd";
-    cmd.kind = PointKind::Command;
+    cmd.write_mode = WriteMode::Fixed;
+    cmd.fixed_raw_value = 1;
     cmd.value_type = ValueType::Bool;
-    c.points.push_back(cmd);
+    c.add_point(cmd);
 
-    Point fb;
+    YxPoint fb;
     fb.point_id = pid("p-fb");
     fb.asset_id = aid("d-1");
     fb.code = "charge_fb";
-    fb.kind = PointKind::Status;
     fb.feedback_of = pid("p-cmd");  // 反馈点指回命令点
-    c.points.push_back(fb);
+    c.add_point(fb);
 
-    Point tel;
+    YcPoint tel;
     tel.point_id = pid("p-pow");
     tel.asset_id = aid("d-1");
     tel.code = "active_power";
-    tel.kind = PointKind::Telemetry;
     tel.unit = "kW";
-    c.points.push_back(tel);
+    c.add_point(tel);
 
     ChannelConfig ch1;
     ch1.channel_id = cid("ch-1");
@@ -267,6 +266,35 @@ TEST(ModelCatalog, DuplicateBindingReported) {
     EXPECT_TRUE(has_code(r, validation_code::kDuplicateBinding));
 }
 
+TEST(ModelCatalog, FourRemoteTypesAreDistinct) {
+    auto c = build_valid_catalog();
+    ASSERT_EQ(c.points_yk.size(), 1u);
+    ASSERT_EQ(c.points_yx.size(), 1u);
+    ASSERT_EQ(c.points_yc.size(), 1u);
+    ASSERT_EQ(c.points_yt.size(), 0u);
+    EXPECT_EQ(c.point_count(), 3u);
+
+    // 遥控与遥调都存为 Command，但四遥分类必须各自保留
+    EXPECT_EQ(c.points_yk[0].point_type, PointType::YK);
+    EXPECT_EQ(c.points_yk[0].kind, PointKind::Command);
+    EXPECT_TRUE(is_command(c.points_yk[0].point_type));
+    EXPECT_EQ(c.points_yx[0].point_type, PointType::YX);
+    EXPECT_EQ(c.points_yx[0].kind, PointKind::Status);
+    EXPECT_TRUE(is_measured(c.points_yx[0].point_type));
+
+    YtPoint yt;
+    yt.point_id = pid("p-set");
+    yt.asset_id = aid("d-1");
+    yt.code = "set_active_power";
+    yt.scale_factor = 0.1;
+    c.add_point(yt);
+    EXPECT_EQ(c.points_yt[0].kind, PointKind::Command);
+    EXPECT_EQ(c.points_yt[0].point_type, PointType::YT);
+    EXPECT_TRUE(c.build_indexes().ok());
+    ASSERT_NE(c.find_point(pid("p-set")), nullptr);
+    EXPECT_EQ(c.find_point(pid("p-set"))->point_type, PointType::YT);
+}
+
 TEST(ModelCatalog, MissingChannelReferenceReported) {
     auto c = build_valid_catalog();
     c.bindings[0].channel_id = cid("ch-ghost");
@@ -277,7 +305,7 @@ TEST(ModelCatalog, MissingChannelReferenceReported) {
 
 TEST(ModelCatalog, InvalidFeedbackRefReported) {
     auto c = build_valid_catalog();
-    c.points[1].feedback_of = pid("p-pow");  // 反馈引用遥测点
+    c.points_yx[0].feedback_of = pid("p-pow");  // 反馈引用遥测点
     auto r = c.build_indexes();
     EXPECT_FALSE(r.ok());
     EXPECT_TRUE(has_code(r, validation_code::kInvalidFeedbackRef));
@@ -285,7 +313,7 @@ TEST(ModelCatalog, InvalidFeedbackRefReported) {
 
 TEST(ModelCatalog, MissingFeedbackPointReported) {
     auto c = build_valid_catalog();
-    c.points[1].feedback_of = pid("p-ghost");
+    c.points_yx[0].feedback_of = pid("p-ghost");
     auto r = c.build_indexes();
     EXPECT_FALSE(r.ok());
     EXPECT_TRUE(has_code(r, validation_code::kInvalidFeedbackRef));
@@ -397,7 +425,7 @@ TEST(ModelView, ResolveCapabilityDisabled) {
 
 TEST(ModelView, ResolveCapabilityDisabledPoint) {
     auto c = build_valid_catalog();
-    c.points[2].enabled = false;  // p-pow 禁用
+    c.points_yc[0].enabled = false;  // p-pow 禁用
     auto shared = std::make_shared<ModelCatalog>(std::move(c));
     shared->build_indexes();
     ModelView view(shared);

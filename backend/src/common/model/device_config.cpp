@@ -124,7 +124,7 @@ ValidationReport validate_device_point_draft(const ModelCatalog& catalog,
                       "类型目录中不存在该固有点");
             continue;
         }
-        const Point* point = catalog.find_point(config.point_id);
+        const PointBase* point = catalog.find_point(config.point_id);
         if (point == nullptr) {
             add_issue(report, validation_code::kMissingReference, id, "point_id", "点实例不存在");
             continue;
@@ -137,11 +137,12 @@ ValidationReport validate_device_point_draft(const ModelCatalog& catalog,
             add_issue(report, validation_code::kInvalidValue, id, "code",
                       "点实例 code 与固有点 code 不一致");
         }
-        if (point->kind != definition->second->kind ||
+        if (point->point_type != definition->second->point_type ||
+            point->kind != definition->second->kind ||
             point->value_type != definition->second->value_type ||
             point->unit != definition->second->unit) {
             add_issue(report, validation_code::kInvalidValue, id, "definition",
-                      "点实例的种类、值类型或单位与固有定义不一致");
+                      "点实例的四遥分类、种类、值类型或单位与固有定义不一致");
         }
         if (config.state == StandardPointState::Unconfigured) {
             if (publishing) {

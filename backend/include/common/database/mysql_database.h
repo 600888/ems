@@ -1,5 +1,6 @@
 #pragma once
 
+#include <common/database/configuration/i_device_config_repository.h>
 #include <common/database/configuration/repository.h>
 #include <common/database/history/repositories.h>
 #include <common/database/i_database.h>
@@ -30,6 +31,7 @@ struct MySqlDatabaseContext {
     std::shared_ptr<IHistoryCatalogRepository> history_catalog;
     std::shared_ptr<IHistoryEventRepository> history_events;
     std::shared_ptr<IConfigurationRepository> configuration;
+    std::shared_ptr<IDeviceConfigRepository> device_config;
 };
 
 /**

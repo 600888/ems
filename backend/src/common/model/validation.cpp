@@ -141,18 +141,27 @@ ValidationReport ModelCatalog::build_indexes() {
         }
         device_bindings_index_.emplace(d.device_id.value(), std::vector<std::size_t>{});
     }
-    for (std::size_t i = 0; i < points.size(); ++i) {
-        const auto& p = points[i];
-        if (p.point_id.empty()) {
-            add_issue(issues, validation_code::kInvalidValue, "", "point_id", "点 ID 为空");
-            continue;
-        }
-        if (!point_index_.emplace(p.point_id.value(), i).second) {
-            add_issue(issues, validation_code::kDuplicateIdentity, p.point_id.value(), "point_id",
-                      "点 ID 重复");
-            continue;
-        }
-        asset_points_index_[p.asset_id.value()].push_back(i);
+    {
+        // 四遥点分散在四个集合，索引项记录（类型, 下标），统一去重与反查
+        auto index_points = [&](PointType type, const auto& collection) {
+            for (std::size_t i = 0; i < collection.size(); ++i) {
+                const auto& p = collection[i];
+                if (p.point_id.empty()) {
+                    add_issue(issues, validation_code::kInvalidValue, "", "point_id", "点 ID 为空");
+                    continue;
+                }
+                if (!point_index_.emplace(p.point_id.value(), PointSlot{type, i}).second) {
+                    add_issue(issues, validation_code::kDuplicateIdentity, p.point_id.value(),
+                              "point_id", "点 ID 重复");
+                    continue;
+                }
+                asset_points_index_[p.asset_id.value()].push_back(PointSlot{type, i});
+            }
+        };
+        index_points(PointType::YC, points_yc);
+        index_points(PointType::YX, points_yx);
+        index_points(PointType::YK, points_yk);
+        index_points(PointType::YT, points_yt);
     }
     for (std::size_t i = 0; i < channels.size(); ++i) {
         const auto& c = channels[i];
@@ -223,8 +232,8 @@ ValidationReport ModelCatalog::build_indexes() {
                       "type_version_id", "设备类型版本不存在: " + d.type_version_id);
         }
     }
-    for (const auto& p : points) {
-        if (p.point_id.empty() || !point_index_.count(p.point_id.value())) continue;
+    for_each_point([&](const PointBase& p) {
+        if (p.point_id.empty() || !point_index_.count(p.point_id.value())) return;
         if (!asset_index_.count(p.asset_id.value())) {
             add_issue(issues, validation_code::kMissingReference, p.point_id.value(), "asset_id",
                       "点所属资产不存在: " + p.asset_id.value());
@@ -233,21 +242,27 @@ ValidationReport ModelCatalog::build_indexes() {
             add_issue(issues, validation_code::kInvalidValue, p.point_id.value(), "code",
                       "点业务编码为空");
         }
-        // 命令反馈依赖：feedback_of 必须指向存在的命令点
+        // 命令反馈依赖：feedback_of 必须指向存在的命令点（遥控或遥调）
         if (p.feedback_of.has_value()) {
             auto it = point_index_.find(p.feedback_of->value());
-            if (it == point_index_.end()) {
+            const PointBase* target = it == point_index_.end() ? nullptr : point_at(it->second);
+            if (target == nullptr) {
                 add_issue(issues, validation_code::kInvalidFeedbackRef, p.point_id.value(),
                           "feedback_of", "反馈点引用的命令点不存在: " + p.feedback_of->value());
-            } else if (points[it->second].kind != PointKind::Command) {
+            } else if (!is_command(target->point_type)) {
                 add_issue(issues, validation_code::kInvalidFeedbackRef, p.point_id.value(),
                           "feedback_of", "反馈点必须引用命令点");
             }
         }
-        if (p.kind == PointKind::Command && !p.feedback_of.has_value()) {
-            // 命令点本身可以没有 feedback_of（反馈点是独立点指回命令点）；此处不强制
+        // 遥控固定值模式必须给出写入值，否则控制侧无法下发
+        if (p.point_type == PointType::YK) {
+            const auto& yk = static_cast<const YkPoint&>(p);
+            if (yk.write_mode == WriteMode::Fixed && !yk.fixed_raw_value.has_value()) {
+                add_issue(issues, validation_code::kInvalidValue, p.point_id.value(),
+                          "fixed_raw_value", "固定值写入必须提供 fixed_raw_value");
+            }
         }
-    }
+    });
 
     // ---- 绑定：设备/通道引用存在 + 同 (device, channel) 去重 + 操作集合非空 ----
     {
@@ -353,9 +368,23 @@ const Device* ModelCatalog::find_device(const core::DeviceId& id) const {
     return it == device_index_.end() ? nullptr : &devices[it->second];
 }
 
-const Point* ModelCatalog::find_point(const core::PointId& id) const {
+const PointBase* ModelCatalog::point_at(const PointSlot& slot) const {
+    switch (slot.type) {
+        case PointType::YC:
+            return slot.index < points_yc.size() ? &points_yc[slot.index] : nullptr;
+        case PointType::YX:
+            return slot.index < points_yx.size() ? &points_yx[slot.index] : nullptr;
+        case PointType::YK:
+            return slot.index < points_yk.size() ? &points_yk[slot.index] : nullptr;
+        case PointType::YT:
+            return slot.index < points_yt.size() ? &points_yt[slot.index] : nullptr;
+    }
+    return nullptr;
+}
+
+const PointBase* ModelCatalog::find_point(const core::PointId& id) const {
     auto it = point_index_.find(id.value());
-    return it == point_index_.end() ? nullptr : &points[it->second];
+    return it == point_index_.end() ? nullptr : point_at(it->second);
 }
 
 const ChannelConfig* ModelCatalog::find_channel(const core::ChannelId& id) const {
@@ -396,13 +425,13 @@ std::vector<const DeviceChannelBinding*> ModelCatalog::bindings_of_device(
     return result;
 }
 
-std::vector<const Point*> ModelCatalog::points_of_asset(const core::AssetId& asset_id) const {
-    std::vector<const Point*> result;
+std::vector<const PointBase*> ModelCatalog::points_of_asset(const core::AssetId& asset_id) const {
+    std::vector<const PointBase*> result;
     auto it = asset_points_index_.find(asset_id.value());
     if (it == asset_points_index_.end()) return result;
     result.reserve(it->second.size());
-    for (std::size_t idx : it->second) {
-        result.push_back(&points[idx]);
+    for (const auto& slot : it->second) {
+        if (const auto* p = point_at(slot)) result.push_back(p);
     }
     return result;
 }

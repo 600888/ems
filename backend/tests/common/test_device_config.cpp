@@ -30,18 +30,15 @@ struct Fixture {
         PcsDeviceModel model;
         auto type = model.definition();
         for (const auto& definition : type.standard_points) {
-            Point point;
-            point.point_id = core::PointId("point-" + definition.semantic_code);
-            point.asset_id = asset.asset_id;
-            point.code = definition.semantic_code;
-            point.kind = definition.kind;
-            point.value_type = definition.value_type;
-            point.unit = definition.unit;
-            catalog.points.push_back(point);
+            auto point = make_standard_point(
+                definition, core::PointId("point-" + definition.semantic_code), asset.asset_id,
+                definition.semantic_code);
+            const core::PointId point_id = as_base(point).point_id;
+            catalog.add_point(std::move(point));
 
             DeviceStandardPointConfig config;
             config.device_id = core::DeviceId("device-1");
-            config.point_id = point.point_id;
+            config.point_id = point_id;
             config.standard_code = definition.semantic_code;
             config.state = StandardPointState::Disabled;
             config.disabled_reason = "unsupported";
@@ -172,7 +169,7 @@ TEST(DeviceConfig, CommandRequiresControlChannel) {
 TEST(DeviceConfig, RejectsWrongDefinitionAndInstance) {
     Fixture fixture;
     fixture.config("active_power").device_id = core::DeviceId("other-device");
-    fixture.catalog.points[5].unit = "W";
+    fixture.catalog.points_yc[0].unit = "W";
     fixture.catalog.build_indexes();
     auto report = validate_device_point_draft(fixture.catalog, fixture.draft, true);
     EXPECT_TRUE(has_issue(report, validation_code::kMissingReference));

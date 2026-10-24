@@ -14,7 +14,7 @@ const Device* ModelView::find_device(const core::DeviceId& device_id) const {
     return catalog_->find_device(device_id);
 }
 
-const Point* ModelView::find_point(const core::PointId& point_id) const {
+const PointBase* ModelView::find_point(const core::PointId& point_id) const {
     return catalog_->find_point(point_id);
 }
 
@@ -60,7 +60,7 @@ CapabilityResolution ModelView::resolve_capability(const core::DeviceId& device_
 
     // 解析启用点；缺失或禁用给出明确原因
     for (const auto& pid : cap->required_points) {
-        const Point* p = catalog_->find_point(pid);
+        const PointBase* p = catalog_->find_point(pid);
         if (p == nullptr) {
             res.reason = "能力所需点不存在: " + pid.value();
             res.capability = nullptr;
@@ -79,7 +79,7 @@ CapabilityResolution ModelView::resolve_capability(const core::DeviceId& device_
     }
 
     for (const auto& pid : cap->required_feedbacks) {
-        const Point* p = catalog_->find_point(pid);
+        const PointBase* p = catalog_->find_point(pid);
         if (p == nullptr) {
             res.reason = "能力所需反馈点不存在: " + pid.value();
             res.capability = nullptr;

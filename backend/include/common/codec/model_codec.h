@@ -73,14 +73,14 @@ core::Result<model::Device> decode_device(const std::string& json_text);
  * @param[in] point 测点数据。
  * @return 成功时包含结果；失败时包含错误信息。
  */
-core::Result<std::string> encode_point(const model::Point& point);
+core::Result<std::string> encode_point(const model::PointBase& point);
 
 /**
  * @brief 从 JSON 解码点定义。
  * @param[in] json_text JSON 文本。
  * @return 成功时包含结果；失败时包含错误信息。
  */
-core::Result<model::Point> decode_point(const std::string& json_text);
+core::Result<model::AnyPoint> decode_point(const std::string& json_text);
 
 /**
  * @brief 将设备通道绑定编码为 JSON。

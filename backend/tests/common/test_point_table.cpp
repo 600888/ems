@@ -67,17 +67,14 @@ struct Fixture {
         draft.device_id = core::DeviceId("pcs-1");
         draft.capabilities = pcs.capabilities();
         for (const auto& definition : type.standard_points) {
-            model::Point point;
-            point.point_id = core::PointId("point-" + definition.semantic_code);
-            point.asset_id = asset.asset_id;
-            point.code = definition.semantic_code;
-            point.kind = definition.kind;
-            point.value_type = definition.value_type;
-            point.unit = definition.unit;
-            catalog.points.push_back(point);
+            auto point = model::make_standard_point(
+                definition, core::PointId("point-" + definition.semantic_code), asset.asset_id,
+                definition.semantic_code);
+            const core::PointId point_id = model::as_base(point).point_id;
+            catalog.add_point(std::move(point));
             model::DeviceStandardPointConfig config;
             config.device_id = draft.device_id;
-            config.point_id = point.point_id;
+            config.point_id = point_id;
             config.standard_code = definition.semantic_code;
             draft.points.push_back(config);
         }

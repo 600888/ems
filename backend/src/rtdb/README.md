@@ -9,7 +9,11 @@
 
 旧 Redis 专用实现已移除。RtDb、RtDbManager、RTDBEMS 的四类测点、设备快照、拓扑和
 配置缓存编入同一动态库，底层只调用 RealtimeClient。采集分发器已接入统一接口。
-来源授权、管理 RPC、可信部署发现和受控迁移编排仍待实现，业务锁不能代替控制授权。
+
+类型化门面 `ems::rtdb::RealtimeService`（`rtdb/client/realtime_service.h`）在同一动态库内
+提供测点/设备/通道状态、来源授权核对、序号与重复判断、新鲜度、作用域配置版本记录和
+能力运行条件。运行目录由 `buildRuntimeCatalog()` 从已发布模型编译。管理 RPC、来源授权
+协调流程、可信部署发现和受控迁移编排仍待实现，业务锁不能代替控制授权。
 
 ```text
 backend/include/rtdb/         公共头，命名空间 ems::rtdb

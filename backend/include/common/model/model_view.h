@@ -27,8 +27,8 @@ struct CapabilityResolution {
     bool ok{false};
     std::string reason;  ///< 失败原因（ok 时为空）
     const CapabilityDefinition* capability{nullptr};
-    std::vector<const Point*> required_points;     ///< 启用点
-    std::vector<const Point*> required_feedbacks;  ///< 反馈定义
+    std::vector<const PointBase*> required_points;     ///< 启用点
+    std::vector<const PointBase*> required_feedbacks;  ///< 反馈定义
 };
 
 /// 只读模型视图：持有一份固定版本快照
@@ -45,10 +45,10 @@ class ModelView {
     /// @return 匹配的对象指针；未找到时为空。
     const Device* find_device(const core::DeviceId& device_id) const;
 
-    /// point_id → Point 或 nullptr（不以 point_code 跨设备查找）
+    /// point_id → 四遥点公共视图或 nullptr（不以 point_code 跨设备查找）
     /// @param[in] point_id point_id 的标识。
-    /// @return 匹配的对象指针；未找到时为空。
-    const Point* find_point(const core::PointId& point_id) const;
+    /// @return 匹配的公共字段视图；未找到时为空。
+    const PointBase* find_point(const core::PointId& point_id) const;
 
     /// device_id + 操作 → 对应绑定列表（空列表表示无此操作绑定）
     /// @param[in] device_id 设备 ID。

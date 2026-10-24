@@ -525,7 +525,7 @@ PointTableLoadResult load_point_table(const model::ModelCatalog& catalog,
             issue(result.issues, row.line, "standard_code", "固有点已显式禁用，不能由导入覆盖");
             continue;
         }
-        const model::Point* point = catalog.find_point(point_config->point_id);
+        const model::PointBase* point = catalog.find_point(point_config->point_id);
         if (point == nullptr || point->unit != row.unit) {
             issue(result.issues, row.line, "unit", "标准点不存在或标准单位不匹配");
             continue;
@@ -534,7 +534,7 @@ PointTableLoadResult load_point_table(const model::ModelCatalog& catalog,
         const model::BindingOp operation =
             writable ? model::BindingOp::Control : model::BindingOp::Collect;
         if (!has_op(*binding, operation) ||
-            (writable != (point->kind == model::PointKind::Command))) {
+            (writable != model::is_command(point->point_type))) {
             issue(result.issues, row.line, "access", "点种类与通道读写操作不匹配");
             continue;
         }

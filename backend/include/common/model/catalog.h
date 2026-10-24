@@ -21,6 +21,7 @@
 #include <optional>
 #include <unordered_map>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 namespace ems::model {
@@ -33,12 +34,69 @@ class ModelCatalog {
     std::vector<EssUnitInfo> ess_units;
     std::vector<DeviceTypeDefinition> device_types;
     std::vector<Device> devices;
-    std::vector<Point> points;
+    /// 四遥点分四个集合保存，字段按类型拆分，不共用可空列
+    std::vector<YcPoint> points_yc;
+    std::vector<YxPoint> points_yx;
+    std::vector<YkPoint> points_yk;
+    std::vector<YtPoint> points_yt;
     std::vector<ChannelConfig> channels;
     std::vector<DeviceChannelBinding> bindings;
     std::vector<CapabilityDefinition> capabilities;
     std::vector<VendorPointRoute> vendor_routes;
     std::vector<ForwardingPointMap> forwarding_maps;
+
+    /**
+     * @brief 追加一个遥测点。
+     * @param[in] point 遥测点。
+     */
+    void add_point(YcPoint point) { points_yc.push_back(std::move(point)); }
+
+    /**
+     * @brief 追加一个遥信点。
+     * @param[in] point 遥信点。
+     */
+    void add_point(YxPoint point) { points_yx.push_back(std::move(point)); }
+
+    /**
+     * @brief 追加一个遥控点。
+     * @param[in] point 遥控点。
+     */
+    void add_point(YkPoint point) { points_yk.push_back(std::move(point)); }
+
+    /**
+     * @brief 追加一个遥调点。
+     * @param[in] point 遥调点。
+     */
+    void add_point(YtPoint point) { points_yt.push_back(std::move(point)); }
+
+    /**
+     * @brief 按变体类型追加四遥点。
+     * @param[in] point 任意四遥点。
+     */
+    void add_point(AnyPoint point) {
+        std::visit([this](auto&& p) { add_point(std::forward<decltype(p)>(p)); },
+                   std::move(point));
+    }
+
+    /**
+     * @brief 按 遥测/遥信/遥控/遥调 顺序遍历全部点。
+     * @param[in] fn 接收 const PointBase& 的回调。
+     */
+    template <typename Fn>
+    void for_each_point(Fn&& fn) const {
+        for (const auto& p : points_yc) fn(static_cast<const PointBase&>(p));
+        for (const auto& p : points_yx) fn(static_cast<const PointBase&>(p));
+        for (const auto& p : points_yk) fn(static_cast<const PointBase&>(p));
+        for (const auto& p : points_yt) fn(static_cast<const PointBase&>(p));
+    }
+
+    /**
+     * @brief 返回四遥点总数。
+     * @return 点数量。
+     */
+    std::size_t point_count() const noexcept {
+        return points_yc.size() + points_yx.size() + points_yk.size() + points_yt.size();
+    }
 
     /**
      * @brief 构建索引并执行纯模型校验（design.md 6.3 validate_snapshot）
@@ -70,9 +128,9 @@ class ModelCatalog {
     /**
      * @brief 按稳定点 ID 查找；不存在返回 nullptr。
      * @param[in] id 对象标识。
-     * @return 匹配的对象指针；未找到时为空。
+     * @return 匹配的公共字段视图；具体四遥字段可用 point_type 判型后 visit。
      */
-    const Point* find_point(const core::PointId& id) const;
+    const PointBase* find_point(const core::PointId& id) const;
 
     /**
      * @brief 按稳定通道 ID 查找；不存在返回 nullptr。
@@ -109,10 +167,10 @@ class ModelCatalog {
     std::vector<const DeviceChannelBinding*> bindings_of_device(
         const core::DeviceId& device_id, std::optional<BindingOp> op = std::nullopt) const;
 
-    /// 资产的点列表
+    /// 设备的点列表（四遥混合，按 遥测/遥信/遥控/遥调 顺序）
     /// @param[in] asset_id asset_id 的标识。
-    /// @return 对应对象的指针。
-    std::vector<const Point*> points_of_asset(const core::AssetId& asset_id) const;
+    /// @return 公共字段视图列表。
+    std::vector<const PointBase*> points_of_asset(const core::AssetId& asset_id) const;
 
    private:
     /**
@@ -127,17 +185,31 @@ class ModelCatalog {
                    const std::string& object_id, const std::string& field_path,
                    const std::string& reason) const;
 
+    /// 四遥点的统一索引项：记录类型与所属集合下标。
+    /// 不存裸指针，保证 ModelCatalog 被拷贝/移动后索引仍然有效。
+    struct PointSlot {
+        PointType type{PointType::YC};  ///< 四遥分类
+        std::size_t index{0};           ///< 对应 points_* 集合下标
+    };
+
+    /**
+     * @brief 把索引项还原为公共字段视图。
+     * @param[in] slot 索引项。
+     * @return 点指针；下标越界返回 nullptr。
+     */
+    const PointBase* point_at(const PointSlot& slot) const;
+
     std::unordered_map<std::string, std::size_t> asset_index_;
     std::unordered_map<std::string, std::size_t> device_index_;
-    std::unordered_map<std::string, std::size_t> point_index_;
+    std::unordered_map<std::string, PointSlot> point_index_;
     std::unordered_map<std::string, std::size_t> channel_index_;
     std::unordered_map<std::string, std::size_t> binding_index_;
     std::unordered_map<std::string, std::size_t> capability_index_;
     std::unordered_map<std::string, std::size_t> device_type_index_;
     /// device_id → 绑定下标集合
     std::unordered_map<std::string, std::vector<std::size_t>> device_bindings_index_;
-    /// asset_id → 点下标集合
-    std::unordered_map<std::string, std::vector<std::size_t>> asset_points_index_;
+    /// asset_id → 点索引项集合
+    std::unordered_map<std::string, std::vector<PointSlot>> asset_points_index_;
     std::unordered_set<
         std::string> mutable issued_codes_;  ///< 校验去重（同对象同码同字段只报一次）
 

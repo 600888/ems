@@ -14,8 +14,8 @@ if(NOT TARGET ems_realtime_api)
     target_compile_features(ems_realtime_api INTERFACE cxx_std_17)
 endif()
 add_library(ems_rtdb SHARED store/realtime_store.cpp store/store_detail.cpp
-    client/realtime_client.cpp client/rtdb.cpp client/rtdb_manager.cpp client/rtdb_ems.cpp
-    model/rtdb_cache.cpp model/rtdb_point.cpp)
+    client/realtime_client.cpp client/realtime_service.cpp client/rtdb.cpp client/rtdb_manager.cpp
+    client/rtdb_ems.cpp model/runtime_catalog.cpp model/rtdb_cache.cpp model/rtdb_point.cpp)
 add_library(ems::rtdb ALIAS ems_rtdb)
 add_library(rtdb ALIAS ems_rtdb)
 target_include_directories(

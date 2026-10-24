@@ -124,19 +124,47 @@ TEST(ModelCodec, DeviceRoundtrip) {
 }
 
 TEST(ModelCodec, PointRoundtripWithFeedback) {
-    model::Point p;
+    model::YxPoint p;
     p.point_id = core::PointId("p-fb");
     p.asset_id = core::AssetId("d-1");
     p.code = "pcs01.charge_fb";
-    p.kind = model::PointKind::Status;
     p.value_type = model::ValueType::Bool;
     p.feedback_of = core::PointId("p-cmd");
+    p.soe = true;
 
     auto text = expect_ok(codec::encode_point(p));
     auto back = expect_ok(codec::decode_point(text));
-    ASSERT_TRUE(back.feedback_of.has_value());
-    EXPECT_EQ(*back.feedback_of, core::PointId("p-cmd"));
-    EXPECT_EQ(back.kind, model::PointKind::Status);
+    const auto* base = &model::as_base(back);
+    ASSERT_TRUE(base->feedback_of.has_value());
+    EXPECT_EQ(*base->feedback_of, core::PointId("p-cmd"));
+    EXPECT_EQ(base->kind, model::PointKind::Status);
+    EXPECT_EQ(base->point_type, model::PointType::YX);
+    EXPECT_TRUE(std::get<model::YxPoint>(back).soe);
+}
+
+TEST(ModelCodec, PointTypeSurvivesRoundtrip) {
+    model::YtPoint p;
+    p.point_id = core::PointId("p-yt");
+    p.asset_id = core::AssetId("d-1");
+    p.code = "set_active_power";
+    p.scale_factor = 0.1;
+    p.range_max = 500.0;
+
+    auto text = expect_ok(codec::encode_point(p));
+    auto back = expect_ok(codec::decode_point(text));
+    EXPECT_EQ(model::as_base(back).point_type, model::PointType::YT);
+    EXPECT_EQ(model::as_base(back).kind, model::PointKind::Command);
+    const auto& yt = std::get<model::YtPoint>(back);
+    EXPECT_DOUBLE_EQ(yt.scale_factor, 0.1);
+    EXPECT_DOUBLE_EQ(yt.range_max, 500.0);
+}
+
+TEST(ModelCodec, LegacyPointWithoutPointTypeDerivesFromKind) {
+    // 旧快照没有 point_type：Command 只能推出遥控，遥调需重新发布
+    const std::string legacy =
+        R"({"point_id":"p-legacy","asset_id":"d-1","code":"start","kind":"Command"})";
+    auto back = expect_ok(codec::decode_point(legacy));
+    EXPECT_EQ(model::as_base(back).point_type, model::PointType::YK);
 }
 
 TEST(ModelCodec, AssetRoundtripNullParent) {

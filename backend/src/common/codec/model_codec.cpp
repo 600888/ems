@@ -99,6 +99,25 @@ core::Result<model::PointKind> parse_point_kind(const std::string& s) {
     return schema_error("未知 PointKind: " + s);
 }
 
+const char* point_type_name(model::PointType t) { return model::to_string(t); }
+
+core::Result<model::PointType> parse_point_type(const std::string& s) {
+    if (s == "YC" || s == "yc") return model::PointType::YC;
+    if (s == "YX" || s == "yx") return model::PointType::YX;
+    if (s == "YK" || s == "yk") return model::PointType::YK;
+    if (s == "YT" || s == "yt") return model::PointType::YT;
+    return schema_error("未知 PointType: " + s);
+}
+
+const char* write_mode_name(model::WriteMode m) { return model::to_string(m); }
+
+core::Result<model::WriteMode> parse_write_mode(const std::string& s) {
+    if (s == "Direct") return model::WriteMode::Direct;
+    if (s == "Fixed") return model::WriteMode::Fixed;
+    if (s == "Scaled") return model::WriteMode::Scaled;
+    return schema_error("未知 WriteMode: " + s);
+}
+
 }  // namespace
 
 // ---- PointValue ----
@@ -246,12 +265,13 @@ core::Result<model::Device> decode_device(const std::string& json_text) {
 
 // ---- Point ----
 
-core::Result<std::string> encode_point(const model::Point& p) {
+core::Result<std::string> encode_point(const model::PointBase& p) {
     json j;
     j["point_id"] = id_to_json(p.point_id.value());
     j["asset_id"] = id_to_json(p.asset_id.value());
     j["code"] = p.code;
     j["name"] = p.name;
+    j["point_type"] = point_type_name(p.point_type);
     j["kind"] = point_kind_name(p.kind);
     j["value_type"] = value_type_name(p.value_type);
     j["unit"] = p.unit;
@@ -259,35 +279,139 @@ core::Result<std::string> encode_point(const model::Point& p) {
     if (p.feedback_of.has_value()) {
         j["feedback_of"] = id_to_json(p.feedback_of->value());
     }
+    switch (p.point_type) {
+        case model::PointType::YC: {
+            const auto& q = static_cast<const model::YcPoint&>(p);
+            j["scale_factor"] = q.scale_factor;
+            j["offset_value"] = q.offset_value;
+            j["range_min"] = q.range_min;
+            j["range_max"] = q.range_max;
+            j["deadband"] = q.deadband;
+            break;
+        }
+        case model::PointType::YX: {
+            const auto& q = static_cast<const model::YxPoint&>(p);
+            j["soe"] = q.soe;
+            j["invert"] = q.invert;
+            break;
+        }
+        case model::PointType::YK: {
+            const auto& q = static_cast<const model::YkPoint&>(p);
+            j["write_mode"] = write_mode_name(q.write_mode);
+            if (q.fixed_raw_value.has_value()) {
+                j["fixed_raw_value"] = i64_to_json(*q.fixed_raw_value);
+            }
+            j["pulse_width_ms"] = q.pulse_width_ms;
+            j["min_interval_ms"] = q.min_interval_ms;
+            j["write_group_key"] = q.write_group_key;
+            j["feedback_timeout_ms"] = q.feedback_timeout_ms;
+            break;
+        }
+        case model::PointType::YT: {
+            const auto& q = static_cast<const model::YtPoint&>(p);
+            j["scale_factor"] = q.scale_factor;
+            j["offset_value"] = q.offset_value;
+            j["range_min"] = q.range_min;
+            j["range_max"] = q.range_max;
+            j["min_interval_ms"] = q.min_interval_ms;
+            j["write_group_key"] = q.write_group_key;
+            j["feedback_timeout_ms"] = q.feedback_timeout_ms;
+            break;
+        }
+    }
     return j.dump();
 }
 
-core::Result<model::Point> decode_point(const std::string& json_text) {
+core::Result<model::AnyPoint> decode_point(const std::string& json_text) {
     json j = json::parse(json_text, nullptr, false);
     if (j.is_discarded()) return schema_error("Point JSON 解析失败");
     bool ok = true;
-    model::Point p;
-    p.point_id = core::PointId(require_str(j, "point_id", ok));
-    p.asset_id = core::AssetId(require_str(j, "asset_id", ok));
-    if (!ok) return schema_error("Point 缺少必需字段 point_id/asset_id");
-    p.code = j.value("code", std::string{});
-    p.name = j.value("name", std::string{});
+
+    model::PointKind kind = model::PointKind::Telemetry;
     if (j.contains("kind") && j["kind"].is_string()) {
         auto k = parse_point_kind(j["kind"].get<std::string>());
         if (!core::is_ok(k)) return core::error_of(k);
-        p.kind = core::value_of(k);
+        kind = core::value_of(k);
     }
+
+    // 旧快照没有 point_type：按记录种类推导（Command 只能推出 YK，遥调需重新发布）
+    model::PointType type = model::derive_point_type(kind);
+    if (j.contains("point_type") && j["point_type"].is_string()) {
+        auto t = parse_point_type(j["point_type"].get<std::string>());
+        if (!core::is_ok(t)) return core::error_of(t);
+        type = core::value_of(t);
+    }
+    if (!model::point_type_matches_kind(type, kind)) {
+        return schema_error("四遥分类与点种类不一致: " + std::string(point_type_name(type)) + "/" +
+                            point_kind_name(kind));
+    }
+
+    model::AnyPoint point = model::make_point(type);
+    model::PointBase* base = &model::as_base(point);
+    base->point_id = core::PointId(require_str(j, "point_id", ok));
+    base->asset_id = core::AssetId(require_str(j, "asset_id", ok));
+    if (!ok) return schema_error("Point 缺少必需字段 point_id/asset_id");
+    base->code = j.value("code", std::string{});
+    base->name = j.value("name", std::string{});
+    base->kind = kind;
     if (j.contains("value_type") && j["value_type"].is_string()) {
         auto t = parse_value_type(j["value_type"].get<std::string>());
         if (!core::is_ok(t)) return core::error_of(t);
-        p.value_type = core::value_of(t);
+        base->value_type = core::value_of(t);
     }
-    p.unit = j.value("unit", std::string{});
-    p.enabled = get_bool(j, "enabled", true);
+    base->unit = j.value("unit", std::string{});
+    base->enabled = get_bool(j, "enabled", true);
     if (j.contains("feedback_of") && !j["feedback_of"].is_null()) {
-        p.feedback_of = core::PointId(json_to_id(j, "feedback_of"));
+        base->feedback_of = core::PointId(json_to_id(j, "feedback_of"));
     }
-    return p;
+
+    switch (type) {
+        case model::PointType::YC: {
+            auto& q = std::get<model::YcPoint>(point);
+            q.scale_factor = get_double(j, "scale_factor", q.scale_factor);
+            q.offset_value = get_double(j, "offset_value", q.offset_value);
+            q.range_min = get_double(j, "range_min", q.range_min);
+            q.range_max = get_double(j, "range_max", q.range_max);
+            q.deadband = get_double(j, "deadband", q.deadband);
+            break;
+        }
+        case model::PointType::YX: {
+            auto& q = std::get<model::YxPoint>(point);
+            q.soe = get_bool(j, "soe", q.soe);
+            q.invert = get_bool(j, "invert", q.invert);
+            break;
+        }
+        case model::PointType::YK: {
+            auto& q = std::get<model::YkPoint>(point);
+            if (j.contains("write_mode") && j["write_mode"].is_string()) {
+                auto m = parse_write_mode(j["write_mode"].get<std::string>());
+                if (!core::is_ok(m)) return core::error_of(m);
+                q.write_mode = core::value_of(m);
+            }
+            if (j.contains("fixed_raw_value") && !j["fixed_raw_value"].is_null()) {
+                auto v = json_to_i64(j, "fixed_raw_value");
+                if (!core::is_ok(v)) return core::error_of(v);
+                q.fixed_raw_value = core::value_of(v);
+            }
+            q.pulse_width_ms = j.value("pulse_width_ms", q.pulse_width_ms);
+            q.min_interval_ms = j.value("min_interval_ms", q.min_interval_ms);
+            q.write_group_key = j.value("write_group_key", q.write_group_key);
+            q.feedback_timeout_ms = j.value("feedback_timeout_ms", q.feedback_timeout_ms);
+            break;
+        }
+        case model::PointType::YT: {
+            auto& q = std::get<model::YtPoint>(point);
+            q.scale_factor = get_double(j, "scale_factor", q.scale_factor);
+            q.offset_value = get_double(j, "offset_value", q.offset_value);
+            q.range_min = get_double(j, "range_min", q.range_min);
+            q.range_max = get_double(j, "range_max", q.range_max);
+            q.min_interval_ms = j.value("min_interval_ms", q.min_interval_ms);
+            q.write_group_key = j.value("write_group_key", q.write_group_key);
+            q.feedback_timeout_ms = j.value("feedback_timeout_ms", q.feedback_timeout_ms);
+            break;
+        }
+    }
+    return point;
 }
 
 // ---- DeviceChannelBinding ----
