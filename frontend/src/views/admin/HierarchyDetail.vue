@@ -1,15 +1,15 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue'
-import {ElMessage} from 'element-plus'
-import {useRoute} from 'vue-router'
+import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useRoute } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import UnderlineTabs from '@/components/common/UnderlineTabs.vue'
 import AdminDeviceTree from '@/components/device/AdminDeviceTree.vue'
-import {subNodes} from '@/mocks/devices'
-import {clusterMetrics} from '@/mocks/points'
-import type {TabItem} from '@/types/ui'
+import { subNodes } from '@/mocks/devices'
+import { clusterMetrics } from '@/mocks/points'
+import type { TabItem } from '@/types/ui'
 
 const route = useRoute()
 
@@ -21,10 +21,10 @@ const nodeName = computed(() => {
 })
 
 const tabs: TabItem[] = [
-  {key: 'overview', label: '节点概况'},
-  {key: 'children', label: '子节点'},
-  {key: 'diagnose', label: '点位诊断'},
-  {key: 'source', label: '数据来源'},
+  { key: 'overview', label: '节点概况' },
+  { key: 'children', label: '子节点' },
+  { key: 'diagnose', label: '点位诊断' },
+  { key: 'source', label: '数据来源' },
 ]
 const tab = ref('overview')
 
@@ -61,7 +61,9 @@ const sourceChain = ['BMS · bms01', 'battery01', 'rack01', 'pack / cell 固有�
           </div>
           <div class="flex min-w-0 flex-1 flex-col gap-[6px]">
             <div class="flex items-center gap-3">
-              <h2 class="truncate text-[20px] leading-none font-semibold text-ink">{{ nodeName }}</h2>
+              <h2 class="truncate text-[20px] leading-none font-semibold text-ink">
+                {{ nodeName }}
+              </h2>
               <StatusTag tone="mute" label="层级节点" :dot="false" />
             </div>
             <p class="truncate text-[11px] text-muted">
@@ -77,7 +79,12 @@ const sourceChain = ['BMS · bms01', 'battery01', 'rack01', 'pack / cell 固有�
             编辑节点
           </button>
         </div>
-        <UnderlineTabs :model-value="tab" :items="tabs" :height="44" @update:model-value="changeTab" />
+        <UnderlineTabs
+          :model-value="tab"
+          :items="tabs"
+          :height="44"
+          @update:model-value="changeTab"
+        />
       </section>
 
       <!-- 电池簇指标 -->
@@ -133,16 +140,27 @@ const sourceChain = ['BMS · bms01', 'battery01', 'rack01', 'pack / cell 固有�
                 :label="row.versionState === 'draft' ? '有草稿' : '已生效'"
               />
             </div>
-            <div class="dt-cell w-[220px] shrink-0 truncate text-[10px] text-muted">{{ row.source }}</div>
+            <div class="dt-cell w-[220px] shrink-0 truncate text-[10px] text-muted">
+              {{ row.source }}
+            </div>
             <div class="dt-cell w-[234px] shrink-0">
-              <span class="link-action" @click="ElMessage.info('子节点详情不在本次示例范围内')">查看 · 点位</span>
+              <span class="link-action" @click="ElMessage.info('子节点详情不在本次示例范围内')"
+                >查看 · 点位</span
+              >
             </div>
           </div>
         </div>
 
         <div class="flex h-[46px] shrink-0 items-center justify-between px-4">
           <span class="text-[10px] text-muted">显示 1—4 项，共 8 项</span>
-          <el-pagination class="ems-pager" small background layout="prev, pager, next" :total="8" :page-size="4" />
+          <el-pagination
+            class="ems-pager"
+            small
+            background
+            layout="prev, pager, next"
+            :total="8"
+            :page-size="4"
+          />
         </div>
       </section>
 
@@ -154,8 +172,16 @@ const sourceChain = ['BMS · bms01', 'battery01', 'rack01', 'pack / cell 固有�
         </div>
         <div class="flex items-center gap-2">
           <template v-for="(item, index) in sourceChain" :key="item">
-            <span class="rounded-[4px] border border-line bg-raised px-2 py-1 text-[11px] text-ink">{{ item }}</span>
-            <AppIcon v-if="index < sourceChain.length - 1" name="arrow-right" :size="13" class="text-subtle" />
+            <span
+              class="rounded-[4px] border border-line bg-raised px-2 py-1 text-[11px] text-ink"
+              >{{ item }}</span
+            >
+            <AppIcon
+              v-if="index < sourceChain.length - 1"
+              name="arrow-right"
+              :size="13"
+              class="text-subtle"
+            />
           </template>
         </div>
         <p class="text-[10px] text-muted">

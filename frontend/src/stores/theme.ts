@@ -1,5 +1,5 @@
-import {defineStore} from 'pinia'
-import {ref} from 'vue'
+import { defineStore } from 'pinia'
+import { ref } from 'vue'
 
 export type ThemeMode = 'dark' | 'light'
 
@@ -31,5 +31,5 @@ export const useThemeStore = defineStore('theme', () => {
     setMode(mode.value === 'dark' ? 'light' : 'dark')
   }
 
-  return {mode, apply, setMode, toggle}
+  return { mode, apply, setMode, toggle }
 })

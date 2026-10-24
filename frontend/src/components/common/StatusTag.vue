@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import { computed } from 'vue'
 
 /** 状态标签色调，对应画板 09「运行状态」色板 */
 export type TagTone = 'ok' | 'warn' | 'danger' | 'mute' | 'accent' | 'info'
@@ -11,7 +11,7 @@ const props = withDefaults(
     /** 是否显示状态点 */
     dot?: boolean
   }>(),
-  {tone: 'ok', dot: true},
+  { tone: 'ok', dot: true },
 )
 
 const toneClass = computed(

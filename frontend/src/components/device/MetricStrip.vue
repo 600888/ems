@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {useMonitorStore} from '@/stores/monitor'
+import { useMonitorStore } from '@/stores/monitor'
 
 const monitor = useMonitorStore()
 
@@ -26,7 +26,10 @@ const toneClass = {
         </span>
         <span v-if="metric.unit" class="text-[11px] text-muted">{{ metric.unit }}</span>
       </div>
-      <span class="truncate text-[10px]" :class="metric.tone === 'warn' ? 'text-warn' : 'text-subtle'">
+      <span
+        class="truncate text-[10px]"
+        :class="metric.tone === 'warn' ? 'text-warn' : 'text-subtle'"
+      >
         {{ metric.note }}
       </span>
     </article>

@@ -7,10 +7,10 @@ const props = defineProps<{
 }>()
 
 const steps = [
-  {index: 1, label: '选择点表'},
-  {index: 2, label: '预览与通道'},
-  {index: 3, label: '映射固有点位'},
-  {index: 4, label: '校验与发布'},
+  { index: 1, label: '选择点表' },
+  { index: 2, label: '预览与通道' },
+  { index: 3, label: '映射固有点位' },
+  { index: 4, label: '校验与发布' },
 ]
 </script>
 

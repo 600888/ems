@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import {computed} from 'vue'
-import type {ChartSeries} from '@/types/ui'
+import { computed } from 'vue'
+import type { ChartSeries } from '@/types/ui'
 
 const props = withDefaults(
   defineProps<{
@@ -12,7 +12,7 @@ const props = withDefaults(
     /** 是否绘制水平网格 */
     grid?: boolean
   }>(),
-  {grid: true},
+  { grid: true },
 )
 
 const yMax = computed(() => props.yTicks[0] ?? 100)
@@ -38,7 +38,7 @@ const paths = computed(() =>
       d += `${open ? 'L' : 'M'}${x.toFixed(2)},${toY(value).toFixed(2)} `
       open = true
     })
-    return {...item, d: d.trim()}
+    return { ...item, d: d.trim() }
   }),
 )
 
@@ -48,7 +48,9 @@ const gridYs = computed(() => props.yTicks.map((tick) => toY(tick)))
 <template>
   <div class="flex min-h-0 flex-1 gap-3">
     <!-- 纵轴刻度：36px，右对齐，与画板一致 -->
-    <div class="flex w-9 shrink-0 flex-col justify-between pb-[22px] text-right text-[10px] text-subtle">
+    <div
+      class="flex w-9 shrink-0 flex-col justify-between pb-[22px] text-right text-[10px] text-subtle"
+    >
       <span v-for="tick in yTicks" :key="tick">{{ tick }}</span>
     </div>
 

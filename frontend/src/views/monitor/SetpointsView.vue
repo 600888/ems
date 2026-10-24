@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue'
-import {ElMessage} from 'element-plus'
+import { computed, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import {useMonitorStore} from '@/stores/monitor'
+import { useMonitorStore } from '@/stores/monitor'
 
 const monitor = useMonitorStore()
 const reason = ref('按值班计划调整放电功率')
@@ -42,7 +42,9 @@ function submit() {
       <section class="panel flex min-w-0 flex-1 flex-col overflow-hidden">
         <div class="panel-bar">
           <h3 class="text-[14px] font-semibold text-ink">遥调 · 运行设定值</h3>
-          <span class="text-[11px] text-muted">{{ monitor.profile.tabCounts.setpoint }} 个调节测点</span>
+          <span class="text-[11px] text-muted"
+            >{{ monitor.profile.tabCounts.setpoint }} 个调节测点</span
+          >
         </div>
 
         <template v-if="monitor.ytRows.length">
@@ -56,8 +58,12 @@ function submit() {
 
           <div class="min-h-0 flex-1 overflow-y-auto">
             <div v-for="row in monitor.ytRows" :key="row.name" class="dt-row h-[56px]">
-              <span class="dt-cell min-w-0 flex-1 truncate text-[12px] text-ink">{{ row.name }}</span>
-              <span class="dt-cell w-[120px] shrink-0 text-[12px] text-muted">{{ row.current }}</span>
+              <span class="dt-cell min-w-0 flex-1 truncate text-[12px] text-ink">{{
+                row.name
+              }}</span>
+              <span class="dt-cell w-[120px] shrink-0 text-[12px] text-muted">{{
+                row.current
+              }}</span>
               <div class="dt-cell w-[160px] shrink-0">
                 <el-input
                   class="ctl w-[110px]!"
@@ -98,7 +104,9 @@ function submit() {
       <!-- 遥调下发确认 -->
       <aside class="panel flex w-[360px] shrink-0 flex-col overflow-hidden">
         <div class="panel-bar">
-          <h3 class="text-[14px] font-semibold text-ink">遥调确认 · {{ activeRow?.name ?? '未选择测点' }}</h3>
+          <h3 class="text-[14px] font-semibold text-ink">
+            遥调确认 · {{ activeRow?.name ?? '未选择测点' }}
+          </h3>
         </div>
 
         <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
@@ -115,7 +123,8 @@ function submit() {
             <div class="flex items-center justify-between">
               <span class="text-[11px] text-muted">修改为</span>
               <span class="text-[20px] leading-none font-semibold text-accent">
-                {{ activeRow?.modified }} <span class="text-[11px] font-normal text-muted">{{ activeRow?.unit }}</span>
+                {{ activeRow?.modified }}
+                <span class="text-[11px] font-normal text-muted">{{ activeRow?.unit }}</span>
               </span>
             </div>
           </div>
@@ -137,7 +146,9 @@ function submit() {
             </div>
           </div>
 
-          <span class="flex items-center gap-2 text-[11px] text-ok"><i class="dot" />当前控制权与操作权限有效</span>
+          <span class="flex items-center gap-2 text-[11px] text-ok"
+            ><i class="dot" />当前控制权与操作权限有效</span
+          >
 
           <div class="flex flex-col gap-[7px]">
             <span class="text-[11px] text-muted">调整原因</span>

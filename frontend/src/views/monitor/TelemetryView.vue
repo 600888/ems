@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import {computed} from 'vue'
-import {ElMessage} from 'element-plus'
-import {useRouter} from 'vue-router'
+import { computed } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import {useMonitorStore} from '@/stores/monitor'
+import { useMonitorStore } from '@/stores/monitor'
 
 const router = useRouter()
 const monitor = useMonitorStore()
 
-const qualityText = {good: '有效', timeout: '超时', invalid: '无效'} as const
-const qualityClass = {good: 'text-ok', timeout: 'text-warn', invalid: 'text-danger'} as const
+const qualityText = { good: '有效', timeout: '超时', invalid: '无效' } as const
+const qualityClass = { good: 'text-ok', timeout: 'text-warn', invalid: 'text-danger' } as const
 
 const selectionLabel = computed(() => `已选 ${monitor.selectedYcCodes.length} / 6 个测点`)
 
@@ -87,7 +87,9 @@ function addToCurve() {
             />
           </div>
           <span class="dt-cell min-w-0 flex-1 truncate text-[12px] text-ink">{{ row.name }}</span>
-          <span class="dt-cell w-[180px] shrink-0 truncate font-mono text-[11px] text-muted">{{ row.code }}</span>
+          <span class="dt-cell w-[180px] shrink-0 truncate font-mono text-[11px] text-muted">{{
+            row.code
+          }}</span>
           <span class="dt-cell w-[150px] shrink-0 text-[12px] text-accent">{{ row.value }}</span>
           <span class="dt-cell w-[62px] shrink-0 text-[12px] text-muted">{{ row.unit }}</span>
           <span class="dt-cell w-[120px] shrink-0 text-[12px]" :class="qualityClass[row.quality]">
@@ -119,7 +121,10 @@ function addToCurve() {
 
     <div class="flex h-[46px] shrink-0 items-center justify-between px-4">
       <span class="text-[11px] text-muted">
-        共 {{ monitor.profile.tabCounts.telemetry }} 个测点 · 当前显示 1–{{ Math.min(10, monitor.ycList.length) }} 条
+        共 {{ monitor.profile.tabCounts.telemetry }} 个测点 · 当前显示 1–{{
+          Math.min(10, monitor.ycList.length)
+        }}
+        条
       </span>
       <div class="flex items-center gap-3">
         <span class="text-[11px] text-muted">10 条 / 页</span>

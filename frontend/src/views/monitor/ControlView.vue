@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import { computed } from 'vue'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import {useMonitorStore} from '@/stores/monitor'
+import { useMonitorStore } from '@/stores/monitor'
 
 const monitor = useMonitorStore()
 
@@ -14,13 +14,38 @@ const current = computed(() => monitor.activeCommand)
 const canExecute = computed(() => Boolean(current.value) && !monitor.controlRunning)
 
 const commandState = computed(() => {
-  if (monitor.controlRunning) return {tone: 'text-accent', icon: 'loader-circle', title: '正在执行', desc: '指令已发送，正在等待设备反馈…', spin: true}
+  if (monitor.controlRunning)
+    return {
+      tone: 'text-accent',
+      icon: 'loader-circle',
+      title: '正在执行',
+      desc: '指令已发送，正在等待设备反馈…',
+      spin: true,
+    }
   if (monitor.controlResult === 'success')
-    return {tone: 'text-ok', icon: 'circle-check', title: '执行成功', desc: '设备反馈：控制命令已执行', spin: false}
+    return {
+      tone: 'text-ok',
+      icon: 'circle-check',
+      title: '执行成功',
+      desc: '设备反馈：控制命令已执行',
+      spin: false,
+    }
   if (monitor.controlResult === 'failed')
-    return {tone: 'text-danger', icon: 'circle-x', title: '执行失败', desc: '设备拒绝：控制权已变更。请重新核对。', spin: false}
+    return {
+      tone: 'text-danger',
+      icon: 'circle-x',
+      title: '执行失败',
+      desc: '设备拒绝：控制权已变更。请重新核对。',
+      spin: false,
+    }
   if (monitor.controlResult === 'timeout')
-    return {tone: 'text-warn', icon: 'clock-3', title: '执行超时', desc: '结果未确认，请核对设备状态与操作记录。', spin: false}
+    return {
+      tone: 'text-warn',
+      icon: 'clock-3',
+      title: '执行超时',
+      desc: '结果未确认，请核对设备状态与操作记录。',
+      spin: false,
+    }
   return null
 })
 </script>
@@ -44,7 +69,10 @@ const commandState = computed(() => {
             <span class="text-[11px] text-muted">{{ monitor.ykList.length }} 个控制点</span>
           </div>
 
-          <div v-if="monitor.ykList.length" class="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto p-4">
+          <div
+            v-if="monitor.ykList.length"
+            class="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto p-4"
+          >
             <article
               v-for="command in monitor.ykList"
               :key="command.name"
@@ -75,7 +103,9 @@ const commandState = computed(() => {
               </div>
               <span class="text-[10px] text-muted">{{ command.desc }}</span>
               <span class="text-[10px] text-subtle">{{ command.current }}</span>
-              <span v-if="command.disabledReason" class="text-[9px] text-warn">{{ command.disabledReason }}</span>
+              <span v-if="command.disabledReason" class="text-[9px] text-warn">{{
+                command.disabledReason
+              }}</span>
             </article>
           </div>
 
@@ -107,9 +137,15 @@ const commandState = computed(() => {
           <div class="min-h-0 flex-1 overflow-y-auto">
             <div v-for="log in monitor.controlLogRows" :key="log.time" class="dt-row h-[44px]">
               <span class="dt-cell w-[100px] shrink-0 text-[11px] text-muted">{{ log.time }}</span>
-              <span class="dt-cell min-w-0 flex-1 truncate text-[11px] text-ink">{{ log.command }}</span>
-              <span class="dt-cell w-[120px] shrink-0 text-[11px] text-muted">{{ log.target }}</span>
-              <span class="dt-cell w-[110px] shrink-0 text-[11px] text-muted">{{ log.operator }}</span>
+              <span class="dt-cell min-w-0 flex-1 truncate text-[11px] text-ink">{{
+                log.command
+              }}</span>
+              <span class="dt-cell w-[120px] shrink-0 text-[11px] text-muted">{{
+                log.target
+              }}</span>
+              <span class="dt-cell w-[110px] shrink-0 text-[11px] text-muted">{{
+                log.operator
+              }}</span>
               <span class="dt-cell w-[100px] shrink-0 text-[11px] text-ok">执行成功</span>
             </div>
           </div>
@@ -119,7 +155,9 @@ const commandState = computed(() => {
       <!-- 遥控确认 -->
       <aside class="panel flex w-[360px] shrink-0 flex-col overflow-hidden">
         <div class="panel-bar">
-          <h3 class="text-[14px] font-semibold text-ink">遥控确认 · {{ current?.name ?? '未选择命令' }}</h3>
+          <h3 class="text-[14px] font-semibold text-ink">
+            遥控确认 · {{ current?.name ?? '未选择命令' }}
+          </h3>
         </div>
 
         <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
@@ -156,7 +194,11 @@ const commandState = computed(() => {
           </div>
 
           <div class="flex flex-col gap-2">
-            <span v-for="item in checks" :key="item" class="flex items-center gap-2 text-[11px] text-ok">
+            <span
+              v-for="item in checks"
+              :key="item"
+              class="flex items-center gap-2 text-[11px] text-ok"
+            >
               <i class="dot" />{{ item }}
             </span>
           </div>

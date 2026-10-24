@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import {onMounted, ref, watch} from 'vue'
-import {useRouter} from 'vue-router'
+import { onMounted, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
-import {useDeviceStore} from '@/stores/device'
-import type {DeviceNode} from '@/types/domain'
+import { useDeviceStore } from '@/stores/device'
+import type { DeviceNode } from '@/types/domain'
 
 const router = useRouter()
 const device = useDeviceStore()
@@ -40,7 +40,10 @@ function open(data: DeviceNode) {
   }
 }
 
-function onNodeClick(data: DeviceNode, node: {expanded: boolean; expand: () => void; collapse: () => void}) {
+function onNodeClick(
+  data: DeviceNode,
+  node: { expanded: boolean; expand: () => void; collapse: () => void },
+) {
   open(data)
   if (hasChildren(data) && !data.isDevice) {
     node.expanded ? node.collapse() : node.expand()
@@ -76,7 +79,7 @@ function onNodeClick(data: DeviceNode, node: {expanded: boolean; expand: () => v
         class="ems-tree"
         :data="device.tree"
         node-key="id"
-        :props="{label: 'name', children: 'children'}"
+        :props="{ label: 'name', children: 'children' }"
         :indent="13"
         :default-expanded-keys="device.expandedIds"
         :current-node-key="device.currentId"
@@ -85,7 +88,7 @@ function onNodeClick(data: DeviceNode, node: {expanded: boolean; expand: () => v
         :filter-node-method="filterNode"
         @node-click="onNodeClick"
       >
-        <template #default="{node, data}">
+        <template #default="{ node, data }">
           <div class="flex w-full min-w-0 items-center gap-[7px]">
             <button
               v-if="hasChildren(data as DeviceNode)"
@@ -103,9 +106,7 @@ function onNodeClick(data: DeviceNode, node: {expanded: boolean; expand: () => v
             />
             <span
               class="truncate text-[11px]"
-              :class="
-                data.id === device.currentId ? 'font-semibold text-accent' : 'text-ink'
-              "
+              :class="data.id === device.currentId ? 'font-semibold text-accent' : 'text-ink'"
             >
               {{ data.name }}
             </span>

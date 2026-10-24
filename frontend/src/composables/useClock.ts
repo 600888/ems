@@ -1,4 +1,4 @@
-import {onBeforeUnmount, onMounted, ref} from 'vue'
+import { onBeforeUnmount, onMounted, ref } from 'vue'
 
 /** 顶栏时钟：设计图为 YYYY-MM-DD  HH:mm:ss（中间两个空格） */
 export function useClock() {
@@ -20,5 +20,5 @@ export function useClock() {
 
   onBeforeUnmount(() => window.clearInterval(timer))
 
-  return {text}
+  return { text }
 }

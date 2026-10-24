@@ -1,4 +1,4 @@
-import type {BindingRow, DiffRow, ImportRow, MappingRow, ParseIssue} from '@/types/domain'
+import type { BindingRow, DiffRow, ImportRow, MappingRow, ParseIssue } from '@/types/domain'
 
 /** 画板 03 通道绑定 */
 export const bindings: BindingRow[] = [
@@ -36,20 +36,62 @@ export const bindings: BindingRow[] = [
 
 /** 画板 04 点表预览 */
 export const importRows: ImportRow[] = [
-  {row: 2, name: '交流有功功率', access: 'R · 0x0000', type: 'int16 · AB', unit: 'kW · 0.1', result: 'pass'},
-  {row: 3, name: '直流电压', access: 'R · 0x0002', type: 'uint16 · AB', unit: 'V · 0.1', result: 'pass'},
-  {row: 4, name: '运行状态', access: 'R · 0x0010', type: 'uint16 · AB', unit: '枚举 · 1', result: 'pass'},
-  {row: 5, name: '有功设定值', access: 'W · 0x0100', type: 'int16 · AB', unit: 'kW · 0.1', result: 'pass'},
-  {row: 6, name: '无功设定值', access: 'W · 0x0102', type: 'int16 · —', unit: 'kvar · 0.1', result: 'warn'},
-  {row: 7, name: '模块温度', access: 'R · 0x0020', type: 'int16 · AB', unit: '°C · 0.1', result: 'pass'},
+  {
+    row: 2,
+    name: '交流有功功率',
+    access: 'R · 0x0000',
+    type: 'int16 · AB',
+    unit: 'kW · 0.1',
+    result: 'pass',
+  },
+  {
+    row: 3,
+    name: '直流电压',
+    access: 'R · 0x0002',
+    type: 'uint16 · AB',
+    unit: 'V · 0.1',
+    result: 'pass',
+  },
+  {
+    row: 4,
+    name: '运行状态',
+    access: 'R · 0x0010',
+    type: 'uint16 · AB',
+    unit: '枚举 · 1',
+    result: 'pass',
+  },
+  {
+    row: 5,
+    name: '有功设定值',
+    access: 'W · 0x0100',
+    type: 'int16 · AB',
+    unit: 'kW · 0.1',
+    result: 'pass',
+  },
+  {
+    row: 6,
+    name: '无功设定值',
+    access: 'W · 0x0102',
+    type: 'int16 · —',
+    unit: 'kvar · 0.1',
+    result: 'warn',
+  },
+  {
+    row: 7,
+    name: '模块温度',
+    access: 'R · 0x0020',
+    type: 'int16 · AB',
+    unit: '°C · 0.1',
+    result: 'pass',
+  },
 ]
 
 /** 画板 04 解析检查 */
 export const parseIssues: ParseIssue[] = [
-  {title: '第 6 行 · 字节序缺失', desc: '请选择 ABCD、CDAB 等明确字节序'},
-  {title: '第 33 行 · 地址重复', desc: '核对读写属性与寄存器范围'},
-  {title: '第 78 行 · 单位待确认', desc: '确认原表 W / kW 的工程单位'},
-  {title: '第 94 行 · 目标节点缺失', desc: '选择对应节点，禁止按重名绑定'},
+  { title: '第 6 行 · 字节序缺失', desc: '请选择 ABCD、CDAB 等明确字节序' },
+  { title: '第 33 行 · 地址重复', desc: '核对读写属性与寄存器范围' },
+  { title: '第 78 行 · 单位待确认', desc: '确认原表 W / kW 的工程单位' },
+  { title: '第 94 行 · 目标节点缺失', desc: '选择对应节点，禁止按重名绑定' },
 ]
 
 /** 画板 05 固有点位映射 */
@@ -132,8 +174,32 @@ export const mappingRows: MappingRow[] = [
 
 /** 画板 06 差异预览 */
 export const diffRows: DiffRow[] = [
-  {type: '修改', item: '有功功率来源', current: '0x0008 / 旧点表', next: '0x0000 / 厂家点表 v2.3', impact: '运行监视、有功调度'},
-  {type: '修改', item: '有功设定反馈', current: '仅设备回显', next: '设备回显 + 实际功率判据', impact: '有功调度'},
-  {type: '新增', item: '厂家扩展诊断点 × 12', current: '未采集', next: '保留采集，仅诊断展示', impact: '诊断数据'},
-  {type: '禁用', item: '无功相关点 × 2', current: '未配置', next: '禁用 / unsupported', impact: '无功调节不可用'},
+  {
+    type: '修改',
+    item: '有功功率来源',
+    current: '0x0008 / 旧点表',
+    next: '0x0000 / 厂家点表 v2.3',
+    impact: '运行监视、有功调度',
+  },
+  {
+    type: '修改',
+    item: '有功设定反馈',
+    current: '仅设备回显',
+    next: '设备回显 + 实际功率判据',
+    impact: '有功调度',
+  },
+  {
+    type: '新增',
+    item: '厂家扩展诊断点 × 12',
+    current: '未采集',
+    next: '保留采集，仅诊断展示',
+    impact: '诊断数据',
+  },
+  {
+    type: '禁用',
+    item: '无功相关点 × 2',
+    current: '未配置',
+    next: '禁用 / unsupported',
+    impact: '无功调节不可用',
+  },
 ]

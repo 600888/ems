@@ -1,7 +1,7 @@
-import {computed, ref} from 'vue'
-import {defineStore} from 'pinia'
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
 
-import {monitorTree} from '@/mocks/devices'
+import { monitorTree } from '@/mocks/devices'
 import {
   controlLogs,
   monitorProfiles,
@@ -13,7 +13,15 @@ import {
   ytPoints,
   type DeviceProfile,
 } from '@/mocks/points'
-import type {ControlLog, DeviceNode, Metric, YcPoint, YkCommand, YtPoint, YxSignal} from '@/types/domain'
+import type {
+  ControlLog,
+  DeviceNode,
+  Metric,
+  YcPoint,
+  YkCommand,
+  YtPoint,
+  YxSignal,
+} from '@/types/domain'
 
 export type MonitorScope = 'all' | 'alarm' | 'offline'
 
@@ -47,7 +55,7 @@ function emptyProfile(node: DeviceNode | undefined): DeviceProfile {
     dataSource: node?.name ?? '—',
     status: node?.status === 'alarm' ? 'alarm' : node?.status === 'offline' ? 'offline' : 'online',
     metrics: blankMetrics,
-    tabCounts: {telemetry: 0, signal: 0, control: 0, setpoint: 0},
+    tabCounts: { telemetry: 0, signal: 0, control: 0, setpoint: 0 },
   }
 }
 
@@ -66,7 +74,7 @@ export const useMonitorStore = defineStore('monitor', () => {
   const curveWindow = ref('最近 30 分钟')
   const sampleInterval = ref('2 秒')
 
-  const ytRows = ref<YtPoint[]>(ytPoints.map((row) => ({...row})))
+  const ytRows = ref<YtPoint[]>(ytPoints.map((row) => ({ ...row })))
   const controlLogRows = ref<ControlLog[]>([...controlLogs])
   const activeCommand = ref<YkCommand | null>(ykCommands[1] ?? null)
   const controlStep = ref<1 | 2 | 3>(1)
@@ -80,10 +88,18 @@ export const useMonitorStore = defineStore('monitor', () => {
   )
 
   const isBms = computed(() => selectedId.value === 'bms01')
-  const ycList = computed<YcPoint[]>(() => (isBms.value ? ycPoints : selectedId.value === 'pcs01' ? pcsYcPoints : []))
-  const yxList = computed<YxSignal[]>(() => (isBms.value ? yxSignals : selectedId.value === 'pcs01' ? pcsYxSignals : []))
-  const ykList = computed<YkCommand[]>(() => (profile.value.tabCounts.control > 0 ? ykCommands : []))
-  const ytList = computed<YtPoint[]>(() => (profile.value.tabCounts.setpoint > 0 ? ytRows.value : []))
+  const ycList = computed<YcPoint[]>(() =>
+    isBms.value ? ycPoints : selectedId.value === 'pcs01' ? pcsYcPoints : [],
+  )
+  const yxList = computed<YxSignal[]>(() =>
+    isBms.value ? yxSignals : selectedId.value === 'pcs01' ? pcsYxSignals : [],
+  )
+  const ykList = computed<YkCommand[]>(() =>
+    profile.value.tabCounts.control > 0 ? ykCommands : [],
+  )
+  const ytList = computed<YtPoint[]>(() =>
+    profile.value.tabCounts.setpoint > 0 ? ytRows.value : [],
+  )
 
   /** 树过滤：按状态范围 + 关键字，保留命中节点的祖先链 */
   const filteredTree = computed<DeviceNode[]>(() => {
@@ -91,13 +107,15 @@ export const useMonitorStore = defineStore('monitor', () => {
     if (scope.value === 'all' && !kw) return tree.value
 
     const keep = (node: DeviceNode): DeviceNode | null => {
-      const children = (node.children ?? []).map(keep).filter((child): child is DeviceNode => Boolean(child))
+      const children = (node.children ?? [])
+        .map(keep)
+        .filter((child): child is DeviceNode => Boolean(child))
       const hitStatus =
         scope.value === 'all' ||
         (scope.value === 'alarm' ? node.status === 'alarm' : node.status === 'offline')
       const hitKeyword =
         !kw || node.name.toLowerCase().includes(kw) || node.code.toLowerCase().includes(kw)
-      if ((hitStatus && hitKeyword) || children.length > 0) return {...node, children}
+      if ((hitStatus && hitKeyword) || children.length > 0) return { ...node, children }
       return null
     }
 
@@ -105,7 +123,7 @@ export const useMonitorStore = defineStore('monitor', () => {
   })
 
   // 示例统计口径与画板 10 一致；接后端时替换为设备统计接口返回
-  const counts = computed(() => ({all: 128, alarm: 2, offline: 1}))
+  const counts = computed(() => ({ all: 128, alarm: 2, offline: 1 }))
 
   /** 选中测点的曲线数据（最多 6 个） */
   const curveSeries = computed(() =>
@@ -154,7 +172,7 @@ export const useMonitorStore = defineStore('monitor', () => {
       controlResult.value = 'success'
       controlLogRows.value = [
         {
-          time: new Date().toLocaleTimeString('zh-CN', {hour12: false}),
+          time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
           command: activeCommand.value?.name ?? '',
           target: activeCommand.value?.action ?? '',
           operator: '值班员',
@@ -166,17 +184,21 @@ export const useMonitorStore = defineStore('monitor', () => {
   }
 
   function setYtValue(name: string, value: string) {
-    ytRows.value = ytRows.value.map((row) => (row.name === name ? {...row, modified: value} : row))
+    ytRows.value = ytRows.value.map((row) =>
+      row.name === name ? { ...row, modified: value } : row,
+    )
   }
 
   function resetYtValue(name: string) {
-    ytRows.value = ytRows.value.map((row) => (row.name === name ? {...row, modified: row.current} : row))
+    ytRows.value = ytRows.value.map((row) =>
+      row.name === name ? { ...row, modified: row.current } : row,
+    )
   }
 
   /** 2 秒一次的心跳：只推进更新时间，数值保持示例稳定 */
   function tick() {
     if (paused.value) return
-    lastUpdated.value = new Date().toLocaleTimeString('zh-CN', {hour12: false})
+    lastUpdated.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
   }
 
   async function load() {

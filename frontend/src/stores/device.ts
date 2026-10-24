@@ -1,8 +1,8 @@
-import {computed, ref} from 'vue'
-import {defineStore} from 'pinia'
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
 
-import {deviceApi} from '@/api/device'
-import type {DeviceNode, DeviceRow} from '@/types/domain'
+import { deviceApi } from '@/api/device'
+import type { DeviceNode, DeviceRow } from '@/types/domain'
 
 const ALL_TYPE = '全部类型'
 const ALL_CONFIG = '全部配置状态'
@@ -21,7 +21,14 @@ export const useDeviceStore = defineStore('device', () => {
   const page = ref(1)
   const pageSize = ref(6)
 
-  const expandedIds = ref<string[]>(['ess000001', 'unit01', 'battery01', 'rack01', 'pack01', 'station-common'])
+  const expandedIds = ref<string[]>([
+    'ess000001',
+    'unit01',
+    'battery01',
+    'rack01',
+    'pack01',
+    'station-common',
+  ])
   const currentId = ref('pcs01')
   const createDrawerOpen = ref(false)
 
@@ -39,7 +46,9 @@ export const useDeviceStore = defineStore('device', () => {
       const hitType = typeFilter.value === ALL_TYPE || row.type === typeFilter.value
       const hitConfig =
         configFilter.value === ALL_CONFIG ||
-        (configFilter.value === '已生效' ? row.versionState === 'applied' : row.versionState === 'draft')
+        (configFilter.value === '已生效'
+          ? row.versionState === 'applied'
+          : row.versionState === 'draft')
       return hitKeyword && hitType && hitConfig
     }),
   )
@@ -55,7 +64,9 @@ export const useDeviceStore = defineStore('device', () => {
     return filtered.value.slice(start, start + pageSize.value)
   })
 
-  const currentRow = computed(() => rows.value.find((row) => row.id === currentId.value) ?? rows.value[0])
+  const currentRow = computed(
+    () => rows.value.find((row) => row.id === currentId.value) ?? rows.value[0],
+  )
 
   /** 读取设备树与列表，失败时保留页面框架并给出重试入口 */
   async function load() {
@@ -93,7 +104,8 @@ export const useDeviceStore = defineStore('device', () => {
   }
 
   function toggleAll() {
-    selectedIds.value = selectedIds.value.length === paged.value.length ? [] : paged.value.map((row) => row.id)
+    selectedIds.value =
+      selectedIds.value.length === paged.value.length ? [] : paged.value.map((row) => row.id)
   }
 
   function setKeyword(value: string) {

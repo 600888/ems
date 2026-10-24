@@ -1,5 +1,5 @@
-import {createApp, type Component} from 'vue'
-import {createPinia} from 'pinia'
+import { createApp, type Component } from 'vue'
+import { createPinia } from 'pinia'
 import {
   ElCheckbox,
   ElConfigProvider,

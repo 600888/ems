@@ -1,26 +1,26 @@
 <script setup lang="ts">
-import {computed} from 'vue'
-import {ElMessage} from 'element-plus'
-import {useRoute, useRouter} from 'vue-router'
+import { computed } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import UserMenu from '@/components/common/UserMenu.vue'
 import NewDeviceDrawer from '@/components/admin/NewDeviceDrawer.vue'
-import {useClock} from '@/composables/useClock'
-import {adminNav} from '@/mocks/nav'
-import {useDeviceStore} from '@/stores/device'
-import type {UserMenuItem} from '@/types/ui'
+import { useClock } from '@/composables/useClock'
+import { adminNav } from '@/mocks/nav'
+import { useDeviceStore } from '@/stores/device'
+import type { UserMenuItem } from '@/types/ui'
 
 const route = useRoute()
 const router = useRouter()
 const device = useDeviceStore()
-const {text: nowText} = useClock()
+const { text: nowText } = useClock()
 
 const userMenu: UserMenuItem[] = [
-  {key: 'monitor', label: '返回前台', icon: 'monitor', tone: 'accent'},
-  {key: 'logout', label: '退出登录', icon: 'log-out', tone: 'danger'},
+  { key: 'monitor', label: '返回前台', icon: 'monitor', tone: 'accent' },
+  { key: 'logout', label: '退出登录', icon: 'log-out', tone: 'danger' },
 ]
 
 function onUserCommand(key: string) {
@@ -31,7 +31,11 @@ function onUserCommand(key: string) {
   ElMessage.info('退出登录不在本次示例范围内')
 }
 
-const activeKey = computed(() => (route.path.startsWith('/admin/devices') || route.path.startsWith('/admin/hierarchy') ? 'devices' : ''))
+const activeKey = computed(() =>
+  route.path.startsWith('/admin/devices') || route.path.startsWith('/admin/hierarchy')
+    ? 'devices'
+    : '',
+)
 
 function go(item: (typeof adminNav)[number]) {
   if (!item.to) {
@@ -57,7 +61,11 @@ function go(item: (typeof adminNav)[number]) {
       <div class="flex items-center gap-[22px]">
         <StatusTag tone="ok" label="后台服务正常" />
         <span class="text-[12px] text-muted">{{ nowText }}</span>
-        <button type="button" class="text-muted transition-colors hover:text-ink" aria-label="告警通知">
+        <button
+          type="button"
+          class="text-muted transition-colors hover:text-ink"
+          aria-label="告警通知"
+        >
           <AppIcon name="bell" :size="17" />
         </button>
         <ThemeToggle />

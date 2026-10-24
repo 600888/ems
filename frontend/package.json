@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "vue-tsc --noEmit"
+    "typecheck": "vue-tsc --noEmit",
+    "format": "prettier --write src vite.config.ts index.html",
+    "format:check": "prettier --check src vite.config.ts index.html"
   },
   "dependencies": {
     "@lucide/vue": "^1.61.0",
@@ -20,6 +22,7 @@
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "^26.6.5",
     "@vitejs/plugin-vue": "6.0.10",
+    "prettier": "3.6.2",
     "tailwindcss": "4.3.3",
     "typescript": "5.9.3",
     "vite": "8.3.5",

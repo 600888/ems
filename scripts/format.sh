@@ -58,7 +58,7 @@ find_clang_format() {
   # 优先无后缀版本，其次从高到低找带版本号的
   local candidates=(clang-format)
   local v
-  for v in 21 20 19 18 17 16 15 14; do
+  for v in 22 21 20 19 18 17 16 15 14; do
     candidates+=("clang-format-${v}")
   done
   local c
@@ -73,7 +73,7 @@ if ! CLANG_FORMAT_BIN="$(find_clang_format)"; then
 未找到 clang-format。请任选一种方式安装：
 
   pip  （推荐，跨平台且版本可控）
-      python -m pip install clang-format==21.1.8
+      python -m pip install clang-format==22.1.8
 
   Ubuntu / Debian
       sudo apt-get install -y clang-format

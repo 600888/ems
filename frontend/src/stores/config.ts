@@ -1,8 +1,8 @@
-import {computed, ref} from 'vue'
-import {defineStore} from 'pinia'
+import { computed, ref } from 'vue'
+import { defineStore } from 'pinia'
 
-import {bindings, diffRows, importRows, mappingRows, parseIssues} from '@/mocks/config'
-import type {BindingRow, DiffRow, ImportRow, MappingRow, ParseIssue} from '@/types/domain'
+import { bindings, diffRows, importRows, mappingRows, parseIssues } from '@/mocks/config'
+import type { BindingRow, DiffRow, ImportRow, MappingRow, ParseIssue } from '@/types/domain'
 
 export type MappingTab = 'all' | 'yc' | 'yx' | 'yk' | 'yt' | 'event'
 
@@ -41,7 +41,9 @@ export const useConfigStore = defineStore('config', () => {
   })
 
   const enabledCount = computed(() => mapping.value.filter((row) => row.state === 'enabled').length)
-  const disabledCount = computed(() => mapping.value.filter((row) => row.state === 'disabled').length)
+  const disabledCount = computed(
+    () => mapping.value.filter((row) => row.state === 'disabled').length,
+  )
 
   function setMappingTab(tab: MappingTab) {
     mappingTab.value = tab

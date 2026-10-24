@@ -1,4 +1,4 @@
-import type {DeviceNode, DeviceRow, SubNodeRow} from '@/types/domain'
+import type { DeviceNode, DeviceRow, SubNodeRow } from '@/types/domain'
 
 /** 后台设备层级树（画板 01–08） */
 export const adminTree: DeviceNode[] = [
@@ -61,13 +61,33 @@ export const adminTree: DeviceNode[] = [
                     icon: 'package',
                     status: 'online',
                     children: [
-                      {id: 'cell001', name: 'Cell 001', code: 'cell001', kind: 'component', icon: 'square'},
+                      {
+                        id: 'cell001',
+                        name: 'Cell 001',
+                        code: 'cell001',
+                        kind: 'component',
+                        icon: 'square',
+                      },
                     ],
                   },
-                  {id: 'pack02', name: 'Pack 02', code: 'pack02', kind: 'component', icon: 'package', status: 'online'},
+                  {
+                    id: 'pack02',
+                    name: 'Pack 02',
+                    code: 'pack02',
+                    kind: 'component',
+                    icon: 'package',
+                    status: 'online',
+                  },
                 ],
               },
-              {id: 'rack02', name: 'Rack 02', code: 'rack02', kind: 'component', icon: 'layers', status: 'online'},
+              {
+                id: 'rack02',
+                name: 'Rack 02',
+                code: 'rack02',
+                kind: 'component',
+                icon: 'layers',
+                status: 'online',
+              },
             ],
           },
           {
@@ -173,8 +193,22 @@ export const monitorTree: DeviceNode[] = [
                 icon: 'battery',
                 status: 'online',
                 children: [
-                  {id: 'pack01', name: '电池包 01', code: 'pack01', kind: 'component', icon: 'layers', status: 'online'},
-                  {id: 'pack02', name: '电池包 02', code: 'pack02', kind: 'component', icon: 'layers', status: 'online'},
+                  {
+                    id: 'pack01',
+                    name: '电池包 01',
+                    code: 'pack01',
+                    kind: 'component',
+                    icon: 'layers',
+                    status: 'online',
+                  },
+                  {
+                    id: 'pack02',
+                    name: '电池包 02',
+                    code: 'pack02',
+                    kind: 'component',
+                    icon: 'layers',
+                    status: 'online',
+                  },
                 ],
               },
               {
@@ -185,7 +219,14 @@ export const monitorTree: DeviceNode[] = [
                 icon: 'battery',
                 status: 'alarm',
               },
-              {id: 'cluster03', name: '电池簇 03', code: 'cluster03', kind: 'component', icon: 'battery', status: 'online'},
+              {
+                id: 'cluster03',
+                name: '电池簇 03',
+                code: 'cluster03',
+                kind: 'component',
+                icon: 'battery',
+                status: 'online',
+              },
             ],
           },
           {
@@ -208,10 +249,16 @@ export const monitorTree: DeviceNode[] = [
           },
         ],
       },
-      {id: 'unit02', name: '储能单元 02', code: 'ess000001-unit02', kind: 'unit', icon: 'boxes'},
-      {id: 'pv', name: '光伏单元', code: 'ess000001-pv', kind: 'unit', icon: 'sun'},
-      {id: 'charger', name: '充电桩单元', code: 'ess000001-charger', kind: 'unit', icon: 'plug-zap'},
-      {id: 'diesel', name: '柴发单元', code: 'ess000001-diesel', kind: 'unit', icon: 'fuel'},
+      { id: 'unit02', name: '储能单元 02', code: 'ess000001-unit02', kind: 'unit', icon: 'boxes' },
+      { id: 'pv', name: '光伏单元', code: 'ess000001-pv', kind: 'unit', icon: 'sun' },
+      {
+        id: 'charger',
+        name: '充电桩单元',
+        code: 'ess000001-charger',
+        kind: 'unit',
+        icon: 'plug-zap',
+      },
+      { id: 'diesel', name: '柴发单元', code: 'ess000001-diesel', kind: 'unit', icon: 'fuel' },
       {
         id: 'station-common',
         name: '站级公共设备',
@@ -315,10 +362,42 @@ export const deviceRows: DeviceRow[] = [
 
 /** 画板 08 电池簇子节点（配置字段：电芯数量 / 映射点位 / 点表模板 / 配置状态） */
 export const subNodes: SubNodeRow[] = [
-  {name: 'Pack 01', path: 'rack01 / pack01', cells: '52 Cell', mapped: '32 / 32', template: '电池包 v2', versionState: 'applied', source: 'bms01 → rack01'},
-  {name: 'Pack 02', path: 'rack01 / pack02', cells: '52 Cell', mapped: '32 / 32', template: '电池包 v2', versionState: 'applied', source: 'bms01 → rack01'},
-  {name: 'Pack 03', path: 'rack01 / pack03', cells: '52 Cell', mapped: '32 / 32', template: '电池包 v2', versionState: 'applied', source: 'bms01 → rack01'},
-  {name: 'Pack 04', path: 'rack01 / pack04', cells: '52 Cell', mapped: '30 / 32', template: '电池包 v2', versionState: 'draft', source: 'bms01 → rack01'},
+  {
+    name: 'Pack 01',
+    path: 'rack01 / pack01',
+    cells: '52 Cell',
+    mapped: '32 / 32',
+    template: '电池包 v2',
+    versionState: 'applied',
+    source: 'bms01 → rack01',
+  },
+  {
+    name: 'Pack 02',
+    path: 'rack01 / pack02',
+    cells: '52 Cell',
+    mapped: '32 / 32',
+    template: '电池包 v2',
+    versionState: 'applied',
+    source: 'bms01 → rack01',
+  },
+  {
+    name: 'Pack 03',
+    path: 'rack01 / pack03',
+    cells: '52 Cell',
+    mapped: '32 / 32',
+    template: '电池包 v2',
+    versionState: 'applied',
+    source: 'bms01 → rack01',
+  },
+  {
+    name: 'Pack 04',
+    path: 'rack01 / pack04',
+    cells: '52 Cell',
+    mapped: '30 / 32',
+    template: '电池包 v2',
+    versionState: 'draft',
+    source: 'bms01 → rack01',
+  },
 ]
 
 /** 设备类型下拉（画板 07 抽屉） */

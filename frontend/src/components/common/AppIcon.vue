@@ -80,7 +80,7 @@ import {
   X,
   Zap,
 } from '@lucide/vue'
-import {computed, type Component} from 'vue'
+import { computed, type Component } from 'vue'
 
 /** lucide 图标名 → 组件，名称与 .pen 设计文件中的 icon 字段一一对应 */
 const registry: Record<string, Component> = {
@@ -174,7 +174,7 @@ const props = withDefaults(
     /** 描边宽度，设计图为 1.75 */
     strokeWidth?: number
   }>(),
-  {size: 16, strokeWidth: 1.75},
+  { size: 16, strokeWidth: 1.75 },
 )
 
 const icon = computed(() => registry[props.name] ?? Square)

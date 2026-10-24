@@ -1,20 +1,20 @@
 <script setup lang="ts">
-import {ElMessage} from 'element-plus'
-import {useRouter} from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import ConfigSteps from '@/components/admin/ConfigSteps.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
-import {useConfigStore} from '@/stores/config'
+import { useConfigStore } from '@/stores/config'
 
 const router = useRouter()
 const config = useConfigStore()
 
 const diffChips = [
-  {label: '新增', value: 12, cls: 'bg-sel text-accent'},
-  {label: '修改', value: 4, cls: 'bg-warn-soft text-warn'},
-  {label: '禁用', value: 2, cls: 'bg-danger-soft text-danger'},
-  {label: '删除', value: 0, cls: 'bg-mute-soft text-muted'},
+  { label: '新增', value: 12, cls: 'bg-sel text-accent' },
+  { label: '修改', value: 4, cls: 'bg-warn-soft text-warn' },
+  { label: '禁用', value: 2, cls: 'bg-danger-soft text-danger' },
+  { label: '删除', value: 0, cls: 'bg-mute-soft text-muted' },
 ]
 
 const chipClass: Record<string, string> = {
@@ -84,17 +84,25 @@ function publish() {
       <div class="min-h-0 flex-1 overflow-y-auto">
         <div v-for="row in config.diffs" :key="row.item" class="dt-row h-[42px]">
           <div class="dt-cell w-[90px] shrink-0">
-            <span class="rounded-[4px] px-2 py-[3px] text-[10px] font-medium" :class="chipClass[row.type]">
+            <span
+              class="rounded-[4px] px-2 py-[3px] text-[10px] font-medium"
+              :class="chipClass[row.type]"
+            >
               {{ row.type }}
             </span>
           </div>
-          <div class="dt-cell min-w-0 flex-1 truncate text-[11px] font-medium text-ink">{{ row.item }}</div>
-          <div class="dt-cell w-[200px] shrink-0 truncate text-[10px] text-muted">{{ row.current }}</div>
+          <div class="dt-cell min-w-0 flex-1 truncate text-[11px] font-medium text-ink">
+            {{ row.item }}
+          </div>
+          <div class="dt-cell w-[200px] shrink-0 truncate text-[10px] text-muted">
+            {{ row.current }}
+          </div>
           <div class="dt-cell w-[220px] shrink-0 truncate text-[10px] text-ink">{{ row.next }}</div>
-          <div class="dt-cell w-[160px] shrink-0 truncate text-[10px] text-muted">{{ row.impact }}</div>
+          <div class="dt-cell w-[160px] shrink-0 truncate text-[10px] text-muted">
+            {{ row.impact }}
+          </div>
         </div>
       </div>
-
     </section>
 
     <!-- 发布与应用过程 -->
@@ -155,7 +163,9 @@ function publish() {
     </section>
 
     <!-- 底部操作 -->
-    <div class="flex shrink-0 items-center gap-3 rounded-[6px] border border-line bg-panel px-4 py-2">
+    <div
+      class="flex shrink-0 items-center gap-3 rounded-[6px] border border-line bg-panel px-4 py-2"
+    >
       <span class="text-[10px] text-muted">发布将生成不可变版本；历史回滚通过新版本完成</span>
       <div class="flex-1" />
       <button

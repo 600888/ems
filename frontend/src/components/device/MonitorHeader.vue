@@ -1,9 +1,9 @@
 <script setup lang="ts">
-import {ElMessage} from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
-import {useMonitorStore} from '@/stores/monitor'
+import { useMonitorStore } from '@/stores/monitor'
 
 const monitor = useMonitorStore()
 </script>
@@ -14,10 +14,24 @@ const monitor = useMonitorStore()
       <span class="truncate text-[11px] text-muted">{{ monitor.profile.parentPath }}</span>
       <div class="flex items-center gap-[10px]">
         <AppIcon :name="monitor.profile.icon" :size="20" class="text-muted" />
-        <h2 class="truncate text-[21px] leading-none font-semibold text-ink">{{ monitor.profile.name }}</h2>
+        <h2 class="truncate text-[21px] leading-none font-semibold text-ink">
+          {{ monitor.profile.name }}
+        </h2>
         <StatusTag
-          :tone="monitor.profile.status === 'alarm' ? 'warn' : monitor.profile.status === 'offline' ? 'mute' : 'ok'"
-          :label="monitor.profile.status === 'alarm' ? '告警' : monitor.profile.status === 'offline' ? '离线' : '在线'"
+          :tone="
+            monitor.profile.status === 'alarm'
+              ? 'warn'
+              : monitor.profile.status === 'offline'
+                ? 'mute'
+                : 'ok'
+          "
+          :label="
+            monitor.profile.status === 'alarm'
+              ? '告警'
+              : monitor.profile.status === 'offline'
+                ? '离线'
+                : '在线'
+          "
         />
       </div>
     </div>

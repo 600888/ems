@@ -1,24 +1,24 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import { computed } from 'vue'
 
 import InfoBar from '@/components/common/InfoBar.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
-import {useDeviceStore} from '@/stores/device'
+import { useDeviceStore } from '@/stores/device'
 
 const device = useDeviceStore()
 const row = computed(() => device.currentRow)
 
 const capabilities = [
-  {name: '运行监视', available: true, desc: '功率、状态及故障反馈已配置'},
-  {name: '有功调度', available: true, desc: '双向功率设定与反馈已验收'},
-  {name: '无功调节', available: false, desc: '型号不支持，相关点位已显式禁用'},
+  { name: '运行监视', available: true, desc: '功率、状态及故障反馈已配置' },
+  { name: '有功调度', available: true, desc: '双向功率设定与反馈已验收' },
+  { name: '无功调节', available: false, desc: '型号不支持，相关点位已显式禁用' },
 ]
 
 /** 配置口径摘要：后台不展示采集读数 */
 const configMetrics = [
-  {label: '固有点位', value: '26', unit: '项'},
-  {label: '映射覆盖率', value: '93.1', unit: '%'},
-  {label: '待发布草稿', value: '1', unit: '项'},
+  { label: '固有点位', value: '26', unit: '项' },
+  { label: '映射覆盖率', value: '93.1', unit: '%' },
+  { label: '待发布草稿', value: '1', unit: '项' },
 ]
 </script>
 
@@ -83,7 +83,10 @@ const configMetrics = [
         <div v-for="(item, index) in capabilities" :key="item.name" class="flex flex-col gap-[7px]">
           <div class="flex items-center justify-between">
             <span class="text-[12px] text-ink">{{ item.name }}</span>
-            <StatusTag :tone="item.available ? 'ok' : 'mute'" :label="item.available ? '可用' : '不可用'" />
+            <StatusTag
+              :tone="item.available ? 'ok' : 'mute'"
+              :label="item.available ? '可用' : '不可用'"
+            />
           </div>
           <p class="text-[10px] text-muted">{{ item.desc }}</p>
           <div v-if="index < capabilities.length - 1" class="h-px w-full bg-line" />

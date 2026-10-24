@@ -1,17 +1,17 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import { computed } from 'vue'
 
 import AppIcon from '@/components/common/AppIcon.vue'
-import {useMonitorStore, type MonitorScope} from '@/stores/monitor'
-import type {DeviceNode} from '@/types/domain'
+import { useMonitorStore, type MonitorScope } from '@/stores/monitor'
+import type { DeviceNode } from '@/types/domain'
 
 const monitor = useMonitorStore()
 const tree = computed(() => monitor.filteredTree)
 
-const scopes: {key: MonitorScope; label: string}[] = [
-  {key: 'all', label: '全部'},
-  {key: 'alarm', label: '异常'},
-  {key: 'offline', label: '离线'},
+const scopes: { key: MonitorScope; label: string }[] = [
+  { key: 'all', label: '全部' },
+  { key: 'alarm', label: '异常' },
+  { key: 'offline', label: '离线' },
 ]
 
 const scopeCount = computed(() => ({
@@ -47,7 +47,12 @@ function onNodeClick(data: DeviceNode) {
       <AppIcon name="panel-left-close" :size="15" class="text-muted" />
     </div>
 
-    <el-input v-model="monitor.keyword" class="ctl search-input mt-1" placeholder="搜索设备名称 / 编码" clearable>
+    <el-input
+      v-model="monitor.keyword"
+      class="ctl search-input mt-1"
+      placeholder="搜索设备名称 / 编码"
+      clearable
+    >
       <template #prefix>
         <AppIcon name="search" :size="14" class="text-subtle" />
       </template>
@@ -77,7 +82,7 @@ function onNodeClick(data: DeviceNode) {
         class="ems-tree"
         :data="tree"
         node-key="id"
-        :props="{label: 'name', children: 'children'}"
+        :props="{ label: 'name', children: 'children' }"
         :indent="13"
         :default-expanded-keys="['ess000001', 'unit01', 'bms01', 'cluster01']"
         :current-node-key="monitor.selectedId"
@@ -85,7 +90,7 @@ function onNodeClick(data: DeviceNode) {
         :expand-on-click-node="false"
         @node-click="onNodeClick"
       >
-        <template #default="{node, data}">
+        <template #default="{ node, data }">
           <div class="flex w-full min-w-0 items-center gap-[6px]">
             <button
               v-if="hasChildren(data as DeviceNode)"
@@ -108,7 +113,11 @@ function onNodeClick(data: DeviceNode) {
               {{ data.name }}
             </span>
             <div class="flex-1" />
-            <i v-if="(data as DeviceNode).status" class="dot" :class="dotClass((data as DeviceNode).status)" />
+            <i
+              v-if="(data as DeviceNode).status"
+              class="dot"
+              :class="dotClass((data as DeviceNode).status)"
+            />
           </div>
         </template>
       </el-tree>

@@ -1,30 +1,30 @@
 <script setup lang="ts">
-import {ElMessage} from 'element-plus'
-import {useRouter} from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import ConfigSteps from '@/components/admin/ConfigSteps.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import UnderlineTabs from '@/components/common/UnderlineTabs.vue'
-import {useConfigStore, type MappingTab} from '@/stores/config'
-import type {TabItem} from '@/types/ui'
+import { useConfigStore, type MappingTab } from '@/stores/config'
+import type { TabItem } from '@/types/ui'
 
 const router = useRouter()
 const config = useConfigStore()
 
 const tabs: TabItem[] = [
-  {key: 'all', label: '全部', count: config.mappingCounts.all},
-  {key: 'yc', label: '遥测', count: config.mappingCounts.yc},
-  {key: 'yx', label: '状态', count: config.mappingCounts.yx},
-  {key: 'event', label: '事件', count: config.mappingCounts.event},
-  {key: 'yk', label: '命令', count: config.mappingCounts.yk},
+  { key: 'all', label: '全部', count: config.mappingCounts.all },
+  { key: 'yc', label: '遥测', count: config.mappingCounts.yc },
+  { key: 'yx', label: '状态', count: config.mappingCounts.yx },
+  { key: 'event', label: '事件', count: config.mappingCounts.event },
+  { key: 'yk', label: '命令', count: config.mappingCounts.yk },
 ]
 
 const dependencies = [
-  {name: '运行监视', available: true},
-  {name: '有功调度', available: true},
-  {name: '无功调节', available: false},
+  { name: '运行监视', available: true },
+  { name: '有功调度', available: true },
+  { name: '无功调节', available: false },
 ]
 </script>
 
@@ -78,7 +78,9 @@ const dependencies = [
             <span class="truncate text-[11px] font-semibold text-ink">{{ row.name }}</span>
             <span class="truncate font-mono text-[9px] text-subtle">{{ row.code }}</span>
           </div>
-          <div class="dt-cell w-[110px] shrink-0 text-[11px] text-ink">{{ row.kind }} / {{ row.unit }}</div>
+          <div class="dt-cell w-[110px] shrink-0 text-[11px] text-ink">
+            {{ row.kind }} / {{ row.unit }}
+          </div>
           <div class="dt-cell w-[100px] shrink-0">
             <StatusTag
               :tone="row.state === 'enabled' ? 'ok' : 'mute'"
@@ -86,9 +88,15 @@ const dependencies = [
               :dot="false"
             />
           </div>
-          <div class="dt-cell w-[160px] shrink-0 truncate text-[11px] text-ink">{{ row.source }}</div>
-          <div class="dt-cell w-[160px] shrink-0 truncate text-[10px] text-muted">{{ row.transform }}</div>
-          <div class="dt-cell w-[150px] shrink-0 truncate text-[10px] text-muted">{{ row.feedback }}</div>
+          <div class="dt-cell w-[160px] shrink-0 truncate text-[11px] text-ink">
+            {{ row.source }}
+          </div>
+          <div class="dt-cell w-[160px] shrink-0 truncate text-[10px] text-muted">
+            {{ row.transform }}
+          </div>
+          <div class="dt-cell w-[150px] shrink-0 truncate text-[10px] text-muted">
+            {{ row.feedback }}
+          </div>
           <div class="dt-cell w-[80px] shrink-0">
             <span class="text-[10px] text-ok">✓ 通过</span>
           </div>
@@ -101,7 +109,9 @@ const dependencies = [
 
       <div class="flex shrink-0 items-center gap-2 border-t border-line px-4 py-3">
         <AppIcon name="info" :size="14" class="text-accent" />
-        <p class="text-[10px] text-muted">启停字共用寄存器，已声明互斥执行资源；禁用点位保留定义与原因。</p>
+        <p class="text-[10px] text-muted">
+          启停字共用寄存器，已声明互斥执行资源；禁用点位保留定义与原因。
+        </p>
       </div>
     </section>
 
@@ -120,7 +130,9 @@ const dependencies = [
     </section>
 
     <!-- 底部操作 -->
-    <div class="flex shrink-0 items-center gap-3 rounded-[6px] border border-line bg-panel px-4 py-[10px]">
+    <div
+      class="flex shrink-0 items-center gap-3 rounded-[6px] border border-line bg-panel px-4 py-[10px]"
+    >
       <span class="text-[10px] text-muted">标准读取与控制命令分别绑定；当前仅为配置草稿</span>
       <div class="flex-1" />
       <button

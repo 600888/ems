@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import {ElMessage} from 'element-plus'
-import {useRouter} from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
 import ConfigSteps from '@/components/admin/ConfigSteps.vue'
-import {useConfigStore} from '@/stores/config'
+import { useConfigStore } from '@/stores/config'
 
 const router = useRouter()
 const config = useConfigStore()
@@ -76,10 +76,14 @@ function next() {
           </div>
 
           <!-- 预览表格 -->
-          <div class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[6px] border border-line">
+          <div
+            class="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[6px] border border-line"
+          >
             <div class="flex h-9 shrink-0 items-center justify-between bg-thead px-3">
               <span class="text-[11px] font-medium text-ink">厂家点表预览</span>
-              <span class="text-[10px] text-ok">124 行通过 / <span class="text-warn">4 行需确认</span></span>
+              <span class="text-[10px] text-ok"
+                >124 行通过 / <span class="text-warn">4 行需确认</span></span
+              >
             </div>
 
             <div class="dt-head">
@@ -94,12 +98,19 @@ function next() {
             <div class="min-h-0 flex-1 overflow-y-auto">
               <div v-for="row in config.importPreview" :key="row.row" class="dt-row h-[40px]">
                 <div class="w-10 shrink-0 text-[10px] text-subtle">{{ row.row }}</div>
-                <div class="dt-cell min-w-0 flex-1 truncate text-[11px] text-ink">{{ row.name }}</div>
-                <div class="dt-cell w-[130px] shrink-0 text-[10px] text-muted">{{ row.access }}</div>
+                <div class="dt-cell min-w-0 flex-1 truncate text-[11px] text-ink">
+                  {{ row.name }}
+                </div>
+                <div class="dt-cell w-[130px] shrink-0 text-[10px] text-muted">
+                  {{ row.access }}
+                </div>
                 <div class="dt-cell w-[130px] shrink-0 text-[10px] text-muted">{{ row.type }}</div>
                 <div class="dt-cell w-[110px] shrink-0 text-[10px] text-muted">{{ row.unit }}</div>
                 <div class="dt-cell w-[90px] shrink-0">
-                  <span class="text-[10px]" :class="row.result === 'pass' ? 'text-ok' : 'text-warn'">
+                  <span
+                    class="text-[10px]"
+                    :class="row.result === 'pass' ? 'text-ok' : 'text-warn'"
+                  >
                     {{ row.result === 'pass' ? '通过' : '待确认' }}
                   </span>
                 </div>
@@ -126,16 +137,24 @@ function next() {
           </div>
 
           <div class="h-px w-full bg-line" />
-          <p class="text-[10px] leading-[1.6] text-subtle">修正全部必填项后可继续映射。未发布前不影响运行。</p>
+          <p class="text-[10px] leading-[1.6] text-subtle">
+            修正全部必填项后可继续映射。未发布前不影响运行。
+          </p>
         </div>
       </section>
     </div>
 
     <!-- 底部操作 -->
-    <div class="flex shrink-0 items-center gap-3 rounded-[6px] border border-line bg-panel px-4 py-[10px]">
+    <div
+      class="flex shrink-0 items-center gap-3 rounded-[6px] border border-line bg-panel px-4 py-[10px]"
+    >
       <AppIcon name="info" :size="14" :class="config.blockedCount > 0 ? 'text-warn' : 'text-ok'" />
       <span class="text-[11px]" :class="config.blockedCount > 0 ? 'text-warn' : 'text-ok'">
-        {{ config.blockedCount > 0 ? `尚有 ${config.blockedCount} 项需确认 · 请修正后继续` : '解析检查已全部通过' }}
+        {{
+          config.blockedCount > 0
+            ? `尚有 ${config.blockedCount} 项需确认 · 请修正后继续`
+            : '解析检查已全部通过'
+        }}
       </span>
       <div class="flex-1" />
       <button

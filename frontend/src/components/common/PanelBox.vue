@@ -11,7 +11,7 @@ withDefaults(
     /** 内容区是否去掉内边距 */
     flush?: boolean
   }>(),
-  {fill: false, flush: false},
+  { fill: false, flush: false },
 )
 </script>
 

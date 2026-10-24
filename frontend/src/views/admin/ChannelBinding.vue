@@ -1,25 +1,25 @@
 <script setup lang="ts">
-import {ElMessage} from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
-import {useConfigStore} from '@/stores/config'
+import { useConfigStore } from '@/stores/config'
 
 const config = useConfigStore()
 
 const details = [
-  {label: '连接目标（示例）', value: '192.0.2.10 : 502'},
-  {label: '共享通信资源', value: 'res01 · PCS 采集网口'},
-  {label: '轮询周期 / 超时', value: '1,000 ms / 3,000 ms'},
-  {label: '采集 / 控制', value: 'telemetry_in / control_out'},
+  { label: '连接目标（示例）', value: '192.0.2.10 : 502' },
+  { label: '共享通信资源', value: 'res01 · PCS 采集网口' },
+  { label: '轮询周期 / 超时', value: '1,000 ms / 3,000 ms' },
+  { label: '采集 / 控制', value: 'telemetry_in / control_out' },
 ]
 
 /** 通道配置参数，取代运行期的通信健康度 */
 const channelParams = [
-  {label: '功能码', value: '03', tone: 'text-accent'},
-  {label: '响应超时', value: '1,000 ms', tone: 'text-accent'},
-  {label: '重试次数', value: '3 次', tone: 'text-accent'},
+  { label: '功能码', value: '03', tone: 'text-accent' },
+  { label: '响应超时', value: '1,000 ms', tone: 'text-accent' },
+  { label: '重试次数', value: '3 次', tone: 'text-accent' },
 ]
 </script>
 
@@ -64,11 +64,16 @@ const channelParams = [
           </div>
           <div class="dt-cell w-[122px] shrink-0 text-[11px] text-ink">{{ row.address }}</div>
           <div class="dt-cell w-[190px] shrink-0">
-            <StatusTag :tone="row.state === 'enabled' ? 'ok' : 'mute'" :label="row.state === 'enabled' ? '已启用' : '已停用'" />
+            <StatusTag
+              :tone="row.state === 'enabled' ? 'ok' : 'mute'"
+              :label="row.state === 'enabled' ? '已启用' : '已停用'"
+            />
           </div>
           <div class="dt-cell w-[138px] shrink-0 text-[11px] text-ink">{{ row.version }}</div>
           <div class="dt-cell flex min-w-0 flex-1 items-center">
-            <span class="link-action" @click="ElMessage.info('通道编辑不在本次示例范围内')">编辑</span>
+            <span class="link-action" @click="ElMessage.info('通道编辑不在本次示例范围内')"
+              >编辑</span
+            >
           </div>
         </div>
       </div>
@@ -97,7 +102,11 @@ const channelParams = [
           <h3 class="text-[14px] font-semibold text-ink">通信参数</h3>
           <span class="text-[11px] text-muted">ch01 · 主采集</span>
         </div>
-        <div v-for="item in channelParams" :key="item.label" class="flex items-center justify-between">
+        <div
+          v-for="item in channelParams"
+          :key="item.label"
+          class="flex items-center justify-between"
+        >
           <span class="text-[11px] text-muted">{{ item.label }}</span>
           <span class="text-[13px] font-medium" :class="item.tone">{{ item.value }}</span>
         </div>

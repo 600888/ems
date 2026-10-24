@@ -6,8 +6,8 @@
 
 @theme inline {
   --font-sans:
-    'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', system-ui,
-    -apple-system, 'Segoe UI', sans-serif;
+    'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', system-ui, -apple-system,
+    'Segoe UI', sans-serif;
   --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
 
   --color-surface: var(--c-bg);

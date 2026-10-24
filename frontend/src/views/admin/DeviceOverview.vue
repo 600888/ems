@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import {computed, onMounted, ref} from 'vue'
-import {useRoute, useRouter} from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import UnderlineTabs from '@/components/common/UnderlineTabs.vue'
 import AdminDeviceTree from '@/components/device/AdminDeviceTree.vue'
-import {useDeviceStore} from '@/stores/device'
+import { useDeviceStore } from '@/stores/device'
 
 const router = useRouter()
 const route = useRoute()
@@ -19,17 +19,45 @@ onMounted(() => {
 })
 
 const tabs = [
-  {key: 'list', label: '设备与部件  12'},
-  {key: 'tree', label: '设备层级'},
-  {key: 'log', label: '配置记录'},
+  { key: 'list', label: '设备与部件  12' },
+  { key: 'tree', label: '设备层级' },
+  { key: 'log', label: '配置记录' },
 ]
 const activeTab = ref('list')
 
 const stats = [
-  {label: '直属节点', value: '12', unit: '项', note: '当前层级 · 设备与部件', icon: 'hard-drive', tone: 'text-accent'},
-  {label: '固有点位映射', value: '268', unit: '项', note: '共 288 项 · 覆盖率 93.1%', icon: 'list-checks', tone: 'text-accent'},
-  {label: '待补充点位', value: '20', unit: '项', note: '2 台设备存在缺失点位', icon: 'unlink', tone: 'text-warn'},
-  {label: '待发布配置', value: '02', unit: '项', note: '草稿尚未影响运行', icon: 'file-clock', tone: 'text-accent'},
+  {
+    label: '直属节点',
+    value: '12',
+    unit: '项',
+    note: '当前层级 · 设备与部件',
+    icon: 'hard-drive',
+    tone: 'text-accent',
+  },
+  {
+    label: '固有点位映射',
+    value: '268',
+    unit: '项',
+    note: '共 288 项 · 覆盖率 93.1%',
+    icon: 'list-checks',
+    tone: 'text-accent',
+  },
+  {
+    label: '待补充点位',
+    value: '20',
+    unit: '项',
+    note: '2 台设备存在缺失点位',
+    icon: 'unlink',
+    tone: 'text-warn',
+  },
+  {
+    label: '待发布配置',
+    value: '02',
+    unit: '项',
+    note: '草稿尚未影响运行',
+    icon: 'file-clock',
+    tone: 'text-accent',
+  },
 ]
 
 const allChecked = computed(
@@ -74,7 +102,9 @@ function openRow(id: string, action: string) {
             <AppIcon :name="item.icon" :size="13" :class="item.tone" />
           </div>
           <div class="flex items-baseline gap-[7px]">
-            <span class="text-[26px] leading-none font-semibold" :class="item.tone">{{ item.value }}</span>
+            <span class="text-[26px] leading-none font-semibold" :class="item.tone">{{
+              item.value
+            }}</span>
             <span class="text-[10px] text-muted">{{ item.unit }}</span>
           </div>
           <p class="truncate text-[9px] text-subtle">{{ item.note }}</p>
@@ -112,7 +142,12 @@ function openRow(id: string, action: string) {
             :model-value="device.configFilter"
             @update:model-value="device.setConfigState($event)"
           >
-            <el-option v-for="item in device.configOptions" :key="item" :label="item" :value="item" />
+            <el-option
+              v-for="item in device.configOptions"
+              :key="item"
+              :label="item"
+              :value="item"
+            />
           </el-select>
 
           <div class="flex-1" />
@@ -199,9 +234,13 @@ function openRow(id: string, action: string) {
               >
                 {{ row.version }}
               </div>
-              <div class="dt-cell flex w-[194px] shrink-0 items-center gap-2 text-[11px] text-accent">
+              <div
+                class="dt-cell flex w-[194px] shrink-0 items-center gap-2 text-[11px] text-accent"
+              >
                 <template v-for="(action, index) in row.actions" :key="action">
-                  <span class="cursor-pointer hover:underline" @click="openRow(row.id, action)">{{ action }}</span>
+                  <span class="cursor-pointer hover:underline" @click="openRow(row.id, action)">{{
+                    action
+                  }}</span>
                   <span v-if="index < row.actions.length - 1" class="text-subtle">·</span>
                 </template>
               </div>
@@ -244,10 +283,18 @@ function openRow(id: string, action: string) {
         <article class="panel flex min-w-0 flex-1 flex-col gap-3 px-4 py-4">
           <div class="flex items-center justify-between">
             <h3 class="text-[12px] font-semibold text-ink">配置应用状态</h3>
-            <span class="link-action text-[10px]" @click="router.push('/admin/devices/pcs01/release')">查看版本 →</span>
+            <span
+              class="link-action text-[10px]"
+              @click="router.push('/admin/devices/pcs01/release')"
+              >查看版本 →</span
+            >
           </div>
           <div class="flex justify-between">
-            <div v-for="stage in ['已发布', '采集已应用', '策略已应用']" :key="stage" class="flex flex-col gap-[6px]">
+            <div
+              v-for="stage in ['已发布', '采集已应用', '策略已应用']"
+              :key="stage"
+              class="flex flex-col gap-[6px]"
+            >
               <span class="text-[10px] text-muted">{{ stage }}</span>
               <span class="text-[13px] font-medium text-ok">✓ v12</span>
             </div>

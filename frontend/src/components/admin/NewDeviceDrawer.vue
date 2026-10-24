@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import {computed, reactive} from 'vue'
-import {ElMessage} from 'element-plus'
+import { computed, reactive } from 'vue'
+import { ElMessage } from 'element-plus'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
-import {deviceTypeOptions} from '@/mocks/devices'
-import {useDeviceStore} from '@/stores/device'
+import { deviceTypeOptions } from '@/mocks/devices'
+import { useDeviceStore } from '@/stores/device'
 
 const device = useDeviceStore()
 
@@ -96,7 +96,12 @@ function submit() {
           <div class="grid grid-cols-2 gap-4">
             <el-form-item label="设备类型 *">
               <el-select v-model="form.type" class="ctl w-full">
-                <el-option v-for="item in deviceTypeOptions" :key="item" :label="item" :value="item" />
+                <el-option
+                  v-for="item in deviceTypeOptions"
+                  :key="item"
+                  :label="item"
+                  :value="item"
+                />
               </el-select>
             </el-form-item>
             <el-form-item label="父级节点 *">
@@ -137,8 +142,14 @@ function submit() {
         <div class="flex flex-col gap-[7px]">
           <span class="text-[11px] text-muted">点表初始化</span>
           <el-select v-model="form.template" class="ctl w-full">
-            <el-option label="复用型号模板 · PCS-125K / v2.3" value="复用型号模板 · PCS-125K / v2.3" />
-            <el-option label="复用型号模板 · BMS-215 / v1.8" value="复用型号模板 · BMS-215 / v1.8" />
+            <el-option
+              label="复用型号模板 · PCS-125K / v2.3"
+              value="复用型号模板 · PCS-125K / v2.3"
+            />
+            <el-option
+              label="复用型号模板 · BMS-215 / v1.8"
+              value="复用型号模板 · BMS-215 / v1.8"
+            />
             <el-option label="不初始化，稍后导入点表" value="不初始化，稍后导入点表" />
           </el-select>
           <p class="text-[10px] text-subtle">模板仅复用点表与映射，实际通信通道需单独绑定。</p>

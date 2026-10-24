@@ -1,5 +1,5 @@
-import type {DeviceNode, DeviceRow} from '@/types/domain'
-import {adminTree, deviceRows} from '@/mocks/devices'
+import type { DeviceNode, DeviceRow } from '@/types/domain'
+import { adminTree, deviceRows } from '@/mocks/devices'
 
 /** 模拟接口耗时，接真实后端时替换为 http 请求 */
 const MOCK_DELAY = 160

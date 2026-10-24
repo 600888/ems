@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import {computed} from 'vue'
+import { computed } from 'vue'
 import AppIcon from './AppIcon.vue'
 
 /** 操作层级：主操作 / 次操作 / 不可用（画板 09） */
@@ -13,7 +13,7 @@ const props = withDefaults(
     /** 不可用原因，给出时以 tooltip 说明（设计规范要求禁用须说明原因） */
     disabledReason?: string
   }>(),
-  {variant: 'secondary', size: 'md'},
+  { variant: 'secondary', size: 'md' },
 )
 
 const variantClass = computed(
@@ -26,11 +26,18 @@ const variantClass = computed(
     })[props.variant],
 )
 
-const sizeClass = computed(() => (props.size === 'md' ? 'h-[38px] px-[14px] text-[13px]' : 'h-[34px] px-3 text-[12px]'))
+const sizeClass = computed(() =>
+  props.size === 'md' ? 'h-[38px] px-[14px] text-[13px]' : 'h-[34px] px-3 text-[12px]',
+)
 </script>
 
 <template>
-  <el-tooltip v-if="disabled && disabledReason" :content="disabledReason" placement="top" :show-after="120">
+  <el-tooltip
+    v-if="disabled && disabledReason"
+    :content="disabledReason"
+    placement="top"
+    :show-after="120"
+  >
     <span class="inline-flex">
       <button
         type="button"

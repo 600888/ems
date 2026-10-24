@@ -13,6 +13,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+# 中文 MSVC 的 /showIncludes 输出需与 CMake 的检测编码一致，否则 Ninja 会漏记头文件依赖。
+$previousCodePage = (& chcp.com) -replace '\D', ''
+& chcp.com 65001 | Out-Null
 $backendDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'backend'
 $preset = "windows-$Toolchain"
 $buildDir = Join-Path $backendDir "build/$preset"
@@ -42,4 +45,5 @@ try {
     }
 } finally {
     Pop-Location
+    if ($previousCodePage) { & chcp.com $previousCodePage | Out-Null }
 }

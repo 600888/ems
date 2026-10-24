@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import {computed} from 'vue'
-import {ElMessage} from 'element-plus'
-import {useRouter} from 'vue-router'
+import { computed } from 'vue'
+import { ElMessage } from 'element-plus'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import LineChart from '@/components/charts/LineChart.vue'
-import {useMonitorStore} from '@/stores/monitor'
-import type {ChartSeries} from '@/types/ui'
+import { useMonitorStore } from '@/stores/monitor'
+import type { ChartSeries } from '@/types/ui'
 
 const router = useRouter()
 const monitor = useMonitorStore()
@@ -18,24 +18,32 @@ const tempMax = computed(() => monitor.ycList.find((point) => point.code === 'ce
 const tempMin = computed(() => monitor.ycList.find((point) => point.code === 'cell_temp_min'))
 
 const socSeries = computed<ChartSeries[]>(() => [
-  {name: 'SOC', color: 'var(--c-accent)', values: socPoint.value?.series ?? []},
+  { name: 'SOC', color: 'var(--c-accent)', values: socPoint.value?.series ?? [] },
 ])
 
 const tempSeries = computed<ChartSeries[]>(() => [
-  {name: '最高单体温度', color: 'var(--c-accent)', values: tempMax.value?.series ?? []},
-  {name: '最低单体温度', color: 'var(--c-brand)', values: tempMin.value?.series ?? []},
+  { name: '最高单体温度', color: 'var(--c-accent)', values: tempMax.value?.series ?? [] },
+  { name: '最低单体温度', color: 'var(--c-brand)', values: tempMin.value?.series ?? [] },
 ])
 
 function stats(values: number[] | undefined) {
-  if (!values || !values.length) return {min: '—', max: '—', avg: '—', last: '—'}
+  if (!values || !values.length) return { min: '—', max: '—', avg: '—', last: '—' }
   const min = Math.min(...values)
   const max = Math.max(...values)
   const avg = values.reduce((sum, value) => sum + value, 0) / values.length
-  return {min: min.toFixed(1), max: max.toFixed(1), avg: avg.toFixed(1), last: values[values.length - 1].toFixed(1)}
+  return {
+    min: min.toFixed(1),
+    max: max.toFixed(1),
+    avg: avg.toFixed(1),
+    last: values[values.length - 1].toFixed(1),
+  }
 }
 
 const socStats = computed(() => stats(socPoint.value?.series))
-const tempStats = computed(() => ({...stats(tempMax.value?.series), min: stats(tempMin.value?.series).last}))
+const tempStats = computed(() => ({
+  ...stats(tempMax.value?.series),
+  min: stats(tempMin.value?.series).last,
+}))
 
 const chips = computed(() =>
   monitor.selectedYcCodes
@@ -73,7 +81,9 @@ function removePoint(code: string) {
 
       <span class="flex items-center gap-[6px] text-[11px]">
         <i class="dot" :class="monitor.paused ? 'text-warn' : 'text-ok'" />
-        <span :class="monitor.paused ? 'text-warn' : 'text-ok'">{{ monitor.paused ? '已暂停' : '实时采样中' }}</span>
+        <span :class="monitor.paused ? 'text-warn' : 'text-ok'">{{
+          monitor.paused ? '已暂停' : '实时采样中'
+        }}</span>
       </span>
       <span class="text-[11px] text-muted">14:02:08 – {{ monitor.lastUpdated }}</span>
 
@@ -96,7 +106,11 @@ function removePoint(code: string) {
         class="flex items-center gap-[6px] rounded-[4px] bg-sel px-[9px] py-1 text-[11px] text-accent"
       >
         {{ point.name }}
-        <button type="button" class="text-accent/70 hover:text-accent" @click="removePoint(point.code)">
+        <button
+          type="button"
+          class="text-accent/70 hover:text-accent"
+          @click="removePoint(point.code)"
+        >
           <AppIcon name="x" :size="11" />
         </button>
       </span>
@@ -116,10 +130,18 @@ function removePoint(code: string) {
       <div class="panel-bar">
         <h3 class="text-[14px] font-semibold text-ink">SOC · %</h3>
         <div class="flex items-center gap-[14px] text-[11px] text-muted">
-          <span>最新 <span class="text-accent">{{ socStats.last }}</span></span>
-          <span>最小 <span class="text-ink">{{ socStats.min }}</span></span>
-          <span>最大 <span class="text-ink">{{ socStats.max }}</span></span>
-          <span>平均 <span class="text-ink">{{ socStats.avg }}</span></span>
+          <span
+            >最新 <span class="text-accent">{{ socStats.last }}</span></span
+          >
+          <span
+            >最小 <span class="text-ink">{{ socStats.min }}</span></span
+          >
+          <span
+            >最大 <span class="text-ink">{{ socStats.max }}</span></span
+          >
+          <span
+            >平均 <span class="text-ink">{{ socStats.avg }}</span></span
+          >
         </div>
       </div>
       <div class="flex min-h-0 flex-1 px-[14px] py-3">

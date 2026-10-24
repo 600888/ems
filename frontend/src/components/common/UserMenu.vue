@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import {ref} from 'vue'
+import { ref } from 'vue'
 
 import AppIcon from '@/components/common/AppIcon.vue'
-import type {UserMenuItem} from '@/types/ui'
+import type { UserMenuItem } from '@/types/ui'
 
 const props = defineProps<{
   /** 账号显示名，如 值班员 / 管理员 */
@@ -12,9 +12,9 @@ const props = defineProps<{
   items: UserMenuItem[]
 }>()
 
-const emit = defineEmits<{select: [key: string]}>()
+const emit = defineEmits<{ select: [key: string] }>()
 
-const dropdownRef = ref<{handleClose: () => void}>()
+const dropdownRef = ref<{ handleClose: () => void }>()
 const open = ref(false)
 
 function pick(key: string) {
@@ -71,10 +71,7 @@ function pick(key: string) {
             :size="15"
             :class="item.tone === 'danger' ? 'text-danger' : 'text-accent'"
           />
-          <span
-            class="text-[13px]"
-            :class="item.tone === 'danger' ? 'text-danger' : 'text-ink'"
-          >
+          <span class="text-[13px]" :class="item.tone === 'danger' ? 'text-danger' : 'text-ink'">
             {{ item.label }}
           </span>
         </button>

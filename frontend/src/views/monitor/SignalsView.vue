@@ -1,10 +1,10 @@
 <script setup lang="ts">
-import {computed, ref} from 'vue'
+import { computed, ref } from 'vue'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
-import {yxChanges} from '@/mocks/points'
-import {useMonitorStore} from '@/stores/monitor'
+import { yxChanges } from '@/mocks/points'
+import { useMonitorStore } from '@/stores/monitor'
 
 const monitor = useMonitorStore()
 const onlyAbnormal = ref(false)
@@ -13,13 +13,18 @@ const rows = computed(() =>
   onlyAbnormal.value ? monitor.yxList.filter((row) => row.level !== 'normal') : monitor.yxList,
 )
 
-const levelClass = {normal: 'text-ok', warn: 'text-warn', danger: 'text-danger', unknown: 'text-muted'} as const
+const levelClass = {
+  normal: 'text-ok',
+  warn: 'text-warn',
+  danger: 'text-danger',
+  unknown: 'text-muted',
+} as const
 
 const alarmFields = [
-  {label: '告警等级', value: '一级预警'},
-  {label: '发生位置', value: '电池簇 02 / 电池包 01'},
-  {label: '当前值 / 阈值', value: '5.4 °C / 5.0 °C'},
-  {label: '持续时间', value: '3 分 32 秒'},
+  { label: '告警等级', value: '一级预警' },
+  { label: '发生位置', value: '电池簇 02 / 电池包 01' },
+  { label: '当前值 / 阈值', value: '5.4 °C / 5.0 °C' },
+  { label: '持续时间', value: '3 分 32 秒' },
 ]
 </script>
 
@@ -55,10 +60,18 @@ const alarmFields = [
         <div class="flex-1" />
 
         <div class="flex items-center gap-[10px] text-[10px]">
-          <span class="flex items-center gap-[5px] text-muted"><i class="dot text-ok" />正常 / 未触发</span>
-          <span class="flex items-center gap-[5px] text-muted"><i class="dot text-warn" />预警</span>
-          <span class="flex items-center gap-[5px] text-muted"><i class="dot text-danger" />故障</span>
-          <span class="flex items-center gap-[5px] text-muted"><i class="dot text-subtle" />未知</span>
+          <span class="flex items-center gap-[5px] text-muted"
+            ><i class="dot text-ok" />正常 / 未触发</span
+          >
+          <span class="flex items-center gap-[5px] text-muted"
+            ><i class="dot text-warn" />预警</span
+          >
+          <span class="flex items-center gap-[5px] text-muted"
+            ><i class="dot text-danger" />故障</span
+          >
+          <span class="flex items-center gap-[5px] text-muted"
+            ><i class="dot text-subtle" />未知</span
+          >
         </div>
       </div>
 
@@ -77,13 +90,24 @@ const alarmFields = [
             <span class="dt-cell w-[120px] shrink-0 text-[12px]" :class="levelClass[row.level]">
               {{ row.state }}
             </span>
-            <span class="dt-cell w-[90px] shrink-0 font-mono text-[11px] text-muted">{{ row.raw }}</span>
-            <span class="dt-cell w-[140px] shrink-0 text-[11px] text-muted">{{ row.lastChange }}</span>
+            <span class="dt-cell w-[90px] shrink-0 font-mono text-[11px] text-muted">{{
+              row.raw
+            }}</span>
+            <span class="dt-cell w-[140px] shrink-0 text-[11px] text-muted">{{
+              row.lastChange
+            }}</span>
             <span class="dt-cell w-[140px] shrink-0 text-[11px] text-muted">{{ row.group }}</span>
           </div>
         </template>
 
-        <EmptyState v-else icon="inbox" title="暂无遥信" desc="该设备暂无遥信信号。" :min-height="220" class="m-4" />
+        <EmptyState
+          v-else
+          icon="inbox"
+          title="暂无遥信"
+          desc="该设备暂无遥信信号。"
+          :min-height="220"
+          class="m-4"
+        />
       </div>
     </section>
 
@@ -95,12 +119,18 @@ const alarmFields = [
           <span class="text-[11px] text-accent">查看全部 →</span>
         </div>
         <div class="min-h-0 flex-1 overflow-y-auto">
-          <div v-for="item in yxChanges" :key="item.time" class="flex flex-col gap-[5px] border-b border-line px-4 py-3 last:border-b-0">
+          <div
+            v-for="item in yxChanges"
+            :key="item.time"
+            class="flex flex-col gap-[5px] border-b border-line px-4 py-3 last:border-b-0"
+          >
             <div class="flex items-center justify-between">
               <span class="text-[11px] font-medium text-ink">{{ item.name }}</span>
               <span class="text-[10px] text-muted">{{ item.time }}</span>
             </div>
-            <span class="text-[10px] text-muted">{{ item.from }} → {{ item.to }} · {{ item.scope }}</span>
+            <span class="text-[10px] text-muted"
+              >{{ item.from }} → {{ item.to }} · {{ item.scope }}</span
+            >
           </div>
         </div>
       </section>
@@ -111,7 +141,11 @@ const alarmFields = [
           <h3 class="text-[13px] font-semibold text-warn">当前告警 · 单体温差预警</h3>
         </div>
         <div class="flex flex-col gap-2">
-          <div v-for="field in alarmFields" :key="field.label" class="flex items-center justify-between">
+          <div
+            v-for="field in alarmFields"
+            :key="field.label"
+            class="flex items-center justify-between"
+          >
             <span class="text-[10px] text-muted">{{ field.label }}</span>
             <span class="text-[11px] text-ink">{{ field.value }}</span>
           </div>

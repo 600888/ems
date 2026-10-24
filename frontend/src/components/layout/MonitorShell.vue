@@ -1,22 +1,22 @@
 <script setup lang="ts">
-import {ElMessage} from 'element-plus'
-import {useRoute, useRouter} from 'vue-router'
+import { ElMessage } from 'element-plus'
+import { useRoute, useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import UserMenu from '@/components/common/UserMenu.vue'
-import {useClock} from '@/composables/useClock'
-import {monitorNav} from '@/mocks/nav'
-import type {UserMenuItem} from '@/types/ui'
+import { useClock } from '@/composables/useClock'
+import { monitorNav } from '@/mocks/nav'
+import type { UserMenuItem } from '@/types/ui'
 
 const route = useRoute()
 const router = useRouter()
-const {text: nowText} = useClock()
+const { text: nowText } = useClock()
 
 const userMenu: UserMenuItem[] = [
-  {key: 'admin', label: '后台管理', icon: 'settings', tone: 'accent'},
-  {key: 'logout', label: '退出登录', icon: 'log-out', tone: 'danger'},
+  { key: 'admin', label: '后台管理', icon: 'settings', tone: 'accent' },
+  { key: 'logout', label: '退出登录', icon: 'log-out', tone: 'danger' },
 ]
 
 function go(item: (typeof monitorNav)[number]) {
@@ -62,7 +62,11 @@ function onUserCommand(key: string) {
           <AppIcon
             :name="item.icon"
             :size="16"
-            :class="route.path.startsWith('/monitor') && item.key === 'monitor' ? 'text-accent' : 'text-muted'"
+            :class="
+              route.path.startsWith('/monitor') && item.key === 'monitor'
+                ? 'text-accent'
+                : 'text-muted'
+            "
           />
           <span
             class="text-[13px]"
@@ -104,7 +108,11 @@ function onUserCommand(key: string) {
 
         <StatusTag tone="ok" label="采集正常" />
         <span class="text-[12px] text-muted">{{ nowText }}</span>
-        <button type="button" class="text-muted transition-colors hover:text-ink" aria-label="告警通知">
+        <button
+          type="button"
+          class="text-muted transition-colors hover:text-ink"
+          aria-label="告警通知"
+        >
           <AppIcon name="bell" :size="17" />
         </button>
         <ThemeToggle />

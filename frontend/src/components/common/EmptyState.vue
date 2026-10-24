@@ -10,14 +10,14 @@ withDefaults(
     minHeight?: number
     tone?: 'muted' | 'warn' | 'danger'
   }>(),
-  {icon: 'hard-drive', minHeight: 194, tone: 'muted'},
+  { icon: 'hard-drive', minHeight: 194, tone: 'muted' },
 )
 </script>
 
 <template>
   <div
     class="flex flex-col items-center justify-center gap-[10px] rounded-[6px] border border-line bg-surface px-4 py-4 text-center"
-    :style="{minHeight: `${minHeight}px`}"
+    :style="{ minHeight: `${minHeight}px` }"
   >
     <AppIcon
       :name="icon"

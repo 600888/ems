@@ -1,11 +1,11 @@
 <script setup lang="ts">
-import {computed} from 'vue'
-import {useRouter} from 'vue-router'
+import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import LineChart from '@/components/charts/LineChart.vue'
-import {keyTelemetry, signalSummary} from '@/mocks/points'
-import {useMonitorStore} from '@/stores/monitor'
+import { keyTelemetry, signalSummary } from '@/mocks/points'
+import { useMonitorStore } from '@/stores/monitor'
 
 const router = useRouter()
 const monitor = useMonitorStore()
@@ -54,8 +54,13 @@ const xLabels = ['14:02', '14:07', '14:12', '14:17', '14:22', '14:27', '14:32']
               {{ row.quality === 'timeout' ? '—' : row.value }}
             </span>
             <span class="dt-cell w-[70px] shrink-0 text-[11px] text-muted">{{ row.unit }}</span>
-            <span class="dt-cell w-[150px] shrink-0 truncate text-[10px] text-muted">{{ row.position }}</span>
-            <span class="dt-cell w-[70px] shrink-0 text-[10px]" :class="row.quality === 'good' ? 'text-ok' : 'text-warn'">
+            <span class="dt-cell w-[150px] shrink-0 truncate text-[10px] text-muted">{{
+              row.position
+            }}</span>
+            <span
+              class="dt-cell w-[70px] shrink-0 text-[10px]"
+              :class="row.quality === 'good' ? 'text-ok' : 'text-warn'"
+            >
               {{ row.quality === 'good' ? '有效' : '超时' }}
             </span>
           </div>
@@ -75,13 +80,32 @@ const xLabels = ['14:02', '14:07', '14:12', '14:17', '14:22', '14:27', '14:32']
         </div>
 
         <div class="flex min-h-0 flex-1 flex-col gap-[10px] overflow-y-auto px-4 py-3">
-          <div v-for="row in signalSummary" :key="row.label" class="flex h-[22px] items-center gap-[10px]">
+          <div
+            v-for="row in signalSummary"
+            :key="row.label"
+            class="flex h-[22px] items-center gap-[10px]"
+          >
             <span class="text-[12px] text-muted">{{ row.label }}</span>
             <div class="flex-1" />
-            <i class="dot" :class="row.tone === 'warn' ? 'text-warn' : row.tone === 'accent' ? 'text-accent' : 'text-ok'" />
+            <i
+              class="dot"
+              :class="
+                row.tone === 'warn'
+                  ? 'text-warn'
+                  : row.tone === 'accent'
+                    ? 'text-accent'
+                    : 'text-ok'
+              "
+            />
             <span
               class="text-[12px]"
-              :class="row.tone === 'warn' ? 'text-warn' : row.tone === 'accent' ? 'text-accent' : 'text-ok'"
+              :class="
+                row.tone === 'warn'
+                  ? 'text-warn'
+                  : row.tone === 'accent'
+                    ? 'text-accent'
+                    : 'text-ok'
+              "
             >
               {{ row.value }}
             </span>
