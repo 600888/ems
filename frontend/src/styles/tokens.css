@@ -1,0 +1,85 @@
+/*
+ * 设计令牌（取自 .pen 画板变量，深色为设计图基准）
+ * 深色数值与设计图完全一致；浅色为同色系明度反转，保持同一套语义命名。
+ */
+:root,
+.dark {
+  color-scheme: dark;
+
+  /* 基础面 */
+  --c-bg: #09192d;
+  --c-nav: #061426;
+  --c-panel: #0f253f;
+  --c-raised: #142e4a;
+  --c-line: #243d59;
+  --c-sidebox: #0b2036;
+
+  /* 文字 */
+  --c-ink: #ebf4ff;
+  --c-muted: #9bb0c8;
+  --c-subtle: #6e89a5;
+
+  /* 语义色 */
+  --c-accent: #55d9ef;
+  --c-brand: #287bff;
+  --c-ok: #48d8ad;
+  --c-warn: #f5bc62;
+  --c-danger: #ff7883;
+
+  /* 选中与表格 */
+  --c-sel: #123d68;
+  --c-rowalt: #102740;
+  --c-thead: #112b46;
+  --c-selrow: #12334f;
+  --c-iconbox: #163d62;
+
+  /* 状态底色 */
+  --c-ok-soft: #143e3c;
+  --c-warn-soft: #433522;
+  --c-danger-soft: #492a38;
+  --c-mute-soft: #25374c;
+  --c-info-soft: #102f48;
+  --c-warnbox: #3b3023;
+  --c-okbox: #10363b;
+
+  --c-shadow: 0 12px 32px rgb(0 0 0 / 0.45);
+  --c-scrim: rgb(3 10 20 / 0.62);
+}
+
+.light {
+  color-scheme: light;
+
+  --c-bg: #eef2f7;
+  --c-nav: #ffffff;
+  --c-panel: #ffffff;
+  --c-raised: #f1f5f9;
+  --c-line: #d8e1ec;
+  --c-sidebox: #f4f7fb;
+
+  --c-ink: #0d1b2e;
+  --c-muted: #5a7089;
+  --c-subtle: #8496ab;
+
+  --c-accent: #0e8fa6;
+  --c-brand: #1d6fe8;
+  --c-ok: #169e7c;
+  --c-warn: #b87a16;
+  --c-danger: #dd4b58;
+
+  --c-sel: #e3eefb;
+  --c-rowalt: #f7fafd;
+  --c-thead: #f0f4fa;
+  --c-selrow: #e3eefb;
+  --c-iconbox: #e3eefb;
+
+  --c-ok-soft: #e4f6ef;
+  --c-warn-soft: #fcf2e1;
+  --c-danger-soft: #fce9ec;
+  --c-mute-soft: #edf1f6;
+  --c-info-soft: #e6f2f9;
+  --c-warnbox: #fbf1de;
+  --c-okbox: #e4f6ef;
+
+  --c-shadow: 0 12px 32px rgb(13 27 46 / 0.16);
+  --c-scrim: rgb(13 27 46 / 0.35);
+}

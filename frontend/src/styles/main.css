@@ -1,0 +1,236 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* 深色为设计图基准：html 默认带 .dark，切换为浅色时替换为 .light */
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme inline {
+  --font-sans:
+    'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', system-ui,
+    -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+
+  --color-surface: var(--c-bg);
+  --color-nav: var(--c-nav);
+  --color-panel: var(--c-panel);
+  --color-raised: var(--c-raised);
+  --color-line: var(--c-line);
+  --color-sidebox: var(--c-sidebox);
+
+  --color-ink: var(--c-ink);
+  --color-muted: var(--c-muted);
+  --color-subtle: var(--c-subtle);
+
+  --color-accent: var(--c-accent);
+  --color-brand: var(--c-brand);
+  --color-ok: var(--c-ok);
+  --color-warn: var(--c-warn);
+  --color-danger: var(--c-danger);
+
+  --color-sel: var(--c-sel);
+  --color-rowalt: var(--c-rowalt);
+  --color-thead: var(--c-thead);
+  --color-selrow: var(--c-selrow);
+  --color-iconbox: var(--c-iconbox);
+
+  --color-ok-soft: var(--c-ok-soft);
+  --color-warn-soft: var(--c-warn-soft);
+  --color-danger-soft: var(--c-danger-soft);
+  --color-mute-soft: var(--c-mute-soft);
+  --color-info-soft: var(--c-info-soft);
+  --color-warnbox: var(--c-warnbox);
+  --color-okbox: var(--c-okbox);
+}
+
+@layer base {
+  html,
+  body,
+  #app {
+    height: 100%;
+  }
+
+  body {
+    margin: 0;
+    background-color: var(--c-bg);
+    color: var(--c-ink);
+    font-family: var(--font-sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+
+  *,
+  *::before,
+  *::after {
+    box-sizing: border-box;
+  }
+
+  button {
+    font: inherit;
+    color: inherit;
+    background: none;
+    border: 0;
+    cursor: pointer;
+  }
+
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  input::placeholder,
+  textarea::placeholder {
+    color: var(--c-subtle);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--c-accent);
+    outline-offset: 1px;
+  }
+
+  ::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background: color-mix(in srgb, var(--c-line) 88%, var(--c-muted));
+    border-radius: 8px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--c-subtle);
+  }
+}
+
+@layer components {
+  /* 面板：设计图统一 6px 圆角 + 1px 描边 */
+  .panel {
+    background-color: var(--c-panel);
+    border: 1px solid var(--c-line);
+    border-radius: 6px;
+  }
+
+  /* 面板内标题栏：44px 高、左右 16px、底部 1px 分隔 */
+  .panel-bar {
+    height: 44px;
+    padding: 0 16px;
+    border-bottom: 1px solid var(--c-line);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex: none;
+  }
+
+  .tab-underline {
+    position: relative;
+  }
+
+  .tab-underline::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: -1px;
+    height: 1px;
+    background-color: var(--c-accent);
+  }
+
+  .hairline {
+    background-color: var(--c-line);
+    height: 1px;
+    width: 100%;
+    flex: none;
+  }
+}
+
+@layer components {
+  /* 数据表格：设计中统一的自绘表格骨架（表头 38px、行内 16px 边距） */
+  .dt-head {
+    display: flex;
+    align-items: center;
+    height: 38px;
+    padding: 0 16px;
+    background-color: var(--c-thead);
+    flex: none;
+  }
+
+  .dt-th {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--c-muted);
+  }
+
+  .dt-row {
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    background-color: var(--c-panel);
+    border-bottom: 1px solid var(--c-line);
+  }
+
+  .dt-row:nth-child(even) {
+    background-color: var(--c-rowalt);
+  }
+
+  .dt-row:last-child {
+    border-bottom: 0;
+  }
+
+  .dt-row-selected {
+    background-color: var(--c-selrow);
+  }
+
+  .dt-cell {
+    min-width: 0;
+  }
+
+  /* 两行单元格：主值 11px + 次值 9px */
+  .cell-main {
+    font-size: 11px;
+    color: var(--c-ink);
+  }
+
+  .cell-sub {
+    font-size: 9px;
+    color: var(--c-subtle);
+  }
+
+  /* 档案字段：标签 11px + 值 13px */
+  .field-label {
+    font-size: 11px;
+    color: var(--c-muted);
+  }
+
+  .field-value {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--c-ink);
+  }
+
+  .link-action {
+    font-size: 11px;
+    color: var(--c-accent);
+    cursor: pointer;
+  }
+
+  .link-action:hover {
+    text-decoration: underline;
+  }
+
+  /* 状态点 */
+  .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 999px;
+    background-color: currentColor;
+    flex: none;
+  }
+}

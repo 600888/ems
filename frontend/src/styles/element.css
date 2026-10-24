@@ -1,0 +1,318 @@
+/*
+ * Element Plus 主题映射：把组件库变量对齐到 .pen 设计令牌。
+ * 注意：element-plus 的深色变量挂在 html.dark 上（权重 0,1,1），
+ * 因此这里统一用 html.前缀，保证覆盖顺序生效。
+ */
+html,
+html.dark {
+  --el-color-primary: #287bff;
+  --el-color-primary-light-3: #549bff;
+  --el-color-primary-light-5: #7ab1ff;
+  --el-color-primary-light-7: #a1c8ff;
+  --el-color-primary-light-8: #c3daff;
+  --el-color-primary-light-9: #123d68;
+  --el-color-primary-dark-2: #1a66dd;
+
+  --el-bg-color: #0f253f;
+  --el-bg-color-page: #09192d;
+  --el-bg-color-overlay: #0f253f;
+
+  --el-text-color-primary: #ebf4ff;
+  --el-text-color-regular: #ebf4ff;
+  --el-text-color-secondary: #9bb0c8;
+  --el-text-color-placeholder: #6e89a5;
+  --el-text-color-disabled: #6e89a5;
+
+  --el-border-color: #243d59;
+  --el-border-color-light: #243d59;
+  --el-border-color-lighter: #243d59;
+  --el-border-color-extra-light: #1c3450;
+  --el-border-color-dark: #2c496a;
+  --el-border-color-darker: #35547a;
+
+  --el-fill-color: #142e4a;
+  --el-fill-color-light: #142e4a;
+  --el-fill-color-lighter: #102740;
+  --el-fill-color-blank: #0f253f;
+  --el-fill-color-dark: #123d68;
+  --el-fill-color-darker: #12334f;
+
+  --el-mask-color: rgb(3 10 20 / 0.62);
+  --el-mask-color-extra-light: rgb(3 10 20 / 0.3);
+
+  --el-disabled-bg-color: #142e4a;
+  --el-disabled-text-color: #6e89a5;
+  --el-disabled-border-color: #243d59;
+
+  --el-box-shadow-light: 0 8px 24px rgb(0 0 0 / 0.45);
+  --el-box-shadow: 0 12px 32px rgb(0 0 0 / 0.5);
+}
+
+html.light {
+  --el-color-primary: #1d6fe8;
+  --el-color-primary-light-3: #4d90ee;
+  --el-color-primary-light-5: #7cadf3;
+  --el-color-primary-light-7: #abcaf8;
+  --el-color-primary-light-8: #c8dbfa;
+  --el-color-primary-light-9: #e3eefb;
+  --el-color-primary-dark-2: #1759ba;
+
+  --el-bg-color: #ffffff;
+  --el-bg-color-page: #eef2f7;
+  --el-bg-color-overlay: #ffffff;
+
+  --el-text-color-primary: #0d1b2e;
+  --el-text-color-regular: #21374f;
+  --el-text-color-secondary: #5a7089;
+  --el-text-color-placeholder: #8496ab;
+  --el-text-color-disabled: #8496ab;
+
+  --el-border-color: #d8e1ec;
+  --el-border-color-light: #e2e9f1;
+  --el-border-color-lighter: #ebeef3;
+  --el-border-color-extra-light: #f2f5f9;
+  --el-border-color-dark: #c6d2e0;
+  --el-border-color-darker: #b3c2d3;
+
+  --el-fill-color: #f1f5f9;
+  --el-fill-color-light: #f4f7fb;
+  --el-fill-color-lighter: #f7fafd;
+  --el-fill-color-blank: #ffffff;
+  --el-fill-color-dark: #e3eefb;
+  --el-fill-color-darker: #d8e6f7;
+
+  --el-mask-color: rgb(13 27 46 / 0.35);
+  --el-mask-color-extra-light: rgb(13 27 46 / 0.16);
+
+  --el-disabled-bg-color: #f1f5f9;
+  --el-disabled-text-color: #8496ab;
+  --el-disabled-border-color: #d8e1ec;
+
+  --el-box-shadow-light: 0 8px 24px rgb(13 27 46 / 0.12);
+  --el-box-shadow: 0 12px 32px rgb(13 27 46 / 0.18);
+}
+
+html {
+  --el-border-radius-base: 5px;
+  --el-border-radius-small: 4px;
+  --el-font-size-base: 13px;
+  --el-component-size: 34px;
+  --el-component-size-small: 28px;
+  --el-component-size-large: 38px;
+  --el-transition-duration: 0.16s;
+}
+
+/* ---------- 输入 / 下拉：设计图为 36px 高、4px 圆角、surface 底色 ---------- */
+.ctl.el-input,
+.ctl .el-input__wrapper,
+.ctl.el-select .el-select__wrapper {
+  font-size: 12px;
+}
+
+.ctl .el-input__wrapper,
+.ctl.el-select .el-select__wrapper {
+  height: 36px;
+  padding: 0 11px;
+  border-radius: 4px;
+  background-color: var(--c-bg);
+  box-shadow: inset 0 0 0 1px var(--c-line);
+}
+
+.ctl .el-input__wrapper.is-focus,
+.ctl.el-select .el-select__wrapper.is-focused {
+  box-shadow: inset 0 0 0 1px var(--c-accent);
+}
+
+.ctl-sm .el-input__wrapper,
+.ctl-sm.el-select .el-select__wrapper {
+  height: 34px;
+  border-radius: 5px;
+  background-color: var(--c-raised);
+  box-shadow: inset 0 0 0 1px var(--c-line);
+}
+
+/* 搜索框：图标在左，提示文字 12px */
+.search-input .el-input__inner::placeholder {
+  font-size: 12px;
+  color: var(--c-subtle);
+}
+
+/* ---------- 复选框 ---------- */
+.el-checkbox {
+  --el-checkbox-input-border: 1px solid var(--c-line);
+  --el-checkbox-checked-text-color: var(--c-ink);
+}
+
+.el-checkbox__inner {
+  border-radius: 3px;
+  background-color: transparent;
+}
+
+.el-checkbox__input.is-checked .el-checkbox__inner {
+  background-color: var(--c-brand);
+  border-color: var(--c-brand);
+}
+
+/* ---------- 开关 ---------- */
+.el-switch {
+  --el-switch-on-color: var(--c-brand);
+  --el-switch-off-color: var(--c-mute-soft);
+}
+
+/* ---------- 抽屉：560px，头部 18/20 内边距 ---------- */
+.ems-drawer .el-drawer__header {
+  margin: 0;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--c-line);
+  color: var(--c-ink);
+}
+
+.ems-drawer .el-drawer__body {
+  padding: 0;
+  overflow: hidden;
+}
+
+.ems-drawer.el-drawer {
+  background-color: var(--c-panel);
+}
+
+/* ---------- 弹层 ---------- */
+.el-popper.is-light {
+  background-color: var(--c-panel);
+  border: 1px solid var(--c-line);
+  color: var(--c-ink);
+}
+
+.el-popper.is-light .el-popper__arrow::before {
+  background-color: var(--c-panel);
+  border-color: var(--c-line);
+}
+
+.el-select-dropdown__item {
+  font-size: 12px;
+  height: 32px;
+  line-height: 32px;
+  color: var(--c-muted);
+}
+
+.el-select-dropdown__item.is-hovering {
+  background-color: var(--c-raised);
+  color: var(--c-ink);
+}
+
+.el-select-dropdown__item.is-selected {
+  color: var(--c-accent);
+  font-weight: 600;
+}
+
+/* ---------- 用户菜单：画板 17 / 18 的账号下拉 ---------- */
+.ems-user-menu.el-popper.is-light {
+  padding: 0;
+  border-radius: 8px;
+  background-color: var(--c-raised);
+  box-shadow: var(--c-shadow);
+}
+
+.ems-user-menu .el-dropdown-menu {
+  padding: 0;
+  background: transparent;
+}
+
+/* ---------- 分页：去掉底色，仅保留数字与箭头 ---------- */
+.ems-pager.el-pagination {
+  --el-pagination-bg-color: transparent;
+  --el-pagination-button-bg-color: transparent;
+  --el-pagination-hover-color: var(--c-accent);
+  --el-pagination-text-color: var(--c-muted);
+  --el-pagination-border-radius: 4px;
+  font-size: 11px;
+  gap: 6px;
+}
+
+.ems-pager.el-pagination .el-pager li,
+.ems-pager.el-pagination button {
+  background: transparent;
+  font-size: 11px;
+  color: var(--c-muted);
+  min-width: 20px;
+}
+
+.ems-pager.el-pagination .el-pager li.is-active {
+  color: var(--c-accent);
+  background-color: var(--c-sel);
+  border-radius: 4px;
+  padding: 0 6px;
+}
+
+/* ---------- 树：节点 32px、无默认箭头（用自定义 chevron） ---------- */
+.ems-tree.el-tree {
+  background: transparent;
+  color: var(--c-ink);
+  --el-tree-node-hover-bg-color: var(--c-raised);
+}
+
+.ems-tree .el-tree-node__content {
+  height: 32px;
+  border-radius: 4px;
+  padding-right: 8px;
+  gap: 7px;
+}
+
+.ems-tree .el-tree-node__expand-icon {
+  display: none;
+}
+
+.ems-tree .el-tree-node.is-current > .el-tree-node__content {
+  background-color: var(--c-sel);
+}
+
+.ems-tree .el-tree-node__content:hover {
+  background-color: var(--c-raised);
+}
+
+/* ---------- 提示消息 ---------- */
+.el-message {
+  background-color: var(--c-panel);
+  border-color: var(--c-line);
+  border-radius: 5px;
+  min-width: 280px;
+}
+
+.el-message .el-message__content {
+  font-size: 12px;
+  color: var(--c-ink);
+}
+
+/* ---------- 表单 ---------- */
+.el-form-item__label {
+  font-size: 11px;
+  color: var(--c-muted);
+  padding-bottom: 7px;
+  line-height: 1.2;
+}
+
+.el-form-item {
+  margin-bottom: 16px;
+}
+
+/* ---------- 数字输入 ---------- */
+.ctl .el-input-number {
+  width: 100%;
+}
+
+.ctl .el-input-number .el-input__wrapper {
+  padding: 0 34px 0 11px;
+}
+
+/* ---------- Tooltip 文本 ---------- */
+.el-popper.is-dark {
+  background: var(--c-raised);
+  border: 1px solid var(--c-line);
+  color: var(--c-ink);
+  font-size: 11px;
+}
+
+.el-popper.is-dark .el-popper__arrow::before {
+  background: var(--c-raised);
+  border-color: var(--c-line);
+}
