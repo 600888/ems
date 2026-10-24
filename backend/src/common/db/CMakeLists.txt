@@ -2,7 +2,7 @@ add_library(ems_database_configuration STATIC configuration/point_table.cpp
     configuration/import_service.cpp configuration/options.cpp)
 target_link_libraries(ems_database_configuration PUBLIC ems_database_api PRIVATE ems_excel)
 target_include_directories(ems_database_configuration SYSTEM PRIVATE
-    ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include)
+    ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include)
 set_target_properties(ems_database_configuration PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO POSITION_INDEPENDENT_CODE ON)
 
@@ -23,7 +23,7 @@ if(EMS_DATABASE_MYSQL_INCLUDE_DIR AND EMS_DATABASE_MYSQL_LIBRARY)
     endif()
     add_library(ems_database_mysql STATIC mysql/mysql_database.cpp)
     target_include_directories(ems_database_mysql SYSTEM PRIVATE ${EMS_DATABASE_MYSQL_INCLUDE_DIR}
-                                                               ${CMAKE_SOURCE_DIR}/3rd/ormpp)
+                                                               ${CMAKE_SOURCE_DIR}/third_party/ormpp)
     target_compile_definitions(ems_database_mysql PRIVATE ORMPP_ENABLE_MYSQL)
     target_link_libraries(ems_database_mysql PRIVATE ${EMS_DATABASE_MYSQL_LIBRARY})
     set_property(TARGET ems_database_mysql PROPERTY EMS_MYSQL_AVAILABLE TRUE)

@@ -4,8 +4,8 @@ if(TARGET modbuspp-shared)
 
     target_include_directories(
         modbus_protocol
-        PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${EMS_BACKEND_ROOT}/3rd"
-               "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/include" "${EMS_BACKEND_ROOT}/include"
+        PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${EMS_BACKEND_ROOT}/third_party"
+               "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/include" "${EMS_BACKEND_ROOT}/include"
     )
 
     target_link_libraries(
@@ -54,7 +54,7 @@ target_include_directories(ems_modbus_core PUBLIC "${EMS_BACKEND_ROOT}/include")
 
 target_include_directories(
     ems_modbus_core SYSTEM
-    PRIVATE "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+    PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
 )
 
 target_link_libraries(ems_modbus_core PRIVATE ems_libmodbus Threads::Threads)

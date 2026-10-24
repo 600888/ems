@@ -16,8 +16,13 @@ struct SharedMemoryOptions {
     std::size_t segment_bytes{268435456};  ///< 映射容量预算，创建前会校验。
 };
 
-/** @brief 使用跨进程共享内存保存实时记录。 */
-class SharedMemoryStore final : public RealtimeStoreBase {
+/**
+ * @brief 使用 Boost.Interprocess 管理段、共享容器和命名锁保存记录。
+ *
+ * 首批使用段级锁；shard_count 仅参与部署兼容校验。持锁进程崩溃后
+ * 可能持续超时，须先隔离所有使用者再受控重建，不自动强制解锁。
+ */
+class EMS_RTDB_API SharedMemoryStore final : public RealtimeStoreBase {
    public:
     /**
      * @brief 在截止时间前创建或附加共享内存段。
@@ -27,6 +32,13 @@ class SharedMemoryStore final : public RealtimeStoreBase {
      */
     static Result<std::unique_ptr<IRealtimeStore>> open(const SharedMemoryOptions& options,
                                                         const CallContext& ctx);
+
+    /**
+     * @brief 通过 Boost 删除共享段及其命名锁；调用方必须先隔离全部使用者。
+     * @param[in] segment_name 部署中指定的逻辑共享段名，不接受 OS 路径。
+     * @return 成功时返回是否删除了任何资源；非法名称返回 InvalidArgument。
+     */
+    static Result<bool> remove(const std::string& segment_name);
 
     /** @brief 释放此实例持有的共享内存资源。 */
     ~SharedMemoryStore() override;
@@ -80,5 +92,5 @@ class SharedMemoryStore final : public RealtimeStoreBase {
  * @param[in,out] factory 接收后端注册的工厂。
  * @return 成功时包含结果；失败时包含错误信息。
  */
-Result<bool> register_shared_memory_backend(BackendFactory& factory);
+EMS_RTDB_API Result<bool> register_shared_memory_backend(BackendFactory& factory);
 }  // namespace ems::realtime

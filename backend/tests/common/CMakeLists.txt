@@ -14,8 +14,8 @@ add_executable(
 target_include_directories(
     test_ems_common
     PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src
-            ${CMAKE_SOURCE_DIR}/3rd/googletest/googletest/include
-            ${CMAKE_SOURCE_DIR}/3rd/googletest/googlemock/include
+            ${CMAKE_SOURCE_DIR}/third_party/googletest/googletest/include
+            ${CMAKE_SOURCE_DIR}/third_party/googletest/googlemock/include
 )
 
 target_link_libraries(
@@ -44,7 +44,7 @@ gtest_discover_tests(test_ems_common)
 
 add_executable(test_ems_database_runtime test_database_runtime.cpp)
 target_include_directories(test_ems_database_runtime PRIVATE ${CMAKE_SOURCE_DIR}/src)
-target_include_directories(test_ems_database_runtime SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/3rd/ormpp)
+target_include_directories(test_ems_database_runtime SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/ormpp)
 target_link_libraries(test_ems_database_runtime PRIVATE ems_database_runtime gtest_main Threads::Threads)
 set_target_properties(test_ems_database_runtime PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES
                                                          CXX_EXTENSIONS NO)
@@ -54,7 +54,7 @@ get_target_property(_ems_test_mysql ems_database_mysql EMS_MYSQL_AVAILABLE)
 if(_ems_test_mysql)
     add_executable(test_ems_database_mysql test_database_mysql.cpp)
     target_include_directories(test_ems_database_mysql SYSTEM PRIVATE ${EMS_DATABASE_MYSQL_INCLUDE_DIR}
-                                                                    ${CMAKE_SOURCE_DIR}/3rd/ormpp)
+                                                                    ${CMAKE_SOURCE_DIR}/third_party/ormpp)
     target_compile_definitions(test_ems_database_mysql PRIVATE ORMPP_ENABLE_MYSQL)
     target_link_libraries(test_ems_database_mysql PRIVATE ems_database_mysql gtest_main)
     set_target_properties(test_ems_database_mysql PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES
@@ -68,7 +68,7 @@ if(EMS_WITH_ZEROMQ)
 
     target_include_directories(
         test_ems_zmq_messaging PRIVATE ${CMAKE_SOURCE_DIR}/include
-                                       ${CMAKE_SOURCE_DIR}/3rd/googletest/googletest/include
+                                       ${CMAKE_SOURCE_DIR}/third_party/googletest/googletest/include
     )
 
     target_link_libraries(test_ems_zmq_messaging PRIVATE ems_zmq_messaging gtest Threads::Threads)

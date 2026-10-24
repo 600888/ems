@@ -14,7 +14,7 @@ add_library(net_collect STATIC collect_engine.cpp channel_thread.cpp data_dispat
 target_include_directories(
     net_collect
     PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/include
-           ${CMAKE_SOURCE_DIR}/3rd ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
+           ${CMAKE_SOURCE_DIR}/third_party ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include
 )
 
 target_link_libraries(net_collect PUBLIC rtdb Threads::Threads net_handler)

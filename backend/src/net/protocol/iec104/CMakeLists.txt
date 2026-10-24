@@ -1,5 +1,5 @@
 # 编译仓库内的 lib60870 C 栈，避免引入 c104/Python 及第三方全局 CMake 选项。
-set(EMS_LIB60870_ROOT "${EMS_BACKEND_ROOT}/3rd/iec104/depends/lib60870/lib60870-C")
+set(EMS_LIB60870_ROOT "${EMS_BACKEND_ROOT}/third_party/iec104/depends/lib60870/lib60870-C")
 set(EMS_LIB60870_SOURCES
     file-service/file_server.c
     iec60870/apl/cpXXtime2a.c
@@ -80,7 +80,7 @@ target_include_directories(ems_iec104_core PUBLIC "${EMS_BACKEND_ROOT}/include")
 
 target_include_directories(
     ems_iec104_core SYSTEM
-    PRIVATE "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+    PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
 )
 
 target_link_libraries(ems_iec104_core PRIVATE ems_lib60870 Threads::Threads)

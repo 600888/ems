@@ -19,6 +19,7 @@
 
 #include <common/core/call_context.h>
 #include <common/core/result.h>
+#include <realtime/export.h>
 
 #include <cstddef>
 #include <cstdint>
@@ -241,8 +242,8 @@ class RealtimeStoreBase : public IRealtimeStore {
 /**
  * @brief 验证逻辑记录键的组合是否合法。
  * @return 合法时返回空字符串，否则返回原因文本。
- * @param[in] key Redis 键。
+ * @param[in] key 逻辑记录键。
  */
-std::string validate_record_key(const RecordKey& key);
+EMS_RTDB_API std::string validate_record_key(const RecordKey& key);
 
 }  // namespace ems::realtime

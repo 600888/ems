@@ -7,8 +7,8 @@
  *
  * 编译: g++ -std=c++20 -o rtu_client rtu_client.cpp \
  *       -I../src/net/protocol/modbus \
- *       -I../3rd/libmodbuspp/include \
- *       -L../build/3rd/libmodbuspp -lmodbuspp \
+ *       -I../third_party/libmodbuspp/include \
+ *       -L../build/third_party/libmodbuspp -lmodbuspp \
  *       -lpthread
  *
  * 运行: ./rtu_client [device] [Baud] [SlaveID]

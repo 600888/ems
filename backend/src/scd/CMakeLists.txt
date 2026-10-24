@@ -9,7 +9,7 @@ target_include_directories(ems_storage_core PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 target_include_directories(
     ems_storage_core PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
-                             ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
+                             ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include
 )
 
 target_link_libraries(

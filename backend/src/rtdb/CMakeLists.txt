@@ -5,7 +5,7 @@ add_library(rtdb STATIC ${RTDB_SOURCES})
 
 target_include_directories(
     rtdb PUBLIC ${CMAKE_CURRENT_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/include
-                ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
+                ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include
 )
 
 target_link_libraries(rtdb PUBLIC ems_hiredis redis++ Threads::Threads ems_models)

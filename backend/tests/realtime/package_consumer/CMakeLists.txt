@@ -1,0 +1,6 @@
+cmake_minimum_required(VERSION 3.21)
+project(rtdb_package_consumer LANGUAGES CXX)
+find_package(ems_rtdb 1 CONFIG REQUIRED)
+add_executable(rtdb_package_consumer main.cpp)
+target_link_libraries(rtdb_package_consumer PRIVATE ems::rtdb)
+set_target_properties(rtdb_package_consumer PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)

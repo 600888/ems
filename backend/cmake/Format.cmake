@@ -9,7 +9,7 @@
 #   cmake -DEMS_ENABLE_FORMAT_TARGET=OFF ..
 #
 # 说明：
-#   - 只处理 include / src / tests / examples 四个目录，backend/3rd 永不参与。
+#   - 只处理 include / src / tests / examples 四个目录，backend/third_party 永不参与。
 #   - 显式指定 CLANG_FORMAT_EXECUTABLE 可覆盖自动探测结果，例如交叉编译或
 #     多版本共存时：
 #       cmake -DCLANG_FORMAT_EXECUTABLE=/usr/bin/clang-format-21 ..
@@ -74,7 +74,7 @@ endif()
 message(STATUS "clang-format: ${CLANG_FORMAT_EXECUTABLE} (${_cf_version_output})")
 
 # ---------------------------------------------------------------------------
-# 收集待格式化文件（排除 3rd）
+# 收集待格式化文件（排除 third_party）
 # ---------------------------------------------------------------------------
 set(_ems_format_dirs include src tests examples)
 set(_ems_format_files "")
@@ -96,7 +96,7 @@ if(NOT _ems_format_files)
 endif()
 
 list(LENGTH _ems_format_files _ems_format_count)
-message(STATUS "clang-format will process ${_ems_format_count} files (backend/3rd excluded)")
+message(STATUS "clang-format will process ${_ems_format_count} files (backend/third_party excluded)")
 
 # ---------------------------------------------------------------------------
 # 目标

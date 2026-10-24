@@ -1,5 +1,5 @@
 # 静态集成固定第三方源码，不引入上游的全局选项、示例和测试。
-set(EMS_DLT645_ROOT "${EMS_BACKEND_ROOT}/3rd/dlt645")
+set(EMS_DLT645_ROOT "${EMS_BACKEND_ROOT}/third_party/dlt645")
 
 # 只使用 Boost 头文件。优先安装包；也支持 BOOST_ROOT 指定的源码/头文件目录。
 cmake_policy(PUSH)
@@ -63,7 +63,7 @@ target_include_directories(
 target_include_directories(ems_dlt645_core PUBLIC "${EMS_BACKEND_ROOT}/include")
 target_include_directories(
     ems_dlt645_core SYSTEM
-    PRIVATE "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+    PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
 )
 target_link_libraries(ems_dlt645_core PRIVATE ems_dlt645_stack)
 

@@ -1,0 +1,17 @@
+{
+  "realtime": {
+    "backend": {
+      "type": "redis",
+      "options": {
+        "address": "127.0.0.1",
+        "port": 6379,
+        "database": 0,
+        "pool_size": 4,
+        "transport_timeout_ms": 100,
+        "pool_wait_timeout_ms": 100,
+        "max_record_bytes": 65536,
+        "max_batch_items": 256
+      }
+    }
+  }
+}

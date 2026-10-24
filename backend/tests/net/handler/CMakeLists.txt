@@ -5,7 +5,7 @@ target_include_directories(test_protocol_handlers PRIVATE "${EMS_BACKEND_ROOT}/s
 
 target_include_directories(
     test_protocol_handlers SYSTEM
-    PRIVATE "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+    PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
 )
 
 target_link_libraries(test_protocol_handlers PRIVATE net_handler)

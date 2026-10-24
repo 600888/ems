@@ -1,7 +1,7 @@
 # 测试继承后端的编译器、标准和依赖配置，不重新覆盖全局编译参数。
 include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/../include" "${CMAKE_CURRENT_SOURCE_DIR}"
-    "${CMAKE_CURRENT_SOURCE_DIR}/../3rd/libmodbuspp/3rdparty/json/single_include"
+    "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libmodbuspp/3rdparty/json/single_include"
 )
 
 add_subdirectory(common)

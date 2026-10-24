@@ -99,7 +99,7 @@ add_library(ems_common_codec STATIC codec/model_codec.cpp codec/event_codec.cpp)
 target_include_directories(ems_common_codec PUBLIC ${CMAKE_SOURCE_DIR}/include)
 
 target_include_directories(
-    ems_common_codec PRIVATE ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/3rdparty/json/single_include
+    ems_common_codec PRIVATE ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include
 )
 
 target_link_libraries(ems_common_codec PUBLIC ems_common_model ems_messaging_api)

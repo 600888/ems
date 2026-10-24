@@ -1,9 +1,15 @@
 #include <gtest/gtest.h>
+#include <realtime/realtime_client.h>
 #include <realtime/redis_store.h>
+#ifdef EMS_REALTIME_TEST_SHM
+#include <boost/interprocess/sync/named_mutex.hpp>
+#endif
 #include <realtime/shared_memory_store.h>
 
 #include <atomic>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <future>
 #include <thread>
 
@@ -19,7 +25,6 @@
 #endif
 
 namespace ems::realtime {
-void set_shared_memory_test_hook(void (*)(int));
 
 namespace {
 CallContext ctx(int ms = 2000) { return core::make_call_context(std::chrono::milliseconds(ms)); }
@@ -78,6 +83,7 @@ class BackendContract : public ::testing::TestWithParam<std::string> {
             shm.shard_count = 2;
             shm.max_record_bytes = 512;
             shm.max_batch_items = 4;
+            shm.segment_bytes = 65536;
             store = take(SharedMemoryStore::open(shm, ctx()));
             shm.create_if_missing = false;
             peer = take(SharedMemoryStore::open(shm, ctx()));
@@ -100,10 +106,7 @@ class BackendContract : public ::testing::TestWithParam<std::string> {
             }
         peer.reset();
         store.reset();
-#ifndef _WIN32
-        if (!redis && !shm.segment_name.empty())
-            shm_unlink(("/ems_rt_" + shm.segment_name).c_str());
-#endif
+        if (!redis && !shm.segment_name.empty()) SharedMemoryStore::remove(shm.segment_name);
     }
 };
 
@@ -241,6 +244,7 @@ struct ShmTest : ::testing::Test {
         options.shard_count = 1;
         options.max_record_bytes = 128;
         options.create_if_missing = true;
+        options.segment_bytes = 65536;
         owner = take(SharedMemoryStore::open(options, ctx()));
     }
 
@@ -252,10 +256,7 @@ struct ShmTest : ::testing::Test {
 
     void TearDown() override {
         owner.reset();
-        set_shared_memory_test_hook(nullptr);
-#ifndef _WIN32
-        shm_unlink(("/ems_rt_" + options.segment_name).c_str());
-#endif
+        SharedMemoryStore::remove(options.segment_name);
     }
 };
 
@@ -291,46 +292,91 @@ TEST_F(ShmTest, FactoryRejectsUnknownOptions) {
                  ErrorCode::InvalidArgument, WriteEffect::NotApplied);
 }
 
-// Each subprocess reopens the OS mapping, proving actual cross-process access.
-// Crash immediately before or after the aligned selector update while holding the shard lock.
-TEST_F(ShmTest, OwnerDeathBeforeCommitPreservesOldImage) {
-    auto initial = seed();
+// Boost named locks do not promise robust owner-death recovery. Never silently clear one.
+TEST_F(ShmTest, AbandonedBoostLockTimesOutUntilManagedRebuild) {
+    seed();
     ASSERT_EXIT(
         {
-            auto other = take(SharedMemoryStore::open(options, ctx()));
-            set_shared_memory_test_hook([](int stage) {
-                if (stage == 1) crash_exit(42);
-            });
-            other->compareExchange({key(), {{"v", "new"}}, initial.revision}, ctx());
-            crash_exit(1);
+            boost::interprocess::named_mutex lock(
+                boost::interprocess::open_only,
+                ("ems_rtdb_boost_" + options.segment_name + "_mutex").c_str());
+            lock.lock();
+            crash_exit(42);
         },
         ::testing::ExitedWithCode(42), "");
-    EXPECT_EQ(take(owner->read(key(), ctx())).fields.at("v"), "old");
-    EXPECT_TRUE(
-        core::is_ok(owner->compareExchange({key(), {{"v", "after"}}, initial.revision}, ctx())));
+    expect_error(owner->read(key(), ctx(50)), ErrorCode::DeadlineExceeded,
+                 WriteEffect::NotApplicable);
 }
 
-TEST_F(ShmTest, OwnerDeathAfterCommitPreservesNewImage) {
+TEST_F(ShmTest, IndependentProcessPublishesThroughSharedLibrary) {
     auto initial = seed();
     ASSERT_EXIT(
         {
             auto other = take(SharedMemoryStore::open(options, ctx()));
-            set_shared_memory_test_hook([](int stage) {
-                if (stage == 2) crash_exit(42);
-            });
-            other->compareExchange({key(), {{"v", "new"}}, initial.revision}, ctx());
-            crash_exit(1);
+            auto result = other->compareExchange({key(), {{"v", "new"}}, initial.revision}, ctx());
+            crash_exit(core::is_ok(result) ? 42 : 1);
         },
         ::testing::ExitedWithCode(42), "");
     EXPECT_EQ(take(owner->read(key(), ctx())).fields.at("v"), "new");
     expect_error(owner->compareExchange({key(), {}, initial.revision}, ctx()), ErrorCode::Conflict,
                  WriteEffect::NotApplied);
 }
+
+TEST(SharedClient, ConfigDrivesLibraryAndClientsCannotCreateSegments) {
+    const auto name = "client_" + take(detail::token());
+    const auto path = std::filesystem::temp_directory_path() / (name + ".json");
+
+    struct Cleanup {
+        std::filesystem::path path;
+        std::string name;
+
+        ~Cleanup() {
+            SharedMemoryStore::remove(name);
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+    } cleanup{path, name};
+
+    auto write_config = [&](const std::string& backend, const std::string& extra) {
+        std::ofstream file(path, std::ios::trunc);
+        file << "{\"realtime\":{\"backend\":{\"type\":\"" << backend
+             << "\",\"options\":{\"segment_name\":\"" << name << "\"" << extra << "}}}}";
+    };
+    write_config("shm", "");
+    expect_error(RealtimeClient::open(path.u8string(), ctx()), ErrorCode::NotFound,
+                 WriteEffect::NotApplied);
+    auto owner = take(RealtimeClient::initialize(path.u8string(), ctx()));
+    auto peer = take(RealtimeClient::open(path.u8string(), ctx()));
+    auto receipt = take(owner->compareExchange({key(), {{"v", "from_dll"}}, {}}, ctx()));
+    auto record = take(peer->read(key(), ctx()));
+    EXPECT_EQ(record.fields.at("v"), "from_dll");
+    EXPECT_EQ(record.revision, receipt.revision);
+    owner->close();
+    EXPECT_EQ(take(peer->read(key(), ctx())).revision, receipt.revision);
+    peer.reset();
+    owner.reset();
+    write_config("shm", ",\"create_if_missing\":true");
+    expect_error(RealtimeClient::open(path.u8string(), ctx()), ErrorCode::InvalidArgument,
+                 WriteEffect::NotApplied);
+    write_config("not_compiled", "");
+    expect_error(RealtimeClient::open(path.u8string(), ctx()), ErrorCode::Unsupported,
+                 WriteEffect::NotApplicable);
+}
+
 #endif
 }  // namespace
 }  // namespace ems::realtime
 
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--cleanup-package-smoke") {
+#ifdef EMS_REALTIME_TEST_SHM
+        const std::string name = argv[2];
+        if (name.rfind("package_smoke_", 0) != 0) return 2;
+        return ems::core::is_ok(ems::realtime::SharedMemoryStore::remove(name)) ? 0 : 1;
+#else
+        return 2;
+#endif
+    }
     if (!std::getenv("EMS_TEST_RUN_ID")) {
         auto id = ems::realtime::detail::token();
         if (!ems::core::is_ok(id)) return 2;

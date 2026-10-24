@@ -3,7 +3,7 @@
 if(TARGET proto_dlt698)
     add_executable(test_dlt698_runtime dlt698_runtime_test.cpp)
     target_include_directories(test_dlt698_runtime SYSTEM PRIVATE
-        "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include")
+        "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include")
     target_link_libraries(test_dlt698_runtime PRIVATE ems_protocol_runtime ems_dlt698_stack)
     target_compile_definitions(test_dlt698_runtime PRIVATE
         EMS_DLT698_PLUGIN="$<TARGET_FILE:proto_dlt698>")
@@ -23,7 +23,7 @@ if(TARGET proto_modbus)
 
     target_include_directories(
         test_protocol_runtime
-        PRIVATE "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+        PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
     )
 
     target_link_libraries(
@@ -111,7 +111,7 @@ if(TARGET proto_iec104)
 
     target_include_directories(
         test_iec104_runtime SYSTEM
-        PRIVATE "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+        PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
     )
 
     target_link_libraries(
@@ -165,7 +165,7 @@ if(TARGET proto_dlt645)
     add_executable(test_dlt645_runtime dlt645_runtime_test.cpp)
     target_include_directories(
         test_dlt645_runtime SYSTEM
-        PRIVATE "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+        PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
     )
     target_link_libraries(test_dlt645_runtime PRIVATE ems_protocol_runtime ems_dlt645_stack)
     target_compile_definitions(

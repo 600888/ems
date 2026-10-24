@@ -18,7 +18,7 @@ add_library(
 target_include_directories(net_handler PUBLIC "${EMS_BACKEND_ROOT}/src")
 
 target_include_directories(
-    net_handler SYSTEM PUBLIC "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+    net_handler SYSTEM PUBLIC "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
 )
 
 target_link_libraries(net_handler PUBLIC ems_protocol_runtime)
@@ -45,7 +45,7 @@ if(TARGET modbus_protocol)
 
     target_include_directories(
         net_proto_handler SYSTEM
-        PRIVATE "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include"
+        PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
     )
 
     target_link_libraries(net_proto_handler PUBLIC modbus_protocol Threads::Threads)

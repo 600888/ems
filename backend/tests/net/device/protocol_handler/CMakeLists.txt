@@ -10,9 +10,9 @@ target_include_directories(
     test_modbus_handler
     PRIVATE ${CMAKE_SOURCE_DIR}/include
             ${CMAKE_SOURCE_DIR}/src
-            ${CMAKE_SOURCE_DIR}/3rd/libmodbuspp/lib/include
-            ${CMAKE_SOURCE_DIR}/3rd/googletest/googletest/include
-            ${CMAKE_SOURCE_DIR}/3rd/googletest/googlemock/include
+            ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/lib/include
+            ${CMAKE_SOURCE_DIR}/third_party/googletest/googletest/include
+            ${CMAKE_SOURCE_DIR}/third_party/googletest/googlemock/include
 )
 
 target_link_libraries(test_modbus_handler PRIVATE gtest gmock Threads::Threads net_proto_handler)

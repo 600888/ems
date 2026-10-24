@@ -1,5 +1,5 @@
 # 静态封装仓库内协议栈，不引入上游示例、测试、Python 和全局构建选项。
-set(EMS_DLT698_ROOT "${EMS_BACKEND_ROOT}/3rd/dlt698")
+set(EMS_DLT698_ROOT "${EMS_BACKEND_ROOT}/third_party/dlt698")
 file(GLOB_RECURSE EMS_DLT698_SOURCES CONFIGURE_DEPENDS "${EMS_DLT698_ROOT}/cpp/src/*.cpp")
 list(FILTER EMS_DLT698_SOURCES EXCLUDE REGEX "/app/(client|server)\\.cpp$")
 # 上游静态收尾器不能在 Windows loader lock 内 join。只在构建目录替换内部头引用，
@@ -39,7 +39,7 @@ endif()
 add_library(ems_dlt698_core STATIC dlt698_protocol.cpp)
 target_include_directories(ems_dlt698_core PUBLIC "${EMS_BACKEND_ROOT}/include")
 target_include_directories(ems_dlt698_core SYSTEM PRIVATE
-    "${EMS_BACKEND_ROOT}/3rd/libmodbuspp/3rdparty/json/single_include")
+    "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include")
 target_link_libraries(ems_dlt698_core PRIVATE ems_dlt698_stack)
 if(MINGW)
     target_compile_options(ems_dlt698_core PRIVATE -Wa,-mbig-obj)

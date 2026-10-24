@@ -7,8 +7,8 @@
  *
  * 编译: g++ -std=c++20 -o tcp_server tcp_server.cpp \
  *       -I../src/net/protocol/modbus \
- *       -I../3rd/libmodbuspp/include \
- *       -L../build/3rd/libmodbuspp -lmodbuspp \
+ *       -I../third_party/libmodbuspp/include \
+ *       -L../build/third_party/libmodbuspp -lmodbuspp \
  *       -lpthread
  *
  * 运行: ./tcp_server [Port]

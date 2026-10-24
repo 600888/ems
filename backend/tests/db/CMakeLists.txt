@@ -8,7 +8,7 @@ set_target_properties(test_point_table_db PROPERTIES CXX_STANDARD 17 CXX_STANDAR
 if(SQLite3_FOUND)
     target_link_libraries(test_point_table_db PRIVATE SQLite::SQLite3)
     target_compile_definitions(test_point_table_db PRIVATE EMS_TEST_SQLITE ORMPP_ENABLE_SQLITE3)
-    target_include_directories(test_point_table_db SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/3rd/ormpp)
+    target_include_directories(test_point_table_db SYSTEM PRIVATE ${CMAKE_SOURCE_DIR}/third_party/ormpp)
 
 endif()
 target_include_directories(test_point_table_db PRIVATE ${CMAKE_SOURCE_DIR}/src)

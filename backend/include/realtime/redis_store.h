@@ -6,7 +6,7 @@
 namespace ems::realtime {
 /** @brief Redis 连接和实时记录容量配置。 */
 struct RedisOptions {
-    std::string address{"127.0.0.1"};  ///< 使用数值地址，避免同步 DNS 查询耗尽预算。
+    std::string address{"127.0.0.1"};  ///< redis-plus-plus 端点；建议数值地址以避免阻塞 DNS。
     unsigned port{6379};
     unsigned database{0};
     std::string username;
@@ -14,10 +14,17 @@ struct RedisOptions {
     std::size_t pool_size{4};
     std::size_t max_record_bytes{65536};
     std::size_t max_batch_items{256};
+    std::size_t transport_timeout_ms{100};  ///< redis-plus-plus 单步连接/socket 超时。
+    std::size_t pool_wait_timeout_ms{100};  ///< redis-plus-plus 池借用等待上限。
 };
 
-/** @brief 使用 Redis 保存实时记录。 */
-class RedisStore final : public RealtimeStoreBase {
+/**
+ * @brief 使用 redis-plus-plus 保存实时记录，第三方类型不进入公共头。
+ *
+ * CallContext 在调用边界检查；同步库调用不能硬取消，其等待还受非零
+ * transport_timeout_ms/pool_wait_timeout_ms 约束，可能超过剩余调用预算。
+ */
+class EMS_RTDB_API RedisStore final : public RealtimeStoreBase {
    public:
     /**
      * @brief 在截止时间前建立 Redis 后端实例。
@@ -80,5 +87,5 @@ class RedisStore final : public RealtimeStoreBase {
  * @param[in,out] factory 接收后端注册的工厂。
  * @return 成功时包含结果；失败时包含错误信息。
  */
-Result<bool> register_redis_backend(BackendFactory& factory);
+EMS_RTDB_API Result<bool> register_redis_backend(BackendFactory& factory);
 }  // namespace ems::realtime

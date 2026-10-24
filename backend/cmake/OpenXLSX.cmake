@@ -74,7 +74,7 @@ function(ems_add_openxlsx)
     set(OPENXLSX_ENABLE_LTO OFF)
     set(OPENXLSX_MONOLITHIC_LIBRARY OFF)
     add_subdirectory(
-        "${_ems_openxlsx_module_dir}/../3rd/OpenXLSX"
+        "${_ems_openxlsx_module_dir}/../third_party/OpenXLSX"
         "${CMAKE_CURRENT_BINARY_DIR}/OpenXLSX"
     )
 endfunction()
