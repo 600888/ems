@@ -57,7 +57,8 @@ if(EMS_STORAGE_WITH_NATIVE AND TARGET ems_zmq_messaging)
         add_executable(ems-storage main.cpp)
         ems_copy_mysql_runtime(ems-storage)
 
-        target_link_libraries(ems-storage PRIVATE ems_storage_native)
+        target_include_directories(ems-storage PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+        target_link_libraries(ems-storage PRIVATE ems_storage_native Threads::Threads)
 
         set_target_properties(
             ems-storage

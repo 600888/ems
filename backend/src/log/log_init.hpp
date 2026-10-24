@@ -1,9 +1,12 @@
 #pragma once
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <mutex>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 #include "spdlog/async.h"
 #include "spdlog/spdlog.h"
@@ -37,7 +40,7 @@ using LV = spdlog::level::level_enum;
 
 struct LogInfo {
     LV level = LV::debug;
-    long long fileSize = 1024 * 1024 * 10 * 10;
+    long long fileSize = 10;
     int count = 10;
 };
 
@@ -73,12 +76,13 @@ class LogInitializer {
 
     /**
      * @brief 从配置文件读取各模块日志等级和滚动参数。
+     * @param[in] defaultLogLevel 配置未指定等级时使用的默认值。
      * @return 匹配条件的数据集合。
      */
-    static inline std::unordered_map<std::string, LogInfo> _readLogConf() {
+    static inline std::unordered_map<std::string, LogInfo> _readLogConf(LV defaultLogLevel) {
         std::unordered_map<std::string, LogInfo> logConfMap;
         std::unordered_map<std::string, LV> logLevelMap{
-            {"debug", LV::debug}, {"info", LV::info},         {"trace", LV::critical},
+            {"debug", LV::debug}, {"info", LV::info},         {"trace", LV::trace},
             {"error", LV::err},   {"critical", LV::critical}, {"warn", LV::warn},
             {"off", LV::off}};
 
@@ -96,8 +100,9 @@ class LogInitializer {
 
             // 遍历所有模块并打印其级别和文件大小
             if (jsonDoc.contains("modules") && jsonDoc["modules"].is_object()) {
-                LogInfo logInfo;
                 for (auto it = jsonDoc["modules"].begin(); it != jsonDoc["modules"].end(); ++it) {
+                    LogInfo logInfo;
+                    logInfo.level = defaultLogLevel;
                     std::string modulesStr = it.key();
                     auto& mod = it.value();
                     if (mod.contains("level") && mod["level"].is_string()) {
@@ -108,11 +113,11 @@ class LogInitializer {
                     }
                     if (mod.contains("file_size") && mod["file_size"].is_number_integer()) {
                         auto fileSize = mod["file_size"].get<int>();
-                        logInfo.fileSize = fileSize;
+                        if (fileSize > 0) logInfo.fileSize = fileSize;
                     }
                     if (mod.contains("count") && mod["count"].is_number_integer()) {
                         auto count = mod["count"].get<int>();
-                        logInfo.count = count;
+                        if (count > 0) logInfo.count = count;
                     }
                     logConfMap[modulesStr] = logInfo;
                 }
@@ -137,10 +142,10 @@ class LogInitializer {
             }
 
             // 读取配置文件
-            std::unordered_map<std::string, LogInfo> logConfMap = _readLogConf();
+            std::unordered_map<std::string, LogInfo> logConfMap = _readLogConf(defalutLogLevel);
             constexpr int oneMb = 1024 * 1024;
             long long fileSize = 10 * oneMb;
-            LV logLevel = LV::debug;
+            LV logLevel = defalutLogLevel;
             int count = 10;
             if (auto it = logConfMap.find(defaultLoggerName) != logConfMap.end()) {
                 logLevel = logConfMap[defaultLoggerName].level;

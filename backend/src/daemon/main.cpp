@@ -106,7 +106,5 @@ int main(int argc, char** argv) {
 
     ems::daemon::platform::release_instance_lock(instance_guard);
     LOG_INFO("ems-daemon 退出");
-    // 等待异步日志线程把剩余日志刷盘后再返回
-    spdlog::shutdown();
     return 0;
 }

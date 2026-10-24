@@ -36,7 +36,8 @@ target_link_libraries(ems_web_app PUBLIC ems_web_device ems_web_health drogon)
 
 file(GLOB entry_sources CONFIGURE_DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/*.cpp")
 add_executable(ems-web ${entry_sources})
-target_link_libraries(ems-web PRIVATE ems_web_app)
+target_include_directories(ems-web PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
+target_link_libraries(ems-web PRIVATE ems_web_app Threads::Threads)
 set_target_properties(ems-web PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
 ems_copy_mysql_runtime(ems-web)
 

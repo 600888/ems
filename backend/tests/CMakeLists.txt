@@ -7,6 +7,7 @@ include_directories(
 add_subdirectory(common)
 add_subdirectory(rtdb)
 add_subdirectory(util)
+add_subdirectory(log)
 add_subdirectory(db)
 
 # 存量处理器测试依赖 libmodbuspp；动态协议插件测试在协议模块内注册。

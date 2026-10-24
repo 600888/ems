@@ -3,12 +3,13 @@
 #include <csignal>
 #include <cstdint>
 #include <cstdlib>
-#include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
 #include <utility>
 
+#include "log/default_logger.hpp"
+#include "log/process_logger.hpp"
 #include "native_adapters.h"
 #include "storage.h"
 #include "telemetry_feed.h"
@@ -38,12 +39,15 @@ std::uint16_t port(const char* name, std::uint16_t fallback) {
 }  // namespace
 
 int main() {
+    const ProcessLogger logger("ems-storage");
+    LOG_INFO("ems-storage starting");
     std::signal(SIGINT, on_signal);
     std::signal(SIGTERM, on_signal);
 
     auto mysql_options = ems::database::load_mysql_options();
     if (!ems::core::is_ok(mysql_options)) {
-        std::cerr << ems::core::error_of(mysql_options).message << '\n';
+        LOG_ERROR("ems-storage: MySQL configuration: {}",
+                  ems::core::error_of(mysql_options).message);
         return 2;
     }
     auto mysql = ems::core::value_of(mysql_options);
@@ -53,7 +57,7 @@ int main() {
     const auto backend_name = environment("EMS_STORAGE_SERIES_BACKEND", "taos");
     auto backend = ems::storage::parse_time_series_backend(backend_name);
     if (!ems::core::is_ok(backend)) {
-        std::cerr << "ems-storage: unknown time-series backend\n";
+        LOG_ERROR("ems-storage: unknown time-series backend");
         return 2;
     }
     time_series.backend = ems::core::value_of(backend);
@@ -75,26 +79,26 @@ int main() {
         telemetry.topic.empty() ||
         (time_series.backend == ems::storage::TimeSeriesBackend::Tdengine &&
          (taos.port == 0 || taos.user.empty()))) {
-        std::cerr << "ems-storage: required connection or telemetry setting is missing\n";
+        LOG_ERROR("ems-storage: required connection or telemetry setting is missing");
         return 2;
     }
 
     auto series_result = ems::storage::connect_time_series(time_series);
     if (!ems::core::is_ok(series_result)) {
-        std::cerr << "ems-storage: time-series backend: "
-                  << ems::core::error_of(series_result).message << '\n';
+        LOG_ERROR("ems-storage: time-series backend: {}",
+                  ems::core::error_of(series_result).message);
         return 1;
     }
     auto repository_result = ems::database::connect_mysql_database(
         mysql, ems::core::make_call_context(std::chrono::seconds(10)));
     if (!ems::core::is_ok(repository_result)) {
-        std::cerr << "ems-storage: MySQL history repository: "
-                  << ems::core::error_of(repository_result).message << '\n';
+        LOG_ERROR("ems-storage: MySQL history repository: {}",
+                  ems::core::error_of(repository_result).message);
         return 1;
     }
     auto feed_result = ems::storage::connect_zmq_telemetry(telemetry);
     if (!ems::core::is_ok(feed_result)) {
-        std::cerr << "ems-storage: failed to subscribe to ZeroMQ telemetry\n";
+        LOG_ERROR("ems-storage: failed to subscribe to ZeroMQ telemetry");
         return 1;
     }
     auto database = std::move(std::get<ems::database::MySqlDatabaseContext>(repository_result));
@@ -108,32 +112,35 @@ int main() {
                                            *database.history_events, *series, scope_id,
                                            consumer_options);
     std::uint64_t last_local_drop_count = 0;
+    LOG_INFO("ems-storage ready: scope={}:{}, time-series backend={}", scope_kind, scope_id,
+             backend_name);
     while (running.load()) {
         auto ctx = ems::core::make_call_context(std::chrono::seconds(10));
         auto batch = consumer.consume_batch(ctx);
         if (!ems::core::is_ok(batch)) {
-            std::cerr << "ems-storage: telemetry read failed\n";
+            LOG_ERROR("ems-storage: telemetry read failed");
             std::this_thread::sleep_for(std::chrono::seconds(1));
             continue;
         }
         const auto& report = ems::core::value_of(batch);
         const auto stats = feed->stats();
         if (stats.dropped_local != last_local_drop_count) {
-            std::cerr << "ems-storage: local telemetry queue dropped "
-                      << stats.dropped_local - last_local_drop_count << " samples\n";
+            LOG_WARN("ems-storage: local telemetry queue dropped {} samples",
+                     stats.dropped_local - last_local_drop_count);
             last_local_drop_count = stats.dropped_local;
         }
         if (report.quarantined || report.dropped) {
-            std::cerr << "ems-storage: received=" << report.received
-                      << " written=" << report.written << " quarantined=" << report.quarantined
-                      << " dropped=" << report.dropped << '\n';
+            LOG_WARN("ems-storage: received={} written={} quarantined={} dropped={}",
+                     report.received, report.written, report.quarantined, report.dropped);
         }
     }
+    LOG_INFO("ems-storage stopping");
     feed->close();
     const auto final_stats = feed->stats();
     if (final_stats.dropped_local != last_local_drop_count) {
-        std::cerr << "ems-storage: local telemetry queue dropped "
-                  << final_stats.dropped_local - last_local_drop_count << " samples on shutdown\n";
+        LOG_WARN("ems-storage: local telemetry queue dropped {} samples on shutdown",
+                 final_stats.dropped_local - last_local_drop_count);
     }
+    LOG_INFO("ems-storage stopped");
     return 0;
 }

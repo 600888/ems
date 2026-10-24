@@ -120,7 +120,9 @@ foreach(compat IN ITEMS ems_realtime_core ems_realtime_shm ems_realtime_redis em
 endforeach()
 if(EMS_REALTIME_BUILD_PROCESS)
     add_executable(ems-rtdb process/main.cpp)
-    target_link_libraries(ems-rtdb PRIVATE ems_rtdb)
+    target_include_directories(ems-rtdb PRIVATE "${EMS_RTDB_THIRD_PARTY}")
+    target_link_libraries(ems-rtdb PRIVATE ems_rtdb Threads::Threads)
+    target_compile_definitions(ems-rtdb PRIVATE DEFAULT_ROOT_DIR="${CMAKE_BINARY_DIR}")
     set_target_properties(
         ems-rtdb
         PROPERTIES CXX_STANDARD 17
@@ -194,6 +196,7 @@ install(
 install(
     FILES "${EMS_RTDB_BACKEND_DIR}/conf/realtime.json"
           "${EMS_RTDB_BACKEND_DIR}/conf/realtime-redis.json"
+          "${EMS_RTDB_BACKEND_DIR}/conf/log.json"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/ems_rtdb"
     COMPONENT EMSRTDB
 )

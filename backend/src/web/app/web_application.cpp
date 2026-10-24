@@ -206,6 +206,7 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
         } catch (const Json::exception&) {
             reply->error(ApiError(400, "InvalidArgument", "invalid_json_or_field_type"));
         } catch (const std::exception&) {
+            LOG_ERROR << "ems-web request failed, request_id=" << reply->trace;
             reply->error(
                 ApiError(500, "Internal", "request_failed", post ? "Unknown" : "NotApplicable"));
         }
@@ -287,6 +288,7 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
     auto closing = std::make_shared<std::atomic<bool>>(false);
     auto shutdown = [state, closing] {
         if (closing->exchange(true)) return;
+        LOG_INFO << "ems-web stopping";
         state->health->set_ready(false);
         state->business.stop();
         state->imports.stop();
@@ -298,6 +300,9 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
     };
     app.setTermSignalHandler(shutdown).setIntSignalHandler(shutdown);
     state->health->set_ready(true);
+    app.registerBeginningAdvice([host = options.host, port = options.port] {
+        LOG_INFO << "ems-web ready, listen=" << host << ':' << port;
+    });
     app.run();
     state->health->set_ready(false);
     state->business.stop();

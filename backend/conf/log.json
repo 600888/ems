@@ -5,42 +5,22 @@
             "file_size": 10,
             "count": 10
         },
-        "stgy": {
+        "ems-rtdb": {
             "level": "debug",
             "file_size": 10,
             "count": 10
         },
-        "scd": {
+        "ems-storage": {
             "level": "debug",
             "file_size": 10,
             "count": 10
         },
-        "web": {
+        "ems-web": {
             "level": "debug",
             "file_size": 10,
             "count": 10
         },
-        "event": {
-            "level": "debug",
-            "file_size": 10,
-            "count": 10
-        },
-        "history": {
-            "level": "debug",
-            "file_size": 10,
-            "count": 10
-        },
-        "mqtt_cloud": {
-            "level": "debug",
-            "file_size": 10,
-            "count": 10
-        },
-        "provd": {
-            "level": "debug",
-            "file_size": 10,
-            "count": 10
-        },
-        "daemon": {
+        "ems-daemon": {
             "level": "info",
             "file_size": 10,
             "count": 10

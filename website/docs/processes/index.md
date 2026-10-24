@@ -37,3 +37,16 @@ flowchart TB
 共享内存由实时数据库进程创建并持有，其他进程只挂接；Redis 模式各进程独立连接。管理进程重启不清空有效后端，重建/切换前停止并隔离旧使用者，详见[实时数据库进程详细设计](data/design.md)。
 
 优先阅读 [系统架构](../architecture/system-design.md)，再按负责的进程进入相应目录。设备、通道、协议模型统一引用 [公共业务设计](../architecture/channel-protocol.md)，不在不同进程重复定义。
+
+## 运行日志
+
+已实现的进程共用 `<EMS_ROOT>/conf/log.json`，`modules` 的键与可执行文件名一致：
+`ems-daemon`、`ems-rtdb`、`ems-web`、`ems-storage`。各进程独立读取自己的
+`level`、`file_size`（MiB）和 `count`（滚动备份文件数），重启进程后生效。
+`level` 支持 `trace`、`debug`、`info`、`warn`、`error`、`critical`、`off`。
+缺失配置时默认使用 `info`、10 MiB、10 个备份；未设置 `EMS_ROOT` 时使用构建根目录。
+
+日志写入 `<EMS_ROOT>/log/<进程名>/<进程名>.log`；配置等级为 `debug` 时文件名为
+`<进程名>-debug.log`。启动、就绪、退出和错误写入各自的文件，正常退出时等待异步日志刷盘。
+Web 的 Drogon/Trantor 框架日志也写入 `ems-web` 文件，沿用相同等级和滚动配置。
+配置中的 `net` 仍供现有采集库和采集示例使用；当前尚未构建独立的 `ems-collector` 入口。

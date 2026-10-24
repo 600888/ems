@@ -8,8 +8,8 @@
  * 包摘要确定性派生，重复上传同一包即精确重放；确认与落库仍走既有
  * update-row/validate/apply 流程，整包不会自动 apply。
  */
-#include "station_package_parser.h"
 #include "web/modules/device/infrastructure/point_table_parser.h"
+#include "web/modules/device/infrastructure/station_package_parser.h"
 #include "web/platform/crypto.h"
 #include "web/transport/json.h"
 
