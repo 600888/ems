@@ -4,10 +4,12 @@
 
 - [公共模块设计与实施规范](design.md)：后续实施入口。定义目录与依赖、公共设备模型、配置版本、数据库事务、实时访问、消息总线、采样缓冲与恢复边界、跨进程及前后端契约、现有代码迁移、P0–P6 实施阶段和验收矩阵。
 
-- [公共数据库访问层](database-design.md)：统一 ormpp Repository、历史目录/事件仓储、时序适配、连接池与事务；明确各进程复用代码、独立运行实例的边界及整改步骤。
+- [公共数据库访问层](database/)：统一 ormpp Repository、历史目录/事件仓储、时序适配、连接池与事务；明确各进程复用代码、独立运行实例的边界及整改步骤。
+- [设备管理数据库设计](database/device-management.md)：只有设备树（无资产概念），四遥拆为遥测/遥信/遥控/遥调四张点表，14 张表覆盖设备树、通道绑定、点表导入、命令规则与运行统计；不做配置版本，保存即生效。
 
 - [实时数据与配置](realtime/index.md)：实时状态、可靠事件、配置权威和历史存储的边界。
 - [公共实时访问接口](realtime/access-design.md)：C++17 抽象基类、共享内存/Redis/其他派生后端、并发/错误/恢复。
+- [类型化实时业务门面](realtime/service-design.md)：`RealtimeService` 的点/设备/通道状态、来源授权、序号、新鲜度与能力运行条件。
 - [Redis 键设计](realtime/redis-key-design.md)：Redis 后端命名、字段、配置/事件目录与生命周期。
 
 公共数据库、配置、消息接口以 [公共模块设计](design.md) 为实施基线；设备语义、实时接口和物理键分别引用对应权威专题，不复制维护。进程与控制边界见 [系统架构](../architecture/system-design.md)，协议插件 C ABI 见 [采集执行与协议插件](../processes/collector/design.md)。

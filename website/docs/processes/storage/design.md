@@ -33,7 +33,7 @@ flowchart TB
 
 ### 1.1 数据库访问统一收口
 
-存储只编排订阅、校验、归档、发布与查询，**不自行维护 ORM 实体、SQL 或数据库连接实现**。MySQL 历史目录、事件身份、隔离和 outbox 均使用公共 ormpp Repository；TDengine 读写走公共时序接口。具体目录、事务、SQL 限制与迁移步骤以[公共数据库访问层](../../common/database-design.md)为准。
+存储只编排订阅、校验、归档、发布与查询，**不自行维护 ORM 实体、SQL 或数据库连接实现**。MySQL 历史目录、事件身份、隔离和 outbox 均使用公共 ormpp Repository；TDengine 读写走公共时序接口。具体目录、事务、SQL 限制与迁移步骤以[公共数据库访问层](../../common/database/)为准。
 
 ```mermaid
 flowchart TD
@@ -48,7 +48,7 @@ flowchart TD
     Adapter --> TS[(TDengine)]
 ```
 
-历史 MySQL 实现已迁入 `src/common/db/mysql/mysql_database.cpp`，使用公共池和显式事务；旧 `src/scd/mysql_history.cpp` 已移除。ormpp 固定版本没有 TDengine 后端，后者封装于公共适配器；存储业务不直接调用客户端或拼 SQL。首批实现和剩余范围见[实施记录](../../common/database-design.md#71-首批实现记录)。
+历史 MySQL 实现已迁入 `src/common/db/mysql/mysql_database.cpp`，使用公共池和显式事务；旧 `src/scd/mysql_history.cpp` 已移除。ormpp 固定版本没有 TDengine 后端，后者封装于公共适配器；存储业务不直接调用客户端或拼 SQL。首批实现和剩余范围见[实施记录](../../common/database/#71-首批实现记录)。
 
 ## 2. MySQL：历史点位目录
 

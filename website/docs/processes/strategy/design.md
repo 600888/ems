@@ -54,7 +54,7 @@ PV 边界包含天气、现有限值及已验证状态；缺少可信边界不�
 
 ### 2.2 配置模型与发布校验
 
-`strategy_config / schedule` 仍是逻辑表建议，DDL、权限和迁移随[公共数据库访问层](../../common/database-design.md)实施；策略只调用公共 ormpp Repository，不维护自己的实体映射、SQL 或连接实现。
+`strategy_config / schedule` 仍是逻辑表建议，DDL、权限和迁移随[公共数据库访问层](../../common/database/)实施；策略只调用公共 ormpp Repository，不维护自己的实体映射、SQL 或连接实现。
 
 | 配置组 | 必需内容 |
 | --- | --- |

@@ -37,7 +37,7 @@ flowchart TD
 
 经统一 RealtimeClient 读取权威状态，客户端内部选择适配器，算法不区分共享内存、Redis 或其他合格后端。批量读不是全局快照，计算须校验版本、时间与质量；协议、会话和厂家地址由采集按生效配置解析。
 
-配置、计划、命令、告警及 outbox 通过[公共数据库访问层](../../common/database-design.md)的 ormpp Repository 持久化；公共工厂装配本进程上下文，策略不自建实体、SQL 或连接实现。
+配置、计划、命令、告警及 outbox 通过[公共数据库访问层](../../common/database/)的 ormpp Repository 持久化；公共工厂装配本进程上下文，策略不自建实体、SQL 或连接实现。
 
 ## 降级、恢复与验收
 

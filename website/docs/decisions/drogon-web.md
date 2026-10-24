@@ -6,7 +6,7 @@
 
 `ems-web` 使用 C++17 与 Drogon 提供 HTTP REST API、WebSocket、路由和鉴权过滤器；Vue 3 前端继续通过 Web API 访问系统。业务进程现为采集与上送、实时数据库、存储、策略、Web 五类；实时数据库进程管理实时后端生命周期。先前规划的 Go/GORM Web 后端不再作为实施目标。
 
-MySQL 访问复用[公共数据库访问层](../common/database-design.md)的 ormpp Repository、实体、连接池/事务实现及统一迁移；Web 入口装配独立运行实例。同步查询、导入和长 RPC 进入有界业务工作池，不占 Drogon 网络线程；不启用另一套 Drogon ORM 表模型或维护 Web 私有 SQL。
+MySQL 访问复用[公共数据库访问层](../common/database/)的 ormpp Repository、实体、连接池/事务实现及统一迁移；Web 入口装配独立运行实例。同步查询、导入和长 RPC 进入有界业务工作池，不占 Drogon 网络线程；不启用另一套 Drogon ORM 表模型或维护 Web 私有 SQL。
 
 ## 依据与边界
 

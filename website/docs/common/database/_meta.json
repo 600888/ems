@@ -1,0 +1,12 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "公共数据库访问层"
+  },
+  {
+    "type": "file",
+    "name": "device-management",
+    "label": "设备管理数据库设计"
+  }
+]

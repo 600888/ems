@@ -11,6 +11,11 @@
   },
   {
     "type": "file",
+    "name": "service-design",
+    "label": "类型化实时业务门面"
+  },
+  {
+    "type": "file",
     "name": "zeromq-messaging-design",
     "label": "ZeroMQ 消息与命令设计"
   },

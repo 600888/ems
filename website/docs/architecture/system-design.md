@@ -329,7 +329,7 @@ Redis 异步复制租约本身不能保证网络分区下现场单写，PCS/串�
 
 ### 7.2 MySQL 与公共 ormpp 模块
 
-全项目持久数据访问统一到公共库，详细实施基线见[公共数据库访问层](../common/database-design.md)。
+全项目持久数据访问统一到公共库，详细实施基线见[公共数据库访问层](../common/database/)。
 
 ```mermaid
 flowchart TD

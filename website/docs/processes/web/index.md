@@ -2,7 +2,7 @@
 
 > 后端：`ems-web` / C++17 + Drogon｜前端：Vue 3 + TypeScript + Tailwind CSS｜更新日期：2026-10-23｜状态：目标设计，尚未实现。
 
-负责认证授权、配置编辑/发布、业务 API 和展示编排。[Drogon](https://github.com/drogonframework/drogon) 提供 REST/WebSocket；MySQL 统一经[公共数据库访问层](../../common/database-design.md)的 ormpp Repository，不在 Web 维护实体、SQL 或另一套 ORM。前端统一经 Web 访问数据和提交意图。
+负责认证授权、配置编辑/发布、业务 API 和展示编排。[Drogon](https://github.com/drogonframework/drogon) 提供 REST/WebSocket；MySQL 统一经[公共数据库访问层](../../common/database/)的 ormpp Repository，不在 Web 维护实体、SQL 或另一套 ORM。前端统一经 Web 访问数据和提交意图。
 
 ## 进程内分层与资源边界
 

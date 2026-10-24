@@ -10,9 +10,11 @@
     "label": "公共模块设计与实施"
   },
   {
-    "type": "file",
-    "name": "database-design",
-    "label": "公共数据库访问层（ormpp / 时序）"
+    "type": "dir",
+    "name": "database",
+    "label": "数据库设计",
+    "collapsible": true,
+    "collapsed": false
   },
   {
     "type": "dir",

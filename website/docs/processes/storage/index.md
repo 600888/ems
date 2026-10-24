@@ -19,7 +19,7 @@
 
 ## 连接、事务与配置发布
 
-通过[公共数据库访问层](../../common/database-design.md)装配 ormpp Repository 与时序适配器，连接池/事务实现、实体和 SQL 统一复用；存储只持有本进程实例并编排业务。时序、审计、outbox、配置与查询分别设预算。数据库与 ZeroMQ 无共同事务，命令按业务 ID 重发/对账，遥测 PUB/SUB 允许丢样。
+通过[公共数据库访问层](../../common/database/)装配 ormpp Repository 与时序适配器，连接池/事务实现、实体和 SQL 统一复用；存储只持有本进程实例并编排业务。时序、审计、outbox、配置与查询分别设预算。数据库与 ZeroMQ 无共同事务，命令按业务 ID 重发/对账，遥测 PUB/SUB 允许丢样。
 
 ```mermaid
 flowchart TD
