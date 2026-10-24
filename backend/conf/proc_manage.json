@@ -1,0 +1,33 @@
+{
+    "stopTimeout": 10,
+    "processes": [
+        {
+            "name": "ems_rtdb",
+            "cmd": "ems-rtdb",
+            "args": [],
+            "runDir": "",
+            "env": {},
+            "singleInstance": true,
+            "depends": [],
+            "start": {
+                "cnt": -1,
+                "delay": 0,
+                "interval": 5
+            }
+        },
+        {
+            "name": "ems_web",
+            "cmd": "ems-web",
+            "args": [],
+            "runDir": "",
+            "env": {},
+            "singleInstance": true,
+            "depends": [],
+            "start": {
+                "cnt": 3,
+                "delay": 2,
+                "interval": 5
+            }
+        }
+    ]
+}

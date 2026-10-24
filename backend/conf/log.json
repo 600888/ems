@@ -39,6 +39,11 @@
             "level": "debug",
             "file_size": 10,
             "count": 10
+        },
+        "daemon": {
+            "level": "info",
+            "file_size": 10,
+            "count": 10
         }
     }
 }
