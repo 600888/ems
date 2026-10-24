@@ -1,19 +1,19 @@
 # 公共实时数据访问接口设计（C++17）
 
-> 版本：1.3｜日期：2026-10-23｜状态：目标设计；底层存储接口与后端已有实现，业务门面、常驻管理与完整业务接入待完成。
-> 适用范围：EMS 采集、数据、策略、存储及 C++ Web 后端复用的公共实时数据访问库。
-> 核心决策：通过抽象基类 `IRealtimeStore` 定义统一契约，由共享内存、Redis 和其他内存数据库派生类实现；业务层通过依赖注入使用接口。
+> 版本：1.5｜日期：2026-10-24｜状态：首批记录级动态库、第三方后端、JSON 配置及常驻入口已实现；类型化授权门面与管理 RPC 待完成。
+> 适用范围：EMS 采集、实时数据库、策略、存储及 C++ Web 后端复用的公共实时数据访问库。
+> 核心决策：业务只使用 `RealtimeClient`；公共组件通过 `IRealtimeStore` 适配共享内存、Redis 和其他合格后端，由实时数据库进程的配置统一选择。
 
 ## 1. 设计结论与范围
 
 公共接口应描述“读取完整运行状态、按版本更新状态”，不直接暴露 Redis Hash 命令或共享内存地址。后端切换改变数据访问实现，业务身份、值类型、质量、来源控制和错误处理保持一致。
 
-本设计采用两层接口：
+业务公开入口为目标 `RealtimeClient`，负责隐藏管理发现、后端选择与本进程资源组装，复用下列两层核心接口：
 
 - **业务门面 `RealtimeService`**：面向测点、设备、通道与控制状态，负责类型转换、配置校验、来源代次和序号检查、新鲜度计算。
 - **抽象存储 `IRealtimeStore`**：面向逻辑记录，提供单记录完整读取、条件替换、条件删除与逐项批量结果。`SharedMemoryStore`、`RedisStore` 以及新增后端均实现这一契约。
 
-两层均为进程内公共库接口。常驻 `ems-data` 管理后端生命周期、部署描述、接入及授权投影，各业务进程仍分别创建门面/后端对象，直接访问同一共享段或 Redis。管理接口不转发正常数据读写，生命周期权威设计见[数据进程详细设计](../../processes/data/design.md)。
+上述均为进程内公共库接口。`ems-rtdb` 在所有后端下均常驻，统一读取后端配置，管理生命周期、部署描述、接入及授权投影。业务入口只创建统一客户端；客户端库内部发现配置、选取适配器并直接访问同一共享段或 Redis，不把具体后端对象、键或连接暴露给算法。管理接口不转发正常数据读写，配置/生命周期与客户端职责见[实时数据库进程详细设计](../../processes/data/design.md)。
 
 Redis 继续作为默认部署后端；共享内存成为同机部署的可选权威实时状态后端。每个逻辑作用域在一个部署代次内只配置一个权威后端，禁止两个后端同时独立受理权威写入。切换通过受控迁移完成，不因 Redis 连接失败就自动切到空共享内存。
 
@@ -35,7 +35,7 @@ Redis 继续作为默认部署后端；共享内存成为同机部署的可选�
 
 | 设计依据 | 必须延续的约束 | 本设计补充 |
 | --- | --- | --- |
-| [EMS 系统架构](../../architecture/system-design.md) | C++17 采集/数据/存储/策略与 Drogon Web 五类进程；职责和控制闭环明确 | 数据进程管理生命周期，各进程通过公共库直接访问后端 |
+| [EMS 系统架构](../../architecture/system-design.md) | C++17 采集/实时数据库/存储/策略与 Drogon Web 五类进程；职责和控制闭环明确 | 实时数据库进程管理生命周期，各进程通过公共库直接访问后端 |
 | [数据采集架构](../../processes/collector/design.md) | 协议 I/O、通道调度与数据分发分离；采样有界缓冲、历史允许丢样 | 分发层注入业务门面，协议模块不选择存储后端 |
 | [设备模型与点表绑定](../../architecture/device-model.md) | 固有点位、厂家映射、启用状态和命令反馈分开 | 统一逻辑测点、类型和质量，不让物理存储决定业务模型 |
 | [Redis 键设计](redis-key-design.md) | station/unit 作用域、递归资产路径、稳定 ID、来源序号、配置版本 | 逻辑身份适用于全部后端，Redis 物理键只属于 Redis 适配器 |
@@ -49,13 +49,14 @@ Redis 继续作为默认部署后端；共享内存成为同机部署的可选�
 
 ```mermaid
 flowchart TB
-    Collector[采集 DataDispatcher] --> Service[RealtimeService / 类型化业务门面]
-    Strategy[策略 / 状态聚合] --> Service
-    Storage[存储 / 状态投影] --> Service
-    Web[Drogon Web] --> Service
-    Data[数据进程 ems-data] -.初始化 / 生命周期 / 授权投影.-> Contract
+    Collector[采集 DataDispatcher] --> Client[RealtimeClient / 统一业务接口]
+    Strategy[策略 / 状态聚合] --> Client
+    Storage[存储 / 状态投影] --> Client
+    Web[Drogon Web] --> Client
+    Client --> Service[RealtimeService / 内部业务校验]
+    Data[实时数据库进程 ems-rtdb] -.初始化 / 生命周期 / 授权投影.-> Contract
     Service --> Contract[IRealtimeStore / C++17 抽象基类]
-    Factory[进程启动 / BackendFactory] --> Contract
+    Factory[客户端内部 / BackendFactory] --> Contract
     Contract --> Shm[SharedMemoryStore]
     Contract --> Redis[RedisStore]
     Contract --> Other[其他内存数据库适配类]
@@ -68,7 +69,7 @@ flowchart TB
     Data -.管理接入 / 部署描述.-> Factory
 ```
 
-图中的 Service、Contract、Factory 代表各进程分别持有的库对象，不是一个共享 C++ 对象或集中转发服务。受信任的同机 C++ Web 后端与采集、策略一样通过公共库直接映射共享段，布局由适配器隐藏；Redis 部署各进程独立连接。浏览器只访问 Web；跨主机直接访问共享段不受支持，首期跨机实时访问选 Redis。存储只提供历史服务，数据进程只提供管理服务；后端切换时全部参与者核对同一部署与实际存储代次。
+图中的 Client、Service、Contract、Factory 代表每个进程独立持有的公共库对象；后端选择、连接/映射和能力校验都在客户端内部，业务不构造 BackendSpec 或判断后端类型。受信任的同机 C++ Web 后端与采集、策略调用相同 API，浏览器只访问 Web。跨主机直接访问共享段不受支持，客户端须拒绝不兼容的部署。存储提供历史服务，实时数据库进程提供统一管理；正常数据不经管理 RPC，切换后全部客户端核对同一部署与实际存储代次。
 
 ```mermaid
 classDiagram
@@ -146,7 +147,7 @@ revision 建议采用后端实例代次与每次写入唯一标识组合的字�
 
 类型化门面建议使用 `std::variant<bool, std::int64_t, std::uint64_t, double, std::string>` 表示有效值，外层 `std::optional` 表示无值；禁止以 NaN/Inf 伪装质量码。`value_type` 与 `value` 的合法组合、浮点往返精度、枚举质量码、字段是否必填写入 `contracts/`，不能让后端各自推断。现有整数精度、JSON null 约定沿用 Redis 键设计。
 
-编码器定义一种规范的长度前缀字段编码，用于计算所有后端一致的 `max_record_bytes`，并限制字段数、单字段长度和总长度；共享内存还计入索引、key 和双映像开销。Redis 原生占用字节可以不同，但不得因为自身允许更大对象就绕过公共记录上限。
+编码器定义规范的长度前缀字段编码，用于计算所有后端一致的 `max_record_bytes`，并限制字段数、单字段长度和总长度；共享内存还计入 Boost 容器、key、revision 和 allocator 开销。Redis 实际占用可以不同，但不能绕过公共记录上限。
 
 ## 5. C++17 接口草案
 
@@ -372,7 +373,7 @@ private:
 
 ### 5.3 业务层使用的公共 API
 
-存储抽象保持简洁，调用者通过下列类型化门面访问。这里的地址类型由公共模型定义，状态类型为 schema 校验后的设备/通道/单元状态；底层 Fields 不传播到协议算法和策略算法中。
+存储抽象保持简洁，下表定义 `RealtimeService` 的类型化业务语义，由公开 `RealtimeClient` 复用同名操作向业务提供；不新增第二份样本或错误模型。客户端的创建只接收服务定位、调用身份、作用域和预算，后端选取由库内部完成。地址类型由公共模型定义，状态类型为 schema 校验后的设备/通道/单元状态；底层 Fields 不传播到协议或策略算法中。
 
 | 门面操作 | 输入 | 结果与约束 |
 | --- | --- | --- |
@@ -391,56 +392,29 @@ Web 通过本进程门面调用 getPoint/getPoints/getState，向浏览器返回
 
 ## 6. 共享内存后端 `SharedMemoryStore`
 
-### 6.1 存储布局与进程边界
+### 6.1 使用系统 Boost.Interprocess
 
-共享内存是同一主机内的共享存储，每个进程分别创建 C++ 访问对象并映射同一段。共享段只保存有版本的布局、进程间同步数据、索引与序列化记录，不保存 `std::string/std::vector/std::map`、虚函数对象、裸指针或进程内互斥量。
+共享内存使用系统安装的 Boost.Interprocess，本机验证版本为 Boost 1.89。Interprocess 及 Container、Move、Intrusive 等依赖全部来自同一套 Boost 安装，不再引用仓库内单独的共享内存组件。CMake 优先查找安装包，并兼容通过 BOOST_ROOT 指定的完整头文件目录；其他系统默认查找系统 Boost。不修改第三方源码，不自研 OS 映射、共享分配器、robust 锁或双映像提交协议。
 
-```text
-SegmentHeader
-  magic / layout_version / endian / header_size / segment_size
-  generation_id / initialization_state / capacity / shard_count
-  platform_sync_abi / index_offset / slots_offset
-Shard[0..N)
-  平台进程间锁 + 恢复状态
-  固定容量索引（完整 key 验证；哈希冲突不能等价为命中）
-RecordSlot
-  固定长度 key 区 / 状态
-  两个有界 record image（revision、length、校验、序列化字段）
-  提交选择器 / 提交代次
-```
+适配器使用 `managed_shared_memory`、共享段 allocator/string/map 和 `named_mutex/scoped_lock`。共享段中的容器由 Boost 管理，不放入普通 STL 对象或进程内裸指针；公共 API 仍返回调用者拥有的记录副本。段内仅增加项目需要的契约版本、容量参数、generation 和业务记录，不另造内存数据库引擎。
 
-采用固定容量 slot 和有界字段载荷作为首期实现，降低跨进程分配器与崩溃回收复杂度。共享索引保存 offset/slot ID；挂接时校验 offset、长度、对齐、整数溢出和段边界。数据映像采用明确字节序、长度编码与 schema；平台锁区域单独校验 OS/架构/同步 ABI，不承诺 Linux 与 Windows 或任意 libc 二进制互通。
+### 6.2 并发与失败边界
 
-不同布局版本拒绝 attach，不能在业务运行期间原地 reinterpret_cast 成新结构。扩容通过新段、新 generation、受控停写与复制切换完成；普通读写进程只 detach，无权自动 unlink 或删除共享段。
+首批以一个段级 Boost 命名互斥锁保护完整记录读取、版本比较和容器更新。新载荷先构造，再在锁内替换；CAS、完整替换、逐项批量与错误语义保持不变。现有 shard_count 作为兼容配置校验，首批不声称已经实现分片并发。
 
-### 6.2 同步与原子提交
+锁通过有界 try_lock 循环与 steady deadline 等待，不自行调用 pthread、Windows Mutex 或原生映射 API。Boost 普通命名锁不被视为 robust owner-death 恢复机制：持锁进程崩溃后可能导致后续访问超时。禁止强制解锁后继续使用可能损坏的段；维护流程先停止/隔离所有使用者，再清理锁和段，创建全新 generation。原生实现的自动持锁者死亡恢复及双映像故障保证不再适用。
 
-首期选用**分片进程间互斥锁 + 锁内读副本 + 双映像提交**。同键总落在同一分片；读操作也加锁，拷贝完成才释放。此方案先保证跨进程正确性，再通过实测优化热点；不以无锁为前置目标。
+### 6.3 生命周期与兼容
 
-Linux 实现使用经目标平台验证的 `PTHREAD_PROCESS_SHARED`、robust mutex；持锁进程死亡后新持有者处理 `EOWNERDEAD`，先恢复受保护数据再声明一致，不能简单清锁继续。相关行为见 [Linux robust mutex 说明](https://man7.org/linux/man-pages/man3/pthread_mutexattr_setrobust.3.html)。Windows 使用命名 mutex；收到 `WAIT_ABANDONED` 同样进入数据恢复流程，见 [Microsoft Mutex 说明](https://learn.microsoft.com/en-us/windows/win32/sync/using-mutex-objects)。
+仅实时数据库进程在首次部署或已授权维护中创建共享段；客户端只 attach，close 只释放本进程资源。`managed_shared_memory` 在 Windows 上的实现与原生页文件映射不同，不依赖“最后一个句柄关闭就自动销毁”假设；最终删除通过 Boost 的显式 remove 管理，并由调用方确保使用者已全部隔离。
 
-具体提交规则：
+新 Boost 段使用独立名称前缀及布局版本，不能原地打开旧自研布局。管理重启验证并复用有效段；扩容/清理遵守停写、隔离、发布新代次流程。不承诺跨 OS、Boost/编译器版本或同步 ABI 的布局兼容。
 
-1. 有界等待分片锁，校验索引和当前完整映像，比较 expected revision。
-2. 在非活动映像中写入完整新 revision、字段、长度与校验，完成必要的内存发布顺序。
-3. 通过**目标平台保证的、对齐且不可撕裂的提交选择器操作**选择新映像，作为线性化点；然后释放锁并返回。
-4. 删除以新版本 tombstone 提交，待锁内索引回收完成后复用 slot；重建用全新 revision，防止 ABA。
-5. 若持锁者死亡，恢复者只认可已发布且校验通过的活动映像；未发布映像不可因“序号更大”就当作成功。无法证明当前映像有效时返回 `CorruptData` 并隔离分片，禁止静默回退并覆盖更新。
-
-C++17 标准本身不提供可移植的跨进程原子提交保证。本实现需要封装并验证 Linux/Windows 的共享映射、原子发布与进程间锁组合；不把普通 `std::atomic` 放入共享段就视为问题已解决。若目标平台不能证明该提交协议，须在该平台禁用后端或采用经验证的共享内存存储组件；不要以 checksum 替代同步。也不使用“无锁读普通字段 + seqlock 重试”绕开 C++ 数据竞争。
-
-首次创建由 `ems-data` 指定初始化角色通过 OS 级独占创建/引导锁完成；其他进程只在结构 READY 状态 attach，结构就绪不等于业务已恢复。初始化中崩溃由管理恢复流程在确认无活跃使用者后重建新代次，PID 不是唯一存活证据。锁获取预算统一使用 steady deadline；平台定时锁使用其他时钟时通过有界尝试循环换算，避免墙钟回拨造成无限等待。
-
-### 6.3 生命周期、容量与安全边界
-
-- 共享内存不持久保存历史。主机重启后加载配置并重新采集设备状态，控制投影从 MySQL 持久业务记录重建，未恢复完成返回 `NotReady`。
-- 普通进程退出只 detach；数据进程重启验证并复用有效段，不清零或重置存储代次。清理由数据进程配合部署管理显式执行，先确认使用者退出/隔离；不只依据共享引用计数、PID 或心跳判断活跃性。Windows 对象在最后引用释放后会丢失，不能视为持久存储。
-- 容量/单记录上限在启动时确定，满时返回 `ResourceExhausted/NotApplied`，不覆盖仍有效的记录、不静默淘汰控制状态。
-- `segment_bytes ≈ header + index + shards + slots × (key区 + 2 × image容量 + 元数据) + 对齐余量`。初始 256 MiB、64 KiB 最大记录等只能作为压测参数，必须核算 slot 数，不能据此宣称容纳任意点数。
-- 使用 OS 用户/组或 ACL 限制段和锁对象访问。能写共享段的进程具有底层修改能力，因此此后端面向互信进程；当前读也要更新锁状态，业务只读不等于 OS 只读映射。更强隔离需另行设计服务 API；命名空间、账户与容器限制见数据进程专题。
-- 变更通知可以用每分片版本计数配合平台唤醒；通知丢失、进程暂停或队列覆盖后必须重读快照，不作为唯一事件副本。
+容量由 Boost allocator 的可用内存与业务记录数双重限制；满时返回 ResourceExhausted，不静默淘汰有效状态。记录/批量上限继续显式校验。直接访问只适用于受信任的同机进程，业务只读不等于 OS 只读映射；新鲜度、配置与来源校验仍由业务门面承担。
 
 ## 7. Redis 后端 `RedisStore`
+
+实现统一使用 `backend/third_party/redis-plus-plus` 的 `sw::redis::Redis`、ConnectionOptions/ConnectionPoolOptions、Hash 与 eval API。连接、认证、重连、RESP 和 socket 由第三方库处理；自有代码只保留项目键、完整替换/CAS 的 Lua 业务规则、配置校验及错误转换，不再直接调用 hiredis C API 或原生 socket。
 
 ### 7.1 与现有键契约兼容
 
@@ -466,7 +440,7 @@ C++17 标准本身不提供可移植的跨进程原子提交保证。本实现�
 
 ### 7.2 连接与故障
 
-每个进程独立持有连接池。默认从当前权威主节点读，禁止悄悄改为读副本而降低读取保证。连接池等待、建连、网络读写和重试共同消耗请求 deadline；选定的客户端如果不能落实每次调用的剩余预算，必须补适配层，不能仅设置一个很长的全局 socket timeout。
+每个进程的库实例独立持有 redis-plus-plus 连接池，配置非零连接、socket 及池等待上限。调用前后及多步操作之间检查 CallContext；首批同步第三方调用不能被 steady deadline 强制取消，实际最坏等待受第三方单步超时限制，可能超过剩余调用预算。此限制必须在接口说明和验收报告中保留，不为实现硬取消而重写原生网络栈；需要更严格期限的控制业务在完善预算适配并验收前不能据此宣称满足硬实时要求。
 
 单机、Sentinel、Cluster 按配置使用相应客户端。重定向、重连和脚本装载必须有次数上限；未取得明确未应用证据的写失败返回 `Unknown`。认证失败不无限重试，池耗尽返回明确资源/超时错误。Pub/Sub、阻塞消费与普通读写不共用同一连接。
 
@@ -522,48 +496,24 @@ v1 仅配置进程本地配置缓存，不默认叠加实时读缓存。未来 `
 
 ### 10.1 部署配置示例
 
-以下 YAML 是配置设计示例，不表示仓库已有相应解析器。每份部署清单具有 `deployment_generation`，同一作用域参与者核对后端选择、键/schema 和共享段代次，发现不一致拒绝就绪。
+后端类型和参数只出现在实时数据库进程的权威配置，结构为 `realtime.backend.type/options`，共享内存与 Redis 的完整示例见[进程配置](../../processes/data/design.md#11-配置与工程组织)。客户端内部通过管理描述发现后端，再核对部署代次、实际存储代次和契约能力。
+
+以下为业务进程的统一客户端配置示例；shm、Redis 及未来适配器使用同一结构，不表示仓库已有相应解析器：
 
 ```yaml
-realtime:
-  backend: shm
-  deployment_generation: "rt20260919a"
+realtime_client:
+  service_endpoint: "127.0.0.1:5562"
+  instance_id: "collector-station001-01"
+  role: collector
+  scopes: ["station:station001", "unit:ess000001"]
   operation_timeout_ms: 50
-  max_batch_items: 256
-  shared_memory:
-    segment_name: "ems_rt_station001_v1"
-    segment_bytes: 268435456
-    layout_version: 1
-    create_if_missing: false
 telemetry:
   backend: zeromq_pubsub
 config:
   backend: mysql
-web_realtime:
-  mode: direct_store
 ```
 
-```yaml
-realtime:
-  backend: redis
-  deployment_generation: "rt20260919a"
-  operation_timeout_ms: 200
-  max_batch_items: 256
-  redis:
-    topology: standalone
-    endpoints: ["redis.internal:6379"]
-    pool_size: 8
-    credentials_ref: "secret/ems/realtime"
-    tls_profile_ref: "tls/ems-internal"
-telemetry:
-  backend: zeromq_pubsub
-config:
-  backend: mysql
-web_realtime:
-  mode: direct_store
-```
-
-两段配置为业务参与者二选一示例，超时/容量必须由目标硬件与采样周期验证。数据进程的管理配置与接入描述见[部署设计](../../processes/data/design.md#11-配置与工程组织)，业务进程仅挂接，创建权限限于指定初始化角色。`BackendSpec.options` 仅用于工厂边界，先转为类型化 Options 严格校验；密钥使用引用，日志只显示脱敏拓扑。示例中的 Redis 拓扑/TLS 等为目标字段，当前单地址适配器不表示已支持全部部署能力。
+公共客户端负责接入描述、管理请求与数据连接，不要求业务配置后端类型、地址或共享段名；`create_if_missing=false` 由内部角色策略强制执行。`BackendSpec.options` 只存在于公共实现的工厂边界，严格转换为类型化 Options；密钥使用引用，不返回给业务调用。配置选择仅适用于已发布且满足能力要求的适配器；改变配置后按维护流程切换，不承诺热切换或自动降级。
 
 ### 10.2 目标目录与链接
 
@@ -571,6 +521,7 @@ web_realtime:
 backend/include/common/core/         # 共享 Error、Result、CallContext
 backend/include/common/model/        # 设备/测点/状态等模型，不由实时库重新定义
 backend/include/realtime/
+  realtime_client.h             # 唯一业务入口；管理发现与后端组装隐藏在实现中
   types.h                       # 基础类型别名、RecordKey、Record、请求/结果
   i_realtime_store.h            # 抽象基类
   realtime_service.h            # 类型化门面
@@ -589,29 +540,28 @@ backend/tests/realtime/
 contracts/realtime/            # 字段 schema、逻辑键、C++/TypeScript 黄金样例
 ```
 
-建议 target 拆分为 `ems_realtime_api`、`ems_realtime_core`、`ems_realtime_shm`、`ems_realtime_redis`。通过 `EMS_REALTIME_WITH_SHM/REDIS` 控制实现编译；业务只链接 core/api，最终进程组装目标链接被选用的后端。Redis 构建依赖只由 Redis target 持有；静态链接最终可传递必要库，但不能把 Redis 类型暴露进公共头文件。
+本批实际交付 `ems_rtdb` 动态库，统一包含 core、client 和所启用的第三方适配器；原 ems_realtime_core/shm/redis target 保留为链接同一动态库的兼容接口，避免多个库实例各自持有工厂与资源。业务链接安装包的 `ems::rtdb`，通过导出头调用 API。Boost Interprocess 与 redis-plus-plus 的包含路径仅在实现侧可见；使用公共 C++ STL API 要求调用者与库使用兼容工具链/CRT，不承诺跨编译器 ABI。
 
 自研 target 统一设置 `CXX_STANDARD 17`、`CXX_STANDARD_REQUIRED YES`、`CXX_EXTENSIONS NO`；`target_compile_features(cxx_std_17)` 可补充最低需求，同时确保上层构建没有将标准提升为 C++20。pthread/Windows 库按平台链接，Linux ARM 与目标桌面平台分别构建；只选共享内存后端时不得强制安装 redis++/hiredis，事件模块需要 Redis 是独立依赖。
 
 ### 10.3 组装顺序
 
 ```text
-ems-data / composition root
+ems-rtdb / composition root
   获取唯一管理权 -> 核对可信部署与配置 -> 注册并冻结后端工厂
   创建或验证复用后端 -> 安装已确认的授权投影 -> 发布实际存储代次
   启动管理服务与健康观测 -> 维护接入状态
 
 业务进程 / composition root
-  核对部署描述 -> 注册并冻结后端工厂
-  仅挂接共享段或创建本进程 Redis 池 -> 核对实际布局/代次/能力
-  初始化本进程配置缓存与所需 ZeroMQ 通道
-  构造 RealtimeService(store, config_provider, caller_role)
-  核对授权和业务依赖 -> 注入分发器 / 策略 / Web -> 登记并就绪
+  读取统一客户端配置 -> 创建 RealtimeClient -> 注入分发器 / 策略 / Web
+  客户端内部：发现并核对描述 -> 工厂选择已注册适配器
+    -> 挂接共享段或创建 Redis 池 -> 核对实际布局/代次/能力
+    -> 构造 RealtimeService -> 核对配置/授权依赖 -> 登记并就绪
 ```
 
-每个进程有独立 Store 对象与连接/映射句柄，可在本进程线程间共享；跨进程只共享后端数据，不共享 C++ 对象。进程生命周期由应用负责，分发器关闭时不擅自关闭仍被其他本进程服务使用的 store。
+每个进程持有独立客户端，内部 Store 与连接/映射句柄可按接口约定在线程间共享；跨进程只共享后端数据，不共享 C++ 对象。进程生命周期由应用负责，业务只关闭自己的客户端，不删除后端或关闭其他本进程服务仍在使用的资源。
 
-管理心跳不参与每次数据访问；管理服务中断时，实际后端与授权仍有效的已挂接进程可按原规则运行，新接入和变更暂停。管理者重启与维护隔离流程以[数据进程生命周期](../../processes/data/design.md#7-共享内存生命周期)为准。
+管理心跳不参与每次数据访问；管理服务中断时，实际后端与授权仍有效的已挂接进程可按原规则运行，新接入和变更暂停。管理者重启与维护隔离流程以[实时数据库进程生命周期](../../processes/data/design.md#7-共享内存生命周期)为准。
 
 ## 11. 故障语义、运行指标与性能
 
@@ -630,7 +580,7 @@ ems-data / composition root
 
 观测至少包括按后端/操作聚合的调用量、P50/P95/P99、超时、Unknown、CAS 冲突、字节数、批量大小、共享段使用率/恢复次数、连接池等待、事件积压和陈旧率。指标标签不带 point_id/event_id 等高基数值，详细关联信息放脱敏日志。
 
-容量评估先定义点数 N、平均频率 f、字段大小 B、读写比例与并发进程数。基准写入量约为 `N × f`；CAS 门面通常包含一次读和一次条件写，还要计算冲突重试、双映像/临时键成本与历史投递开销。不能只以底层 SET 或 memcpy 的吞吐代表完整链路。
+容量评估先定义点数 N、平均频率 f、字段大小 B、读写比例与并发进程数。基准写入量约为 `N × f`；CAS 门面通常包含一次读和一次条件写，还要计算冲突重试、Boost 容器分配/Redis 临时键成本与历史投递开销。不能只以底层 SET 或 memcpy 的吞吐代表完整链路。
 
 压测矩阵覆盖 1/4/8 个进程、单热点键与均匀分布、不同记录长度、批大小、读写比例和故障恢复。报告目标硬件、OS、客户端/服务版本、样本量、持续时间与尾延迟；SLO 根据协议周期和策略预算冻结，不在设计阶段承诺未经测试的“微秒级”或固定百万吞吐。
 
@@ -650,7 +600,7 @@ ems-data / composition root
 Redis → 共享内存（反向同理）的切换步骤：
 
 1. 检查目标容量、平台、schema 与访问路径；创建新 generation，目标尚不接受业务写。
-2. 暂停受影响作用域的新调度与实时投影写入，采集可短暂使用有界内存缓冲；排空在途 CAS，记录配置/来源授权并报告未发布样本风险。由数据进程配合部署管理确认旧使用者已退出或被隔离，不能将心跳超时当作停写证明。
+2. 暂停受影响作用域的新调度与实时投影写入，采集可短暂使用有界内存缓冲；排空在途 CAS，记录配置/来源授权并报告未发布样本风险。由实时数据库进程配合部署管理确认旧使用者已退出或被隔离，不能将心跳超时当作停写证明。
 3. 按配置目录复制完整状态并验证记录数、稳定 ID、值/质量/时间、来源与内容摘要；目标生成新 revision，不复制源后端 CAS 令牌。
 4. 处理暂停期间仍保留的内存样本并核对事件发布；对已丢失样本报告缺口；更新部署代次，将全部生产者、消费者、Web 查询入口切到目标，确认旧实例已退出写权限。没有参与者确认不得开放双写。
 5. 核对新状态与授权，恢复业务；旧后端只读保留至观察期结束。期间影子对比不用于控制执行。
@@ -665,13 +615,14 @@ Redis → 共享内存（反向同理）的切换步骤：
 | 类别 | 关键用例及通过标准 |
 | --- | --- |
 | C++17 与依赖 | 公共头独立编译，无 C++20/23 API；仅编译共享内存时实时库不依赖 Redis SDK |
+| 后端透明性 | 业务只引用统一客户端，业务代码/客户端配置在 shm、Redis 及合格新后端保持一致；未编译/不兼容后端明确拒绝，配置切换不形成双权威写入 |
 | 全字段一致性 | 并发交替写两套明显不同的值/质量/时间组合，读者绝不看到拼接样本；替换删除旧字段 |
 | 创建与 CAS | 多进程同版本竞争只有一个成功；错误 expected 不写入；不存在与空字段记录可区分 |
 | ABA 与恢复 | 删除重建/共享段重建后旧 revision 不能成功；旧 schema 不自动覆盖 |
 | 顺序与来源 | 乱序忽略、同序异值拒绝、新授权阻断旧来源；切换部分完成时策略拒绝不一致输入 |
 | 批量 | 空输入、重复键、部分成功、超限、deadline 中途耗尽，结果数量/顺序/确定性正确 |
 | 数值与编码 | int64/uint64 边界、bool、UTF-8、null、浮点往返、非法 NaN/Inf、超长载荷跨后端一致 |
-| 共享内存故障 | 在初始化、非活动映像写入、提交前后、索引修改/删除时杀进程；恢复只返回已提交完整记录或明确损坏 |
+| 共享内存故障 | 独立进程更新可见；持 Boost 锁崩溃后有界超时；禁止未经隔离强制清锁或自动复用可能损坏的容器，初始化中断按维护恢复验收 |
 | Redis 故障 | 响应丢失、断网、NOSCRIPT、池耗尽、主从切换、Cluster 跨槽拒绝、临时键残留，不能误报未应用 |
 | 生命周期 | 多线程共享、停止入口/在途等待/close 顺序、普通进程退出不删除段；订阅退出无悬空回调 |
 | 遥测链路 | 实时更新与 ZeroMQ 原始事件发布分别记录；重复实时值不跳过事件发布；退出/超限的丢样边界可验证 |

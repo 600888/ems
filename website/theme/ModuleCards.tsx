@@ -13,8 +13,8 @@ const modules = [
     label: '进程设计',
     en: 'PROCESSES',
     href: '/processes/',
-    description: '采集与上送、数据、存储、策略和 Web，各进程的职责与协作方式。',
-    tags: '采集 · 数据 · 存储 · 策略 · Web',
+    description: '采集与上送、实时数据库、存储、策略和 Web，各进程的职责与协作方式。',
+    tags: '采集 · 实时数据库 · 存储 · 策略 · Web',
     icon: 'network',
   },
   {

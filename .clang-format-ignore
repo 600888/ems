@@ -1,2 +1,2 @@
 # clang-format 忽略清单（语法同 .gitignore，相对本文件所在目录）。
-# 第三方单头 CSV 库 rapidcsv 已移到 backend/3rd/，由该目录的规则排除。
+# 第三方单头 CSV 库 rapidcsv 已移到 backend/third_party/，由该目录的规则排除。

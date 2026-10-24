@@ -1,0 +1,17 @@
+*.map
+*.lss
+*.sym
+*.bak
+.codelite
+.clang
+compile_commands.json
+*.a
+*.so
+obj/
+version.h
+config.h
+*build*/
+work/
+lib/libmodbus
+examples/
+tests/

@@ -2,11 +2,11 @@
   {
     "type": "file",
     "name": "index",
-    "label": "数据进程设计"
+    "label": "实时数据库进程设计"
   },
   {
     "type": "file",
     "name": "design",
-    "label": "数据进程详细设计"
+    "label": "实时数据库进程详细设计"
   }
 ]

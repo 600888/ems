@@ -3,7 +3,7 @@
 # EMS Backend 代码格式化入口（clang-format，基于 Google 风格）。
 #
 # 规则文件：仓库根目录 .clang-format
-# 第三方目录 backend/3rd/ 永不参与格式化。
+# 第三方目录 backend/third_party/ 永不参与格式化。
 #
 # 用法：
 #   ./scripts/format.sh                      格式化 backend 下全部自有代码
@@ -20,10 +20,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "${ROOT_DIR}"
 
-# 默认格式化范围：只包含项目自有代码，不含 3rd/
+# 默认格式化范围：只包含项目自有代码，不含 third_party/
 DEFAULT_PATHS=(backend/include backend/src backend/tests backend/examples)
 # 兜底排除：即使显式传入 backend/ 也会跳过该目录下的第三方代码
-PRUNE_DIR="backend/3rd"
+PRUNE_DIR="backend/third_party"
 
 MODE="write"
 JOBS=""

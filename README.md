@@ -1,9 +1,11 @@
 # ems
 储能EMS能量管理系统
 
-设计文档入口：[EMS 设计文档](website/docs/index.mdx)。目标架构包含采集与上送、数据、存储、策略及 C++17 + Drogon Web 五类进程，前端为 Vue 3；[数据进程](website/docs/processes/data/design.md)常驻管理实时后端生命周期，各进程通过公共库直接访问共享内存或 Redis。下面的构建说明与现有实现状态分开维护。
+设计文档入口：[EMS 设计文档](website/docs/index.mdx)。目标架构包含采集与上送、实时数据库、存储、策略及 C++17 + Drogon Web 五类进程，前端为 Vue 3。[实时数据库进程 ems-rtdb](website/docs/processes/data/design.md)常驻并按配置选择 Redis、共享内存或其他合格后端，业务只使用统一 RealtimeClient 接口，连接与直接访问封装在公共组件内部。下面的构建说明与现有实现状态分开维护。
 
 在线文档：[EMS 设计文档](https://600888.github.io/ems/)。合并到 `main` 的文档变更会由 GitHub Actions 自动构建并发布到 GitHub Pages。
+
+实时数据库已开始按动态库交付：公共头 + `ems::rtdb`，共享内存使用系统 Boost.Interprocess（本机 Boost 1.89），Redis 使用仓库内 redis-plus-plus。首批记录级接口、配置/常驻入口、安装包与验证范围见[实时数据库实现说明](backend/src/realtime/README.md)；类型化授权门面和完整管理 RPC 尚待接入。
 
 文档站点独立放在 `website/`，使用相同的 Rspress 2 主题，需要 Node.js 22.12+：
 
@@ -23,8 +25,8 @@ npm run dev
 
 ## 依赖安装
 
-项目使用 redis-plus-plus 作为 Redis 客户端库，已集成在 `backend/3rd/` 目录下。
-DLT645 默认启用，需要 **Boost 1.83+ 头文件**；协议栈源码已集成在 `backend/3rd/dlt645/`。
+项目使用 redis-plus-plus 作为 Redis 客户端库，已集成在 `backend/third_party/` 目录下。
+DLT645 默认启用，需要 **Boost 1.83+ 头文件**；协议栈源码已集成在 `backend/third_party/dlt645/`。
 可通过 `-DBOOST_ROOT=<Boost 根目录>` 指定头文件，或用 `-DEMS_BUILD_DLT645=OFF` 关闭该插件。
 发行版提供的 Boost 版本较旧时，需要单独准备 1.83+；仅使用头文件，无需编译 Boost 库。
 
@@ -182,15 +184,15 @@ python -m pip install clang-format==22.1.8
 
 也可以在 `backend/build` 下使用 CMake 目标：`make format`、`make format-check`。
 
-`backend/3rd/` 下的第三方代码不参与格式化。
+`backend/third_party/` 下的第三方代码不参与格式化。
 
 CMake 文件按功能块分隔空行，统一 4 空格缩进和 100 列，规则见 `.cmake-format.yaml`。
 可使用 `cmake-format -i -c .cmake-format.yaml -- <自有 CMake 文件>` 格式化；
-不要对 `backend/3rd/` 内的第三方子项目执行格式整改。
+不要对 `backend/third_party/` 内的第三方子项目执行格式整改。
 
 ## 头文件目录
 
-`backend/include/` 放供外部使用的公共接口，以及通用工具头文件 `util/`；其中公共接口包括 `common/`、`db/`、`realtime/` 和协议插件 C 接口。模块内部头文件放在对应的 `backend/src/` 模块目录；第三方头文件放在 `backend/3rd/`。新增内部头文件时，不要把所在模块的目录作为公共 include 路径导出。
+`backend/include/` 放供外部使用的公共接口，以及通用工具头文件 `util/`；其中公共接口包括 `common/`、`db/`、`realtime/` 和协议插件 C 接口。模块内部头文件放在对应的 `backend/src/` 模块目录；第三方头文件放在 `backend/third_party/`。新增内部头文件时，不要把所在模块的目录作为公共 include 路径导出。
 
 ## C++ 标准
 

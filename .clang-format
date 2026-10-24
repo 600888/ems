@@ -6,11 +6,11 @@
 #           https://google.github.io/styleguide/cppguide.html
 #
 # 用法：
-#   ./scripts/format.sh                    # 格式化全部项目代码（不含 3rd/）
+#   ./scripts/format.sh                    # 格式化全部项目代码（不含 third_party/）
 #   ./scripts/format.sh --check            # 仅检查是否符合规则，CI 用，不改文件
 #   ./scripts/format.sh --diff backend/src/net   # 预览指定目录的格式化差异
 #
-# 注意：backend/3rd/ 下的第三方代码不参与格式化，该目录内另有
+# 注意：backend/third_party/ 下的第三方代码不参与格式化，该目录内另有
 #       .clang-format（DisableFormat）作为兜底，防止 IDE 误格式化。
 ##############################################################################
 Language: Cpp

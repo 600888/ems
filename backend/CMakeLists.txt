@@ -62,7 +62,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(Dependencies)
 
 # 先定义第三方目标，再开启自有代码的警告，避免给第三方追加项目警告。
-add_subdirectory(3rd)
+add_subdirectory(third_party)
 
 if(MSVC)
     add_compile_options(/W4 /we4715)

@@ -53,7 +53,7 @@ flowchart TB
     Inbox --> B
     A --> Dispatch["DataDispatcher<br/>有界队列"]
     B --> Dispatch
-    Dispatch --> RT["RealtimeService<br/>最新值"]
+    Dispatch --> RT["RealtimeClient<br/>统一实时数据接口"]
     Dispatch --> Event["ZeroMQ<br/>原始遥测"]
 ```
 

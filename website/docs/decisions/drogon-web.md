@@ -4,7 +4,7 @@
 
 ## 决策
 
-`ems-web` 使用 C++17 与 Drogon 提供 HTTP REST API、WebSocket、路由和鉴权过滤器；Vue 3 前端继续通过 Web API 访问系统。业务进程现为采集与上送、数据、存储、策略、Web 五类；数据进程管理实时后端生命周期。先前规划的 Go/GORM Web 后端不再作为实施目标。
+`ems-web` 使用 C++17 与 Drogon 提供 HTTP REST API、WebSocket、路由和鉴权过滤器；Vue 3 前端继续通过 Web API 访问系统。业务进程现为采集与上送、实时数据库、存储、策略、Web 五类；实时数据库进程管理实时后端生命周期。先前规划的 Go/GORM Web 后端不再作为实施目标。
 
 MySQL 访问复用[公共数据库访问层](../common/database-design.md)的 ormpp Repository、实体、连接池/事务实现及统一迁移；Web 入口装配独立运行实例。同步查询、导入和长 RPC 进入有界业务工作池，不占 Drogon 网络线程；不启用另一套 Drogon ORM 表模型或维护 Web 私有 SQL。
 
@@ -12,7 +12,7 @@ MySQL 访问复用[公共数据库访问层](../common/database-design.md)的 or
 
 [Drogon 官方项目](https://github.com/drogonframework/drogon)提供 HTTP、WebSocket、过滤器及 MySQL 支持，并支持 C++17 和 ARM；这些能力与项目计划的 REST、实时推送和目标工具链相符。统一 C++ 业务模型可减少 Go 与 C++ 两套点位/配置映射，但不能消除进程间版本契约，也不能让 Web 绕过策略仲裁或直接控制设备。
 
-历史查询走存储进程 gRPC；实时查询通过公共门面直接读取同机共享段或权威 Redis，数据进程的管理 RPC 不进入每次读写路径。浏览器只访问 Web，直接映射的信任与平台限制见[数据进程设计](../processes/data/design.md)。控制意图由 Web 使用公共 Repository 与 outbox 在 MySQL 同事务持久保存，最终执行仍由策略仲裁、采集执行并反馈。Drogon 的 HTTP/WebSocket 只负责对外入口，不能充当可靠历史事件总线。
+历史查询走存储进程 gRPC；实时查询通过公共门面直接读取同机共享段或权威 Redis，实时数据库进程的管理 RPC 不进入每次读写路径。浏览器只访问 Web，直接映射的信任与平台限制见[实时数据库进程设计](../processes/data/design.md)。控制意图由 Web 使用公共 Repository 与 outbox 在 MySQL 同事务持久保存，最终执行仍由策略仲裁、采集执行并反馈。Drogon 的 HTTP/WebSocket 只负责对外入口，不能充当可靠历史事件总线。
 
 ## 实施约束与验收
 

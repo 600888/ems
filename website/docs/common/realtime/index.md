@@ -1,10 +1,10 @@
 # EMS 实时数据与配置
 
-本文描述 C++17 采集、数据、存储、策略与 Drogon Web 五类进程中的实时数据边界。整体决策以[系统架构](../../architecture/system-design.md)为准，实时生命周期见[数据进程设计](../../processes/data/design.md)，采集执行见[数据采集架构](../../processes/collector/design.md)。以下为目标设计，不代表代码已完成实现。
+本文描述 C++17 采集、实时数据库、存储、策略与 Drogon Web 五类进程中的实时数据边界。整体决策以[系统架构](../../architecture/system-design.md)为准，实时生命周期见[实时数据库进程设计](../../processes/data/design.md)，采集执行见[数据采集架构](../../processes/collector/design.md)。以下为目标设计，不代表代码已完成实现。
 
 公共实时状态统一通过 `IRealtimeStore` 抽象基类及业务门面访问，支持共享内存、Redis 与其他满足契约的内存数据库派生类，详细定义见 [公共实时数据访问接口设计（C++17）](access-design.md)。Redis 为默认实时后端，只保存实时状态；配置以 MySQL 为权威，消息传输走 ZeroMQ。
 
-常驻数据进程创建/验证后端，管理共享段生命周期、接入、授权投影和受控恢复。各业务进程通过本进程公共库直接映射共享段或独立连接 Redis；正常实时读写不经数据进程管理 RPC。
+`ems-rtdb` 在所有后端下均常驻，按统一配置选择和管理后端。业务只使用 `RealtimeClient`，不解析 Redis 地址、共享段名或后端类型；公共客户端内部发现部署、选择适配器并直接访问后端。后端扩展保持同一业务 API，配置切换通过受控维护完成；正常读写不经管理 RPC。
 
 消息订阅与命令下发使用独立于状态后端的 [ZeroMQ 通道](zeromq-messaging-design.md)：PUB/SUB 提供可丢弃的变更提示，REQ/REP 配合 MySQL 持久状态交接命令。旧采集分发器已提供可选通知接入；命令业务入口仍待接线。
 

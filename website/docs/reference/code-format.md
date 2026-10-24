@@ -7,11 +7,11 @@
 | 范围 | 是否格式化 | 说明 |
 | --- | --- | --- |
 | `backend/include` `backend/src` `backend/tests` `backend/examples` | 是 | 项目自有代码 |
-| `backend/3rd/**` | 否 | 第三方依赖，跟随上游版本更新 |
+| `backend/third_party/**` | 否 | 第三方依赖，跟随上游版本更新 |
 
-`3rd/` 目录内另有 `.clang-format`（`DisableFormat: true`）作为兜底，防止 IDE 或编辑器自动格式化误改第三方代码。
+`third_party/` 目录内另有 `.clang-format`（`DisableFormat: true`）作为兜底，防止 IDE 或编辑器自动格式化误改第三方代码。
 
-> 注意：`3rd/iec104/depends/catch` 与 `lib60870` 自带 `.clang-format`，就近配置会覆盖上面的兜底文件。执行脚本与 CMake 目标不会进入 `3rd/`，因此不受影响；但如果编辑器对这两个子目录开启「保存时格式化」，仍可能误改。**不要对 `backend/3rd/` 打开保存时格式化。**
+> 注意：`third_party/iec104/depends/catch` 与 `lib60870` 自带 `.clang-format`，就近配置会覆盖上面的兜底文件。执行脚本与 CMake 目标不会进入 `third_party/`，因此不受影响；但如果编辑器对这两个子目录开启「保存时格式化」，仍可能误改。**不要对 `backend/third_party/` 打开保存时格式化。**
 
 ## 工具版本
 
@@ -94,4 +94,4 @@ git diff --name-only --cached --diff-filter=ACM \
 先只格式化自己改动的文件：`./scripts/format.sh <改动的文件列表>`。全量格式化只在需要时做一次，并单独提交。
 
 **`backend/include/util/` 下的文件看起来是旧代码，也要格式化吗？**
-该目录只保留项目自研通用工具头；第三方 `rapidcsv.h` 位于 `backend/3rd/rapidcsv/`，日志包装头位于 `backend/src/log/`。`date.hpp`、`time.hpp`、`date_time.hpp`、`timer.hpp`、`task.hpp`、`map.hpp`、`crc_check.h` 等旧风格文件仍在格式化范围内。Modbus 专用工具位于 `backend/src/net/protocol/modbus/`。其中 `crc_check.h` 依赖未定义的 `hUChar`、`modbus_mapping_map.hpp` 依赖未定义的 `ushort`，本身已无法编译，属于遗留代码，如需排除请加入 `.clang-format-ignore`。
+该目录只保留项目自研通用工具头；第三方 `rapidcsv.h` 位于 `backend/third_party/rapidcsv/`，日志包装头位于 `backend/src/log/`。`date.hpp`、`time.hpp`、`date_time.hpp`、`timer.hpp`、`task.hpp`、`map.hpp`、`crc_check.h` 等旧风格文件仍在格式化范围内。Modbus 专用工具位于 `backend/src/net/protocol/modbus/`。其中 `crc_check.h` 依赖未定义的 `hUChar`、`modbus_mapping_map.hpp` 依赖未定义的 `ushort`，本身已无法编译，属于遗留代码，如需排除请加入 `.clang-format-ignore`。
