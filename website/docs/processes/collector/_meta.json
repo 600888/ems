@@ -6,6 +6,11 @@
   },
   {
     "type": "file",
+    "name": "running",
+    "label": "构建与运行"
+  },
+  {
+    "type": "file",
     "name": "design",
     "label": "采集执行与协议插件"
   },

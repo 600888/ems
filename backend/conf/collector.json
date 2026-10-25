@@ -1,0 +1,7 @@
+{
+    "database_config": "db.json",
+    "rtdb_config": "realtime.json",
+    "scope_code": "station001",
+    "poll_interval_ms": 1000,
+    "max_channels": 256
+}

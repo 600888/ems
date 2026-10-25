@@ -72,3 +72,5 @@ if(EMS_STORAGE_WITH_NATIVE AND TARGET ems_zmq_messaging)
 elseif(EMS_STORAGE_WITH_NATIVE)
     message(STATUS "ems-storage native process disabled: configure with EMS_WITH_ZEROMQ=ON")
 endif()
+
+ems_copy_directory_runtime_dependencies()

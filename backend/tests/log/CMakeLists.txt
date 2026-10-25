@@ -15,3 +15,5 @@ if(EMS_BUILD_WEB)
     target_compile_features(test_web_logging PRIVATE cxx_std_17)
     add_test(NAME web_framework_logging COMMAND test_web_logging)
 endif()
+
+ems_copy_directory_runtime_dependencies()

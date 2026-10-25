@@ -14,7 +14,9 @@
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "ON",
-        "EMS_ENABLE_ARCH_TUNING": "ON"
+        "EMS_ENABLE_ARCH_TUNING": "ON",
+        "EMS_BUILD_WEB": "ON",
+        "EMS_BUILD_COLLECTOR": "ON"
       },
       "condition": {
         "type": "equals",
@@ -31,7 +33,9 @@
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "OFF",
         "EMS_ENABLE_ARCH_TUNING": "ON",
-        "EMS_TARGET_LINUX_ARM": "ON"
+        "EMS_TARGET_LINUX_ARM": "ON",
+        "EMS_BUILD_WEB": "ON",
+        "EMS_BUILD_COLLECTOR": "ON"
       },
       "condition": {
         "type": "equals",
@@ -49,7 +53,9 @@
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "OFF",
         "EMS_ENABLE_ARCH_TUNING": "ON",
-        "Python_EXECUTABLE": "/usr/bin/python3"
+        "Python_EXECUTABLE": "/usr/bin/python3",
+        "EMS_BUILD_WEB": "ON",
+        "EMS_BUILD_COLLECTOR": "ON"
       },
       "condition": {
         "type": "equals",
@@ -72,7 +78,9 @@
         "CMAKE_CXX_COMPILER": "cl",
         "BUILD_TESTS": "ON",
         "EMS_ENABLE_ARCH_TUNING": "OFF",
-        "EMS_BUILD_LEGACY_MODBUS": "OFF"
+        "EMS_BUILD_LEGACY_MODBUS": "OFF",
+        "EMS_BUILD_WEB": "ON",
+        "EMS_BUILD_COLLECTOR": "ON"
       }
     },
     {
@@ -91,7 +99,9 @@
         "CMAKE_BUILD_TYPE": "Release",
         "BUILD_TESTS": "ON",
         "EMS_ENABLE_ARCH_TUNING": "OFF",
-        "EMS_BUILD_LEGACY_MODBUS": "OFF"
+        "EMS_BUILD_LEGACY_MODBUS": "OFF",
+        "EMS_BUILD_WEB": "ON",
+        "EMS_BUILD_COLLECTOR": "ON"
       }
     }
   ],

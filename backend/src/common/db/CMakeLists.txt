@@ -78,13 +78,7 @@ set_target_properties(
 
 function(ems_copy_mysql_runtime target)
     if(WIN32 AND EMS_DATABASE_MYSQL_RUNTIME)
-        add_custom_command(
-            TARGET ${target}
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "${EMS_DATABASE_MYSQL_RUNTIME}"
-                    "$<TARGET_FILE_DIR:${target}>"
-            VERBATIM
-        )
+        ems_copy_runtime_files(${target} "${EMS_DATABASE_MYSQL_RUNTIME}")
     endif()
 endfunction()
 

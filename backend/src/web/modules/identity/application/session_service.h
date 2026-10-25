@@ -15,8 +15,8 @@ struct Session {
 class SessionService {
    public:
     /**
-     * @brief 加载部署账号、哈希和授权；不接受明文或内置账号。
-     * @param[in] users 账号配置数组。
+     * @brief 创建内存会话服务；账号来源由调用方注入，不读取部署配置。
+     * @param[in] users 显式注入的账号数组；为空时服务保持未装配状态并拒绝登录。
      * @param[in] max_sessions 内存会话容量。
      * @param[in] ttl_seconds 会话有效时长。
      */
@@ -24,7 +24,7 @@ class SessionService {
     /**
      * @brief 校验密码并创建安全随机会话；错误与账号不存在一致。
      * @param[in] request username/password JSON。
-     * @return 会话令牌与会话内容；容量/频率限制抛 ApiError。
+     * @return 会话令牌与会话内容；账号未装配、容量或频率限制时抛 ApiError。
      */
     std::pair<std::string, Session> login(const Json& request);
     /**

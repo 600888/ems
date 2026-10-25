@@ -8,3 +8,7 @@ add_subdirectory(handler)
 add_subdirectory(collect)
 
 add_subdirectory(para_loader)
+
+if(EMS_BUILD_COLLECTOR)
+    add_subdirectory(collect/process)
+endif()

@@ -5,6 +5,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
         VERSION 1.0.0
         LANGUAGES C CXX
     )
+    include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/OutputDirectories.cmake")
+    ems_set_output_directories("${CMAKE_BINARY_DIR}")
 endif()
 option(EMS_REALTIME_WITH_SHM "Build the Boost.Interprocess backend" ON)
 option(EMS_REALTIME_WITH_REDIS "Build the redis-plus-plus backend" ON)
@@ -104,13 +106,7 @@ if(EMS_REALTIME_WITH_REDIS)
     target_compile_definitions(ems_rtdb PRIVATE EMS_REALTIME_WITH_REDIS)
     target_link_libraries(ems_rtdb PRIVATE redis++)
     if(WIN32)
-        add_custom_command(
-            TARGET ems_rtdb
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:ems_rtdb>
-                    $<TARGET_FILE_DIR:ems_rtdb>
-            COMMAND_EXPAND_LISTS
-        )
+        ems_copy_runtime_files(ems_rtdb "$<TARGET_RUNTIME_DLLS:ems_rtdb>")
     endif()
 endif()
 # 旧目标兼容入口，全部链接同一个动态库。
@@ -195,8 +191,7 @@ install(
 )
 install(
     FILES "${EMS_RTDB_BACKEND_DIR}/conf/realtime.json"
-          "${EMS_RTDB_BACKEND_DIR}/conf/realtime-redis.json"
-          "${EMS_RTDB_BACKEND_DIR}/conf/log.json"
+          "${EMS_RTDB_BACKEND_DIR}/conf/realtime-redis.json" "${EMS_RTDB_BACKEND_DIR}/conf/log.json"
     DESTINATION "${CMAKE_INSTALL_DATADIR}/ems_rtdb"
     COMPONENT EMSRTDB
 )
@@ -251,3 +246,5 @@ install(
     DESTINATION "${EMS_RTDB_CMAKE_INSTALL_DIR}"
     COMPONENT EMSRTDB
 )
+
+ems_copy_directory_runtime_dependencies()

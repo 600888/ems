@@ -7,6 +7,8 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
     set(CMAKE_CXX_STANDARD 17)
     set(CMAKE_CXX_STANDARD_REQUIRED ON)
     set(CMAKE_CXX_EXTENSIONS OFF)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/../../cmake/OutputDirectories.cmake")
+    ems_set_output_directories("${CMAKE_BINARY_DIR}")
 endif()
 
 find_package(Threads REQUIRED)
@@ -14,6 +16,7 @@ find_package(Threads REQUIRED)
 if(NOT TARGET ems_rtdb)
     add_subdirectory(../../src/rtdb rtdb)
 endif()
+ems_set_output_directories("${CMAKE_BINARY_DIR}/tests")
 set(gtest_force_shared_crt
     ON
     CACHE BOOL "Use shared runtime" FORCE
@@ -21,7 +24,12 @@ set(gtest_force_shared_crt
 set(BUILD_SHARED_LIBS OFF)
 
 if(NOT TARGET gtest)
+    set(CMAKE_POLICY_DEFAULT_CMP0077 NEW)
+    set(INSTALL_GTEST OFF)
     add_subdirectory(../../third_party/googletest googletest EXCLUDE_FROM_ALL)
+    foreach(target IN ITEMS gtest gtest_main gmock gmock_main)
+        ems_set_target_output_directories(${target} "${CMAKE_BINARY_DIR}/tests")
+    endforeach()
 endif()
 
 add_executable(
@@ -39,13 +47,6 @@ if(MSVC)
 endif()
 if(WIN32)
     target_link_libraries(test_realtime_backends PRIVATE bcrypt)
-    add_custom_command(
-        TARGET test_realtime_backends
-        POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:test_realtime_backends>
-                $<TARGET_FILE_DIR:test_realtime_backends>
-        COMMAND_EXPAND_LISTS
-    )
 endif()
 
 if(EMS_REALTIME_WITH_SHM)
@@ -88,16 +89,6 @@ if(EMS_REALTIME_WITH_SHM)
         target_link_libraries(test_rtdb_dispatcher PRIVATE redis++)
         target_compile_definitions(test_rtdb_dispatcher PRIVATE EMS_NOTIFICATION_WITH_REDIS)
     endif()
-    if(WIN32)
-        add_custom_command(
-            TARGET test_rtdb_dispatcher
-            POST_BUILD
-            COMMAND
-                ${CMAKE_COMMAND} -E copy_if_different $<TARGET_RUNTIME_DLLS:test_rtdb_dispatcher>
-                $<TARGET_FILE_DIR:test_rtdb_dispatcher>
-            COMMAND_EXPAND_LISTS
-        )
-    endif()
     add_test(NAME rtdb_dispatcher COMMAND test_rtdb_dispatcher)
 endif()
 if(WIN32)
@@ -117,3 +108,5 @@ if(WIN32)
         )
     endif()
 endif()
+
+ems_copy_directory_runtime_dependencies()

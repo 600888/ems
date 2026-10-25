@@ -28,3 +28,5 @@ endforeach()
 
 add_test(NAME channel_handler_failure COMMAND test_channel_handlers channel_failure)
 set_tests_properties(channel_handler_failure PROPERTIES TIMEOUT 30)
+
+ems_copy_directory_runtime_dependencies()

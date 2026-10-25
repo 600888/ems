@@ -392,6 +392,7 @@ TEST_F(WebDevice, XlsxPreviewParsesRealWorkbookWithoutChangingRevision) {
     Upload upload;
     upload.filename = "厂家点表.xlsx";
     upload.bytes.assign(std::istreambuf_iterator<char>(input), {});
+    input.close();
     auto preview = service->execute("/api/point-imports/create",
                                     {{"device_id", "hvac01"},
                                      {"binding_id", "binding01"},
@@ -404,6 +405,23 @@ TEST_F(WebDevice, XlsxPreviewParsesRealWorkbookWithoutChangingRevision) {
         execute("/api/point-imports/rows", {{"import_job_id", preview.data.at("import_job_id")}});
     ASSERT_EQ(rows.data.at("total"), 1);
     EXPECT_EQ(rows.data.at("items").front().at("vendor_name"), "温度");
+
+    // 重复表头必须保留解析错误，不能生成没有行的成功预览。
+    excel.open(path);
+    excel.writeCell("点表", 1, 7, std::string("access"));
+    excel.save();
+    excel.close();
+    std::ifstream invalid_input(path, std::ios::binary);
+    upload.bytes.assign(std::istreambuf_iterator<char>(invalid_input), {});
+    EXPECT_NE(sha256(upload.bytes), preview.data.at("file_sha256"));
+    const auto invalid = service->execute("/api/point-imports/create",
+                                          {{"device_id", "hvac01"},
+                                           {"binding_id", "binding01"},
+                                           {"source_kind", "vendor_xlsx"},
+                                           {"address_base", "zero"}},
+                                          actor, context(), upload);
+    EXPECT_EQ(invalid.data.at("status"), "failed");
+    EXPECT_EQ(invalid.meta.at("config_revision"), "2");
 }
 
 TEST_F(WebDevice, HttpLoginCookieCsrfAndFixedJsonRoutes) {
@@ -411,11 +429,13 @@ TEST_F(WebDevice, HttpLoginCookieCsrfAndFixedJsonRoutes) {
     options.port = 19763;
     options.allowed_origin = "http://127.0.0.1:19763";
     options.workspace = (directory / "http-upload").u8string();
-    options.users = Json::array({{{"username", "operator"},
-                                  {"password_hash", hash_password("http-test-password")},
-                                  {"permissions", Json::array({"*"})},
-                                  {"station_ids", Json::array({"*"})},
-                                  {"device_roots", Json::array({"*"})}}});
+    auto identity = std::make_shared<SessionService>(
+        Json::array({{{"username", "operator"},
+                      {"password_hash", hash_password("http-test-password")},
+                      {"permissions", Json::array({"*"})},
+                      {"station_ids", Json::array({"*"})},
+                      {"device_roots", Json::array({"*"})}}}),
+        options.session_capacity, options.session_ttl_seconds);
 
     // 服务在当前主线程运行；客户端放到独立线程，保证事件循环的创建和销毁线程一致。
     (void)drogon::app();
@@ -557,8 +577,89 @@ TEST_F(WebDevice, HttpLoginCookieCsrfAndFixedJsonRoutes) {
             ADD_FAILURE() << error.what();
         }
     });
+    run_web_with_database(options, db, identity);
+    client_thread.join();
+}
+
+TEST_F(WebDevice, HttpStartsWithoutAccounts) {
+    WebOptions options;
+    options.port = 19763;
+    options.allowed_origin = "http://127.0.0.1:19763";
+    options.workspace = (directory / "http-upload").u8string();
+
+    // CTest 为各 HTTP 场景启动独立进程，避免复用 Drogon 的全局事件循环。
+    (void)drogon::app();
+    std::thread client_thread([&] {
+        struct QuitOnExit {
+            ~QuitOnExit() { drogon::app().quit(); }
+        } quit;
+        try {
+            for (int i = 0; i < 200 && !drogon::app().isRunning(); ++i)
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            ASSERT_TRUE(drogon::app().isRunning());
+            auto client = drogon::HttpClient::newHttpClient(options.allowed_origin);
+            auto call = [&](const std::string& path, drogon::HttpMethod method,
+                            const Json& body = Json::object()) {
+                auto request = drogon::HttpRequest::newHttpRequest();
+                request->setPath(path);
+                request->setMethod(method);
+                request->addHeader("Origin", options.allowed_origin);
+                if (method == drogon::Post) {
+                    request->setContentTypeCode(drogon::CT_APPLICATION_JSON);
+                    request->setBody(body.dump());
+                }
+                const auto result = client->sendRequest(request, 5);
+                if (result.first != drogon::ReqResult::Ok)
+                    throw std::runtime_error("HTTP transport failed");
+                return result.second;
+            };
+            EXPECT_EQ(call("/health/live", drogon::Get)->statusCode(), 200);
+            EXPECT_EQ(call("/health/ready", drogon::Get)->statusCode(), 200);
+            auto login = call("/api/auth/login", drogon::Post,
+                              {{"username", "operator"}, {"password", "any-password"}});
+            EXPECT_EQ(login->statusCode(), 503);
+            EXPECT_EQ(
+                Json::parse(login->body().begin(), login->body().end()).at("error").at("reason"),
+                "identity_not_configured");
+            EXPECT_EQ(call("/api/devices/list", drogon::Post)->statusCode(), 401);
+        } catch (const std::exception& error) {
+            ADD_FAILURE() << error.what();
+        }
+    });
     run_web_with_database(options, db);
     client_thread.join();
+}
+
+TEST_F(WebDevice, RuntimeConfigurationDoesNotContainAccounts) {
+    const auto file = directory / "web.json";
+    auto load = [&](const Json& configuration) {
+        std::ofstream output(file);
+        output << configuration.dump();
+        output.close();
+        return load_web_options(file.u8string());
+    };
+    const auto options = load(Json::object());
+    EXPECT_EQ(options.host, "127.0.0.1");
+    EXPECT_EQ(options.port, 8080);
+    EXPECT_THROW(load(Json{{"users", Json::array()}}), ApiError);
+    EXPECT_THROW(load(Json{{"identity_file", "accounts.json"}}), ApiError);
+}
+
+TEST(WebIdentity, UnconfiguredAccountsDoNotBlockConstructionOrGrantAccess) {
+    SessionService sessions(Json::array(), 10, 60);
+    try {
+        sessions.login({{"username", "operator"}, {"password", "any-password"}});
+        FAIL();
+    } catch (const ApiError& error) {
+        EXPECT_EQ(error.status, 503);
+        EXPECT_EQ(error.reason, "identity_not_configured");
+    }
+    try {
+        sessions.get("arbitrary-token");
+        FAIL();
+    } catch (const ApiError& error) {
+        EXPECT_EQ(error.status, 401);
+    }
 }
 
 TEST(WebExecutor, BoundedAdmissionAndDrain) {

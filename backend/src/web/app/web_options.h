@@ -1,9 +1,13 @@
 #pragma once
 #include <common/database/mysql_database.h>
 
+#include <memory>
+
 #include "web/transport/json.h"
 
 namespace ems::web {
+class SessionService;
+
 struct WebOptions {
     std::string host{"127.0.0.1"};
     unsigned short port{8080};
@@ -15,10 +19,9 @@ struct WebOptions {
     int request_timeout_ms{5000}, import_timeout_ms{30000}, session_ttl_seconds{3600};
     std::size_t session_capacity{1000};
     bool secure_cookie{false};
-    Json users;
 };
 
-/** @brief 读取严格 Web 配置，账号可由 EMS_WEB_IDENTITY_FILE 提供。
+/** @brief 读取并校验 Web 运行配置，不包含账号数据。
  * @param[in] path UTF-8 配置路径。
  * @return 已校验选项；不连接数据库。
  */
@@ -31,7 +34,9 @@ int run_web(const WebOptions& options);
 /** @brief 使用显式数据库上下文运行 HTTP 入口，允许集成测试注入公共测试驱动。
  * @param[in] options 已校验运行选项。
  * @param[in] database 独立公共数据库上下文。
+ * @param[in] identity 可选会话服务，共享所有权；未提供时拒绝登录，不影响进程启动。
  * @return 正常退出为 0。
  */
-int run_web_with_database(const WebOptions& options, database::MySqlDatabaseContext database);
+int run_web_with_database(const WebOptions& options, database::MySqlDatabaseContext database,
+                          std::shared_ptr<SessionService> identity = {});
 }  // namespace ems::web

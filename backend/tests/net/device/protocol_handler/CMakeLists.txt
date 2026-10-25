@@ -17,6 +17,8 @@ target_include_directories(
 
 target_link_libraries(test_modbus_handler PRIVATE gtest gmock Threads::Threads net_proto_handler)
 
-gtest_discover_tests(test_modbus_handler)
-
 message(STATUS "Created test_modbus_handler executable")
+
+ems_copy_directory_runtime_dependencies()
+
+gtest_discover_tests(test_modbus_handler)

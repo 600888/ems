@@ -61,7 +61,10 @@ make
 ## Windows 构建
 
 准备 CMake 3.21+、支持 C++17 的编译器，以及同架构、同工具链编译的
-`hiredis >= 1.0` 和 `libmodbus >= 3.1.6`。`redis-plus-plus`、GoogleTest 和 IEC104 C 栈使用仓库内版本。
+`hiredis >= 1.0`（Windows 缺少安装包时默认下载并使用当前工具链编译固定的 1.3.0）。
+Modbus 协议插件需要 `libmodbus >= 3.1.6`；Windows 缺少安装库时默认下载并使用当前工具链
+编译固定的 3.1.10，共享库随插件部署。旧处理器仍需预装 libmodbus 和 pkg-config。
+`redis-plus-plus`、GoogleTest 和 IEC104 C 栈使用仓库内版本。
 DLT645 还需要 Boost 1.83+；其头文件可跨 MSVC / MinGW 使用。
 MSVC 构建需要 Ninja，并在 **x64 Native Tools Command Prompt / Developer PowerShell** 中执行；
 MinGW 构建需要将 MinGW-w64 的 `bin` 目录加入 `PATH`。
@@ -104,6 +107,18 @@ ctest --preset windows-mingw
 hiredis 的 CMake 包提供 DLL 路径时，采集示例会自动复制该 DLL。
 协议插件额外的 DLL 可通过 `-DEMS_PROTOCOL_RUNTIME_DEPENDENCIES='C:/deps/modbus.dll;...'` 部署。
 
+使用 VSCode CMake Tools 时，将源码目录设为 `${workspaceFolder}/backend`，选择
+`windows-msvc` 或 `windows-mingw` Configure Preset 后使用齿轮构建。首次自动准备依赖需要联网，
+后续复用构建目录内的下载和编译结果。若外部依赖目录已删除，先执行
+`CMake: Delete Cache and Reconfigure`，清除旧的 `CMAKE_PREFIX_PATH` 和 FetchContent 源码覆盖路径。
+可设置 `EMS_FETCH_HIREDIS=OFF` 强制使用预装 hiredis；离线构建可用
+`FETCHCONTENT_SOURCE_DIR_EMS_HIREDIS` 指定已有官方源码目录。
+libmodbus 同样支持 `EMS_FETCH_LIBMODBUS=OFF` 强制使用预装库，或用
+`FETCHCONTENT_SOURCE_DIR_EMS_LIBMODBUS` 指定离线的官方 3.1.10 源码目录。
+Windows 开启 Web 测试且未安装 SQLite 时，会自动编译固定的 SQLite 3.50.2；
+该静态库仅进入 `tests/archive/`。可用 `EMS_FETCH_SQLITE=OFF` 强制使用预装 SQLite，
+或用 `FETCHCONTENT_SOURCE_DIR_EMS_SQLITE` 指定离线的 amalgamation 源码目录。
+
 Windows 默认构建 Modbus / IEC104 / DLT645 动态插件、独立 handler 层、采集引擎、数据库和实时存储库，以及公共模块和存储测试。
 三个协议的统一处理器、目录和采集接入见 [协议处理器接入](website/docs/reference/protocol/handlers.md)。
 DLT645 的配置、测点编码和模拟器互通说明见 [DLT645 动态库接入](website/docs/reference/protocol/dlt645.md)。
@@ -114,8 +129,35 @@ DLT698 默认启用，复用统一插件 ABI、Handler 和采集通道，支持 
 旧版 libmodbuspp 处理器、对应的四个示例和设备处理器测试由 `EMS_BUILD_LEGACY_MODBUS` 控制：
 Linux 默认开启，Windows 默认关闭；这些旧目标仍依赖上游的 pkg-config 构建入口。
 `BUILD_TESTS=OFF` 可关闭测试，`BUILD_EXAMPLES=OFF` 可关闭示例。
-MSVC 可执行文件和通用 DLL 位于 `backend/build/windows-msvc/bin/<配置>/`，
+`EMS_BUILD_WEB`、`EMS_BUILD_COLLECTOR` 默认开启，分别生成 `ems-web` 和 `ems-collector`；
+两者独立于示例开关，可用 `-DEMS_BUILD_WEB=OFF`、`-DEMS_BUILD_COLLECTOR=OFF` 分别关闭。
+Web 还需要同工具链的 Trantor、JsonCpp 和 zlib；Windows 可先在对应编译器终端执行
+`./scripts/setup_web_dependencies.ps1 -Toolchain msvc`。CMake 会自动查找
+`backend/build/web-deps-msvc/install`；MinGW 使用 `-Toolchain mingw` 和对应的独立依赖目录。
+自定义依赖位置可通过 `EMS_WEB_DEPENDENCY_PREFIX` 或 `CMAKE_PREFIX_PATH` 指定。
+详细说明见 [Web 构建与运行](website/docs/processes/web/running.md) 和
+[采集进程构建与运行](website/docs/processes/collector/running.md)。
+MSVC 可执行文件及其运行依赖 DLL 位于 `backend/build/windows-msvc/bin/<配置>/`，
 协议插件位于 `lib/<配置>/`，配置文件位于构建根目录的 `conf/`。
+
+构建目录中的运行交付物、测试和示例按用途分离：
+
+| 目录（相对构建根目录） | 内容 |
+| --- | --- |
+| `bin/` | 正式可执行程序及其 Windows 运行依赖 DLL |
+| `lib/` | 协议插件及其依赖、Linux 共享库 |
+| `archive/` | 正式目标的静态库、Windows 导入库和链接中间文件 |
+| `tests/bin/` | 测试可执行程序及其 Windows 运行依赖 DLL |
+| `tests/lib/` | 测试插件夹具和共享库 |
+| `tests/archive/` | GoogleTest / GoogleMock 等测试静态库和导入库 |
+| `examples/bin/` | 示例可执行程序（包括 `ems_point_import`）及其 Windows 运行依赖 DLL |
+| `examples/lib/`、`examples/archive/` | 示例的共享库和链接产物（如有） |
+| `symbols/`、`tests/symbols/`、`examples/symbols/` | 对应目标的 Windows 调试符号 |
+
+MSVC 等多配置生成器会在上述各目录下追加 `<配置>/`（如 `Release/`、`Debug/`）；
+MinGW 和 Linux 单配置构建直接使用上述目录。测试继续通过 `ctest --preset ...` 运行。
+Windows 构建时会将已声明的运行依赖 DLL 复制到对应 EXE 所在目录。
+已有构建目录切换布局前，应移走旧 `bin/`、`lib/` 中的产物再重新构建，避免残留文件混入交付目录。
 
 ## Linux ARM (ARM64) 构建
 

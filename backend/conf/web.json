@@ -12,6 +12,5 @@
   "import_timeout_ms": 30000,
   "session_ttl_seconds": 3600,
   "session_capacity": 1000,
-  "secure_cookie": false,
-  "users": []
+  "secure_cookie": false
 }

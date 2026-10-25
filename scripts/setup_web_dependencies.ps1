@@ -1,6 +1,8 @@
 [CmdletBinding()]
 param(
     [string]$BuildDirectory = '',
+    [ValidateSet('msvc', 'mingw')]
+    [string]$Toolchain = 'msvc',
     [ValidateSet('none', 'openssl')]
     [string]$TlsProvider = 'none',
     [ValidateRange(1, 32)]
@@ -10,10 +12,17 @@ param(
 $ErrorActionPreference = 'Stop'
 & chcp.com 65001 | Out-Null
 $projectRoot = Split-Path $PSScriptRoot -Parent
-if (-not $BuildDirectory) { $BuildDirectory = Join-Path $projectRoot 'build/web-deps' }
+if (-not $BuildDirectory) {
+    $BuildDirectory = Join-Path $projectRoot "backend/build/web-deps-$Toolchain"
+}
 $dependencyRoot = [IO.Path]::GetFullPath($BuildDirectory)
 $prefix = Join-Path $dependencyRoot 'install'
 New-Item -ItemType Directory -Path $dependencyRoot -Force | Out-Null
+$compilerArgs = if ($Toolchain -eq 'msvc') {
+    @('-DCMAKE_C_COMPILER=cl', '-DCMAKE_CXX_COMPILER=cl')
+} else {
+    @('-DCMAKE_C_COMPILER=gcc', '-DCMAKE_CXX_COMPILER=g++')
+}
 
 # 只补充框架依赖，Drogon 始终使用用户放入 backend/third_party/drogon 的源码。
 $trantorRevision = '78e480f5e138acdc05f76c55a2716718cd846364'
@@ -44,7 +53,7 @@ foreach ($package in $packages) {
     $build = Join-Path $dependencyRoot "$($package.Name)-build"
     & cmake -S $source -B $build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_CXX_STANDARD=17 `
         -DCMAKE_POLICY_DEFAULT_CMP0141=NEW -DCMAKE_MSVC_DEBUG_INFORMATION_FORMAT=Embedded `
-        "-DCMAKE_INSTALL_PREFIX=$prefix" "-DCMAKE_PREFIX_PATH=$prefix" @($package.Options)
+        "-DCMAKE_INSTALL_PREFIX=$prefix" "-DCMAKE_PREFIX_PATH=$prefix" @compilerArgs @($package.Options)
     if ($LASTEXITCODE -ne 0) { throw "Configure failed: $($package.Name)" }
 
     & cmake --build $build --parallel $Jobs
@@ -54,3 +63,4 @@ foreach ($package in $packages) {
 }
 
 Write-Output "Web dependencies installed: $prefix"
+Write-Output "Configure next: cmake --preset windows-$Toolchain -S backend"

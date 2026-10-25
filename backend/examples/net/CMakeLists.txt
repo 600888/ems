@@ -32,29 +32,16 @@ set_target_properties(data_collect_example PROPERTIES CXX_STANDARD 20 CXX_STANDA
 # 统一运行目录后，按单配置 / 多配置布局定位协议 DLL 或共享库。
 if(CMAKE_CONFIGURATION_TYPES)
     target_compile_definitions(
-        data_collect_example PRIVATE EMS_EXAMPLE_PLUGIN_RELATIVE_DIR="../../lib/$<CONFIG>"
+        data_collect_example PRIVATE EMS_EXAMPLE_PLUGIN_RELATIVE_DIR="../../../lib/$<CONFIG>"
     )
 else()
     target_compile_definitions(
-        data_collect_example PRIVATE EMS_EXAMPLE_PLUGIN_RELATIVE_DIR="../lib"
+        data_collect_example PRIVATE EMS_EXAMPLE_PLUGIN_RELATIVE_DIR="../../lib"
     )
 endif()
 
 message(STATUS "EMS net examples configured")
 
-# hiredis CMake 包提供 DLL 路径时，将其部署到程序旁，便于直接运行。
-if(WIN32 AND TARGET hiredis::hiredis)
-    get_target_property(_hiredis_type hiredis::hiredis TYPE)
-
-    if(_hiredis_type STREQUAL "SHARED_LIBRARY")
-        add_custom_command(
-            TARGET data_collect_example
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:hiredis::hiredis>"
-                    "$<TARGET_FILE_DIR:data_collect_example>"
-            VERBATIM
-        )
-    endif()
-endif()
-
 ems_copy_mysql_runtime(data_collect_example)
+
+ems_copy_directory_runtime_dependencies()

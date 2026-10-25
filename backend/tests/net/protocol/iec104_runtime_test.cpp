@@ -388,7 +388,7 @@ void lazy_load() {
     }
     CHECK(manager.loaded_library_count() == 0);
     const auto source = fs::absolute(fs::u8path(plugin_path));
-    const auto unicode = source.parent_path() / fs::u8path(u8"IEC104 中文路径");
+    const auto unicode = fs::current_path() / fs::u8path(u8"IEC104 中文路径");
     fs::create_directories(unicode);
     for (const auto& item : fs::directory_iterator(source.parent_path()))
         if (item.is_regular_file() && (item.path().extension() == ".dll" || item.path() == source))

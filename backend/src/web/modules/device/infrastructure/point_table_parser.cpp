@@ -68,8 +68,9 @@ Json parse_vendor_xlsx(const std::string& bytes, const std::string& workspace) {
                 throw ApiError(422, "Unsupported", "import_column_not_supported");
         }
     }
-    config::PointTableImportResult parsed =
-        config::import_point_table_file(path.u8string(), core::DeviceId(""), "");
+    // 文件层只解析内容，真实设备和绑定由请求层校验；公共解析器要求非空上下文。
+    config::PointTableImportResult parsed = config::import_point_table_file(
+        path.u8string(), core::DeviceId("xlsx-preview"), "xlsx-preview");
     Json result = {{"rows", Json::array()}, {"issues", Json::array()}};
     for (const auto& row : parsed.rows)
         result["rows"].push_back({{"line_no", row.line},
@@ -143,6 +144,10 @@ Json parse_upload(const Json& metadata, const Upload& upload, const std::string&
             restored.unit = row.at("unit").get<std::string>();
             parsed.rows.push_back(std::move(restored));
         }
+        for (const auto& issue : preview.at("issues"))
+            parsed.issues.push_back({issue.at("line_no").get<std::size_t>(),
+                                     issue.at("field").get<std::string>(),
+                                     issue.at("message").get<std::string>()});
     } else
         throw ApiError(422, "Unsupported", "import_format_not_supported");
 

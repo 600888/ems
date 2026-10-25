@@ -1,10 +1,7 @@
 #include "web_options.h"
 
-#include <cstdlib>
 #include <filesystem>
 #include <fstream>
-
-#include "web/modules/identity/application/session_service.h"
 
 namespace ems::web {
 WebOptions load_web_options(const std::string& path) {
@@ -16,7 +13,7 @@ WebOptions load_web_options(const std::string& path) {
     fields(j, {"host", "port", "allowed_origin", "database_config", "document_root", "workspace",
                "io_threads", "workers", "queue_size", "import_workers", "import_queue_size",
                "request_timeout_ms", "import_timeout_ms", "session_ttl_seconds", "session_capacity",
-               "secure_cookie", "users", "identity_file"});
+               "secure_cookie"});
     WebOptions o;
     auto number = [&](const char* key, std::size_t fallback, std::size_t maximum) {
         if (j.count(key) && !j.at(key).is_number_integer())
@@ -49,20 +46,6 @@ WebOptions load_web_options(const std::string& path) {
     if (o.host.empty() || o.allowed_origin.empty() ||
         ((o.host != "127.0.0.1" && o.host != "::1") && !o.secure_cookie))
         throw std::invalid_argument("remote listener requires TLS proxy and secure cookie");
-    auto identity = j.value("identity_file", std::string{});
-    if (const auto* env = std::getenv("EMS_WEB_IDENTITY_FILE")) identity = env;
-    if (!identity.empty()) {
-        if (std::filesystem::file_size(std::filesystem::u8path(identity)) > 1024 * 1024)
-            throw std::invalid_argument("identity config too large");
-        std::ifstream file(std::filesystem::u8path(identity));
-        Json document;
-        file >> document;
-        fields(document, {"users"});
-        o.users = document.at("users");
-    } else
-        o.users = j.value("users", Json::array());
-
-    SessionService verify(o.users, o.session_capacity, o.session_ttl_seconds);
     return o;
 }
 }  // namespace ems::web

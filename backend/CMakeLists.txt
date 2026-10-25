@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.15)
+cmake_minimum_required(VERSION 3.21)
 
 project(
     ems_backend
@@ -13,7 +13,8 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 option(BUILD_TESTS "Build tests" ON)
 option(BUILD_EXAMPLES "Build examples" ON)
-option(EMS_BUILD_WEB "Build the Drogon Web process" OFF)
+option(EMS_BUILD_WEB "Build the Drogon Web process" ON)
+option(EMS_BUILD_COLLECTOR "Build the ems-collector acquisition process" ON)
 option(EMS_BUILD_DAEMON "Build the ems-daemon process supervisor (Windows/Linux)" ON)
 option(EMS_WITH_ZEROMQ "Build the ZeroMQ notification and command channels" OFF)
 option(EMS_ENABLE_ARCH_TUNING "Enable architecture-specific tuning flags" ON)
@@ -32,10 +33,8 @@ if(WIN32)
     add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN _CRT_SECURE_NO_WARNINGS)
 endif()
 
-# 所有库输出到统一目录
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/OutputDirectories.cmake")
+ems_set_output_directories("${CMAKE_BINARY_DIR}")
 
 string(TOLOWER "${CMAKE_SYSTEM_PROCESSOR}" EMS_SYSTEM_PROCESSOR_LOWER)
 set(EMS_IS_ARM64 OFF)
@@ -113,6 +112,8 @@ message(STATUS "Source directory: ${CMAKE_CURRENT_SOURCE_DIR}")
 message(STATUS "Build directory: ${CMAKE_CURRENT_BINARY_DIR}")
 message(STATUS "Build tests: ${BUILD_TESTS}")
 message(STATUS "Build examples: ${BUILD_EXAMPLES}")
+message(STATUS "Build Web: ${EMS_BUILD_WEB}")
+message(STATUS "Build collector: ${EMS_BUILD_COLLECTOR}")
 message(STATUS "Build daemon: ${EMS_BUILD_DAEMON}")
 message(STATUS "System processor: ${CMAKE_SYSTEM_PROCESSOR}")
 message(STATUS "ARM64 detected: ${EMS_IS_ARM64}")

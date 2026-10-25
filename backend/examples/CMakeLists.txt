@@ -2,6 +2,8 @@
 # This directory contains various example programs demonstrating
 # the usage of EMS backend libraries
 
+ems_set_output_directories("${CMAKE_BINARY_DIR}/examples")
+
 add_subdirectory(protocol)
 
 add_subdirectory(net)
@@ -15,3 +17,5 @@ add_executable(ems_point_import point_table_import.cpp)
 target_link_libraries(ems_point_import PRIVATE ems_database_mysql ems_database_configuration)
 
 ems_copy_mysql_runtime(ems_point_import)
+
+ems_copy_directory_runtime_dependencies()

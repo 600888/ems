@@ -1,12 +1,17 @@
 {
     "modules": {
-        "net": {
-            "level": "debug",
+        "ems-daemon": {
+            "level": "info",
             "file_size": 10,
             "count": 10
         },
         "ems-rtdb": {
             "level": "debug",
+            "file_size": 10,
+            "count": 10
+        },
+        "ems-collector": {
+            "level": "info",
             "file_size": 10,
             "count": 10
         },
@@ -17,11 +22,6 @@
         },
         "ems-web": {
             "level": "debug",
-            "file_size": 10,
-            "count": 10
-        },
-        "ems-daemon": {
-            "level": "info",
             "file_size": 10,
             "count": 10
         }

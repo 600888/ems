@@ -11,8 +11,7 @@ void Principal::require(const std::string& permission) const {
 
 SessionService::SessionService(Json users, std::size_t capacity, int ttl)
     : users_(std::move(users)), capacity_(capacity), ttl_(ttl) {
-    if (!users_.is_array() || users_.empty() || users_.size() > 1000 || capacity_ == 0 ||
-        ttl_ <= 0) {
+    if (!users_.is_array() || users_.size() > 1000 || capacity_ == 0 || ttl_ <= 0) {
         throw std::invalid_argument("invalid identity configuration");
     }
 
@@ -35,6 +34,7 @@ SessionService::SessionService(Json users, std::size_t capacity, int ttl)
 }
 
 std::pair<std::string, Session> SessionService::login(const Json& request) {
+    if (users_.empty()) throw ApiError(503, "NotReady", "identity_not_configured");
     fields(request, {"username", "password"});
     const auto username = text(request, "username", 64);
     const auto password = text(request, "password", 1024);

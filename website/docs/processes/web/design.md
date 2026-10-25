@@ -180,7 +180,7 @@ flowchart LR
 | 项目 | 约定 |
 | --- | --- |
 | 连接 | 沿用 EMS_DATABASE_CONFIG / EMS_MYSQL_*；Web 不复制数据库配置结构 |
-| 身份 | 可替换账号提供者；首期可配账号哈希/权限，不内置默认密码 |
+| 身份 | 账号体系与数据来源待后续设计；运行配置不包含账号，未装配身份服务不阻止进程启动 |
 | 会话 | HttpOnly + SameSite cookie；HTTPS 加 Secure；首期内存会话重启失效 |
 | 授权 | 按数据库实际关系校验站、设备子树、绑定和任务，过滤列表与 total |
 | CSRF | POST 查询与写入统一检查；登录检查 Origin；后续 WebSocket 也检查来源 |

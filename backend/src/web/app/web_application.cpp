@@ -60,15 +60,18 @@ struct Reply {
 
 struct State {
     WebOptions options;
-    SessionService identity;
+    std::shared_ptr<SessionService> identity;
     DeviceService device;
     BoundedExecutor business;
     BoundedExecutor imports;
     std::shared_ptr<HealthService> health = std::make_shared<HealthService>();
 
-    State(const WebOptions& o, database::MySqlDatabaseContext database)
+    State(const WebOptions& o, database::MySqlDatabaseContext database,
+          std::shared_ptr<SessionService> sessions)
         : options(o),
-          identity(o.users, o.session_capacity, o.session_ttl_seconds),
+          identity(sessions ? std::move(sessions)
+                            : std::make_shared<SessionService>(Json::array(), o.session_capacity,
+                                                               o.session_ttl_seconds)),
           device(std::move(database), o.workspace),
           business(o.workers, o.queue_size),
           imports(o.import_workers, o.import_queue_size) {}
@@ -163,7 +166,7 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
                 return;
             }
             if (path == "/api/auth/login") {
-                auto login = state->identity.login(body);
+                auto login = state->identity->login(body);
                 auto cookie = "ems_session=" + login.first + "; Path=/; HttpOnly; SameSite=Strict" +
                               (state->options.secure_cookie ? "; Secure" : "");
                 reply->send(200,
@@ -174,7 +177,7 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
             }
 
             auto token = request->getCookie("ems_session");
-            auto session = state->identity.get(token);
+            auto session = state->identity->get(token);
             if (post && !secure_equal(request->getHeader("x-csrf-token"), session.csrf))
                 throw ApiError(403, "PermissionDenied", "csrf_mismatch");
             if (path == "/api/auth/session") {
@@ -190,7 +193,7 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
             }
             if (path == "/api/auth/logout") {
                 fields(body, {});
-                state->identity.logout(token);
+                state->identity->logout(token);
                 reply->send(
                     200,
                     {{"data", {{"logged_out", true}}}, {"meta", {{"request_id", reply->trace}}}},
@@ -226,8 +229,9 @@ int run_web(const WebOptions& options) {
     return run_web_with_database(options, std::move(database));
 }
 
-int run_web_with_database(const WebOptions& options, database::MySqlDatabaseContext database) {
-    auto state = std::make_shared<State>(options, std::move(database));
+int run_web_with_database(const WebOptions& options, database::MySqlDatabaseContext database,
+                          std::shared_ptr<SessionService> identity) {
+    auto state = std::make_shared<State>(options, std::move(database), std::move(identity));
     state->device.check_schema(core::make_call_context(std::chrono::seconds(15)));
     std::filesystem::create_directories(std::filesystem::u8path(options.workspace));
 

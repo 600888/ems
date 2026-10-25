@@ -4,8 +4,8 @@
         {
             "name": "ems_rtdb",
             "cmd": "ems-rtdb",
-            "args": [],
-            "runDir": "",
+            "args": ["--config", "conf/realtime.json"],
+            "runDir": ".",
             "env": {},
             "singleInstance": true,
             "depends": [],
@@ -16,13 +16,41 @@
             }
         },
         {
-            "name": "ems_web",
-            "cmd": "ems-web",
-            "args": [],
-            "runDir": "",
+            "name": "ems_collector",
+            "cmd": "ems-collector",
+            "args": ["--config", "conf/collector.json"],
+            "runDir": ".",
             "env": {},
             "singleInstance": true,
-            "depends": [],
+            "depends": ["ems_rtdb"],
+            "start": {
+                "cnt": -1,
+                "delay": 1,
+                "interval": 5
+            }
+        },
+        {
+            "name": "ems_storage",
+            "cmd": "ems-storage",
+            "args": [],
+            "runDir": ".",
+            "env": {},
+            "singleInstance": true,
+            "depends": ["ems_rtdb"],
+            "start": {
+                "cnt": 0,
+                "delay": 1,
+                "interval": 5
+            }
+        },
+        {
+            "name": "ems_web",
+            "cmd": "ems-web",
+            "args": ["--config", "conf/web.json"],
+            "runDir": ".",
+            "env": {},
+            "singleInstance": true,
+            "depends": ["ems_rtdb"],
             "start": {
                 "cnt": 3,
                 "delay": 2,

@@ -11,20 +11,13 @@ else()
     set(EMS_DAEMON_PLATFORM_SRC process_posix.cpp)
 endif()
 
-add_executable(
-    ems-daemon
-    ${EMS_DAEMON_COMMON_SRC}
-    ${EMS_DAEMON_PLATFORM_SRC}
-    main.cpp
-)
+add_executable(ems-daemon ${EMS_DAEMON_COMMON_SRC} ${EMS_DAEMON_PLATFORM_SRC} main.cpp)
 
 # 头文件来源：公共接口（include/）、进程内公共实现（src/log 等）、
 # 以及 spdlog、nlohmann/json 两个纯头文件第三方库。
 target_include_directories(
     ems-daemon
-    PRIVATE ${CMAKE_SOURCE_DIR}/include
-            ${CMAKE_SOURCE_DIR}/src
-            ${CMAKE_SOURCE_DIR}/third_party
+    PRIVATE ${CMAKE_SOURCE_DIR}/include ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/third_party
             ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include
 )
 
@@ -38,3 +31,5 @@ set_target_properties(
                CXX_STANDARD_REQUIRED YES
                CXX_EXTENSIONS NO
 )
+
+ems_copy_directory_runtime_dependencies()

@@ -46,8 +46,6 @@ set_target_properties(
                CXX_EXTENSIONS NO
 )
 
-gtest_discover_tests(test_ems_common)
-
 add_executable(test_ems_database_runtime test_database_runtime.cpp)
 target_include_directories(test_ems_database_runtime PRIVATE ${CMAKE_SOURCE_DIR}/src)
 target_include_directories(
@@ -62,8 +60,6 @@ set_target_properties(
                CXX_STANDARD_REQUIRED YES
                CXX_EXTENSIONS NO
 )
-gtest_discover_tests(test_ems_database_runtime)
-
 get_target_property(_ems_test_mysql ems_database_mysql EMS_MYSQL_AVAILABLE)
 if(_ems_test_mysql)
     add_executable(test_ems_database_mysql test_database_mysql.cpp)
@@ -80,7 +76,6 @@ if(_ems_test_mysql)
                    CXX_EXTENSIONS NO
     )
     ems_copy_mysql_runtime(test_ems_database_mysql)
-    gtest_discover_tests(test_ems_database_mysql)
 endif()
 
 if(EMS_WITH_ZEROMQ)
@@ -105,3 +100,11 @@ if(EMS_WITH_ZEROMQ)
 endif()
 
 message(STATUS "Created test_ems_common executable")
+
+ems_copy_directory_runtime_dependencies()
+
+gtest_discover_tests(test_ems_common)
+gtest_discover_tests(test_ems_database_runtime)
+if(TARGET test_ems_database_mysql)
+    gtest_discover_tests(test_ems_database_mysql)
+endif()

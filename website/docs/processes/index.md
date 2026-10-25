@@ -41,7 +41,7 @@ flowchart TB
 ## 运行日志
 
 已实现的进程共用 `<EMS_ROOT>/conf/log.json`，`modules` 的键与可执行文件名一致：
-`ems-daemon`、`ems-rtdb`、`ems-web`、`ems-storage`。各进程独立读取自己的
+`ems-daemon`、`ems-rtdb`、`ems-collector`、`ems-web`、`ems-storage`。各进程独立读取自己的
 `level`、`file_size`（MiB）和 `count`（滚动备份文件数），重启进程后生效。
 `level` 支持 `trace`、`debug`、`info`、`warn`、`error`、`critical`、`off`。
 缺失配置时默认使用 `info`、10 MiB、10 个备份；未设置 `EMS_ROOT` 时使用构建根目录。
@@ -49,4 +49,15 @@ flowchart TB
 日志写入 `<EMS_ROOT>/log/<进程名>/<进程名>.log`；配置等级为 `debug` 时文件名为
 `<进程名>-debug.log`。启动、就绪、退出和错误写入各自的文件，正常退出时等待异步日志刷盘。
 Web 的 Drogon/Trantor 框架日志也写入 `ems-web` 文件，沿用相同等级和滚动配置。
-配置中的 `net` 仍供现有采集库和采集示例使用；当前尚未构建独立的 `ems-collector` 入口。
+配置中的 `net` 仍供现有采集库和采集示例使用；正式采集入口为 `ems-collector`。
+
+## 守护进程启动
+
+`ems-daemon` 读取 `<EMS_ROOT>/conf/proc_manage.json`，可先用 `--check-config` 校验。
+默认先启动 `ems-rtdb`，随后启动依赖它的 `ems-collector` 和 `ems-web`；
+各进程的工作目录设为 `EMS_ROOT`，配置路径从该目录解析，不依赖启动守护进程时的工作目录。
+Windows 控制台输出使用 UTF-8，可直接运行 EXE 查看中文日志。
+
+`ems-storage` 已列入配置，默认 `start.cnt` 为 `0`（禁用）。启用前需以
+`EMS_WITH_ZEROMQ=ON` 和可用的 MySQL 客户端构建，并配置存储连接、站域及遥测环境变量；
+将 `start.cnt` 改为 `-1` 后由守护进程持续托管。策略进程尚无可执行入口，暂不加入托管清单。

@@ -2,8 +2,10 @@ get_filename_component(EMS_BACKEND_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../.." A
 
 # handler 是独立的应用层；单独构建时先创建协议插件和 ABI 加载器。
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    cmake_minimum_required(VERSION 3.15)
+    cmake_minimum_required(VERSION 3.21)
     project(ems_handlers LANGUAGES C CXX)
+    include("${EMS_BACKEND_ROOT}/cmake/OutputDirectories.cmake")
+    ems_set_output_directories("${CMAKE_BINARY_DIR}")
     option(BUILD_TESTS "Build handler and protocol integration tests" ON)
     enable_testing()
     add_subdirectory("../protocol" "protocol")

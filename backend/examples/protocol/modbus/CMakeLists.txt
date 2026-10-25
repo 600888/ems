@@ -18,3 +18,5 @@ foreach(src ${EXAMPLE_SOURCES})
 endforeach()
 
 message(STATUS "Modbus examples: ${EXAMPLE_SOURCES}")
+
+ems_copy_directory_runtime_dependencies()

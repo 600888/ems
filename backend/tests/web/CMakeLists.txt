@@ -1,5 +1,7 @@
 include(GoogleTest)
-find_package(SQLite3 REQUIRED)
+if(NOT TARGET SQLite::SQLite3)
+    find_package(SQLite3 REQUIRED)
+endif()
 
 file(GLOB_RECURSE web_test_sources CONFIGURE_DEPENDS "test_*.cpp")
 add_executable(test_web ${web_test_sources})
@@ -16,4 +18,6 @@ if(MSVC)
 endif()
 ems_copy_mysql_runtime(test_web)
 ems_copy_web_runtime(test_web)
+ems_copy_directory_runtime_dependencies()
+
 gtest_discover_tests(test_web)

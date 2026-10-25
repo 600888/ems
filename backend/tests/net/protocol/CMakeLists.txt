@@ -1,5 +1,7 @@
 # 动态协议插件集成测试，覆盖 ABI、实例生命周期和网络读写。
 
+ems_set_output_directories("${CMAKE_BINARY_DIR}/tests")
+
 if(TARGET proto_dlt698)
     add_executable(test_dlt698_runtime dlt698_runtime_test.cpp)
     target_include_directories(
@@ -61,8 +63,6 @@ if(TARGET proto_modbus)
             PROPERTIES CXX_STANDARD 17
                        CXX_STANDARD_REQUIRED YES
                        CXX_EXTENSIONS NO
-                       LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fixtures"
-                       RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/fixtures"
         )
     endforeach()
 
@@ -107,13 +107,7 @@ if(TARGET proto_modbus)
     endforeach()
 
     if(EMS_PROTOCOL_RUNTIME_DEPENDENCIES)
-        add_custom_command(
-            TARGET test_protocol_runtime
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EMS_PROTOCOL_RUNTIME_DEPENDENCIES}
-                    "$<TARGET_FILE_DIR:test_protocol_runtime>"
-            COMMAND_EXPAND_LISTS
-        )
+        ems_copy_runtime_files(test_protocol_runtime ${EMS_PROTOCOL_RUNTIME_DEPENDENCIES})
     endif()
 
 endif()
@@ -162,13 +156,7 @@ if(TARGET proto_iec104)
     endforeach()
 
     if(EMS_PROTOCOL_RUNTIME_DEPENDENCIES)
-        add_custom_command(
-            TARGET test_iec104_runtime
-            POST_BUILD
-            COMMAND ${CMAKE_COMMAND} -E copy_if_different ${EMS_PROTOCOL_RUNTIME_DEPENDENCIES}
-                    "$<TARGET_FILE_DIR:test_iec104_runtime>"
-            COMMAND_EXPAND_LISTS
-        )
+        ems_copy_runtime_files(test_iec104_runtime ${EMS_PROTOCOL_RUNTIME_DEPENDENCIES})
     endif()
 endif()
 
@@ -207,3 +195,5 @@ if(TARGET proto_dlt645)
         set_tests_properties(dlt645_${scenario} PROPERTIES TIMEOUT 30)
     endforeach()
 endif()
+
+ems_copy_directory_runtime_dependencies()

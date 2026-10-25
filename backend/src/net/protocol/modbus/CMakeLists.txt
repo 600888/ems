@@ -16,6 +16,20 @@ if(TARGET modbuspp-shared)
 endif()
 
 # 支持包管理器或显式指定同平台/同工具链 libmodbus 安装路径。
+option(EMS_FETCH_LIBMODBUS "Build pinned libmodbus on Windows when no installation is found"
+       ${WIN32}
+)
+
+# 清除已经被删除的安装路径，避免 CMake 继续复用失效缓存。
+if(LIBMODBUS_INCLUDE_DIR AND NOT EXISTS "${LIBMODBUS_INCLUDE_DIR}/modbus.h")
+    unset(LIBMODBUS_INCLUDE_DIR CACHE)
+    unset(LIBMODBUS_INCLUDE_DIR)
+endif()
+if(LIBMODBUS_LIBRARY AND NOT EXISTS "${LIBMODBUS_LIBRARY}")
+    unset(LIBMODBUS_LIBRARY CACHE)
+    unset(LIBMODBUS_LIBRARY)
+endif()
+
 if(LIBMODBUS_INCLUDE_DIRS AND LIBMODBUS_LIBRARIES)
     set(EMS_MODBUS_INCLUDE_DIRS "${LIBMODBUS_INCLUDE_DIRS}")
     set(EMS_MODBUS_LIBRARIES "${LIBMODBUS_LIBRARIES}")
@@ -28,14 +42,22 @@ else()
 
     find_library(LIBMODBUS_LIBRARY NAMES modbus libmodbus)
 
-    if(NOT LIBMODBUS_INCLUDE_DIR OR NOT LIBMODBUS_LIBRARY)
+    if(LIBMODBUS_INCLUDE_DIR AND LIBMODBUS_LIBRARY)
+        set(EMS_MODBUS_INCLUDE_DIRS "${LIBMODBUS_INCLUDE_DIR}")
+        set(EMS_MODBUS_LIBRARIES "${LIBMODBUS_LIBRARY}")
+    elseif(WIN32 AND EMS_FETCH_LIBMODBUS)
+        message(
+            STATUS
+                "libmodbus installation missing; building libmodbus 3.1.10 with the current toolchain"
+        )
+        include("${EMS_BACKEND_ROOT}/cmake/Libmodbus.cmake")
+        ems_add_libmodbus()
+    else()
         message(
             FATAL_ERROR
                 "libmodbus >= 3.1.6 is required; set LIBMODBUS_INCLUDE_DIR and LIBMODBUS_LIBRARY"
         )
     endif()
-    set(EMS_MODBUS_INCLUDE_DIRS "${LIBMODBUS_INCLUDE_DIR}")
-    set(EMS_MODBUS_LIBRARIES "${LIBMODBUS_LIBRARY}")
 endif()
 
 add_library(ems_libmodbus INTERFACE)
@@ -96,6 +118,18 @@ elseif(APPLE)
     )
 else()
     set_target_properties(proto_modbus PROPERTIES INSTALL_RPATH "$ORIGIN;$ORIGIN/deps")
+endif()
+
+if(TARGET ems_libmodbus_vendor)
+    add_custom_command(
+        TARGET proto_modbus
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy_if_different "$<TARGET_FILE:ems_libmodbus_vendor>"
+                "$<TARGET_FILE_DIR:proto_modbus>"
+        VERBATIM
+    )
+    install(TARGETS ems_libmodbus_vendor RUNTIME DESTINATION plugins/modbus/2.0.0)
+    install(FILES "${EMS_MODBUS_LICENSE_FILE}" DESTINATION plugins/modbus/2.0.0/licenses)
 endif()
 
 if(WIN32 AND CMAKE_SIZEOF_VOID_P EQUAL 4)

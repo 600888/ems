@@ -62,3 +62,5 @@ foreach(_ems_test test_ems_storage test_ems_telemetry_feed test_ems_time_series_
         target_compile_options(${_ems_test} PRIVATE -UNDEBUG)
     endif()
 endforeach()
+
+ems_copy_directory_runtime_dependencies()

@@ -1,6 +1,10 @@
 #include <iostream>
 #include <string>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include "daemon_log.h"
 #include "log/default_logger.hpp"
 #include "pid_file.h"
@@ -31,6 +35,10 @@ void print_usage() {
 }  // namespace
 
 int main(int argc, char** argv) {
+#ifdef _WIN32
+    // 源码和日志均使用 UTF-8，控制台默认的本地代码页无法正确显示中文。
+    ::SetConsoleOutputCP(CP_UTF8);
+#endif
     std::string config_file = emsdConfPath();
     bool foreground = true;
     bool check_only = false;

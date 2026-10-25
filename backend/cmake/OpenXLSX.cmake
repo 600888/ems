@@ -15,6 +15,8 @@ function(ems_add_openxlsx)
     set(BUILD_EXAMPLES OFF)
     set(BUILD_TESTING OFF)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+    # OpenXLSX 用共享库输出变量写 pkg-config 模板；这些构建元数据不进入交付 lib/。
+    set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/OpenXLSX")
 
     find_package(pugixml 1.15 CONFIG QUIET)
     if(NOT TARGET pugixml::pugixml)

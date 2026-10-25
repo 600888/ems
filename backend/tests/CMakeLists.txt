@@ -1,4 +1,11 @@
 # 测试继承后端的编译器、标准和依赖配置，不重新覆盖全局编译参数。
+ems_set_output_directories("${CMAKE_BINARY_DIR}/tests")
+
+if(EMS_BUILD_WEB)
+    include(SQLite)
+    ems_require_test_sqlite()
+endif()
+
 include_directories(
     "${CMAKE_CURRENT_SOURCE_DIR}/../include" "${CMAKE_CURRENT_SOURCE_DIR}"
     "${CMAKE_CURRENT_SOURCE_DIR}/../third_party/libmodbuspp/3rdparty/json/single_include"

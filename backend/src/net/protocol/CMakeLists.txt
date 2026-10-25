@@ -1,7 +1,9 @@
 # 通讯协议子工程可独立构建，不依赖 MySQL/Redis 或其他协议栈。
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
-    cmake_minimum_required(VERSION 3.15)
+    cmake_minimum_required(VERSION 3.21)
     project(ems_protocols LANGUAGES C CXX)
+    include("${CMAKE_CURRENT_SOURCE_DIR}/../../../cmake/OutputDirectories.cmake")
+    ems_set_output_directories("${CMAKE_BINARY_DIR}")
     option(BUILD_TESTS "Build protocol integration tests" ON)
     enable_testing()
 endif()

@@ -64,7 +64,7 @@ Linux 等系统安装 Boost 开发包后可省略 `BOOST_ROOT`，使用系统搜
 安装布局：
 
 ```text
-bin/                          ems-rtdb.exe、ems_rtdb.dll 及依赖 DLL（Windows）
+bin/                          ems-rtdb 可执行程序及 Windows 运行依赖 DLL
 lib/                          导入库或 Linux SO
 include/rtdb/                 公共接口，Boost/Redis 实现头不外露
 include/common/core/          Result、CallContext 等共享类型
@@ -72,7 +72,7 @@ lib/cmake/ems_rtdb/            find_package 配置与 ems::rtdb 导出目标
 share/ems_rtdb/                配置示例和本文档
 ```
 
-Windows 将 bin 中的全部依赖 DLL 随程序部署或加入进程 PATH；Linux 还须配置 SO
+Windows 将 bin 中的程序与依赖 DLL 一起部署；Linux 还须配置 SO
 搜索路径并安装匹配的 hiredis 等运行依赖。调用方无需安装 Boost/Redis SDK，仍需要运行库。
 原有业务模型使用的 JSON 头随 SDK 安装，无需调用方单独配置依赖。
 

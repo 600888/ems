@@ -200,7 +200,7 @@ void aliases() {
     CHECK(manager.loaded_library_count() == 0);
 
     // 通过 UTF-8 API 构造中文路径，不依赖 Windows 窄字符 argv 的本地代码页。
-    const auto unicode = path.parent_path() / fs::u8path(u8"通讯协议 Unicode 测试");
+    const auto unicode = fs::current_path() / fs::u8path(u8"通讯协议 Unicode 测试");
     fs::create_directories(unicode);
     for (const auto& file : fs::directory_iterator(path.parent_path())) {
         if (file.is_regular_file() && file.path().extension() == ".dll")

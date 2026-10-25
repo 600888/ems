@@ -45,19 +45,28 @@ ems_copy_mysql_runtime(ems-web)
 function(ems_copy_web_runtime target)
     if(WIN32)
         get_filename_component(zlib_prefix "${ZLIB_INCLUDE_DIR}" DIRECTORY)
-        find_file(
-            EMS_WEB_ZLIB_RUNTIME
-            NAMES zlib.dll zlib1.dll
-            HINTS "${zlib_prefix}/bin"
+        # 优先选择实际 ZLIB 包的 DLL，替换旧缓存中从 PATH 误找到的其他工具链 DLL。
+        set(_ems_zlib_runtime_found OFF)
+        foreach(_ems_zlib_dll IN ITEMS zlib.dll zlib1.dll libzlib.dll)
+            if(EXISTS "${zlib_prefix}/bin/${_ems_zlib_dll}")
+                set(EMS_WEB_ZLIB_RUNTIME
+                    "${zlib_prefix}/bin/${_ems_zlib_dll}"
+                    CACHE FILEPATH "ZLIB runtime DLL deployed with Web targets" FORCE
+                )
+                set(_ems_zlib_runtime_found ON)
+                break()
+            endif()
+        endforeach()
+        if(NOT _ems_zlib_runtime_found AND (NOT EMS_WEB_ZLIB_RUNTIME OR NOT EXISTS
+                                                                        "${EMS_WEB_ZLIB_RUNTIME}")
         )
+            unset(EMS_WEB_ZLIB_RUNTIME CACHE)
+            unset(EMS_WEB_ZLIB_RUNTIME)
+        endif()
         if(EMS_WEB_ZLIB_RUNTIME)
-            add_custom_command(
-                TARGET ${target}
-                POST_BUILD
-                COMMAND ${CMAKE_COMMAND} -E copy_if_different "${EMS_WEB_ZLIB_RUNTIME}"
-                        "$<TARGET_FILE_DIR:${target}>"
-            )
+            ems_copy_runtime_files(${target} "${EMS_WEB_ZLIB_RUNTIME}")
         endif()
     endif()
 endfunction()
 ems_copy_web_runtime(ems-web)
+ems_copy_directory_runtime_dependencies()

@@ -1,4 +1,6 @@
 # 从应用层处理器经真实 ABI 加载协议插件，验证每种协议均可独立调用。
+ems_set_output_directories("${CMAKE_BINARY_DIR}/tests")
+
 add_executable(test_protocol_handlers protocol_handlers_test.cpp)
 
 target_include_directories(test_protocol_handlers PRIVATE "${EMS_BACKEND_ROOT}/src")
@@ -39,3 +41,5 @@ endforeach()
 
 add_test(NAME handler_factory_and_failure COMMAND test_protocol_handlers factory)
 set_tests_properties(handler_factory_and_failure PROPERTIES TIMEOUT 30)
+
+ems_copy_directory_runtime_dependencies()
