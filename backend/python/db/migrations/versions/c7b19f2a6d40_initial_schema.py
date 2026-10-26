@@ -346,6 +346,7 @@ def upgrade() -> None:
     )
     op.create_index('ix_history_point', 'history_point_snapshot', ['point_id', 'scope_kind', 'scope_id', 'config_version'], unique=False)
     op.create_table('cfg_point_yc',
+    sa.Column('id', sa.BigInteger().with_variant(mysql.BIGINT(unsigned=True), 'mysql').with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('origin', sa.Enum('type', 'template', 'vendor', 'component', name='ck_cfg_point_yc_origin', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('type', 'template', 'vendor', 'component'), 'mysql'), server_default=sa.text("'vendor'"), nullable=False),
     sa.Column('address_space', sa.Enum('coil', 'discrete_input', 'input_register', 'holding_register', name='ck_cfg_point_yc_address_space', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('coil', 'discrete_input', 'input_register', 'holding_register'), 'mysql'), nullable=True, comment='空=非寄存器协议'),
     sa.Column('wire_type', sa.Enum('bool', 'i16', 'u16', 'i32', 'u32', 'f32', 'i64', 'u64', 'f64', name='ck_cfg_point_yc_wire_type', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('bool', 'i16', 'u16', 'i32', 'u32', 'f32', 'i64', 'u64', 'f64'), 'mysql'), nullable=False),
@@ -358,7 +359,6 @@ def upgrade() -> None:
     sa.Column('range_min', sa.Double(), server_default=sa.text('-9999999'), nullable=False),
     sa.Column('range_max', sa.Double(), server_default=sa.text('9999999'), nullable=False),
     sa.Column('deadband', sa.Double(), server_default=sa.text('0'), nullable=False, comment='变化死区，0 表示逐点上报'),
-    sa.Column('id', sa.BigInteger().with_variant(mysql.BIGINT(unsigned=True), 'mysql').with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('point_id', sa.String(length=64), nullable=False, comment='稳定点 ID，四表之间也全局唯一（服务校验）'),
     sa.Column('owner_device_id', sa.String(length=64), nullable=False, comment='点归属节点；部件点填 rack/pack/cell'),
     sa.Column('binding_id', sa.String(length=64), nullable=False, comment='实际采集来源绑定；部件点填 BMS 的绑定'),
@@ -396,6 +396,7 @@ def upgrade() -> None:
     op.create_index('uq_yc_semantic', 'cfg_point_yc', ['owner_device_id', sa.literal_column("(NULLIF(semantic_code, ''))")], unique=True)
     op.create_index('uq_yc_vendor_key', 'cfg_point_yc', ['binding_id', sa.literal_column("(NULLIF(vendor_key, ''))")], unique=True)
     op.create_table('cfg_point_yk',
+    sa.Column('id', sa.BigInteger().with_variant(mysql.BIGINT(unsigned=True), 'mysql').with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('origin', sa.Enum('type', 'template', 'vendor', 'component', name='ck_cfg_point_yk_origin', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('type', 'template', 'vendor', 'component'), 'mysql'), server_default=sa.text("'vendor'"), nullable=False),
     sa.Column('address_space', sa.Enum('coil', 'discrete_input', 'input_register', 'holding_register', name='ck_cfg_point_yk_address_space', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('coil', 'discrete_input', 'input_register', 'holding_register'), 'mysql'), nullable=True),
     sa.Column('wire_type', sa.Enum('bool', 'i16', 'u16', 'i32', 'u32', 'f32', 'i64', 'u64', 'f64', name='ck_cfg_point_yk_wire_type', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('bool', 'i16', 'u16', 'i32', 'u32', 'f32', 'i64', 'u64', 'f64'), 'mysql'), nullable=False),
@@ -410,7 +411,6 @@ def upgrade() -> None:
     sa.Column('feedback_json', sa.JSON(), nullable=True, comment='[{point_code,criterion,expected,tolerance,order,required}]'),
     sa.Column('feedback_timeout_ms', sa.Integer().with_variant(mysql.INTEGER(unsigned=True), 'mysql'), server_default=sa.text('5000'), autoincrement=False, nullable=False),
     sa.Column('failure_policy', sa.Enum('reject', 'retry', 'escalate', name='ck_cfg_point_yk_failure_policy', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('reject', 'retry', 'escalate'), 'mysql'), server_default=sa.text("'reject'"), nullable=False),
-    sa.Column('id', sa.BigInteger().with_variant(mysql.BIGINT(unsigned=True), 'mysql').with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('point_id', sa.String(length=64), nullable=False, comment='稳定点 ID，四表之间也全局唯一（服务校验）'),
     sa.Column('owner_device_id', sa.String(length=64), nullable=False, comment='点归属节点；部件点填 rack/pack/cell'),
     sa.Column('binding_id', sa.String(length=64), nullable=False, comment='实际采集来源绑定；部件点填 BMS 的绑定'),
@@ -447,6 +447,7 @@ def upgrade() -> None:
     op.create_index('uq_yk_semantic', 'cfg_point_yk', ['owner_device_id', sa.literal_column("(NULLIF(semantic_code, ''))")], unique=True)
     op.create_index('uq_yk_vendor_key', 'cfg_point_yk', ['binding_id', sa.literal_column("(NULLIF(vendor_key, ''))")], unique=True)
     op.create_table('cfg_point_yt',
+    sa.Column('id', sa.BigInteger().with_variant(mysql.BIGINT(unsigned=True), 'mysql').with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('origin', sa.Enum('type', 'template', 'vendor', 'component', name='ck_cfg_point_yt_origin', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('type', 'template', 'vendor', 'component'), 'mysql'), server_default=sa.text("'vendor'"), nullable=False),
     sa.Column('address_space', sa.Enum('coil', 'discrete_input', 'input_register', 'holding_register', name='ck_cfg_point_yt_address_space', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('coil', 'discrete_input', 'input_register', 'holding_register'), 'mysql'), nullable=True),
     sa.Column('wire_type', sa.Enum('bool', 'i16', 'u16', 'i32', 'u32', 'f32', 'i64', 'u64', 'f64', name='ck_cfg_point_yt_wire_type', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('bool', 'i16', 'u16', 'i32', 'u32', 'f32', 'i64', 'u64', 'f64'), 'mysql'), nullable=False),
@@ -463,7 +464,6 @@ def upgrade() -> None:
     sa.Column('feedback_json', sa.JSON(), nullable=True),
     sa.Column('feedback_timeout_ms', sa.Integer().with_variant(mysql.INTEGER(unsigned=True), 'mysql'), server_default=sa.text('5000'), autoincrement=False, nullable=False),
     sa.Column('failure_policy', sa.Enum('reject', 'retry', 'escalate', name='ck_cfg_point_yt_failure_policy', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('reject', 'retry', 'escalate'), 'mysql'), server_default=sa.text("'reject'"), nullable=False),
-    sa.Column('id', sa.BigInteger().with_variant(mysql.BIGINT(unsigned=True), 'mysql').with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('point_id', sa.String(length=64), nullable=False, comment='稳定点 ID，四表之间也全局唯一（服务校验）'),
     sa.Column('owner_device_id', sa.String(length=64), nullable=False, comment='点归属节点；部件点填 rack/pack/cell'),
     sa.Column('binding_id', sa.String(length=64), nullable=False, comment='实际采集来源绑定；部件点填 BMS 的绑定'),
@@ -502,6 +502,7 @@ def upgrade() -> None:
     op.create_index('uq_yt_semantic', 'cfg_point_yt', ['owner_device_id', sa.literal_column("(NULLIF(semantic_code, ''))")], unique=True)
     op.create_index('uq_yt_vendor_key', 'cfg_point_yt', ['binding_id', sa.literal_column("(NULLIF(vendor_key, ''))")], unique=True)
     op.create_table('cfg_point_yx',
+    sa.Column('id', sa.BigInteger().with_variant(mysql.BIGINT(unsigned=True), 'mysql').with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('origin', sa.Enum('type', 'template', 'vendor', 'component', name='ck_cfg_point_yx_origin', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('type', 'template', 'vendor', 'component'), 'mysql'), server_default=sa.text("'vendor'"), nullable=False),
     sa.Column('address_space', sa.Enum('coil', 'discrete_input', 'input_register', 'holding_register', name='ck_cfg_point_yx_address_space', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('coil', 'discrete_input', 'input_register', 'holding_register'), 'mysql'), nullable=True),
     sa.Column('wire_type', sa.Enum('bool', 'i16', 'u16', 'i32', 'u32', 'f32', 'i64', 'u64', 'f64', name='ck_cfg_point_yx_wire_type', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('bool', 'i16', 'u16', 'i32', 'u32', 'f32', 'i64', 'u64', 'f64'), 'mysql'), nullable=False),
@@ -513,7 +514,6 @@ def upgrade() -> None:
     sa.Column('enum_json', sa.JSON(), nullable=True, comment='[{raw,label,severity}]'),
     sa.Column('unknown_policy', sa.Enum('retain_raw', 'uncertain', 'invalid', name='ck_cfg_point_yx_unknown_policy', native_enum=False, create_constraint=True).with_variant(mysql.ENUM('retain_raw', 'uncertain', 'invalid'), 'mysql'), server_default=sa.text("'retain_raw'"), nullable=False),
     sa.Column('feedback_of_point_id', sa.String(length=64), server_default=sa.text("''"), nullable=False, comment='反馈点指回遥控/遥调点'),
-    sa.Column('id', sa.BigInteger().with_variant(mysql.BIGINT(unsigned=True), 'mysql').with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('point_id', sa.String(length=64), nullable=False, comment='稳定点 ID，四表之间也全局唯一（服务校验）'),
     sa.Column('owner_device_id', sa.String(length=64), nullable=False, comment='点归属节点；部件点填 rack/pack/cell'),
     sa.Column('binding_id', sa.String(length=64), nullable=False, comment='实际采集来源绑定；部件点填 BMS 的绑定'),

@@ -17,6 +17,7 @@ class PointBase(Base):
         nullable=False,
         autoincrement=True,
         primary_key=True,
+        sort_order=-100,
     )
     point_id: Mapped[str] = mapped_column(
         sa.String(64), nullable=False, comment="稳定点 ID，四表之间也全局唯一（服务校验）"

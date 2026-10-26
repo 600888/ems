@@ -92,12 +92,18 @@ def test_frozen_migration_matches_orm_ddl_for_each_database(dialect):
     with Operations.context(context):
         BASELINE.upgrade()
     assert ddl_statements(buffer.getvalue()) == ddl_statements(";\n".join(expected))
+    # The semantic DDL comparison sorts fields; verify physical column order separately.
+    for text in (buffer.getvalue(), ";\n".join(expected)):
+        first_columns = re.findall(r"CREATE TABLE \S+ \(\s*(\w+)", text)
+        assert len(first_columns) == len(Base.metadata.tables)
+        assert set(first_columns) == {"id"}
 
 
 def test_all_models_are_mapped_and_four_point_tables_share_base():
     assert len(Base.registry.mappers) == len(Base.metadata.tables) == 19
     assert not {"device", "channel", "point_yc", "point_yx", "point_yk", "point_yt"} & set(Base.metadata.tables)
     for table in Base.metadata.tables.values():
+        assert list(table.c)[0].name == "id", table.name
         assert [column.name for column in table.primary_key] == ["id"], table.name
         assert table.c.id.autoincrement is True, table.name
     for model, table in (
@@ -113,6 +119,9 @@ def test_all_models_are_mapped_and_four_point_tables_share_base():
 def test_upgrade_check_downgrade_and_reupgrade(engine):
     with engine.begin() as connection:
         assert schema_differences(connection) == []
+        inspector = sa.inspect(connection)
+        for name in Base.metadata.tables:
+            assert inspector.get_columns(name)[0]["name"] == "id", name
         assert connection.exec_driver_sql("PRAGMA foreign_keys").scalar_one() == 1
         command.downgrade(migration_config(connection=connection), "base")
         assert set(sa.inspect(connection).get_table_names()) == {"alembic_version"}
