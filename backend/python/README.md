@@ -1,8 +1,12 @@
 # 数据库 ORM 与迁移
 
 `db/models/` 使用 SQLAlchemy 2 的 `DeclarativeBase`、`Mapped`、`mapped_column` 定义现有
-25 张业务表。四遥对应 `YcPoint` / `YxPoint` / `YkPoint` / `YtPoint`，共享抽象 `PointBase`，
+19 张业务表。四遥对应 `YcPoint` / `YxPoint` / `YkPoint` / `YtPoint`，共享抽象 `PointBase`，
 仍是四张物理表。Alembic 管理数据库结构的初始化和迁移，业务进程不在启动时执行 DDL。
+
+19 张业务表统一具有数据库生成的整数 `id` 主键。设备类型、类型固有点、模板、导入任务、
+通信统计和历史表的原业务主键改为唯一约束；外键继续引用这些稳定业务字段。
+`alembic_version` 是 Alembic 自己维护的迁移记录表，不属于业务模型。
 
 ## 安装与配置
 
@@ -14,6 +18,17 @@ python -m pip install -e ./backend/python
 python -m pip install -e "./backend/python[mysql]"
 python -m pip install -e "./backend/python[postgresql]"
 ```
+
+使用 uv 时，在 `backend/python` 中按所选数据库安装依赖：
+
+```powershell
+uv sync --extra mysql          # MySQL，包含 PyMySQL 与认证依赖
+# 或 uv sync --extra postgresql
+ems-db init
+```
+
+仅运行 `uv sync` 不会安装可选数据库驱动；切换数据库后需同步对应 extra。
+SQLite 不需要额外驱动。安装命令需在运行 `ems-db` 的同一虚拟环境中执行。
 
 编辑本目录的 [`database.yaml`](database.yaml)。它**仅供 Python 数据库迁移工具使用**，
 不是全局配置，也不改变 C++ 进程的数据库配置。
@@ -72,6 +87,8 @@ ems-db check                  # 比对 ORM 与当前库；差异返回非零退�
 
 ## 修改结构与迁移
 
+表结构只在 `db/models/` 的 ORM 模型中定义，先修改模型，再让 Alembic 生成迁移：
+
 ```powershell
 ems-db revision --autogenerate -m "add device field"
 # 审查生成文件，补齐必要的数据转换、CHECK、枚举和函数索引操作。
@@ -82,8 +99,8 @@ ems-db downgrade <revision>
 
 SQLite 自动生成迁移采用 Alembic batch 模式以支持表重建。初始迁移保存固定的表定义，
 不在执行时导入当前 ORM 元数据或读取会变化的旧 SQL 文件。后续迁移采用 Alembic revision ID，
-不增加 `004_*.sql` / `*_v2.*`。当前开发阶段允许原地修改基线，但已执行该基线的本地库需要
-重新创建或明确编写结构变更操作，`upgrade head` 不会重放同一 revision。
+不增加 `004_*.sql` / `*_v2.*`。当前初始迁移已从 ORM 模型重新生成，包含全部业务表的 `id`。
+`upgrade head` 不会重放同一 revision；后续模型变更仍需先生成新的 Alembic 迁移。
 
 迁移工具对 SQLite 显式开启 DDL 事务。重建表时在事务外暂停外键约束，避免删除旧表触发级联；
 提交前执行外键检查，失败则回滚，最后恢复外键约束。包含函数索引的表在 batch 重建时仍需在
@@ -104,10 +121,11 @@ ems-db upgrade head --sql --dialect postgresql
 `check` 比对表、字段、默认值、常规索引、外键和主键，并核对预期函数索引是否存在，
 不保证跨方言的全部 CHECK 和函数索引表达式等价。
 
-已有数据库不能直接运行初始建表迁移：先备份、执行 `ems-db check`，核对 CHECK 与函数索引定义，
-处理差异后，才通过 `alembic -c backend/python/db/alembic.ini stamp c7b19f2a6d40` 登记基线。
-既有 MySQL 数据库中的 `device` / `channel` 索引如果仍名为 `uq_configuration_code`，需要分别改名为
-`uq_configuration_device_code` / `uq_configuration_channel_code`；跨库索引命名必须全局唯一。
+既有数据库先执行 `ems-db check` 并人工核验 CHECK 与函数索引。
+只有表结构已与当前模型一致，才能使用
+`alembic -c backend/python/db/alembic.ini stamp c7b19f2a6d40` 登记当前初始迁移。
+重置过迁移历史的开发库也必须先确认结构一致，再重新登记；这不会执行建表或修改业务数据。
+旧库如果缺少 `id` 或其他字段，不能用 `stamp` 冒充已迁移，应先按模型差异生成并审查迁移。
 `stamp` 只登记位置，不执行表结构变更，也不验证兼容性。
 
 ## ORM 使用与兼容范围
@@ -131,7 +149,14 @@ PostgreSQL 使用自己的序列与类型；MySQL 通过类型 variant 保留原
 精度和时间精度不等同于服务端数据库。`updated_at` 在 ORM 更新时维护，MySQL 还保留服务端
 `ON UPDATE`；SQLite / PostgreSQL 的外部原生 SQL 更新不会自动改该字段。
 
-本工具覆盖现有 25 张关系表，表结构与种子数据分别维护在 `db/models/` 和 `db/seed_data.py`。
+设备配置只保留 `cfg_device`、`cfg_channel`、`cfg_binding` 和四张 `cfg_point_*` 表。
+旧的 `device`、`channel`、`point_yc/yx/yk/yt` ORM 模型和建表定义已删除；采集进程读取同一套新表。
+开发演示数据也写入新表，设备和通道默认禁用，配置真实端点后再启用。
+开发阶段直接更新初始迁移；已经执行过旧基线的数据库不会因为再次 `init` 自动删除旧表，
+`ems-db check` 会报告这些退役表；通过 `ems-db revision --autogenerate -m "remove legacy tables"`
+可从当前 ORM 自动生成删除变更，审查后再 `ems-db upgrade head`。不能用 `stamp` 代替结构变更。
+
+本工具覆盖现有 19 张关系表，表结构与种子数据分别维护在 `db/models/` 和 `db/seed_data.py`。
 原 `backend/data` 下的 SQL 脚本已移除。TDengine 历史库不在当前 SQLAlchemy 迁移范围内，
 需根据[存储设计](../../website/docs/processes/storage/design.md#31-表结构与时间)由部署单独准备。
 现有 C++ 运行时仍通过 MySQL/ormpp 访问数据库；本次支持三库的是 Python ORM 与迁移工具，

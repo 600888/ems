@@ -55,6 +55,21 @@ TEST(RtdbDispatcher, WritesThroughUnifiedLibraryWithoutRedisNotificationDependen
     rtdb::YxPoint status;
     ASSERT_TRUE(reader.getYx("breaker", status));
     EXPECT_EQ(status.value_, 1);
+    net::collect::PointValue analog;
+    analog.code = "YX_analog-stable-id";
+    analog.value = 6.25;
+    analog.quality = 0;
+    analog.timestamp = 2345;
+    analog.details = {{"point_type", "yc"}};
+    net::collect::PointValue discrete = analog;
+    discrete.code = "stable-discrete-id";
+    discrete.value = 1;
+    discrete.details = {{"point_type", "yx"}};
+    ASSERT_EQ(dispatcher.batch_update({analog, discrete}), 2);
+    ASSERT_TRUE(reader.getYc(analog.code, point));
+    EXPECT_DOUBLE_EQ(point.value_, 6.25);
+    ASSERT_TRUE(reader.getYx(discrete.code, status));
+    EXPECT_EQ(status.value_, 1);
     dispatcher.shutdown();
     EXPECT_TRUE(reader.getYc("power", point));
 }

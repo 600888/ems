@@ -1,10 +1,9 @@
 import json
-from pathlib import Path
 
 import pytest
 import yaml
 
-from db.config import load_url, normalize_url
+from db.config import load_url, normalize_url, make_engine
 
 
 def write_config(tmp_path, backend, section):
@@ -50,9 +49,13 @@ def test_sqlite_relative_to_yaml_and_not_cwd(tmp_path, monkeypatch):
 
 
 def test_default_migration_yaml_is_independent_of_cwd(tmp_path, monkeypatch):
+    migration_dir = tmp_path / "python"
+    migration_dir.mkdir()
+    write_config(migration_dir, "sqlite", {"url": "sqlite:///ems.sqlite3"})
+    monkeypatch.setattr("db.config.__file__", str(migration_dir / "db" / "config.py"))
     write_config(tmp_path, "sqlite", {"url": "sqlite:///:memory:"})
     monkeypatch.chdir(tmp_path)
-    assert load_url(environ={}).database == str(Path(__file__).resolve().parents[2] / "ems.sqlite3")
+    assert load_url(environ={}).database == str(migration_dir / "ems.sqlite3")
 
 
 def test_full_url_and_explicit_fields(tmp_path):
@@ -127,3 +130,18 @@ def test_invalid_url_errors_do_not_echo_password():
     with pytest.raises(ValueError) as error:
         normalize_url("mysql://user:secret@host:bad-port/db")
     assert "secret" not in str(error.value)
+
+
+@pytest.mark.parametrize("backend,module", [("mysql", "pymysql"), ("postgresql", "psycopg")])
+def test_missing_database_driver_has_install_hint_without_credentials(monkeypatch, backend, module):
+    def missing_driver(*args, **kwargs):
+        raise ModuleNotFoundError(f"No module named '{module}'", name=module)
+
+    monkeypatch.setattr("db.config.create_engine", missing_driver)
+    with pytest.raises(ValueError) as error:
+        make_engine(f"{backend}://ems:secret@localhost/ems")
+    message = str(error.value)
+    assert module in message
+    assert f"uv sync --extra {backend}" in message
+    assert f".[{backend}]" in message
+    assert "secret" not in message

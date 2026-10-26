@@ -30,6 +30,7 @@
 #include "net/collect/collect_types.h"
 #include "net/handler/protocol_handler.h"
 #include "net/log.h"
+#include "net/para_loader/cfg_loader.h"
 #include "plugin_manager.h"
 #include "rtdb/model/rtdb_channel.h"
 
@@ -42,14 +43,7 @@ using rtdb::ChannelConfig;
 /**
  * @brief 设备上下文（通道路径下的设备及其测点列表）
  */
-struct DeviceContext {
-    int64_t deviceId_{0};
-    std::string deviceName_;
-    std::vector<std::string> ycPointCodes_;  // 遥测测点编码列表
-    std::vector<std::string> yxPointCodes_;  // 遥信测点编码列表
-    std::vector<std::string> ykPointCodes_;  // 遥控测点编码列表
-    std::vector<std::string> ytPointCodes_;  // 遥调测点编码列表
-};
+using DeviceContext = device::ConfiguredDevice;
 
 /**
  * @brief 命令任务（遥控/遥调下发）
@@ -262,9 +256,10 @@ class ChannelThread {
     void collect_device(const DeviceContext& device);
     /**
      * @brief 批量采集指定测点。
-     * @param[in] pointCodes 测点编码列表。
+     * @param[in] routes 稳定测点 ID 与协议地址路由。
+     * @param[in] point_type 四遥类型 yc 或 yx。
      */
-    void collect_points(const std::vector<std::string>& pointCodes);
+    void collect_points(const std::vector<device::PointRoute>& routes, const char* point_type);
 
     // ---- 状态切换 ----
     /**

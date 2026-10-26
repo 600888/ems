@@ -21,6 +21,9 @@ Web 用例与保存边界见[设备模块设计](../../processes/web/device/inde
 
 **表数：14。**
 
+所有业务表统一使用自增整数 `id` 作为内部主键，稳定业务 ID 和原复合键保留唯一约束。
+类型、模板、导入任务及通信统计等表也遵循此规则；数字主键不替代业务编码和外键关联。
+
 ## 1. 目标与边界
 
 **范围内**
@@ -108,7 +111,7 @@ Web 用例与保存边界见[设备模块设计](../../processes/web/device/inde
 | 域 | 表 | 说明 |
 | --- | --- | --- |
 | 设备 | `cfg_device` | 设备树（站/单元/设备/部件）+ 站点默认值与 `config_revision` |
-| 设备 | `cfg_device_type` | 设备类型（复合主键含类型版本） |
+| 设备 | `cfg_device_type` | 设备类型（类型编码与类型版本联合唯一） |
 | 设备 | `cfg_type_point` | 类型固有点目录（四遥 + 能力编码数组） |
 | 设备 | `cfg_template` | 型号模板（默认四遥点表，`points_json`） |
 | 通道 | `cfg_channel` | 通道/连接（同一行被多次绑定即共享） |
@@ -176,13 +179,15 @@ erDiagram
 
 ### 6.2 `cfg_device_type`（设备类型）
 
-`(type_code, type_version)` 复合主键，如 `pcs` + `pcs-v1`；`category` 供页面分组；`status` 支持停用。不随设备复制。
+`id` 为自增主键，`(type_code, type_version)` 联合唯一，如 `pcs` + `pcs-v1`；
+`category` 供页面分组；`status` 支持停用。不随设备复制。
 
 ### 6.3 `cfg_type_point`（类型固有点目录）
 
 | 字段 | 说明 |
 | --- | --- |
-| `(type_code, type_version, semantic_code)` | 主键；如 `active_power`、`run_state`、`start` |
+| `id` | 数据库生成的整数主键 |
+| `(type_code, type_version, semantic_code)` | 联合唯一；如 `active_power`、`run_state`、`start` |
 | `point_type` | `yc/yx/yk/yt`，决定映射行必须落在哪张点表 |
 | `value_type/unit` | 与实例比对，不一致拒绝保存 |
 | `required` | 属于任一能力即为必需；必需固有点未映射时阻止保存 |
@@ -200,7 +205,7 @@ erDiagram
 
 ### 6.4 `cfg_template`（型号模板）
 
-`(template_id, template_version)` 主键，`points_json` 保存默认四遥点表与映射。模板是“复制源”，不参与运行期联表，所以用 JSON 一次存全。套用模板时由服务按固有点类型生成对应点表的行；模板里的地址只是建议值，绑定通道不同需重填。
+`id` 为自增主键，`(template_id, template_version)` 联合唯一，`points_json` 保存默认四遥点表与映射。模板是“复制源”，不参与运行期联表，所以用 JSON 一次存全。套用模板时由服务按固有点类型生成对应点表的行；模板里的地址只是建议值，绑定通道不同需重填。
 
 ### 6.5 `cfg_channel`（通道）
 
@@ -287,7 +292,7 @@ erDiagram
 
 ### 6.11 `cfg_import_job` / `cfg_import_row`
 
-`cfg_import_job`：`import_job_id`、`device_id`、`binding_id`、`source_kind`、`file_name`、`file_sha256`、`address_base(zero/one)`、`idempotency_key`（`SHA-256(device|binding|sha256)`，唯一）、`status(parsed/confirmed/applied/failed)`、行数统计、提交人与时间。
+`cfg_import_job`：自增主键 `id`，唯一业务 ID `import_job_id`，以及 `device_id`、`binding_id`、`source_kind`、`file_name`、`file_sha256`、`address_base(zero/one)`、`idempotency_key`（`SHA-256(device|binding|sha256)`，唯一）、`status(parsed/confirmed/applied/failed)`、行数统计、提交人与时间。
 
 `cfg_import_row`：逐行 `vendor_key/vendor_name`、`point_type`（决定写入哪张点表）、`target_device_path`（空即“目标节点缺失”）、`semantic_code`、地址与取值列、`parse_status/parse_code/parse_message`、`confirm_state(none/accepted/fixed/rejected)` 与确认留痕、`resolved_point_id`。
 
@@ -297,7 +302,7 @@ erDiagram
 
 ### 6.12 `ops_comm_stat_5m` / `ops_state_log`
 
-- `ops_comm_stat_5m`：`(binding_id, window_start)` 主键，请求/成功/超时/错误计数、平均与 p95 时延、最近有效数据时间。采集进程 5 分钟一窗，保留 30 天。
+- `ops_comm_stat_5m`：自增 `id` 主键，`(binding_id, window_start)` 联合唯一，请求/成功/超时/错误计数、平均与 p95 时延、最近有效数据时间。采集进程 5 分钟一窗，保留 30 天。
 - `ops_state_log`：`object_kind(device/channel/binding)` + `object_id` + `state` + `since`，只在状态变化时写，保留 90 天。最新状态仍在实时库，本表只做追溯。
 
 ## 7. 关键流程
@@ -442,7 +447,9 @@ station-package.zip
 | `point_yk` | `cfg_point_yk` | `command_type` → `write_mode`；`related_yx_id` → 反馈点 `feedback_of_point_id` |
 | `point_yt` | `cfg_point_yt` | `write_mode` 固定 `scaled`；`related_yc_id` → `feedback_json` 首条判据 |
 
-迁移期间旧表只读；采集切到新结构后保留一个验证周期再下线。`ems_point_import` 工具改为按类型写四张点表。
+旧表、旧 ORM 模型和 `ems_point_import` 已移除。表格仅说明字段对应关系，不再维护旧结构。
+采集进程使用 `CfgLoader` 从 `cfg_device/cfg_channel/cfg_binding` 与四张新点表构建通道目录，
+按绑定地址编译协议地址，采样以稳定 `point_id` 写入实时库。点表使用 Web 设备管理导入接口。
 
 ## 10. 与实时库的契约
 
@@ -501,7 +508,7 @@ station-package.zip
 | --- | --- |
 | `cfg_asset` / `cfg_ess_unit` | 并入 `cfg_device`（`node_kind` 与站根字段） |
 | `cfg_scope` / `cfg_version` / `cfg_version_snapshot` / `cfg_scope_active` / `cfg_apply_receipt` / `cfg_validation_finding` | **全部去掉**：不做配置版本，改为站根 `config_revision` + 保存前校验 |
-| `cfg_device_type_version` | 并入 `cfg_device_type` 复合主键 |
+| `cfg_device_type_version` | 并入 `cfg_device_type`，类型编码与版本联合唯一 |
 | `cfg_standard_point_def` / `cfg_capability_def` / `cfg_capability_requirement` | `cfg_type_point`（`capability_codes_json`） |
 | `cfg_model_template` / `_version` / `cfg_template_point` | `cfg_template`（`points_json`） |
 | `cfg_connection_resource` | `cfg_channel`（同一行被多次绑定即共享） |

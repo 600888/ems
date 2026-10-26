@@ -299,9 +299,15 @@ void channel(const std::string& protocol, const char* plugin_path,
     settings["timeout_ms"] = 500;
     config.settings_ = settings.dump();
     ChannelThread worker(config, nullptr);
+    ems::net::device::ConfiguredDevice device;
+    device.ytPoints_.push_back({"stable-command-point", code, 2.0, 1.0, false, "scaled"});
+    worker.add_device(std::move(device));
     worker.set_poll_interval(100);
     CHECK(worker.start(manager));
-    auto command = worker.post_command(code, 23.5);
+    auto unknown = worker.post_command("unconfigured-point", 1);
+    CHECK(unknown.wait_for(5s) == std::future_status::ready);
+    CHECK(!unknown.get());
+    auto command = worker.post_command("stable-command-point", 48.0);
     CHECK(command.wait_for(5s) == std::future_status::ready);
     CHECK(command.get());
     {

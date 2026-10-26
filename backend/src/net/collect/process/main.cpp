@@ -18,7 +18,7 @@
 #include "log/default_logger.hpp"
 #include "log/process_logger.hpp"
 #include "net/collect/collect_engine.h"
-#include "net/para_loader/para_loader.h"
+#include "net/para_loader/cfg_loader.h"
 
 namespace {
 namespace fs = std::filesystem;
@@ -150,11 +150,11 @@ int main(int argc, char** argv) {
             std::cerr << "ems-collector: database unavailable; check configuration and schema\n";
             return 1;
         }
-        ems::net::device::ParaLoader loader;
+        ems::net::device::CfgLoader loader;
         if (!loader.initialize(ems::core::value_of(database),
                                ems::core::make_call_context(std::chrono::seconds(10))))
             throw std::runtime_error("configuration load failed");
-        const auto channels = loader.load_channels();
+        const auto channels = loader.channels();
         if (channels.size() > static_cast<std::size_t>(options.engine.maxChannels_))
             throw std::runtime_error("channel limit exceeded");
 
@@ -166,7 +166,29 @@ int main(int argc, char** argv) {
             throw std::runtime_error("channel startup failed");
         LOG_INFO("ems-collector started, channels={}", started);
         std::cout << "ems-collector started, channels=" << started << std::endl;
-        while (!stopping) std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        auto next_reload = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+        while (!stopping) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            if (std::chrono::steady_clock::now() < next_reload) continue;
+            next_reload = std::chrono::steady_clock::now() + std::chrono::seconds(1);
+            const auto revision = loader.config_revision();
+            auto candidate = loader;
+            if (!candidate.reload(ems::core::make_call_context(std::chrono::seconds(10)))) {
+                LOG_WARN("ems-collector configuration reload failed: {}", candidate.last_error());
+                continue;
+            }
+            if (candidate.config_revision() == revision) continue;
+            if (candidate.channels().size() >
+                static_cast<std::size_t>(options.engine.maxChannels_)) {
+                LOG_WARN("ems-collector configuration exceeds channel limit");
+                continue;
+            }
+            engine.stop_all();
+            loader = std::move(candidate);
+            if (engine.start_all(loader) != static_cast<int>(loader.channels().size()))
+                throw std::runtime_error("channel reload failed");
+            LOG_INFO("ems-collector reloaded, config_revision={}", loader.config_revision());
+        }
         engine.shutdown();
         LOG_INFO("ems-collector stopped");
         return 0;

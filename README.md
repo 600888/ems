@@ -170,7 +170,7 @@ MSVC 可执行文件及其运行依赖 DLL 位于 `backend/build/windows-msvc/bi
 | `tests/bin/` | 测试可执行程序及其 Windows 运行依赖 DLL |
 | `tests/lib/` | 测试插件夹具和共享库 |
 | `tests/archive/` | GoogleTest / GoogleMock 等测试静态库和导入库 |
-| `examples/bin/` | 示例可执行程序（包括 `ems_point_import`）及其 Windows 运行依赖 DLL |
+| `examples/bin/` | 示例可执行程序及其 Windows 运行依赖 DLL |
 | `examples/lib/`、`examples/archive/` | 示例的共享库和链接产物（如有） |
 | `symbols/`、`tests/symbols/`、`examples/symbols/` | 对应目标的 Windows 调试符号 |
 

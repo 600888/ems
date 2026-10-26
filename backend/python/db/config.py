@@ -143,7 +143,17 @@ def make_engine(url: str | URL) -> Engine:
         kwargs["connect_args"] = {"connect_timeout": 10, "read_timeout": 300, "write_timeout": 300}
     elif url.get_backend_name() == "postgresql":
         kwargs["connect_args"] = {"connect_timeout": 10}
-    engine = create_engine(url, **kwargs)
+    try:
+        engine = create_engine(url, **kwargs)
+    except ModuleNotFoundError as exc:
+        extra = {"mysql": "mysql", "postgresql": "postgresql"}.get(url.get_backend_name())
+        if extra and exc.name in ("pymysql", "psycopg", "psycopg_binary", "psycopg_c"):
+            raise ValueError(
+                f"Missing {url.get_backend_name()} driver module '{exc.name}'. "
+                f"From backend/python run: uv sync --extra {extra}; "
+                f'or: python -m pip install -e ".[{extra}]"'
+            ) from exc
+        raise
     if url.get_backend_name() == "sqlite":
 
         @event.listens_for(engine, "connect")

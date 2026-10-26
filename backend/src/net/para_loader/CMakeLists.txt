@@ -5,11 +5,11 @@
 # 从公共配置仓储加载设备、通道及测点配置。
 #
 # 采集进程启动流程:
-#   1. ParaLoader::load_all_as_config() 加载设备/通道/测点配置
+#   1. CfgLoader::initialize() 加载设备/通道/测点配置
 #   2. 按通道创建协议处理器开始采集
 #   3. 采样交给遥测/历史链路，不直接写关系库
 
-add_library(net_para_loader OBJECT para_loader.cpp)
+add_library(net_para_loader OBJECT cfg_loader.cpp)
 
 target_include_directories(
     net_para_loader

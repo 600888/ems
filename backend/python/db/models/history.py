@@ -13,30 +13,29 @@ class HistoryPointVersion(Base):
     """history_point_version persisted rows."""
 
     __tablename__ = "history_point_version"
-
-    scope_kind: Mapped[str] = mapped_column(sa.String(8), nullable=False, primary_key=True)
-    scope_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, primary_key=True)
+    scope_kind: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    scope_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     config_version: Mapped[int] = mapped_column(
-        integer(size="big", unsigned=True, boolean=False),
-        nullable=False,
-        autoincrement=False,
-        primary_key=True,
+        integer(size="big", unsigned=True, boolean=False), nullable=False, autoincrement=False
     )
     checksum: Mapped[str] = mapped_column(sa.CHAR(64), nullable=False)
     point_count: Mapped[int] = mapped_column(
         integer(size="integer", unsigned=True, boolean=False), nullable=False, autoincrement=False
     )
     ready_at: Mapped[datetime | None] = mapped_column(timestamp(microseconds=True), nullable=True)
-
-    __table_args__ = ({"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},)
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "scope_kind", "scope_id", "config_version", name="uq_history_version_key"
+        ),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )
 
 
 class HistoryPointSeries(Base):
     """history_point_series persisted rows."""
 
     __tablename__ = "history_point_series"
-
-    point_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, primary_key=True)
+    point_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     value_type: Mapped[str] = mapped_column(sa.String(16), nullable=False)
     series_table: Mapped[str] = mapped_column(sa.String(96), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
@@ -45,8 +44,8 @@ class HistoryPointSeries(Base):
         server_default=TimestampDefault(on_update=False, microseconds=True),
     )
     retired_at: Mapped[datetime | None] = mapped_column(timestamp(microseconds=True), nullable=True)
-
     __table_args__ = (
+        sa.UniqueConstraint("point_id", name="uq_history_series_point"),
         sa.CheckConstraint(
             "value_type IN ('numeric', 'integer', 'boolean', 'text')", name="ck_history_series_type"
         ),
@@ -59,16 +58,12 @@ class HistoryPointSnapshot(Base):
     """history_point_snapshot persisted rows."""
 
     __tablename__ = "history_point_snapshot"
-
-    scope_kind: Mapped[str] = mapped_column(sa.String(8), nullable=False, primary_key=True)
-    scope_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, primary_key=True)
+    scope_kind: Mapped[str] = mapped_column(sa.String(8), nullable=False)
+    scope_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     config_version: Mapped[int] = mapped_column(
-        integer(size="big", unsigned=True, boolean=False),
-        nullable=False,
-        autoincrement=False,
-        primary_key=True,
+        integer(size="big", unsigned=True, boolean=False), nullable=False, autoincrement=False
     )
-    point_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, primary_key=True)
+    point_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     owner_device_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     point_code: Mapped[str] = mapped_column(sa.String(128), nullable=False)
     display_name: Mapped[str] = mapped_column(sa.String(256), nullable=False)
@@ -83,8 +78,10 @@ class HistoryPointSnapshot(Base):
         integer(size="tiny", unsigned=False, boolean=True), nullable=False
     )
     device_path: Mapped[Any] = mapped_column(sa.JSON(), nullable=False)
-
     __table_args__ = (
+        sa.UniqueConstraint(
+            "scope_kind", "scope_id", "config_version", "point_id", name="uq_history_snapshot_key"
+        ),
         sa.ForeignKeyConstraint(
             ["scope_kind", "scope_id", "config_version"],
             [
@@ -106,8 +103,7 @@ class HistoryEventIdentity(Base):
     """history_event_identity persisted rows."""
 
     __tablename__ = "history_event_identity"
-
-    event_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, primary_key=True)
+    event_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     point_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     source_time_us: Mapped[int] = mapped_column(
         integer(size="big", unsigned=False, boolean=False), nullable=False, autoincrement=False
@@ -118,8 +114,8 @@ class HistoryEventIdentity(Base):
         nullable=False,
         server_default=TimestampDefault(on_update=False, microseconds=True),
     )
-
     __table_args__ = (
+        sa.UniqueConstraint("event_id", name="uq_history_event_id"),
         sa.Index("ix_history_identity_point_time", "point_id", "source_time_us"),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )
@@ -129,9 +125,8 @@ class HistoryQuarantine(Base):
     """history_quarantine persisted rows."""
 
     __tablename__ = "history_quarantine"
-
-    stream_scope: Mapped[str] = mapped_column(sa.String(128), nullable=False, primary_key=True)
-    stream_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, primary_key=True)
+    stream_scope: Mapped[str] = mapped_column(sa.String(128), nullable=False)
+    stream_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     event_id: Mapped[str | None] = mapped_column(sa.String(64), nullable=True)
     reason: Mapped[str] = mapped_column(sa.String(256), nullable=False)
     raw_payload: Mapped[bytes] = mapped_column(
@@ -148,8 +143,8 @@ class HistoryQuarantine(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(
         timestamp(microseconds=True), nullable=True
     )
-
     __table_args__ = (
+        sa.UniqueConstraint("stream_scope", "stream_id", name="uq_history_quarantine_key"),
         sa.Index("ix_history_quarantine_status", "status", "created_at"),
         {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )

@@ -1,10 +1,16 @@
 """Portable schema comparison and migration safeguards."""
 
 import warnings
+import re
+from decimal import Decimal
 import sqlalchemy as sa
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
 from .models import Base
+
+# Keep retired EMS names in the comparison scope so model removal generates DROP TABLE,
+# while unrelated application tables in a shared database remain outside migration scope.
+RETIRED_TABLES = frozenset({"device", "channel", "point_yc", "point_yx", "point_yk", "point_yt"})
 
 
 def functional_index(index: sa.Index) -> bool:
@@ -14,7 +20,7 @@ def functional_index(index: sa.Index) -> bool:
 def include_object(obj, name, type_, reflected, compare_to):
     """Scope comparisons to EMS and leave function-index migrations to explicit operations."""
     if type_ == "table":
-        return name in Base.metadata.tables
+        return name in Base.metadata.tables or name in RETIRED_TABLES
     if type_ == "check_constraint":
         # Alembic excludes type-bound Enum checks from metadata but can reflect them as ordinary
         # CHECKs, otherwise reporting every portable enum constraint as something to delete.
@@ -33,10 +39,46 @@ def include_object(obj, name, type_, reflected, compare_to):
 def comparison_options(dialect: str) -> dict:
     return {
         "compare_type": True,
-        "compare_server_default": True,
+        "compare_server_default": compare_numeric_defaults,
         "include_object": include_object,
         "render_as_batch": dialect == "sqlite",
     }
+
+
+def _numeric_literal(value: str | None) -> Decimal | None:
+    if value is None:
+        return None
+    value = value.strip()
+    if value.startswith("'") and value.endswith("'"):
+        value = value[1:-1].strip()
+    while value.startswith("(") and value.endswith(")"):
+        value = value[1:-1].strip()
+    if value[:1] in ("+", "-"):
+        number = _numeric_literal(value[1:])
+        return (-number if value[0] == "-" else number) if number is not None else None
+    if re.fullmatch(r"(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?", value):
+        return Decimal(value)
+    return None
+
+
+def compare_numeric_defaults(
+    context,
+    inspected_column,
+    metadata_column,
+    inspected_default,
+    metadata_default,
+    rendered_metadata_default,
+):
+    """Ignore MySQL's numeric formatting changes while preserving real default differences."""
+    if context.dialect.name != "mysql" or not isinstance(
+        metadata_column.type, (sa.Numeric, sa.Integer)
+    ):
+        return None
+    actual = _numeric_literal(inspected_default)
+    expected = _numeric_literal(rendered_metadata_default)
+    if actual is None or expected is None:
+        return None  # Let Alembic compare functions, NULL, strings and unsupported expressions.
+    return actual != expected
 
 
 def require_supported(connection: sa.Connection) -> None:

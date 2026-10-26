@@ -18,8 +18,8 @@
 #include <utility>
 #include <variant>
 
+#include "checked_configuration_session.h"
 #include "device_management_rows.h"
-#include "orm_repository.h"
 
 namespace ems::database::detail {
 

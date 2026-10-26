@@ -8,7 +8,7 @@
  * 启动流程:
  *   1. 初始化 PluginManager (设置插件目录)
  *   2. 初始化 DataDispatcher (连接 Redis)
- *   3. ParaLoader 加载通道/设备/测点配置
+ *   3. CfgLoader 加载通道/设备/测点配置
  *   4. start_all() 遍历通道，加载插件，创建并启动通道线程
  *
  * 停止流程:
@@ -19,10 +19,6 @@
  */
 #ifndef EMS_NET_COLLECT_COLLECT_ENGINE_H
 #define EMS_NET_COLLECT_COLLECT_ENGINE_H
-
-#include <common/database/configuration/channel.h>
-#include <common/database/configuration/device.h>
-#include <common/database/configuration/point.h>
 
 #include <atomic>
 #include <cstddef>
@@ -43,7 +39,7 @@
 namespace ems {
 namespace net {
 namespace device {
-class ParaLoader;
+class CfgLoader;
 }  // namespace device
 
 namespace collect {
@@ -125,18 +121,11 @@ class CollectEngine {
     bool initialize(const EngineConfig& config);
 
     /**
-     * @brief 启动所有已配置的通道
-     *
-     * 从 ParaLoader 加载通道配置，逐一创建并启动通道线程。
-     *
-     * @param[in] para_loader 参数加载器引用
-     * @param[in] yc_points   遥测测点配置（可选，用于构建设备上下文）
-     * @param[in] yx_points   遥信测点配置（可选）
-     * @return 成功启动的通道数
+     * @brief 从新设备配置加载器启动所有通道。
+     * @param[in] loader 已编译 cfg_* 运行目录的加载器。
+     * @return 成功启动的通道数，未初始化时返回负数。
      */
-    int start_all(device::ParaLoader& para_loader,
-                  const std::vector<ems::database::AnalogPoint>* yc_points = nullptr,
-                  const std::vector<ems::database::StatusPoint>* yx_points = nullptr);
+    int start_all(device::CfgLoader& loader);
 
     /**
      * @brief 启动单个通道
@@ -244,18 +233,6 @@ class CollectEngine {
     void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
 
    private:
-    /**
-     * @brief 创建设备上下文列表
-     * @param[in] channelConfig 通道配置。
-     * @param[in] yc_points 遥测测点列表。
-     * @param[in] yx_points 遥信测点列表。
-     * @return 匹配条件的数据集合。
-     */
-    std::vector<DeviceContext> build_device_contexts(
-        const ems::rtdb::ChannelConfig& channelConfig,
-        const std::vector<ems::database::AnalogPoint>* yc_points,
-        const std::vector<ems::database::StatusPoint>* yx_points);
-
     /**
      * @brief 处理通道上报的错误。
      * @param[in] channel_id 通道 ID。

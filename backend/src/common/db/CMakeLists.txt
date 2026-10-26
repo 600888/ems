@@ -47,6 +47,14 @@ if(EMS_DATABASE_MYSQL_INCLUDE_DIR AND EMS_DATABASE_MYSQL_LIBRARY)
             HINTS "${_ems_mysql_lib_dir}" "${_ems_mysql_lib_dir}/../bin"
                   "${_ems_mysql_lib_dir}/../../bin"
         )
+        find_path(
+            EMS_DATABASE_MYSQL_PLUGIN_DIR
+            NAMES caching_sha2_password.dll sha256_password.dll
+            HINTS "${_ems_mysql_lib_dir}/plugin" "${_ems_mysql_lib_dir}/../lib/plugin"
+                  "${_ems_mysql_lib_dir}/mariadb/plugin" "${_ems_mysql_lib_dir}/../lib/mariadb/plugin"
+                  "${_ems_mysql_lib_dir}/../lib64/mysql/plugin" "${_ems_mysql_lib_dir}/../bin"
+                  "${_ems_mysql_lib_dir}/.."
+        )
     endif()
     add_library(ems_database_mysql STATIC mysql/mysql_database.cpp)
     target_include_directories(
@@ -79,6 +87,11 @@ set_target_properties(
 function(ems_copy_mysql_runtime target)
     if(WIN32 AND EMS_DATABASE_MYSQL_RUNTIME)
         ems_copy_runtime_files(${target} "${EMS_DATABASE_MYSQL_RUNTIME}")
+        foreach(_ems_auth IN ITEMS caching_sha2_password sha256_password)
+            if(EXISTS "${EMS_DATABASE_MYSQL_PLUGIN_DIR}/${_ems_auth}.dll")
+                ems_copy_runtime_files(${target} "${EMS_DATABASE_MYSQL_PLUGIN_DIR}/${_ems_auth}.dll")
+            endif()
+        endforeach()
     endif()
 endfunction()
 

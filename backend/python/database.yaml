@@ -1,5 +1,5 @@
 # 仅供数据库迁移工具使用。选择 sqlite、mysql 或 postgresql。
-database: sqlite
+database: mysql
 
 databases:
   sqlite:
@@ -11,8 +11,8 @@ databases:
     url: mysql+pymysql://
     host: 127.0.0.1
     port: 3306
-    username: ems
-    password: ""
+    username: root
+    password: "root"
     database: ems
 
   postgresql:

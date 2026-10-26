@@ -10,7 +10,7 @@
 #include <nlohmann/json.hpp>
 #include <sstream>
 
-#include "net/para_loader/para_loader.h"
+#include "net/para_loader/cfg_loader.h"
 #include "net/protocol/protocol_types.h"
 
 namespace ems {
@@ -80,21 +80,19 @@ bool CollectEngine::initialize(const EngineConfig& config) {
 // 启动所有通道
 // ============================================================
 
-int CollectEngine::start_all(ParaLoader& para_loader,
-                             const std::vector<ems::database::AnalogPoint>* yc_points,
-                             const std::vector<ems::database::StatusPoint>* yx_points) {
+int CollectEngine::start_all(CfgLoader& loader) {
     if (state_.load() == EngineState::Running) {
         LOG_WARN("采集引擎已在运行中");
         return 0;
     }
 
-    if (!para_loader.is_initialized()) {
+    if (!loader.is_initialized()) {
         LOG_ERROR("参数加载器未初始化");
         return enum_value(protocol::OperationResult::Failure);
     }
 
     // 1. 加载所有启用的通道配置
-    auto channels = para_loader.load_channels();
+    auto channels = loader.channels();
     if (channels.empty()) {
         LOG_INFO("数据库中没有启用的通道");
         return 0;
@@ -109,20 +107,7 @@ int CollectEngine::start_all(ParaLoader& para_loader,
 
     LOG_INFO(fmt::format("从数据库加载了{}个通道配置", channels.size()).c_str());
 
-    // 2. 加载测点配置（如果未提供）
-    std::vector<ems::database::AnalogPoint> localYcPoints;
-    std::vector<ems::database::StatusPoint> localYxPoints;
-    if (!yc_points) {
-        localYcPoints = para_loader.load_yc_points();
-        yc_points = &localYcPoints;
-    }
-    if (!yx_points) {
-        localYxPoints = para_loader.load_yx_points();
-        yx_points = &localYxPoints;
-    }
-
-    // 3. 转换为运行时配置
-    auto channelConfigs = para_loader.to_channel_configs(channels);
+    auto channelConfigs = std::move(channels);
 
     // 4. 启动每个通道
     int started = 0;
@@ -138,12 +123,14 @@ int CollectEngine::start_all(ParaLoader& para_loader,
                      .c_str());
 
         // 构建设备上下文
-        auto devices = build_device_contexts(chConfig, yc_points, yx_points);
+        auto devices = loader.devices(chConfig.id_);
 
         // 创建通道线程
         auto channelThread = std::make_shared<ChannelThread>(chConfig, dispatcher_);
         channelThread->set_devices(std::move(devices));
-        channelThread->set_poll_interval(config_.defaultPollIntervalMs_);
+        channelThread->set_poll_interval(
+            json::parse(chConfig.settings_)
+                .value("poll_interval_ms", config_.defaultPollIntervalMs_));
 
         // 设置错误回调
         channelThread->set_error_callback(
@@ -321,49 +308,6 @@ void CollectEngine::on_channel_error(int64_t channel_id, const std::string& erro
     if (error_cb_) {
         error_cb_(channel_id, error);
     }
-}
-
-// ============================================================
-// 构建设备上下文
-// ============================================================
-
-std::vector<DeviceContext> CollectEngine::build_device_contexts(
-    const ems::rtdb::ChannelConfig& channelConfig,
-    const std::vector<ems::database::AnalogPoint>* yc_points,
-    const std::vector<ems::database::StatusPoint>* yx_points) {
-    std::unordered_map<int64_t, DeviceContext> deviceMap;
-
-    // 处理 YC 测点
-    if (yc_points) {
-        for (const auto& pt : *yc_points) {
-            if (pt.channel_id != channelConfig.id_) continue;
-
-            auto& ctx = deviceMap[pt.device_id];
-            ctx.deviceId_ = pt.device_id;
-            ctx.deviceName_ = pt.name;
-            ctx.ycPointCodes_.push_back(pt.code);
-        }
-    }
-
-    // 处理 YX 测点
-    if (yx_points) {
-        for (const auto& pt : *yx_points) {
-            if (pt.channel_id != channelConfig.id_) continue;
-
-            auto& ctx = deviceMap[pt.device_id];
-            ctx.deviceId_ = pt.device_id;
-            ctx.deviceName_ = pt.name;
-            ctx.yxPointCodes_.push_back(pt.code);
-        }
-    }
-
-    std::vector<DeviceContext> result;
-    result.reserve(deviceMap.size());
-    for (auto& [_, ctx] : deviceMap) {
-        result.push_back(std::move(ctx));
-    }
-
-    return result;
 }
 
 }  // namespace collect

@@ -85,8 +85,7 @@ flowchart TD
 
 | 接口 | 主要方法 | 关键约束 |
 | --- | --- | --- |
-| `IConfigurationRepository` | 设备/通道读写、四遥点表暂存、有界工程配置读取 | 当前工程配置 API；显式事务，不自动发布版本 |
-| `IConfigRepository` | 精确版本读取、保存版本、条件激活、应用报告 | 不拼接不同版本，乐观并发，active 不倒退 |
+| `IDeviceConfigRepository` | 设备、通道、绑定与四遥新表读写及有界读取 | 显式事务；保存即生效，站根修订号用于热加载 |
 | `IControlRepository` | 意图/命令、inbox 登记、条件推进、回执与对账 | 稳定 ID 去重，旧状态/控制权代次不可覆盖新状态 |
 | `IAlarmRepository` | 生命周期事件、确认与有界查询 | 稳定事件 ID，业务状态机归策略 |
 | `IOutboxRepository` | append、租约 claim、确认发布 | 与业务同事务；网络发送在事务外 |
@@ -208,9 +207,9 @@ Python 层的多数据库支持不改变现有 C++ MySQL/ormpp 运行时。回�
 
 ### 7.2 工程配置入口替换
 
-旧 `DbManager`、`backend/include/db/` 与 `ems_db` target 已删除。`IConfigurationRepository` 负责设备/通道 CRUD、有界工程配置读取及四遥点表暂存；公开头只定义记录与接口，ormpp 反射及查询放在公共实现内部。点表服务在解析 XLSX 时释放连接，再通过新事务暂存并提交；Unknown 原样返回，不自动重试。
+旧 `DbManager`、`backend/include/db/` 与 `ems_db` target 已删除。`IDeviceConfigRepository` 负责 `cfg_device`、`cfg_channel`、`cfg_binding` 和四遥新表的读写及有界配置读取；公开头只定义记录与接口，ormpp 反射及查询放在公共实现内部。点表导入由 Web 配置服务提交，并递增站根 `config_revision`。
 
-`ParaLoader` 接收进程入口创建的公共上下文，加载成功后再替换本地配置；查询失败不伪装成空配置。点表 CLI 和采集示例直接使用公共工厂。未被调用的 `PointImportCaller/PointImporter` 与 `point_collect` 写入接口已删除，采样归现有遥测/历史链路。
+`CfgLoader` 接收进程入口创建的公共上下文，通过 `IDeviceConfigRepository` 读取设备、通道、绑定和四遥新表，加载成功后再替换本地配置；查询失败保留上次有效配置。旧表仓储和点表 CLI 已移除，点表由 Web 设备管理导入。采集示例使用同一公共工厂。未被调用的 `PointImportCaller/PointImporter` 与 `point_collect` 写入接口已删除，采样归现有遥测/历史链路。
 
 应用不再建库、建表或写示例数据。空库通过 Python 工具执行 `ems-db init`，
 目录和开发示例分别显式执行 `ems-db seed catalog`、`ems-db seed demo`。

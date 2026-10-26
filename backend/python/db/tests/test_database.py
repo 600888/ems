@@ -24,7 +24,6 @@ from db.models import (
     YxPoint,
     YkPoint,
     YtPoint,
-    LegacyDevice,
 )
 from db.schema import schema_differences
 from db.seeds import apply_seed
@@ -47,6 +46,7 @@ def ddl_statements(text):
         sql = re.sub(r"\s+", " ", sql.strip())
         if not sql or sql.startswith("--"):
             continue
+        sql = re.sub(r"CONSTRAINT \w+ PRIMARY KEY", "PRIMARY KEY", sql)
         if not sql.startswith("CREATE TABLE"):
             result.add(sql)
             continue
@@ -86,16 +86,20 @@ def test_frozen_migration_matches_orm_ddl_for_each_database(dialect):
     )
     Base.metadata.create_all(mock)
     buffer = io.StringIO()
-    ctx = MigrationContext.configure(
+    context = MigrationContext.configure(
         dialect=mock.dialect, opts={"as_sql": True, "output_buffer": buffer}
     )
-    with Operations.context(ctx):
+    with Operations.context(context):
         BASELINE.upgrade()
     assert ddl_statements(buffer.getvalue()) == ddl_statements(";\n".join(expected))
 
 
 def test_all_models_are_mapped_and_four_point_tables_share_base():
-    assert len(Base.registry.mappers) == len(Base.metadata.tables) == 25
+    assert len(Base.registry.mappers) == len(Base.metadata.tables) == 19
+    assert not {"device", "channel", "point_yc", "point_yx", "point_yk", "point_yt"} & set(Base.metadata.tables)
+    for table in Base.metadata.tables.values():
+        assert [column.name for column in table.primary_key] == ["id"], table.name
+        assert table.c.id.autoincrement is True, table.name
     for model, table in (
         (YcPoint, "cfg_point_yc"),
         (YxPoint, "cfg_point_yx"),
@@ -137,7 +141,14 @@ def test_catalog_seed_idempotent_and_preserves_existing_station(engine):
         assert session.scalar(sa.select(sa.func.count()).select_from(DeviceType)) == 11
         assert session.scalar(sa.select(sa.func.count()).select_from(TypePoint)) == 47
         assert session.scalars(sa.select(Device.device_id)).all() == ["real_station"]
-        point = session.get(TypePoint, ("pcs", "pcs-v1", "active_power"))
+        point = session.scalar(
+            sa.select(TypePoint).where(
+                TypePoint.type_code == "pcs",
+                TypePoint.type_version == "pcs-v1",
+                TypePoint.semantic_code == "active_power",
+            )
+        )
+        assert point.id > 0
         assert point.capability_codes_json == ["monitor_power", "set_active_power"]
         assert point.stale_after_ms == 0
 
@@ -145,15 +156,23 @@ def test_catalog_seed_idempotent_and_preserves_existing_station(engine):
 def test_demo_seed_uses_generated_ids_and_preserves_user_rows(engine):
     factory = session_factory(engine)
     with factory.begin() as session:
-        session.add(LegacyDevice(code="existing", name="User device"))
+        session.add(Device(device_id="existing", node_kind="station", code="existing",
+                           name="User station", path="/"))
     for _ in range(2):
         with factory.begin() as session:
             apply_seed(session, "demo")
     with factory() as session:
-        assert session.scalar(sa.select(sa.func.count()).select_from(LegacyDevice)) == 2
-        demo = session.scalar(sa.select(LegacyDevice).where(LegacyDevice.code == "PCS_001"))
+        assert session.scalar(sa.select(sa.func.count()).select_from(Device)) == 2
+        demo = session.scalar(sa.select(Device).where(Device.device_id == "demo-pcs"))
         assert demo.id != 1
-        assert session.get(LegacyDevice, 1).name == "User device"
+        assert demo.parent_device_id == "existing"
+        assert demo.enabled == 0
+        assert session.get(Device, 1).name == "User station"
+        channel = session.scalar(sa.select(Channel).where(Channel.channel_id == "demo-modbus"))
+        assert channel.enabled == 0
+        point = session.scalar(sa.select(YcPoint).where(YcPoint.point_id == "demo-pcs-active-power"))
+        assert point.owner_device_id == demo.device_id
+        assert point.binding_id == "demo-pcs-modbus"
 
 
 def test_seed_failure_rolls_back(engine):
@@ -228,7 +247,7 @@ def test_schema_check_detects_missing_index_and_column(engine):
     with engine.begin() as connection:
         connection.exec_driver_sql("DROP INDEX uq_yc_semantic")
         assert any("uq_yc_semantic" in diff for diff in schema_differences(connection))
-        connection.exec_driver_sql("ALTER TABLE device ADD COLUMN unexpected INTEGER")
+        connection.exec_driver_sql("ALTER TABLE cfg_device ADD COLUMN unexpected INTEGER")
         assert any("unexpected" in diff for diff in schema_differences(connection))
 
 
@@ -279,3 +298,50 @@ def test_sqlite_ddl_rolls_back(engine):
             connection.exec_driver_sql("CREATE TABLE rollback_ddl (id INTEGER)")
             raise RuntimeError("abort migration")
     assert "rollback_ddl" not in sa.inspect(engine).get_table_names()
+
+
+def test_reset_migration_record_preserves_business_schema_and_data(engine):
+    with session_factory(engine).begin() as session:
+        apply_seed(session, "catalog")
+    with engine.begin() as connection:
+        connection.execute(
+            sa.text("UPDATE alembic_version SET version_num=:revision"),
+            {"revision": "removed_revision"},
+        )
+    with engine.connect() as connection:
+        before = {
+            name: connection.execute(sa.select(table).order_by(table.c.id)).all()
+            for name, table in Base.metadata.tables.items()
+        }
+        connection.rollback()
+        command.stamp(migration_config(connection=connection), BASELINE.revision, purge=True)
+        assert MigrationContext.configure(connection).get_current_revision() == BASELINE.revision
+        assert schema_differences(connection) == []
+        after = {
+            name: connection.execute(sa.select(table).order_by(table.c.id)).all()
+            for name, table in Base.metadata.tables.items()
+        }
+        assert after == before
+
+
+@pytest.mark.filterwarnings("ignore:Skipped unsupported reflection of expression-based index:sqlalchemy.exc.SAWarning")
+@pytest.mark.filterwarnings("ignore:autogenerate skipping metadata-specified expression-based index:UserWarning")
+def test_removed_legacy_models_generate_table_drops_but_unrelated_tables_are_ignored(engine):
+    from alembic.autogenerate import produce_migrations
+    from alembic.operations import ops
+    from db.schema import comparison_options, RETIRED_TABLES
+
+    with engine.begin() as connection:
+        retired = sa.MetaData()
+        for name in RETIRED_TABLES | {"unrelated_app_table"}:
+            sa.Table(name, retired, sa.Column("id", sa.Integer, primary_key=True))
+        retired.create_all(connection)
+        context = MigrationContext.configure(connection, opts=comparison_options("sqlite"))
+        migration = produce_migrations(context, Base.metadata)
+        dropped = {op.table_name for op in migration.upgrade_ops.ops if isinstance(op, ops.DropTableOp)}
+        assert dropped == RETIRED_TABLES
+        operations = Operations(context)
+        for op in migration.upgrade_ops.ops:
+            operations.invoke(op)
+        assert "unrelated_app_table" in sa.inspect(connection).get_table_names()
+        assert schema_differences(connection) == []

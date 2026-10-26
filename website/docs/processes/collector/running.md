@@ -1,7 +1,16 @@
 # 采集进程构建与运行
 
-`ems-collector` 是独立的常驻采集入口，复用现有 `CollectEngine`、`ParaLoader`、协议插件和统一实时库。
+`ems-collector` 是独立的常驻采集入口，复用现有 `CollectEngine`、`CfgLoader`、协议插件和统一实时库。
 `EMS_BUILD_COLLECTOR` 默认开启，各平台预设也显式启用；`BUILD_EXAMPLES=OFF` 不影响该进程。
+
+设备、通道、绑定和测点统一来自 `cfg_device`、`cfg_channel`、`cfg_binding`、
+`cfg_point_yc/yx/yk/yt`；先按 [数据库初始化说明](../../../../backend/python/README.md) 建表。
+组件点使用 `source_device_id` 指定的通信设备绑定，禁用节点、通道或绑定会停止相关采集。
+读数按点配置执行倍率、偏移或取反，实时库键使用稳定 `point_id`，四遥种类由所属表决定。
+控制命令按稳定 `point_id` 解析至遥控/遥调地址，支持遥控固定值与遥调反向换算。
+进程每秒轮询新表，站根 `config_revision` 变化后重建通道；读取或配置解析失败时保留已运行目录。
+当前 Modbus 插件支持 bool、i16/u16、i32/u32、f32/f64，i64/u64 配置会明确报错。
+DLT698 插件每通道使用一个表地址；DLT645 当前只编译遥测路由。
 
 ## 构建
 
@@ -17,6 +26,9 @@ cmake --build --preset windows-msvc --target ems-collector
 构建该目标也会构建已启用的 Modbus、IEC104、DLT645、DLT698 插件。
 正式程序输出到构建目录的 `bin/`，协议插件位于 `lib/`；MSVC 在两者下追加 `<配置>/`。
 Windows 构建后会将已声明的 DLL 依赖复制到 EXE 所在目录。
+MariaDB 客户端连接 MySQL 8 时还需构建并部署 `caching_sha2_password.dll`；
+CMake 从客户端库附近自动查找认证插件，也可用 `EMS_DATABASE_MYSQL_PLUGIN_DIR` 指定目录，
+随后与客户端 DLL 一起复制到程序目录。
 
 ## 配置与启动
 

@@ -9,7 +9,7 @@
 | 设备、通道、角色与路由 | [设备、通道与协议](../../architecture/channel-protocol.md) |
 | 标准点、厂家点、实例绑定与反馈 | [设备模型](../../architecture/device-model.md) |
 | 实时后端注入与并发 | [公共实时访问接口](../../common/realtime/access-design.md) |
-| 资产路径与共享通道命名 | [Redis 键设计](../../common/realtime/redis-key-design.md) |
+| 设备路径与共享通道命名 | [Redis 键设计](../../common/realtime/redis-key-design.md) |
 
 ## 1. 概述
 
@@ -41,7 +41,7 @@ GOOSE/SV 需独立 profile、发布/订阅角色及验收，不属于 MMS TCP �
 
 ```mermaid
 flowchart TB
-    Config[版本化配置仓储] --> Para["ParaLoader<br/>校验并应用版本"]
+    Config[cfg_* 当前配置仓储] --> Para["CfgLoader<br/>校验并编译运行目录"]
     Para --> Engine[CollectEngine]
     Engine --> A["独立资源 A<br/>ChannelThread"]
     Engine --> B["共享总线 B<br/>ChannelThread"]
@@ -66,7 +66,7 @@ flowchart TB
 | `PluginManager` | 跨平台 PIMPL 加载器，管理包缓存、工厂和库租约 |
 | `ProtocolPlugin` | 动态库内 PIMPL 实现，通过版本化 C ABI 交互 |
 | `DataDispatcher` | 缓冲采样，分别更新最新值与发布事件；预算内重试，超限报告缺口 |
-| `ParaLoader` | 加载指定版本的资产、绑定和测点，校验后反馈实际应用版本 |
+| `CfgLoader` | 加载当前设备、通道、绑定和四遥表，按站根修订号重建运行目录 |
 
 ## 3. 通道线程模型
 
@@ -82,7 +82,7 @@ flowchart LR
     C --> Q[控制优先队列 + 到期采集队列]
 ```
 
-资产归属、连接资源和协议地址分别建模。多个逻辑通道指向不可并发资源时，合并到同一调度器或拒绝配置；独立采控连接须设备支持，控制冲突仍按设备仲裁。
+设备归属、连接资源和协议地址分别建模。多个逻辑通道指向不可并发资源时，合并到同一调度器或拒绝配置；独立采控连接须设备支持，控制冲突仍按设备仲裁。
 
 ### 3.2 线程隔离的好处
 
@@ -111,7 +111,7 @@ stateDiagram-v2
 
 | 字段组 | 运行时内容 |
 | --- | --- |
-| 身份与配置 | `channel_id`、不可变配置、实际应用版本 |
+| 身份与配置 | `channel_id`、当前配置、站根 `config_revision` |
 | 资源 | 工作线程、运行标志、持有库租约的协议对象 |
 | 绑定与采集 | 设备运行视图、到期采集任务、采集周期 |
 | 控制调度 | 有界优先队列、队列锁、命令/停止/配置变更的唤醒条件 |
@@ -122,7 +122,7 @@ stateDiagram-v2
 
 | 配置 | 用途 |
 | --- | --- |
-| `device_channel_binding_version` | `device_id/channel_id/config_version/operations/device_address`；telemetry_in/control_out 决定采、控或共用 |
+| `cfg_binding` | `device_id/channel_id/device_address` 与 `can_collect/can_control/can_forward` 决定采集、控制或上送 |
 | `channel_version.local_role` | 本端 client/server 角色，与采控操作组合分开 |
 | `vendor_point_route_version` | 厂家点的协议地址、编码和通道 |
 | `point_binding` | 标准点到厂家点的转换及主备来源 |
@@ -132,7 +132,7 @@ stateDiagram-v2
 
 调度只在**响应完成或超时后**切换任务，不打断已发送帧。大批读取拆成多个有界事务；控制连续预算、采集最大延迟和关键读取预算共同防止饥饿。同优先级 FIFO，队满返回 `queue_full`，过期返回 `expired`；仅允许覆盖且未发送的设定可合并，并记录 `superseded`。
 
-ZeroMQ 入口先校验并持久登记 inbox，执行器恢复后入队、唤醒；网络回调不直接操作协议。执行前复核期限、配置版本、控制权代次、互锁和 MySQL 执行状态；持久登记失败则不执行。旧实例未确认隔离时不接管控制。通道故障或来源切换更新质量与 `source_epoch`，反馈使用发送后的新样本。
+ZeroMQ 入口先校验并持久登记 inbox，执行器恢复后入队、唤醒；网络回调不直接操作协议。执行前复核期限、配置修订号、控制权代次、互锁和 MySQL 执行状态；持久登记失败则不执行。旧实例未确认隔离时不接管控制。通道故障或来源切换更新质量与 `source_epoch`，反馈使用发送后的新样本。
 
 ## 4. 动态库插件机制
 
@@ -148,7 +148,7 @@ flowchart TD
     Last -->|否| Keep[其他通道继续使用]
 ```
 
-同一 Modbus 包复用库句柄，各通道实例与会话隔离；浏览配置、编辑草稿和未启用通道不加载。API、C ABI、所有权及部署规则见[通讯协议动态库设计](protocol-design.md)。
+同一 Modbus 包复用库句柄，各通道实例与会话隔离；浏览配置和未启用通道不加载。API、C ABI、所有权及部署规则见[通讯协议动态库设计](protocol-design.md)。
 
 ## 5. 采集流程
 
@@ -156,13 +156,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    Start[进程启动] --> Read[ParaLoader 读取指定版本]
-    Read --> Cache{Redis 版本快照完整?}
-    Cache -->|是| Check["校验资产、通道、绑定<br/>测点与反馈路由"]
-    Cache -->|否| DB["公共 ormpp API<br/>读取 MySQL 指定版本"]
-    DB --> Check
-    Check -->|失败| Reject["报告失败<br/>拒绝不完整版本"]
-    Check -->|成功| Apply["切换并反馈<br/>actual_config_version"]
+    Start[进程启动] --> Read[CfgLoader 读取 cfg_* 当前配置]
+    Read --> DB[IDeviceConfigRepository 同事务读取]
+    DB --> Check[校验设备、通道、绑定和测点路由]
+    Check -->|失败| Reject[启动报错或保留原运行目录]
+    Check -->|成功| Apply[按站根 config_revision 重建通道]
     Apply --> Init[初始化分发器与插件管理器]
     Init --> Channel["按启用通道加载包<br/>创建上下文"]
     Channel --> Connect[启动工作线程 / 建连]

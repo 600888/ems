@@ -2,25 +2,26 @@
 
 # ruff: noqa: E402
 
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
+from ..types import integer
 
 
 class Base(DeclarativeBase):
     """Base for all EMS persisted models."""
+
+    id: Mapped[int] = mapped_column(
+        integer(size="big", unsigned=True),
+        primary_key=True,
+        autoincrement=True,
+        nullable=False,
+        sort_order=-100,
+    )
 
 
 metadata = Base.metadata
 
 from .point import PointBase
 
-from .configuration import (
-    LegacyDevice,
-    LegacyChannel,
-    LegacyYcPoint,
-    LegacyYxPoint,
-    LegacyYkPoint,
-    LegacyYtPoint,
-)  # noqa: E402, F401
 from .device_management import (
     Device,
     DeviceType,
@@ -49,12 +50,6 @@ __all__ = [
     "Base",
     "metadata",
     "PointBase",
-    "LegacyDevice",
-    "LegacyChannel",
-    "LegacyYcPoint",
-    "LegacyYxPoint",
-    "LegacyYkPoint",
-    "LegacyYtPoint",
     "Device",
     "DeviceType",
     "TypePoint",

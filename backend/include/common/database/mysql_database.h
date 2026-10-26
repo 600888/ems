@@ -2,7 +2,6 @@
 
 #include <common/database/configuration/i_device_config_repository.h>
 #include <common/database/configuration/i_device_management_store.h>
-#include <common/database/configuration/repository.h>
 #include <common/database/history/repositories.h>
 #include <common/database/i_database.h>
 
@@ -31,13 +30,12 @@ struct MySqlDatabaseContext {
     std::shared_ptr<IDatabase> database;
     std::shared_ptr<IHistoryCatalogRepository> history_catalog;
     std::shared_ptr<IHistoryEventRepository> history_events;
-    std::shared_ptr<IConfigurationRepository> configuration;
     std::shared_ptr<IDeviceConfigRepository> device_config;
     std::shared_ptr<IDeviceManagementStore> device_management;
 };
 
 /**
- * @brief 初始化或复用 ormpp 进程内池并验证连接，可选检查历史 schema；不自动建表。
+ * @brief 初始化或复用 ormpp 进程内池并验证连接，可选检查历史及设备配置 schema；不自动建表。
  * @param[in] options 首次初始化的凭据、连接数及预算；后续配置必须一致。
  * @param[in] ctx 首次连接与 schema 检查期限。
  * @return 共享池的上下文；不同池配置返回 Conflict，未编译驱动返回 Unsupported，

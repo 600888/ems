@@ -7,6 +7,10 @@ from .models import Base, Device
 from .seed_data import CATALOG, DEMO
 
 MODELS = {mapper.local_table.name: mapper.class_ for mapper in Base.registry.mappers}
+CATALOG_KEYS = {
+    "cfg_device_type": ("type_code", "type_version"),
+    "cfg_type_point": ("type_code", "type_version", "semantic_code"),
+}
 
 
 def apply_seed(session: Session, kind: str) -> None:
@@ -33,6 +37,8 @@ def apply_seed(session: Session, kind: str) -> None:
                 enabled=1,
             )
         )
+    if kind == "demo":
+        apply_seed(session, "catalog")
     session.flush()
     for name, rows, updates in CATALOG if kind == "catalog" else DEMO:
         model = MODELS[name]
@@ -42,23 +48,21 @@ def apply_seed(session: Session, kind: str) -> None:
                 k: json.loads(v) if isinstance(mapper.columns[k].type, sa.JSON) else v
                 for k, v in row.items()
             }
-            identity = tuple(values[c.name] for c in mapper.primary_key)
             if kind == "demo":
-                # Use natural keys and generated IDs, so PostgreSQL sequences stay in sync.
-                values.pop("id")
-                if "device_id" in values:
-                    values["device_id"] = session.scalar(
-                        sa.select(MODELS["device"].id).where(MODELS["device"].code == "PCS_001")
-                    )
-                if "channel_id" in values:
-                    values["channel_id"] = session.scalar(
-                        sa.select(MODELS["channel"].id).where(
-                            MODELS["channel"].code == "CH_MODBUS_001"
-                        )
-                    )
-                existing = session.scalar(sa.select(model).where(model.code == values["code"]))
+                # Demo references stable business IDs, never generated numeric primary keys.
+                values.pop("id", None)
+                if name == "cfg_device":
+                    station = session.scalar(sa.select(Device).where(Device.node_kind == "station"))
+                    values["parent_device_id"] = station.device_id
+                key = {"cfg_device": "device_id", "cfg_channel": "channel_id",
+                       "cfg_binding": "binding_id", "cfg_point_yc": "point_id"}[name]
+                existing = session.scalar(sa.select(model).where(getattr(model, key) == values[key]))
             else:
-                existing = session.get(model, identity)
+                existing = session.scalar(
+                    sa.select(model).where(
+                        *(getattr(model, key) == values[key] for key in CATALOG_KEYS[name])
+                    )
+                )
             if existing is None:
                 session.add(model(**values))
             elif updates:

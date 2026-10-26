@@ -141,8 +141,8 @@ class DeviceType(Base):
     """cfg_device_type persisted rows."""
 
     __tablename__ = "cfg_device_type"
-    type_code: Mapped[str] = mapped_column(sa.String(32), nullable=False, primary_key=True)
-    type_version: Mapped[str] = mapped_column(sa.String(16), nullable=False, primary_key=True)
+    type_code: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+    type_version: Mapped[str] = mapped_column(sa.String(16), nullable=False)
     name: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     category: Mapped[str] = mapped_column(
         sa.String(32),
@@ -170,6 +170,7 @@ class DeviceType(Base):
         onupdate=sa.func.current_timestamp(),
     )
     __table_args__ = (
+        sa.UniqueConstraint("type_code", "type_version", name="uq_device_type_key"),
         {"comment": "设备类型（含类型版本）", "mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
     )
 
@@ -178,10 +179,10 @@ class TypePoint(Base):
     """cfg_type_point persisted rows."""
 
     __tablename__ = "cfg_type_point"
-    type_code: Mapped[str] = mapped_column(sa.String(32), nullable=False, primary_key=True)
-    type_version: Mapped[str] = mapped_column(sa.String(16), nullable=False, primary_key=True)
+    type_code: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+    type_version: Mapped[str] = mapped_column(sa.String(16), nullable=False)
     semantic_code: Mapped[str] = mapped_column(
-        sa.String(64), nullable=False, comment="如 active_power、run_state、start", primary_key=True
+        sa.String(64), nullable=False, comment="如 active_power、run_state、start"
     )
     name: Mapped[str] = mapped_column(sa.String(128), nullable=False, server_default=sa.text("''"))
     point_type: Mapped[str] = mapped_column(
@@ -226,6 +227,7 @@ class TypePoint(Base):
         server_default=sa.text("0"),
     )
     __table_args__ = (
+        sa.UniqueConstraint("type_code", "type_version", "semantic_code", name="uq_type_point_key"),
         sa.ForeignKeyConstraint(
             ["type_code", "type_version"],
             ["cfg_device_type.type_code", "cfg_device_type.type_version"],
@@ -248,12 +250,8 @@ class DeviceTemplate(Base):
     """cfg_template persisted rows."""
 
     __tablename__ = "cfg_template"
-    template_id: Mapped[str] = mapped_column(
-        sa.String(64), nullable=False, comment="如 PCS-125K", primary_key=True
-    )
-    template_version: Mapped[str] = mapped_column(
-        sa.String(16), nullable=False, comment="如 v2.3", primary_key=True
-    )
+    template_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, comment="如 PCS-125K")
+    template_version: Mapped[str] = mapped_column(sa.String(16), nullable=False, comment="如 v2.3")
     device_type_code: Mapped[str] = mapped_column(sa.String(32), nullable=False)
     type_version: Mapped[str] = mapped_column(sa.String(16), nullable=False)
     vendor: Mapped[str] = mapped_column(sa.String(64), nullable=False, server_default=sa.text("''"))
@@ -281,6 +279,7 @@ class DeviceTemplate(Base):
         onupdate=sa.func.current_timestamp(),
     )
     __table_args__ = (
+        sa.UniqueConstraint("template_id", "template_version", name="uq_template_key"),
         sa.ForeignKeyConstraint(
             ["device_type_code", "type_version"],
             ["cfg_device_type.type_code", "cfg_device_type.type_version"],
@@ -867,7 +866,7 @@ class ImportJob(Base):
     """cfg_import_job persisted rows."""
 
     __tablename__ = "cfg_import_job"
-    import_job_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, primary_key=True)
+    import_job_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     device_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, comment="目标通信设备")
     binding_id: Mapped[str] = mapped_column(
         sa.String(64), nullable=False, comment="目标采集/下发绑定"
@@ -944,6 +943,7 @@ class ImportJob(Base):
         sa.String(1024), nullable=False, server_default=sa.text("''")
     )
     __table_args__ = (
+        sa.UniqueConstraint("import_job_id", name="uq_import_job_id"),
         sa.Index("uq_import_idem", "idempotency_key", unique=True),
         sa.Index("ix_import_target", "device_id", "submitted_at"),
         {"comment": "点表导入任务与幂等键", "mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
@@ -1069,10 +1069,8 @@ class CommStat5m(Base):
     """ops_comm_stat_5m persisted rows."""
 
     __tablename__ = "ops_comm_stat_5m"
-    binding_id: Mapped[str] = mapped_column(sa.String(64), nullable=False, primary_key=True)
-    window_start: Mapped[datetime] = mapped_column(
-        timestamp(microseconds=True), nullable=False, primary_key=True
-    )
+    binding_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    window_start: Mapped[datetime] = mapped_column(timestamp(microseconds=True), nullable=False)
     request_total: Mapped[int] = mapped_column(
         integer(size="big", unsigned=True, boolean=False),
         nullable=False,
@@ -1110,6 +1108,7 @@ class CommStat5m(Base):
         sa.String(64), nullable=False, server_default=sa.text("''")
     )
     __table_args__ = (
+        sa.UniqueConstraint("binding_id", "window_start", name="uq_comm_stat_window"),
         sa.Index("ix_comm_stat_window", "window_start"),
         {
             "comment": "绑定维度 5 分钟通信统计",

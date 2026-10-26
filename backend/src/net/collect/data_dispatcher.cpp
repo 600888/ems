@@ -279,16 +279,12 @@ int DataDispatcher::batch_update(const std::vector<PointValue>& results) {
     std::map<std::string, model::YxPoint> yxBatch;
 
     for (const auto& r : results) {
-        // 根据测点编码前缀判断类型 (约定: YC_/YX_/YK_/YT_ 或包含特定标识)
-        if (r.code.rfind("YC_", 0) == 0 || r.code.rfind("yc_", 0) == 0) {
-            ycBatch[r.code] = make_yc_point(r.code, r.value, r.quality, r.timestamp);
-        } else if (r.code.rfind("YX_", 0) == 0 || r.code.rfind("yx_", 0) == 0) {
+        const auto type = r.details.is_object() ? r.details.value("point_type", "yc") : "yc";
+        if (type == "yx")
             yxBatch[r.code] =
                 make_yx_point(r.code, static_cast<int>(r.value), r.quality, r.timestamp);
-        } else {
-            // 无前缀，默认当作 YC
+        else
             ycBatch[r.code] = make_yc_point(r.code, r.value, r.quality, r.timestamp);
-        }
     }
 
     int total = 0;

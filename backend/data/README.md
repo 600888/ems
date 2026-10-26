@@ -6,7 +6,7 @@
    在仓库根目录安装 `python -m pip install -e ./backend/python`，按需安装 `[mysql]` 或
    `[postgresql]` 驱动，编辑 `backend/python/database.yaml` 选择数据库及连接参数。
    YAML 仅供迁移工具使用；配置和命令详见 [Python 迁移说明](../python/README.md)。
-2. MySQL / PostgreSQL 先创建空数据库，再运行 `ems-db init`，统一建立现有 25 张关系表；
+2. MySQL / PostgreSQL 先创建空数据库，再运行 `ems-db init`，统一建立现有 19 张关系表；
    默认 SQLite 在 `backend/python/ems.sqlite3` 建库。`ems-db seed catalog` 显式写入站根、
    11 个设备类型与 47 个固有点；`ems-db check` 检查结构差异。
 3. 原建表与种子 SQL 脚本已移除，不再手动执行 SQL 初始化关系表。
@@ -17,4 +17,6 @@
 5. C++ 运行时仍通过 `EMS_DATABASE_CONFIG` 指定 MySQL 配置 JSON，环境变量 `EMS_MYSQL_*`
    覆盖文件字段；Python 工具另外支持迁移专用 YAML 与 `EMS_DATABASE_URL`。
 
-工程配置使用公共 `IConfigurationRepository`；设备管理配置的字段契约见 `../../website/docs/common/database/device-management.md`，配置仓储 `IDeviceConfigRepository` 已实现，保存即生效（无发布服务）。早期遗留 schema（`net.sql`、`ems_config.sql`、`point_config_v2.sql`、`point_table_excel_migration.sql`）已于 2026-10-24 清理删除。
+设备、通道、绑定及四遥配置统一使用 `IDeviceConfigRepository` 访问 `cfg_*` 表。
+采集进程也读取同一套配置；点表导入使用 Web 设备管理入口或上述整站导入接口。
+旧设备、通道、测点表及旧点表 CLI 已移除。

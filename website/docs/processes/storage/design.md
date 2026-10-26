@@ -66,13 +66,17 @@ flowchart TD
 
 | 字段组 | 逻辑字段 |
 | --- | --- |
-| 唯一版本身份 | `scope_kind / scope_id / config_version / point_id`，共同构成主键 |
+| 内部行主键 | 数据库生成的整数 `id` |
+| 唯一版本身份 | `scope_kind / scope_id / config_version / point_id`，共同构成唯一业务键 |
 | 当时归属与展示 | `asset_id / point_code / display_name / device_path` |
 | 点语义 | `point_kind / value_type / unit / enabled` |
 | 定义引用 | `definition_id / definition_version` |
 
 关系表、联合键及索引由 `backend/python/db/models/history.py` 的声明式 ORM 与 Alembic 管理；
 原 SQL 脚本已移除，本页不提供应用运行时建表 SQL。
+
+所有历史关系表统一使用自增 `id` 主键；原有作用域/版本、点 ID、事件 ID 和隔离记录键保留
+唯一约束。目录及快照外键继续引用稳定业务键，不依赖新生成的数字 ID。
 
 版本头保存 `(scope_kind, scope_id, config_version, checksum, point_count, ready_at)`；支持分批暂存，完整校验后才 `ready`。同版本同 checksum 幂等完成，异内容报警并停止发布；消费/查询只读 ready 版本。
 

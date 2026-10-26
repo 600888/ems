@@ -1,6 +1,6 @@
 /**
  * @file device_management.h
- * @brief 设备管理表行结构（14 张表），与 003 迁移逐列对应。
+ * @brief 设备管理表行结构（14 张表），与 SQLAlchemy ORM 字段对应。
  *
  * 设计见 website/docs/common/database/device-management.md：
  *   · 只有设备：cfg_device 一棵树，node_kind 区分站/单元/设备/部件
@@ -8,7 +8,7 @@
  *   · 不做配置版本：表可原地改，热加载靠站根 config_revision
  *
  * 行结构约定：
- *   - 字段顺序与 DDL 列顺序一致（ormpp 的 SELECT * 按位置映射）。
+ *   - ormpp 按反射字段显式选择列，不依赖数据库物理列顺序。
  *   - SQL NULL 用 0 / 空串表达（ormpp 只对算术类型清零），语义见各字段注释。
  *   - JSON 列在行里是 JSON 文本，由服务解析；空值为 "[]" 或 "null"。
  *   - 数字自增主键 id 仅供连接，不对外；稳定业务 ID 是文本列。
@@ -51,6 +51,7 @@ struct CfgDeviceRow {
 
 /// cfg_device_type：设备类型（含类型版本）
 struct CfgDeviceTypeRow {
+    std::int64_t id{0};  ///< 数据库生成的内部主键
     std::string type_code;
     std::string type_version;
     std::string name;
@@ -63,6 +64,7 @@ struct CfgDeviceTypeRow {
 
 /// cfg_type_point：类型固有点目录（四遥）
 struct CfgTypePointRow {
+    std::int64_t id{0};  ///< 数据库生成的内部主键
     std::string type_code;
     std::string type_version;
     std::string semantic_code;  ///< 如 active_power、run_state、start
@@ -79,6 +81,7 @@ struct CfgTypePointRow {
 
 /// cfg_template：型号模板（点表为 JSON 复制源，不参与运行期联表）
 struct CfgTemplateRow {
+    std::int64_t id{0};            ///< 数据库生成的内部主键
     std::string template_id;       ///< 如 PCS-125K
     std::string template_version;  ///< 如 v2.3
     std::string device_type_code;
@@ -280,6 +283,7 @@ struct CfgPointYtRow {
 
 /// cfg_import_job：点表导入任务与幂等键
 struct CfgImportJobRow {
+    std::int64_t id{0};  ///< 数据库生成的内部主键
     std::string import_job_id;
     std::string device_id;
     std::string binding_id;
@@ -334,6 +338,7 @@ struct CfgImportRow {
 
 /// ops_comm_stat_5m：绑定维度 5 分钟通信统计
 struct OpsCommStat5mRow {
+    std::int64_t id{0};  ///< 数据库生成的内部主键
     std::string binding_id;
     std::string window_start;
     std::int64_t request_total{0};

@@ -98,20 +98,20 @@ constexpr std::string_view get_alias_struct_name(OpsCommStat5mRow*) { return "op
  */
 constexpr std::string_view get_alias_struct_name(OpsStateLogRow*) { return "ops_state_log"; }
 
-// 字段顺序必须与 DDL 列顺序一致（SELECT * 按位置映射）
+// 查询显式使用反射字段，数字主键不改变稳定业务 ID 的定位方式。
 
 YLT_REFL(CfgDeviceRow, id, device_id, parent_device_id, node_kind, code, name, path, depth,
          sort_order, device_type_code, type_version, template_id, source_device_id, vendor, model,
          firmware_version, rated_power_kw, timezone, default_stale_after_ms, config_revision,
          enabled, description, legacy_ref, created_at, updated_at)
 
-YLT_REFL(CfgDeviceTypeRow, type_code, type_version, name, category, status, description, created_at,
-         updated_at)
+YLT_REFL(CfgDeviceTypeRow, id, type_code, type_version, name, category, status, description,
+         created_at, updated_at)
 
-YLT_REFL(CfgTypePointRow, type_code, type_version, semantic_code, name, point_type, value_type,
+YLT_REFL(CfgTypePointRow, id, type_code, type_version, semantic_code, name, point_type, value_type,
          unit, required, capability_codes_json, writable, stale_after_ms, sort_order)
 
-YLT_REFL(CfgTemplateRow, template_id, template_version, device_type_code, type_version, vendor,
+YLT_REFL(CfgTemplateRow, id, template_id, template_version, device_type_code, type_version, vendor,
          model, status, points_json, description, created_at, updated_at)
 
 YLT_REFL(CfgChannelRow, id, channel_id, code, name, protocol, conn_mode, endpoint, serial_json,
@@ -147,8 +147,8 @@ YLT_REFL(CfgPointYtRow, id, point_id, owner_device_id, binding_id, code, name, s
          feedback_timeout_ms, failure_policy, enabled, disabled_reason, stale_after_ms,
          source_import_row_id, legacy_ref, description, created_at, updated_at)
 
-YLT_REFL(CfgImportJobRow, import_job_id, device_id, binding_id, source_kind, file_name, file_sha256,
-         file_bytes, address_base, status, row_total, row_ok, row_warning, row_error,
+YLT_REFL(CfgImportJobRow, id, import_job_id, device_id, binding_id, source_kind, file_name,
+         file_sha256, file_bytes, address_base, status, row_total, row_ok, row_warning, row_error,
          idempotency_key, submitted_by, submitted_at, finished_at, error_code, error_message)
 
 YLT_REFL(CfgImportRow, id, import_job_id, line_no, vendor_key, vendor_name, point_type,
@@ -157,12 +157,23 @@ YLT_REFL(CfgImportRow, id, import_job_id, line_no, vendor_key, vendor_name, poin
          offset_value, unit, parse_status, parse_code, parse_message, confirm_state, confirm_note,
          confirm_by, confirm_at, resolved_point_id)
 
-YLT_REFL(OpsCommStat5mRow, binding_id, window_start, request_total, success_total, timeout_total,
-         error_total, avg_latency_ms, p95_latency_ms, last_valid_at, last_error_code)
+YLT_REFL(OpsCommStat5mRow, id, binding_id, window_start, request_total, success_total,
+         timeout_total, error_total, avg_latency_ms, p95_latency_ms, last_valid_at, last_error_code)
 
 YLT_REFL(OpsStateLogRow, id, object_kind, object_id, state, since, reason)
 
 // 自增主键：插入时跳过该列，由 MySQL 生成
+
+inline const auto cfg_device_type_row_auto_key =
+    ormpp::add_auto_key_field(ylt::reflection::type_string<CfgDeviceTypeRow>(), "id");
+inline const auto cfg_type_point_row_auto_key =
+    ormpp::add_auto_key_field(ylt::reflection::type_string<CfgTypePointRow>(), "id");
+inline const auto cfg_template_row_auto_key =
+    ormpp::add_auto_key_field(ylt::reflection::type_string<CfgTemplateRow>(), "id");
+inline const auto cfg_import_job_row_auto_key =
+    ormpp::add_auto_key_field(ylt::reflection::type_string<CfgImportJobRow>(), "id");
+inline const auto ops_comm_stat_5m_row_auto_key =
+    ormpp::add_auto_key_field(ylt::reflection::type_string<OpsCommStat5mRow>(), "id");
 
 inline const auto cfg_device_row_auto_key =
     ormpp::add_auto_key_field(ylt::reflection::type_string<CfgDeviceRow>(), "id");

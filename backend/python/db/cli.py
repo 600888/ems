@@ -96,6 +96,11 @@ def main(argv=None) -> int:
         return 0
     except (ValueError, OSError, ImportError, CommandError, sa.exc.SQLAlchemyError) as exc:
         # Driver exceptions/URLs may contain credentials; keep detailed exceptions out of CLI output.
-        message = str(exc) if isinstance(exc, (ValueError, CommandError)) else type(exc).__name__
+        if isinstance(exc, ModuleNotFoundError):
+            message = f"Missing Python module '{exc.name or 'unknown'}' in {sys.executable}"
+        else:
+            message = (
+                str(exc) if isinstance(exc, (ValueError, CommandError)) else type(exc).__name__
+            )
         print(f"Database operation failed: {message}", file=sys.stderr)
         return 1

@@ -14,7 +14,6 @@
 
 #include "../configuration/orm_device_config_repository.h"
 #include "../configuration/orm_device_management_store.h"
-#include "../configuration/orm_repository.h"
 #include "../runtime/transaction_database.h"
 
 namespace ems::database::mysql_rows {
@@ -552,27 +551,39 @@ core::Result<MySqlDatabaseContext> connect_mysql_database(const MySqlConnectionO
                                       core::WriteEffect::NotApplied, "history schema");
     }
     if (options.require_configuration_schema) {
-        connection.orm.query_s<DeviceRecord>("1=0");
+        connection.orm.query_s<CfgDeviceRow>("1=0");
         if (connection.orm.has_error())
             return mysql_error_result(connection.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "configuration schema");
-        connection.orm.query_s<ChannelRecord>("1=0");
+        connection.orm.query_s<CfgDeviceTypeRow>("1=0");
         if (connection.orm.has_error())
             return mysql_error_result(connection.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "configuration schema");
-        connection.orm.query_s<AnalogPoint>("1=0");
+        connection.orm.query_s<CfgTypePointRow>("1=0");
         if (connection.orm.has_error())
             return mysql_error_result(connection.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "configuration schema");
-        connection.orm.query_s<StatusPoint>("1=0");
+        connection.orm.query_s<CfgChannelRow>("1=0");
         if (connection.orm.has_error())
             return mysql_error_result(connection.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "configuration schema");
-        connection.orm.query_s<ControlPoint>("1=0");
+        connection.orm.query_s<CfgBindingRow>("1=0");
         if (connection.orm.has_error())
             return mysql_error_result(connection.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "configuration schema");
-        connection.orm.query_s<SetpointPoint>("1=0");
+        connection.orm.query_s<CfgPointYcRow>("1=0");
+        if (connection.orm.has_error())
+            return mysql_error_result(connection.orm.get_last_error_code(),
+                                      core::WriteEffect::NotApplied, "configuration schema");
+        connection.orm.query_s<CfgPointYxRow>("1=0");
+        if (connection.orm.has_error())
+            return mysql_error_result(connection.orm.get_last_error_code(),
+                                      core::WriteEffect::NotApplied, "configuration schema");
+        connection.orm.query_s<CfgPointYkRow>("1=0");
+        if (connection.orm.has_error())
+            return mysql_error_result(connection.orm.get_last_error_code(),
+                                      core::WriteEffect::NotApplied, "configuration schema");
+        connection.orm.query_s<CfgPointYtRow>("1=0");
         if (connection.orm.has_error())
             return mysql_error_result(connection.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "configuration schema");
@@ -580,16 +591,6 @@ core::Result<MySqlDatabaseContext> connect_mysql_database(const MySqlConnectionO
     auto released = tx.rollback(ctx);
     if (!core::is_ok(released)) return core::error_of(released);
     auto repositories = std::make_shared<HistoryRepositories>(pool);
-    auto configuration = std::make_shared<detail::OrmConfigurationRepository<MySqlConnection>>(
-        [repositories](ITransaction& transaction, const core::CallContext& context) {
-            return repositories->session(transaction, context);
-        },
-        [pool](ITransaction& transaction) { pool->invalidate(transaction); },
-        [](MySqlConnection& driver) {
-            return mysql_error_result(driver.orm.get_last_error_code(),
-                                      core::WriteEffect::NotApplied, "configuration operation");
-        },
-        true);
     auto device_config = std::make_shared<detail::OrmDeviceConfigRepository<MySqlConnection>>(
         [repositories](ITransaction& transaction, const core::CallContext& context) {
             return repositories->session(transaction, context);
@@ -609,8 +610,7 @@ core::Result<MySqlDatabaseContext> connect_mysql_database(const MySqlConnectionO
             return mysql_error_result(driver.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "device management operation");
         });
-    return MySqlDatabaseContext{pool,          repositories,  repositories,
-                                configuration, device_config, management};
+    return MySqlDatabaseContext{pool, repositories, repositories, device_config, management};
 }
 
 }  // namespace ems::database

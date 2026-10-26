@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cmath>
 #include <cstring>
 #include <future>
 #include <nlohmann/json.hpp>
@@ -213,15 +214,7 @@ void ChannelThread::run() {
             // 检查是否仍在运行（可能被外部停止）
             if (state_.load() != ChannelState::Running) break;
 
-            // 采集遥测
-            if (!device.ycPointCodes_.empty()) {
-                collect_points(device.ycPointCodes_);
-            }
-
-            // 采集遥信
-            if (!device.yxPointCodes_.empty()) {
-                collect_points(device.yxPointCodes_);
-            }
+            collect_device(device);
         }
 
         // 3.4 计算等待时间
@@ -308,7 +301,23 @@ void ChannelThread::process_command_queue() {
                                      task.taskId_, task.pointCode_, task.value_, task.timeoutMs_)
                              .c_str());
 
-        const bool success = handler_ && handler_->write_value(task.pointCode_, task.value_);
+        bool success = false;
+        for (const auto& device : devices()) {
+            for (const auto* routes : {&device.ykPoints_, &device.ytPoints_}) {
+                for (const auto& route : *routes) {
+                    if (route.point_id != task.pointCode_) continue;
+                    double raw = task.value_;
+                    if (route.write_mode == "fixed")
+                        raw = route.fixed_raw_value;
+                    else if (route.write_mode == "scaled") {
+                        if (route.scale_factor == 0) continue;
+                        raw = (raw - route.offset_value) / route.scale_factor;
+                    }
+                    success = handler_ && std::isfinite(raw) &&
+                              handler_->write_value(route.protocol_code, raw);
+                }
+            }
+        }
 
         CHANNEL_LOG_INFO(this, fmt::format("命令执行{}: taskId={}, pointCode={}",
                                            success ? "成功" : "失败", task.taskId_, task.pointCode_)
@@ -325,23 +334,30 @@ void ChannelThread::process_command_queue() {
 // ============================================================
 
 void ChannelThread::collect_device(const DeviceContext& device) {
-    if (!device.ycPointCodes_.empty()) {
-        collect_points(device.ycPointCodes_);
-    }
-
-    if (!device.yxPointCodes_.empty()) {
-        collect_points(device.yxPointCodes_);
-    }
+    collect_points(device.ycPoints_, "yc");
+    collect_points(device.yxPoints_, "yx");
 }
 
-void ChannelThread::collect_points(const std::vector<std::string>& pointCodes) {
-    if (pointCodes.empty() || !handler_) return;
+void ChannelThread::collect_points(const std::vector<device::PointRoute>& routes,
+                                   const char* point_type) {
+    if (routes.empty() || !handler_) return;
+    std::vector<std::string> codes;
+    for (const auto& route : routes) codes.push_back(route.protocol_code);
     std::vector<PointValue> values;
-    const int count = handler_->read_batch(pointCodes, values);
-    if (count < 0) {
-        last_err_ = "read_batch failed: " + handler_->last_error();
-        CHANNEL_LOG_ERROR(this, fmt::format("批量读取失败: {}", last_err_).c_str());
+    if (handler_->read_batch(codes, values) < 0 || values.size() != routes.size()) {
+        last_err_ = "read_batch failed or returned incomplete results: " + handler_->last_error();
         return;
+    }
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        auto& value = values[i];
+        const auto& route = routes[i];
+        value.code = route.point_id;
+        if (std::string(point_type) == "yc")
+            value.value = value.value * route.scale_factor + route.offset_value;
+        else
+            value.value = (value.value != 0) != route.invert ? 1.0 : 0.0;
+        if (!value.details.is_object()) value.details = json::object();
+        value.details["point_type"] = point_type;
     }
     if (dispatcher_ && !values.empty()) dispatcher_->batch_update(values);
 }
