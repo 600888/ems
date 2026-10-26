@@ -23,6 +23,26 @@ npm run dev
 
 设备点表参考 `ems_simulate` 的 XLSX 格式，空白模板和协议示例统一放在根目录 [data/](data/README.md)。当前公共模块支持的 Modbus CSV 格式见 [点表导入说明](website/docs/architecture/point-table-import.md)。
 
+## 数据库初始化
+
+关系数据库的建表与迁移统一使用 SQLAlchemy ORM 和 Alembic，需要 Python 3.11+。
+在仓库根目录安装工具，编辑 [迁移配置](backend/python/database.yaml) 中的 `database`
+选择 SQLite、MySQL 或 PostgreSQL，并填写对应连接参数：
+
+```powershell
+python -m pip install -e ./backend/python
+ems-db init
+ems-db seed catalog
+ems-db check
+```
+
+默认使用 SQLite；MySQL / PostgreSQL 需先创建空数据库，并分别安装
+`python -m pip install -e "./backend/python[mysql]"` 或
+`python -m pip install -e "./backend/python[postgresql]"`。
+开发演示数据可另行执行 `ems-db seed demo`。YAML 仅供迁移工具使用，应用启动时不自动建表。
+详细命令见 [数据库迁移说明](backend/python/README.md)。TDengine 历史库需由部署单独准备，
+不在当前 SQLAlchemy 迁移范围内。
+
 ## 依赖安装
 
 项目使用 redis-plus-plus 作为 Redis 客户端库，已集成在 `backend/third_party/` 目录下。

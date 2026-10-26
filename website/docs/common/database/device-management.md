@@ -1,8 +1,11 @@
 # 设备管理数据库表设计
 
-> 日期：2026-10-24｜状态：表结构已落为 `003` 迁移，仓储与首期 Web 接口已实现
+> 日期：2026-10-24｜状态：表结构由声明式 ORM 与 Alembic 管理，仓储与首期 Web 接口已实现
 > 依据：`.pen/device_manage.pen` 全部 9 个页面、[公共模型设计](../design)、[实时访问接口设计](../realtime/access-design)
-> 迁移：`backend/data/migrations/003_device_management_mysql.sql` + `backend/data/seeds/device_management_seed.sql`（旧 42 表设计已被本设计取代，脚本原地改写）
+> 初始化：`backend/python/db/models/` 的声明式 ORM + Alembic，连接配置为
+> `backend/python/database.yaml`（仅供迁移工具使用）。`ems-db init` 建表，
+> `ems-db seed catalog` 写入基础目录；详见 `backend/python/README.md`。
+> 原建表与种子 SQL 已移除，旧 42 表设计已被本设计取代。
 
 Web 用例与保存边界见[设备模块设计](../../processes/web/device/index.md)，HTTP 载荷见[设备模块 API](../../processes/web/device/api.md)。下文定义持久化模型；本次已补齐公共分页/锁查询、模板读取和导入仓储；运行及测试边界见[构建运行](../../processes/web/running.md)。
 
@@ -32,7 +35,7 @@ Web 用例与保存边界见[设备模块设计](../../processes/web/device/inde
 
 **范围外**
 
-- 历史数据（TDengine 超级表，见 `002_storage_taos.sql`）与告警业务表。
+- 历史数据（TDengine 超级表，见[存储设计](../../processes/storage/design.md#31-表结构与时间)）与告警业务表。
 - 用户、角色、操作审计：归统一审计/权限模块，本设计不建 `audit_log`。
 - 北向转发映射（原 `cfg_forward_map`）：归通信管理模块，等该模块设计确认后再建表。
 - 采集驱动、策略算法、控制仲裁本身的行为。

@@ -35,7 +35,7 @@ wire_type, byte_order, scale, offset, unit`
 - `wire_type`：`bool / i16 / u16 / i32 / u32 / f32`（bool 点的 scale/offset 必须为 1/0）
 - `byte_order`：双寄存器点（i32/u32/f32）必须填 `ABCD/BADC/CDAB/DCBA` 之一；
   单寄存器与线圈点留空
-- `standard_code` 填固有点语义码（如 `active_power`，见 `seeds/device_management_seed.sql`）；
+- `standard_code` 填固有点语义码（如 `active_power`，见 `backend/python/db/seed_data.py`）；
   留空即厂家扩展点，导入后按 `template_key` 幂等更新
 
 ## 导入后的确认流程（不自动生效）

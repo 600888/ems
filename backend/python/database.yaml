@@ -1,0 +1,24 @@
+# 仅供数据库迁移工具使用。选择 sqlite、mysql 或 postgresql。
+database: sqlite
+
+databases:
+  sqlite:
+    # 相对文件路径以本 YAML 所在目录为基准；SQLite 不需要端口、用户名或密码。
+    url: sqlite:///./ems.sqlite3
+
+  mysql:
+    # 可以填写完整 URL；下方显式配置的字段覆盖 URL 中的同名项。
+    url: mysql+pymysql://
+    host: 127.0.0.1
+    port: 3306
+    username: ems
+    password: ""
+    database: ems
+
+  postgresql:
+    url: postgresql+psycopg://
+    host: 127.0.0.1
+    port: 5432
+    username: ems
+    password: ""
+    database: ems

@@ -346,7 +346,7 @@ flowchart TD
 | 配置、控制、告警、用户、outbox 与历史目录/事件 Repository | 实体、映射、查询与并发语义集中实现，业务不拼 SQL 或直调驱动 |
 | 公共连接池、事务、工厂与错误转换 | 各进程创建自身实例；同进程同数据库/凭据与用途共池，Repository 不各建连接 |
 | 公共时序读写、映射及客户端适配 | 仅存储进程装配，其他进程经 HistoryService；不把历史业务算法迁入公共层 |
-| 一套部署迁移 | 沿用 backend/data/migrations，应用仅检查版本，不自动建业务表或升级 schema |
+| 部署迁移 | 关系表使用 backend/python/db 的 ORM/Alembic，TDengine 单独部署；应用不自动建业务表或升级 schema |
 
 固定版 ormpp 支持 MySQL/PostgreSQL/SQLite，不含 TDengine。MySQL 普通 CRUD 使用 ORM；必要的参数化复杂查询仅留公共实现，TAOS 客户端/方言仅留公共时序适配器。公开 API 不提供任意 SQL，也不暴露 ORM/驱动对象。
 
@@ -358,7 +358,7 @@ flowchart TD
 
 首期按数据类型划分超级表、每个测点一张子表，适配不同设备点表/采样周期；同构高频设备可经容量测试评估宽表。标签是子表级元数据，不能在同一子表逐行更换 point_id 标签混存多个点。[TDengine 数据建模](https://docs.taosdata.com/quick-start/data-modeling/)、[数据表说明](https://docs.taosdata.com/tdengine-sql/ddl/table/)。
 
-目标版本为 TDengine 3.4.2，服务端与客户端锁定兼容补丁。数值、整数、布尔及文本分别映射类型化超级表，以稳定 point_id 作标签，行身份为 `(ts, event_id)`；物理 schema 由 `backend/data/migrations/002_storage_taos.sql` 管理，动态子表只经公共适配器按受控映射创建。完整目录、字段组与消费规则见[存储进程详细设计](../processes/storage/design.md)。
+目标版本为 TDengine 3.4.2，服务端与客户端锁定兼容补丁。数值、整数、布尔及文本分别映射类型化超级表，以稳定 point_id 作标签，行身份为 `(ts, event_id)`；历史库与超级表按存储设计由部署单独准备，未纳入当前 SQLAlchemy 迁移，动态子表只经公共适配器按受控映射创建。完整目录、字段组与消费规则见[存储进程详细设计](../processes/storage/design.md)。
 
 表名由受控 ID 映射产生，值使用参数绑定。布尔、状态、字符串和高精度整数使用对应类型，不能全部转 DOUBLE。名称、单位、资产归属等可变信息通过 MySQL 版本模型解释历史，避免修改标签造成历史含义漂移。
 

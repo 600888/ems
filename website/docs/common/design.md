@@ -98,7 +98,8 @@ contracts/                   # 仓库根目录，供各 C++ 进程与前端共�
   fixtures/                  # 有效、无效、兼容版本及边界样例
   realtime/                  # 实时字段与逻辑键黄金样例，引用统一 schema
   compatibility.md           # 当前支持的 schema 范围及兼容策略
-backend/data/migrations/     # 沿用已有 MySQL/TAOS 版本化迁移，唯一部署来源
+backend/python/db/          # 关系数据库声明式 ORM、Alembic 迁移与种子
+backend/python/database.yaml # 仅供迁移工具使用的多数据库连接配置
 ```
 
 命名空间采用 `ems::core`、`ems::model`、`ems::codec`、`ems::config`、`ems::database`、`ems::messaging`、`ems::observability`；实时保持 `ems::rtdb`。类型用 PascalCase，字段与公开方法用 lower_snake_case；实时专题已定义的 camelCase 方法保留，不为风格统一另造一套接口。
@@ -333,7 +334,10 @@ outbox 至少保存 event_id、业务关联 ID、scope/topic、schema_version、
 
 ### 8.3 Schema、错误与限制
 
-数据库 schema 统一由 `backend/data/migrations/` 的版本化部署迁移维护，沿用现有 MySQL/TAOS 脚本；应用不自动建业务表、超级表或升级 schema。时序动态子表仅由公共适配器按已授权映射受控创建。应用检查 schema 版本范围，超出范围拒绝写就绪；滚动升级先增兼容字段，再迁移/切读，最后独立清理。
+关系表 schema 由 `backend/python/db/` 的 SQLAlchemy 声明式 ORM 与 Alembic 管理，
+`backend/python/database.yaml` 仅为迁移工具提供 SQLite/MySQL/PostgreSQL 连接配置；
+C++ 运行时仍使用现有 MySQL 配置。TDengine 历史库按存储设计单独部署。应用不自动建业务表、超级表或升级
+schema，时序动态子表仅由公共适配器按已授权映射受控创建。迁移位置记录与设备配置修订号分离。
 
 唯一键冲突映射 Conflict；对象不存在为 NotFound；权限错误为 PermissionDenied；池耗尽/超时与服务器不可用分别返回明确错误。SQL 参数必须绑定；动态排序/列名只能来自白名单，业务接口不接收任意 SQL。
 

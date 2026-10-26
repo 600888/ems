@@ -71,7 +71,8 @@ flowchart TD
 | 点语义 | `point_kind / value_type / unit / enabled` |
 | 定义引用 | `definition_id / definition_version` |
 
-物理表、联合键及索引由 `backend/data/migrations/001_storage_mysql.sql` 管理，后续调整新增迁移版本；本页不提供应用运行时建表 SQL。
+关系表、联合键及索引由 `backend/python/db/models/history.py` 的声明式 ORM 与 Alembic 管理；
+原 SQL 脚本已移除，本页不提供应用运行时建表 SQL。
 
 版本头保存 `(scope_kind, scope_id, config_version, checksum, point_count, ready_at)`；支持分批暂存，完整校验后才 `ready`。同版本同 checksum 幂等完成，异内容报警并停止发布；消费/查询只读 ready 版本。
 
@@ -105,7 +106,8 @@ flowchart TD
 | 无效值 | null 加质量/原因，禁止 NaN、Infinity、默认零 |
 | 无损整数 | 不把 64 位整数/状态码转 DOUBLE；无符号 64 位版本/代次/序号用十进制文本，应用层整数比较 |
 
-公共时序记录按下列字段组映射；物理 schema 由 `backend/data/migrations/002_storage_taos.sql` 管理，类型、长度及批量 API 须在锁定版本验证：
+公共时序记录按下列字段组映射；TDengine 库与超级表由部署单独准备，未纳入当前 SQLAlchemy
+迁移，类型、长度及批量 API 须在锁定版本验证：
 
 | 字段组 | 字段 |
 | --- | --- |
@@ -115,6 +117,11 @@ flowchart TD
 | 历史配置 | `scope_kind / scope_id / config_version` |
 | 来源顺序 | `source_id / source_epoch / sequence` |
 | 稳定标签 | `point_id` |
+
+历史库名为 `ems_history`，使用微秒精度。四张超级表分别为 `telemetry_numeric`（DOUBLE）、
+`telemetry_integer`（BIGINT）、`telemetry_boolean`（BOOL）和 `telemetry_text`（VARCHAR(1024)），
+括号内为 `sample_value` 类型。各表以 `ts TIMESTAMP` 和 `event_id VARCHAR(64)` 作为复合行身份，
+以 `point_id VARCHAR(64)` 作为标签；部署需核验超级表与公共时序适配器的字段契约一致。
 
 其他类型使用对应超级表，`time_origin` 码表纳入事件契约。建库前冻结事件 ID 长度、时间精度及主键类型；目标版本不支持复合主键时须重设方案，不能退化为时间戳加普通 event_id 列。参考[超级表/复合主键](https://docs.tdengine.com/tdengine-sql/ddl/stable/)及[数据库精度与保留](https://docs.tdengine.com/tdengine-sql/ddl/database/)。
 
@@ -233,7 +240,7 @@ sequenceDiagram
 | 契约 | 固定 schema/topic、质量码、UTC 微秒与身份/版本；实测锁定 TAOS 的复合主键 |
 | 公共 MySQL 层 | 历史实体、目录/身份/隔离及查询从 scd 迁入公共 ormpp Repository；统一连接池、显式事务与错误转换 |
 | 公共时序层 | 现有读写接口/类型及 TAOS 客户端封装迁入公共目录；存储只注入 API，不自建 SQL/驱动对象 |
-| 版本化迁移 | 沿用 backend/data/migrations，验证目录/映射及公共 Repository 兼容；应用不自动改正式表结构 |
+| 结构迁移 | 关系表使用 backend/python/db 的 ORM/Alembic，TDengine 单独部署；验证目录/映射及公共 Repository 兼容，应用不自动改正式表结构 |
 | 运行接入 | 订阅、HistoryService、配置/outbox/审计调用公共接口；验证事务回滚、提交 Unknown、跨进程复用与查询预算；InfluxDB 后续验收 |
 | 旧数据迁移 | 备份、导出 ID/类型/单位/精度/质量映射、受控回填；无事件 ID 时用旧表主键生成稳定迁移 ID；核对数量、范围及曲线后切查询，不直接删旧表 |
 

@@ -34,7 +34,11 @@
 
 ## 数据库接入
 
-新建空库后，由部署人员执行 [工程配置 schema](../backend/data/migrations/000_configuration_mysql.sql)，需要开发样例时再显式执行 [采集示例数据](../backend/data/seeds/collection_demo.sql)。应用不再自动建库、改表或写示例。存储历史表另执行 `001_storage_mysql.sql` 与 `002_storage_taos.sql`。
+关系数据库使用 [SQLAlchemy ORM 与 Alembic](../backend/python/README.md) 初始化：
+编辑 `backend/python/database.yaml`，在仓库根目录安装 `python -m pip install -e ./backend/python`，
+再执行 `ems-db init` 和 `ems-db seed catalog`；需要开发样例时另行执行 `ems-db seed demo`。
+MySQL / PostgreSQL 需先创建空数据库并安装对应驱动。应用不自动建库、改表或写示例。
+TDengine 历史库仍需由部署单独准备，不在当前 SQLAlchemy 迁移范围内。
 
 公共工厂 `connect_mysql_database()` 返回事务入口和 `IConfigurationRepository`；通过 `import_configuration_points()` 导入，只有返回值中的 `committed` 为 true 才表示已入库。数据库错误带写入确定性，提交 Unknown 时先核验数据库，再决定后续操作。点表导入不自动发布运行配置。
 

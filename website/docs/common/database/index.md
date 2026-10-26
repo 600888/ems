@@ -40,7 +40,7 @@ flowchart TD
 | 公共 Repository API | 类型化读写、稳定身份、条件更新、幂等与事务参与 | HTTP/gRPC、协议句柄、任意 SQL 入口 |
 | 公共 MySQL 实现 | ormpp 实体映射、批量查询、约束冲突、连接池与事务 | 设备控制、告警规则、私自提交业务事务 |
 | 公共时序实现 | 类型化批量写/扫描、受控序列映射、客户端和方言 | PCC/需量计算、用户鉴权、跨库提交 |
-| 部署迁移 | 唯一版本化 schema、索引与数据升级 | 业务启动时自动建表 |
+| 部署迁移 | SQLAlchemy 声明式 ORM、Alembic 结构迁移及显式种子 | 业务启动时自动建表 |
 
 Redis/共享内存继续由公共 `RealtimeService/IRealtimeStore` 访问；ZeroMQ 属于消息层。统一持久数据访问不意味着把实时状态、消息队列与业务表合成一个万能 `DatabaseManager`。
 
@@ -107,7 +107,7 @@ ORM 行实体与反射注册留在 `src/common/db/mysql/`，通过显式转换�
 | 条件、排序、分页 | 业务传枚举/字段化筛选对象；公共实现固定模板/白名单，值全部绑定 |
 | 联表、锁、原子条件更新 | 先用可满足语义的 ORM 操作；确需 SQL 时仅限公共 MySQL 实现内部，经 ormpp 参数化接口执行并独立验证并发语义 |
 | TDengine 方言/批量 API | 仅公共时序适配器可使用；值绑定，物理标识符来自受控映射，禁止外部输入拼表名 |
-| 业务表、超级表、索引与升级 | 部署迁移保留 SQL；应用仅检查兼容版本，不在启动时 execute DDL；动态子表仅由时序适配器按授权映射受控创建 |
+| 业务表、超级表、索引与升级 | 关系表由 Python 声明式 ORM/Alembic 迁移；TDengine 保留 SQL；应用不在启动时 execute DDL；动态子表仅由时序适配器按授权映射受控创建 |
 
 使用 `ormpp::query_s` 执行固定参数化语句属于底层实现手段，不能把 SQL 字符串、`execute(sql)`、`query(sql)` 或 ORM 连接暴露给业务层。禁止通过 `execute` 拼接用户值；不得以“已经调用 ormpp”为由保留各进程自己的实体和 SQL。当前版本不能安全表达的操作，须在公共实现补齐受控能力并验证后使用。
 
@@ -161,7 +161,8 @@ backend/src/common/db/
   timeseries/taos/                官方客户端、映射与读写适配
   timeseries/influxdb/            后续实现，当前不支持
 backend/src/scd/                  订阅、归档/聚合/发布/查询编排
-backend/data/migrations/          唯一部署迁移来源
+backend/python/db/               关系表 ORM、Alembic 与显式种子
+backend/python/database.yaml     迁移专用连接配置
 ```
 
 | Target | 依赖边界 |
@@ -172,7 +173,12 @@ backend/data/migrations/          唯一部署迁移来源
 | `ems_timeseries_taos` | 私有链接 TAOS；仅存储装配，不强迫其他进程链接 |
 | 存储核心 | 只链接公共 API，入口负责依赖注入；不再编译私有数据库实现 |
 
-沿用已有 `001_storage_mysql.sql`、`002_storage_taos.sql` 迁移；后续变化新增版本，不篡改已执行脚本或另建竞争目录。生产由部署工具单点执行，记录版本与校验和，应用仅检查。回填/批量升级走离线迁移流程，不作为业务 API 接受任意 SQL。
+关系表由 `backend/python/db/models/` 的 SQLAlchemy 声明式模型和 Alembic 管理，
+迁移专用配置为 `backend/python/database.yaml`，支持 SQLite、MySQL、PostgreSQL。
+`alembic_version` 仅登记数据库结构迁移位置，不是设备配置版本。原建表与种子 SQL 已移除，
+不新增编号 SQL 文件；TDengine 历史库需按存储设计单独部署，未纳入当前 ORM 迁移。
+部署工具单点执行，应用仅检查。
+Python 层的多数据库支持不改变现有 C++ MySQL/ormpp 运行时。回填/批量升级走离线迁移流程。
 
 ## 7. 实施顺序与验收
 
@@ -206,4 +212,7 @@ backend/data/migrations/          唯一部署迁移来源
 
 `ParaLoader` 接收进程入口创建的公共上下文，加载成功后再替换本地配置；查询失败不伪装成空配置。点表 CLI 和采集示例直接使用公共工厂。未被调用的 `PointImportCaller/PointImporter` 与 `point_collect` 写入接口已删除，采样归现有遥测/历史链路。
 
-应用不再建库、建表或写示例数据。空库先执行 `backend/data/migrations/000_configuration_mysql.sql`；开发示例可显式执行 `backend/data/seeds/collection_demo.sql`。`load_mysql_options` 统一读取 `EMS_DATABASE_CONFIG` 与 `EMS_MYSQL_*`，旧 `DbConfig`、SQLite 生产连接入口和旧环境变量已退出。SQLite 只用于配置仓储事务回归，不能代替 MySQL 行锁联调。
+应用不再建库、建表或写示例数据。空库通过 Python 工具执行 `ems-db init`，
+目录和开发示例分别显式执行 `ems-db seed catalog`、`ems-db seed demo`。
+Python 工具读取 `backend/python/database.yaml`；C++ 的 `load_mysql_options` 继续读取
+`EMS_DATABASE_CONFIG` 与 `EMS_MYSQL_*`。SQLite 的 ORM/迁移测试不能代替 MySQL 行锁联调。

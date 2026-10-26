@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ems-db"
+version = "0.1.0"
+description = "Portable EMS ORM models and deployment migrations"
+requires-python = ">=3.11"
+dependencies = [
+    "SQLAlchemy>=2.0.45,<2.1",
+    "alembic>=1.19.1,<2",
+    "PyYAML>=6.0,<7",
+]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10"]
+mysql = ["PyMySQL[rsa]>=1.1.2,<2"]
+postgresql = ["psycopg[binary]>=3.2,<4"]
+
+[project.scripts]
+ems-db = "db.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["db", "db.models", "db.migrations", "db.migrations.versions"]
+
+[tool.setuptools.package-data]
+db = ["alembic.ini", "migrations/script.py.mako"]
+
+[tool.pytest.ini_options]
+testpaths = ["db/tests"]
+pythonpath = ["."]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint.per-file-ignores]
+"db/models/__init__.py" = ["E402"]
+
