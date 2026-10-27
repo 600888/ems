@@ -1,0 +1,12 @@
+[
+  {
+    "type": "file",
+    "name": "login",
+    "label": "登录设计（OAuth2 + JWT）"
+  },
+  {
+    "type": "file",
+    "name": "index",
+    "label": "用户管理与角色权限设计"
+  }
+]

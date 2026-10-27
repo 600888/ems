@@ -16,6 +16,13 @@
   },
   {
     "type": "dir",
+    "name": "user",
+    "label": "用户管理模块",
+    "collapsible": true,
+    "collapsed": false
+  },
+  {
+    "type": "dir",
     "name": "device",
     "label": "设备管理模块",
     "collapsible": true,

@@ -2,6 +2,8 @@
 
 > 日期：2026-10-24｜状态：首期 Web 与设备模块已实现；[构建运行](running.md)。[设备设计](device/index.md) · [API 契约](device/api.md)。
 
+登录及用户管理的目标设计见[OAuth2 + JWT 登录](user/login.md)和[用户管理与角色权限](user/index.md)。当前仍为内存会话骨架；下文身份目标约定不表示协议和持久账号已经实现。
+
 ## 1. 进程与业务模块
 
 ```mermaid
@@ -117,6 +119,7 @@ flowchart TD
 | 参数 | 有参数一律 POST + JSON；GET 只用于无参数读取 |
 | 并发参数 | expected_config_revision、expected_preview_hash 均放 JSON |
 | 上传例外 | multipart：file 为二进制文件，metadata 为 JSON 业务参数 |
+| 认证协议例外（目标） | OAuth2/OIDC authorize 与 callback 允许协议查询参数，token/revoke 与本地授权登录页使用表单；仅限[登录设计](user/login.md)列出的认证端点 |
 | 身份 | cookie、认证/CSRF 等安全头保留，不承载业务筛选与 ID |
 | 编码 | UTF-8、snake_case；对象/数组直接传 JSON，不传转义 JSON 字符串 |
 | JSON 库 | 业务、配置、DTO 与序列化统一 nlohmann::json；JsonCpp 仅为 Drogon 内部依赖，不进入业务接口 |
@@ -180,12 +183,13 @@ flowchart LR
 | 项目 | 约定 |
 | --- | --- |
 | 连接 | 沿用 EMS_DATABASE_CONFIG / EMS_MYSQL_*；Web 不复制数据库配置结构 |
-| 身份 | 账号体系与数据来源待后续设计；运行配置不包含账号，未装配身份服务不阻止进程启动 |
-| 会话 | HttpOnly + SameSite cookie；HTTPS 加 Secure；首期内存会话重启失效 |
+| 身份 | 目标为公共数据库账号、三类固定角色和资源范围；OAuth2 授权码 + PKCE、JWT，见[登录设计](user/login.md)；运行配置不含账号清单 |
+| 会话 | 当前内存会话重启失效；目标 BFF 持久会话，浏览器只持 HttpOnly/Secure/SameSite=Lax Cookie，JWT 与刷新令牌由服务端持有 |
 | 授权 | 按数据库实际关系校验站、设备子树、绑定和任务，过滤列表与 total |
 | CSRF | POST 查询与写入统一检查；登录检查 Origin；后续 WebSocket 也检查来源 |
 | 审计 | 同公共事务对接统一审计；不在 Web 建私有审计表 |
 | 健康 | GET `/health/live`、`/health/ready`；依赖缺失返回 503，采集离线不阻断配置 |
+| 身份就绪 | 当前未装配账号服务可启动但拒绝受保护请求；目标生产部署必须启用身份模块，身份表/密钥等依赖缺失时 ready 返回 503 |
 | 部署 | 同源；Drogon 静态服务或 Nginx 唯一入口；只信任配置中的代理 |
 
 ```mermaid

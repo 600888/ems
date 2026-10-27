@@ -4,7 +4,7 @@
 `EMS_BUILD_COLLECTOR` 默认开启，各平台预设也显式启用；`BUILD_EXAMPLES=OFF` 不影响该进程。
 
 设备、通道、绑定和测点统一来自 `cfg_device`、`cfg_channel`、`cfg_binding`、
-`cfg_point_yc/yx/yk/yt`；先按 [数据库初始化说明](../../../../backend/python/README.md) 建表。
+`cfg_point_yc/yx/yk/yt`；先按 [数据库初始化说明](https://github.com/600888/ems/blob/main/backend/python/README.md) 建表。
 组件点使用 `source_device_id` 指定的通信设备绑定，禁用节点、通道或绑定会停止相关采集。
 读数按点配置执行倍率、偏移或取反，实时库键使用稳定 `point_id`，四遥种类由所属表决定。
 控制命令按稳定 `point_id` 解析至遥控/遥调地址，支持遥控固定值与遥调反向换算。
