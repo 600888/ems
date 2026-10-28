@@ -9,18 +9,19 @@ import { useMonitorStore } from '@/stores/monitor'
 const monitor = useMonitorStore()
 const reason = ref('按值班计划调整放电功率')
 
-const changed = computed(() => monitor.ytRows.filter((row) => row.modified !== row.current))
+const changed = computed(() => monitor.ytList.filter((row) => row.modified !== row.current))
 
 const allValid = computed(() =>
-  monitor.ytRows.every((row) => {
+  monitor.ytList.every((row) => {
     const value = Number(row.modified)
     return Number.isFinite(value) && value >= row.min && value <= row.max
   }),
 )
 
-const activeRow = computed(() => changed.value[0] ?? monitor.ytRows[0])
+const activeRow = computed(() => changed.value[0] ?? monitor.ytList[0])
 
 function submit() {
+  if (!monitor.ytList.length || !changed.value.length) return
   if (!allValid.value) {
     ElMessage.warning('存在超出允许范围的设定值，请修正后下发')
     return
@@ -47,7 +48,7 @@ function submit() {
           >
         </div>
 
-        <template v-if="monitor.ytRows.length">
+        <template v-if="monitor.ytList.length">
           <div class="dt-head shrink-0">
             <div class="min-w-0 flex-1"><span class="dt-th">测点名称</span></div>
             <div class="w-[120px] shrink-0"><span class="dt-th">当前设定</span></div>
@@ -57,7 +58,7 @@ function submit() {
           </div>
 
           <div class="min-h-0 flex-1 overflow-y-auto">
-            <div v-for="row in monitor.ytRows" :key="row.name" class="dt-row h-[56px]">
+            <div v-for="row in monitor.ytList" :key="row.name" class="dt-row h-[56px]">
               <span class="dt-cell min-w-0 flex-1 truncate text-[12px] text-ink">{{
                 row.name
               }}</span>

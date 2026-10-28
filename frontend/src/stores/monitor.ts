@@ -1,9 +1,11 @@
-import { computed, ref } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
+import { useAuthStore } from '@/stores/auth'
+import { scopedDeviceTree } from '@/domain/resource-scope'
 
-import { monitorTree } from '@/mocks/devices'
+// 授权选择和运行导航共用设备目录，确保设备的父子关系一致。
+import { adminTree as monitorTree } from '@/mocks/devices'
 import {
-  controlLogs,
   monitorProfiles,
   pcsYcPoints,
   pcsYxSignals,
@@ -61,7 +63,15 @@ function emptyProfile(node: DeviceNode | undefined): DeviceProfile {
 
 /** 前台设备监视：设备树、实时档案、四遥数据、运行操作 */
 export const useMonitorStore = defineStore('monitor', () => {
-  const tree = ref<DeviceNode[]>(monitorTree)
+  const auth = useAuthStore()
+  const authorized = computed(() =>
+    scopedDeviceTree(
+      monitorTree,
+      auth.full ? auth.session?.scope_mode : undefined,
+      auth.full ? (auth.session?.scopes ?? []) : [],
+    ),
+  )
+  const tree = computed(() => authorized.value.tree)
   const selectedId = ref('bms01')
   const keyword = ref('')
   const scope = ref<MonitorScope>('all')
@@ -75,30 +85,42 @@ export const useMonitorStore = defineStore('monitor', () => {
   const sampleInterval = ref('2 秒')
 
   const ytRows = ref<YtPoint[]>(ytPoints.map((row) => ({ ...row })))
-  const controlLogRows = ref<ControlLog[]>([...controlLogs])
-  const activeCommand = ref<YkCommand | null>(ykCommands[1] ?? null)
+  const controlLogRows = ref<ControlLog[]>([])
+  const activeCommand = ref<YkCommand | null>(null)
   const controlStep = ref<1 | 2 | 3>(1)
   const controlReason = ref('计划维护停机')
   const controlRunning = ref(false)
   const controlResult = ref<'idle' | 'success' | 'failed' | 'timeout'>('idle')
 
   const selectedNode = computed(() => findNode(tree.value, selectedId.value))
-  const profile = computed<DeviceProfile>(
-    () => monitorProfiles[selectedId.value] ?? emptyProfile(selectedNode.value),
+  const profile = computed<DeviceProfile>(() =>
+    authorized.value.allowedIds.has(selectedId.value)
+      ? (monitorProfiles[selectedId.value] ?? emptyProfile(selectedNode.value))
+      : emptyProfile(undefined),
   )
 
-  const isBms = computed(() => selectedId.value === 'bms01')
+  const isBms = computed(
+    () => authorized.value.allowedIds.has(selectedId.value) && selectedId.value === 'bms01',
+  )
   const ycList = computed<YcPoint[]>(() =>
-    isBms.value ? ycPoints : selectedId.value === 'pcs01' ? pcsYcPoints : [],
+    isBms.value
+      ? ycPoints
+      : authorized.value.allowedIds.has(selectedId.value) && selectedId.value === 'pcs01'
+        ? pcsYcPoints
+        : [],
   )
   const yxList = computed<YxSignal[]>(() =>
-    isBms.value ? yxSignals : selectedId.value === 'pcs01' ? pcsYxSignals : [],
+    isBms.value
+      ? yxSignals
+      : authorized.value.allowedIds.has(selectedId.value) && selectedId.value === 'pcs01'
+        ? pcsYxSignals
+        : [],
   )
   const ykList = computed<YkCommand[]>(() =>
-    profile.value.tabCounts.control > 0 ? ykCommands : [],
+    auth.can('command.yk') && profile.value.tabCounts.control > 0 ? ykCommands : [],
   )
   const ytList = computed<YtPoint[]>(() =>
-    profile.value.tabCounts.setpoint > 0 ? ytRows.value : [],
+    auth.can('command.yt') && profile.value.tabCounts.setpoint > 0 ? ytRows.value : [],
   )
 
   /** 树过滤：按状态范围 + 关键字，保留命中节点的祖先链 */
@@ -122,8 +144,54 @@ export const useMonitorStore = defineStore('monitor', () => {
     return tree.value.map(keep).filter((node): node is DeviceNode => Boolean(node))
   })
 
-  // 示例统计口径与画板 10 一致；接后端时替换为设备统计接口返回
-  const counts = computed(() => ({ all: 128, alarm: 2, offline: 1 }))
+  const counts = computed(() => {
+    const devices: DeviceNode[] = []
+    const visit = (nodes: DeviceNode[]) => {
+      for (const node of nodes) {
+        if (node.isDevice) devices.push(node)
+        visit(node.children ?? [])
+      }
+    }
+    visit(tree.value)
+    return {
+      all: devices.length,
+      alarm: devices.filter((n) => n.status === 'alarm').length,
+      offline: devices.filter((n) => n.status === 'offline').length,
+    }
+  })
+
+  watch(
+    () =>
+      JSON.stringify([
+        auth.user?.user_id,
+        auth.session?.scope_mode,
+        auth.session?.scopes,
+        auth.session?.permissions,
+      ]),
+    () => {
+      function firstDevice(nodes: DeviceNode[]): string | undefined {
+        for (const node of nodes) {
+          if (node.isDevice) return node.id
+          const id = firstDevice(node.children ?? [])
+          if (id) return id
+        }
+      }
+      selectedId.value = authorized.value.allowedIds.has('bms01')
+        ? 'bms01'
+        : (firstDevice(tree.value) ?? '')
+      keyword.value = ''
+      scope.value = 'all'
+      selectedYcCodes.value = ['soc', 'cell_temp_max', 'cell_temp_min']
+      activeCommand.value = null
+      controlRunning.value = false
+      controlResult.value = 'idle'
+      controlStep.value = 1
+      controlReason.value = ''
+      ytRows.value = ytPoints.map((row) => ({ ...row }))
+      controlLogRows.value = []
+    },
+    { immediate: true },
+  )
 
   /** 选中测点的曲线数据（最多 6 个） */
   const curveSeries = computed(() =>
@@ -133,10 +201,13 @@ export const useMonitorStore = defineStore('monitor', () => {
   )
 
   function selectDevice(id: string) {
+    if (!authorized.value.allowedIds.has(id) || !findNode(tree.value, id)?.isDevice) return
     selectedId.value = id
+    controlRunning.value = false
     controlResult.value = 'idle'
     controlStep.value = 1
-    if (!activeCommand.value) activeCommand.value = ykCommands[1] ?? null
+    activeCommand.value = null
+    ytRows.value = ytPoints.map((row) => ({ ...row }))
   }
 
   function toggleYc(code: string) {
@@ -149,13 +220,14 @@ export const useMonitorStore = defineStore('monitor', () => {
   }
 
   function openCommand(command: YkCommand) {
-    if (command.disabledReason) return
+    if (!auth.can('command.yk') || !ykList.value.includes(command) || command.disabledReason) return
     activeCommand.value = command
     controlStep.value = 1
     controlResult.value = 'idle'
   }
 
   function closeCommand() {
+    controlRunning.value = false
     activeCommand.value = null
     controlStep.value = 1
     controlResult.value = 'idle'
@@ -163,19 +235,36 @@ export const useMonitorStore = defineStore('monitor', () => {
 
   /** 模拟指令下发：发送中 → 设备反馈 */
   function executeCommand() {
-    if (!activeCommand.value) return
+    if (
+      !auth.can('command.yk') ||
+      !activeCommand.value ||
+      controlRunning.value ||
+      !authorized.value.allowedIds.has(selectedId.value)
+    )
+      return
+    const command = activeCommand.value
+    const deviceId = selectedId.value
+    const userId = auth.user?.user_id
     controlStep.value = 3
     controlRunning.value = true
     controlResult.value = 'idle'
     setTimeout(() => {
+      if (
+        auth.user?.user_id !== userId ||
+        selectedId.value !== deviceId ||
+        activeCommand.value !== command ||
+        !auth.can('command.yk') ||
+        !authorized.value.allowedIds.has(deviceId)
+      )
+        return
       controlRunning.value = false
       controlResult.value = 'success'
       controlLogRows.value = [
         {
           time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-          command: activeCommand.value?.name ?? '',
-          target: activeCommand.value?.action ?? '',
-          operator: '值班员',
+          command: command.name,
+          target: command.action,
+          operator: auth.user?.display_name ?? '',
           result: 'success',
         },
         ...controlLogRows.value,
@@ -184,12 +273,14 @@ export const useMonitorStore = defineStore('monitor', () => {
   }
 
   function setYtValue(name: string, value: string) {
+    if (!auth.can('command.yt') || !ytList.value.length) return
     ytRows.value = ytRows.value.map((row) =>
       row.name === name ? { ...row, modified: value } : row,
     )
   }
 
   function resetYtValue(name: string) {
+    if (!auth.can('command.yt') || !ytList.value.length) return
     ytRows.value = ytRows.value.map((row) =>
       row.name === name ? { ...row, modified: row.current } : row,
     )

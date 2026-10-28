@@ -13,7 +13,7 @@ export const adminNav: NavItem[] = [
   { key: 'models', label: '型号与点表', icon: 'layers' },
   { key: 'strategy', label: '策略配置', icon: 'workflow' },
   { key: 'alarm', label: '告警规则', icon: 'bell-ring' },
-  { key: 'users', label: '用户与权限', icon: 'users' },
+  { key: 'users', label: '用户与权限', icon: 'users', to: '/admin/users' },
   { key: 'audit', label: '审计日志', icon: 'scroll-text' },
   { key: 'system', label: '系统配置', icon: 'settings' },
 ]

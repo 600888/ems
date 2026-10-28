@@ -1,0 +1,54 @@
+@layer components {
+  .identity-page {
+    @apply flex min-h-0 flex-1 flex-col gap-[22px] overflow-y-auto;
+  }
+  .identity-table {
+    @apply w-full min-w-[1050px] border-collapse text-left text-[14px];
+  }
+  .identity-table th,
+  .identity-table td {
+    @apply border-b border-line px-[18px] py-4;
+  }
+  .identity-table thead {
+    @apply sticky top-0 z-10 bg-raised;
+  }
+  .identity-table thead th {
+    @apply h-12 py-3 text-[12px] font-medium text-muted;
+  }
+  .identity-table tbody tr {
+    @apply h-[72px] bg-panel even:bg-rowalt;
+  }
+  .identity-text-action {
+    @apply text-[13px] text-accent hover:underline disabled:cursor-not-allowed disabled:text-subtle;
+  }
+  .identity-page .el-input__wrapper,
+  .identity-page .el-select__wrapper,
+  .identity-drawer .el-input__wrapper,
+  .identity-drawer .el-select__wrapper,
+  .identity-dialog .el-input__wrapper {
+    @apply min-h-10 bg-surface text-[14px];
+  }
+  .identity-login-input .el-input__wrapper {
+    @apply h-[50px] bg-surface px-4 text-[15px];
+  }
+  .identity-dialog .el-dialog__header {
+    @apply mb-5 pr-8;
+  }
+  .identity-dialog .el-dialog__title {
+    @apply text-[21px] font-semibold text-ink;
+  }
+  .identity-dialog {
+    @apply rounded-lg border border-line bg-panel p-7;
+  }
+  .identity-page .el-tree,
+  .identity-drawer .el-tree {
+    @apply bg-transparent;
+  }
+  .identity-page .el-tree-node__content,
+  .identity-drawer .el-tree-node__content {
+    @apply min-h-[43px];
+  }
+  .identity-policy-section {
+    @apply flex flex-col gap-5;
+  }
+}

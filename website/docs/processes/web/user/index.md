@@ -1,7 +1,7 @@
 # 用户管理与角色权限设计
 
 > 日期：2026-10-27｜状态：待实现的目标设计；角色、持久账号和用户管理接口尚未落地。
-> 关联：[登录设计（OAuth2 + JWT）](login.md) · [Web 进程设计](../design.md) · [设备模块 API](../device/api.md)。
+> 关联：[登录设计（用户名、密码与加密）](login.md) · [Web 进程设计](../design.md) · [设备模块 API](../device/api.md)。
 
 ## 1. 范围与基本规则
 
@@ -17,38 +17,32 @@
 
 管理员承担系统管理和工程维护；操作员承担值班运行；观察员读取运行数据。管理员拥有全部已定义业务权限，但同样受到资源范围、业务校验和控制安全联锁约束。以下为目标权限，监视/历史/告警/控制能力随对应模块实现后开放。
 
+图例：<span className="permission-yes" aria-label="允许">✓</span> 允许；<span className="permission-no" aria-label="禁止">×</span> 禁止。文档与设计图统一采用该标识，同时保留可访问文本。
+
 | 功能 / 后端权限 | 管理员 | 操作员 | 观察员 |
 | --- | --- | --- | --- |
-| 实时监视 `monitor.read`、历史/曲线 `history.read` | 允许 | 允许 | 允许 |
-| 告警列表与详情 `alarm.read` | 允许 | 允许 | 允许 |
-| 告警确认、处置备注 `alarm.ack` | 允许 | 允许 | 禁止 |
-| 遥控意图 `command.yk`、遥调意图 `command.yt` | 允许 | 允许 | 禁止 |
-| 设备树/档案/四遥定义 `device.read` | 允许 | 允许 | 允许 |
-| 通道与绑定只读 `channel.read` | 允许 | 允许 | 禁止 |
-| 设备增改删 `device.write` | 允许 | 禁止 | 禁止 |
-| 通道配置 `channel.write`、绑定配置 `binding.write` | 允许 | 禁止 | 禁止 |
-| 四遥配置 `point.write`、导入预览/应用 `import.write` | 允许 | 禁止 | 禁止 |
-| 用户列表/详情 `user.read` | 允许 | 禁止 | 禁止 |
-| 用户创建、编辑、启停、删除 `user.write` | 允许 | 禁止 | 禁止 |
-| 角色与资源范围分配 `user.grant` | 允许 | 禁止 | 禁止 |
-| 他人密码重置/解锁 `user.security` | 允许 | 禁止 | 禁止 |
-| 查看及撤销他人会话 `session.manage` | 允许 | 禁止 | 禁止 |
-| 全局审计查询 `audit.read`、进程指标 `system.read` | 允许 | 禁止 | 禁止 |
-| 自己的资料、改密、会话查看/退出 | 允许 | 允许 | 允许 |
+| 实时监视 `monitor.read`、历史/曲线 `history.read` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> |
+| 告警列表与详情 `alarm.read` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> |
+| 告警确认、处置备注 `alarm.ack` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 遥控意图 `command.yk`、遥调意图 `command.yt` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 设备树/档案/四遥定义 `device.read` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> |
+| 通道与绑定只读 `channel.read` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 设备增改删 `device.write` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 通道配置 `channel.write`、绑定配置 `binding.write` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 四遥配置 `point.write`、导入预览/应用 `import.write` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 用户列表/详情 `user.read` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 用户创建、编辑、启停、删除 `user.write` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 角色与资源范围分配 `user.grant` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 密码重置、解锁与登录保护 `user.security` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 查看及撤销他人会话 `session.manage` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 全局审计查询 `audit.read`、进程指标 `system.read` | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-no" aria-label="禁止">×</span> | <span className="permission-no" aria-label="禁止">×</span> |
+| 自己的资料、改密、会话查看/退出 | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> | <span className="permission-yes" aria-label="允许">✓</span> |
 
 “自己的操作”由登录主体匹配校验，不授予上述全局管理权限。用户不能通过传入别人的 `user_id` 将自助接口变成管理接口。三类角色均无公开注册、直接修改密码哈希、读取密钥或跳过控制联锁的能力。
 
 角色在代码中集中映射为明确权限集合；数据库保存 `role_code`。生产主体不生成通配 `permissions={"*"}`，新增权限默认不自动授予任何角色，必须修改集中映射并验收。现有设备模块的 `device.read/device.write/channel.read/channel.write/binding.write/point.write/import.write` 名称保持一致。
 
-| OAuth2 scope | 权限上限映射 | 可授予角色 |
-| --- | --- | --- |
-| `ems.read` | `monitor.read/history.read/alarm.read/device.read/channel.read/system.read`，仍与角色取交集 | 三类角色 |
-| `ems.configure` | `device.write/channel.write/binding.write/point.write/import.write` | 管理员 |
-| `ems.operate` | `alarm.ack/command.yk/command.yt` | 管理员、操作员 |
-| `ems.users` | `user.read/user.write/user.grant/user.security/session.manage` | 管理员 |
-| `ems.audit` | `audit.read` | 管理员 |
-
-`openid` 只用于身份确认，不赋予业务权限。自助资料、改密和自己的会话管理要求完整认证会话；被限制为首次改密事务的主体不适用这些完整会话接口。
+有效操作权限直接取当前角色的集中映射，资源范围另行校验，不再增加协议授权范围。自助资料、改密和自己的会话管理要求完整认证会话；首次改密受限会话只能访问专用改密与退出接口。
 
 ### 2.1 读取与运行操作边界
 
@@ -70,8 +64,8 @@
 
 ```mermaid
 flowchart TD
-    Request[用户发起请求] --> Identity[JWT 与在线会话有效]
-    Identity --> Role{当前角色及 scope 允许操作}
+    Request[用户发起请求] --> Identity[当前持久会话有效]
+    Identity --> Role{当前角色允许操作}
     Role -->|否| Forbidden[403 权限不足]
     Role -->|是| Locate[从数据库定位真实站和设备关系]
     Locate --> Scope{目标属于当前授权范围}
@@ -95,7 +89,7 @@ flowchart TD
 
 | 字段 | 规则 |
 | --- | --- |
-| `user_id` | 稳定、服务端生成的字符串 ID，作为 JWT sub 和审计主体，不能复用 |
+| `user_id` | 稳定、服务端生成的字符串 ID，作为会话与审计主体，不能复用 |
 | `username` | 4～64 位 ASCII 字母/数字/下划线/点/连字符，首位字母；统一小写后唯一，创建后不可改 |
 | `display_name` | 1～64 个 Unicode 字符，去首尾空白；展示时转义 |
 | `role_code` | `admin/operator/observer` 三选一 |
@@ -111,7 +105,7 @@ flowchart TD
 
 ### 4.2 密码规则与重置
 
-- 密码长度 12～128 个 Unicode 字符，UTF-8 编码最多 512 字节；允许粘贴、空格及密码管理器。不得静默截断或去空格，不做隐式 Unicode 归一化；拒绝常见弱密码和与用户名相同的密码。
+- 参考 EMS300CP，密码长度为 12～32 个 Unicode 字符，最小长度由管理员在 12～32 之间配置；大写字母、小写字母、数字、特殊符号至少三类。允许粘贴和密码管理器，不静默截断、去空格或隐式归一化；拒绝弱密码和与用户名相同的密码。以[登录设计](login.md)为统一认证规则。
 - 默认使用成熟实现的 Argon2id，最低参数 `m=19 MiB/t=2/p=1`，每用户独立随机盐，编码存储算法及成本。参数基线参考 [OWASP 密码存储指南](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)，上线前在目标 ARM/Windows 硬件压测有界并发及派生成本。
 - 当前测试骨架的 PBKDF2 不是目标新账号默认值；已有合法 PBKDF2 哈希可在成功登录后重哈希，不能直接“转换”摘要。没有生产账号时无需构造兼容数据。
 - 创建用户时管理员设置符合策略的临时密码，服务端只写哈希并置首次改密；请求/响应与审计均不回显密码。临时密码通过现场受控渠道告知，系统不自动发送邮件或消息。
@@ -134,34 +128,32 @@ flowchart TD
 
 | 逻辑实体 | 核心字段 / 约束 |
 | --- | --- |
-| `auth_user` | user_id、username、display_name、password_hash、role_code、status、scope_mode、must_change_password、temporary_password_expires_at、failed_attempts、failure_window_started_at、locked_until、password_changed_at、created_at、updated_at、last_login_at、deleted_at；user_id/归一化 username 分别唯一 |
+| `auth_user` | user_id、username、display_name、password_hash、role_code、status、scope_mode、must_change_password、temporary_password_expires_at、failed_attempts、locked_until、password_changed_at、created_at、updated_at、last_login_at、deleted_at；user_id/归一化 username 分别唯一 |
 | `auth_user_scope` | user_id、station_id、可空 device_root_id；实际关系校验；规范化后不重复，删除账号时清理范围 |
-| `auth_login_transaction` | transaction_id、用途、浏览器 Cookie 摘要、CSRF 摘要、state/nonce 摘要、加密 verifier、challenge、client_id、redirect_uri、scope、return_to、可空 user_id、expires_at、consumed_at、revoked_at；支持授权前及受限改密事务 |
-| `auth_authorization_code` | code_digest、transaction_id、user_id、client_id、redirect_uri、challenge/method、nonce、granted_scope、expires_at、consumed_at、revoked_at；code_digest 唯一 |
-| `auth_session` | sid、user_id、client_id、granted_scope、Cookie 摘要、加密令牌包、auth_time、last_interactive_at、idle/absolute_expires_at、revoked_at/reason、来源 IP/UA 摘要、刷新租约 owner/until；Cookie 摘要唯一 |
-| `auth_refresh_token` | token_digest、sid、family_id、parent_id、issued_at、expires_at、consumed_at、revoked_at；摘要唯一，保留已消费记录用于重放检测 |
+| `auth_session` | session_id、user_id、kind（full/password_change）、Cookie 摘要、csrf_token、auth_time、last_interactive_at、created_at、absolute_expires_at、revoked_at/reason、来源 IP/UA 摘要；Cookie 摘要唯一，受限会话固定 5 分钟 |
+| `auth_login_policy` | 唯一实例策略行；failed_login_limit（默认 6，3～6）、lock_minutes（默认 10，10～30）、idle_timeout_minutes（默认 10，10～30）、password_min_length（默认 12，12～32）、login_notice（最多 500 字符）、updated_at；保存即生效 |
 | `auth_security_guard` | 唯一实例安全守卫行；串行首管理员初始化、管理员数量保护及权限管理事务，不是配置修订计数 |
 | 统一 `audit_log` | event_id、actor/target_user_id、action、resource、脱敏差异、outcome/reason、request_id、来源、occurred_at；复用公共审计契约，不建 Web 私有表 |
 
-Cookie、授权码、Refresh Token 均为高熵随机值，检索仅存不可逆摘要；密码用专门密码哈希。BFF 为协议调用所需恢复的 verifier/令牌包单独带认证加密；密钥不在表内。ID 对外都是字符串，密码哈希和密文不得进入公共用户 DTO。
+会话 Cookie 为高熵随机值，服务端只保存其摘要；密码使用专用哈希。会话原值仅通过 Set-Cookie 交给浏览器，不进入 JSON。每会话的随机 csrf_token 保存在服务端会话记录中，以便页面刷新后由受保护的 session 接口恢复，多标签使用同一值；CSRF 单独不能充当登录凭证。ID 对外都是字符串，密码哈希不得进入公共用户 DTO。资源范围属于设备授权数据。
 
-推荐索引：用户 `(status, role_code)`、会话 `(user_id, revoked_at, absolute_expires_at)`、刷新 `(sid, family_id)`、临时记录 `expires_at`；列表默认 `created_at,user_id` 稳定排序。MySQL 对可空列的 UNIQUE 不能保证“整站授权”去重，须在锁定用户的事务内规范化/去重，不能只依赖复合唯一索引。
+推荐索引：用户 `(status, role_code)`、会话 `(user_id, revoked_at, absolute_expires_at)` 和 Cookie 摘要唯一索引；列表默认 `created_at,user_id` 稳定排序。MySQL 对可空列的 UNIQUE 不能保证“整站授权”去重，须在锁定用户的事务内规范化/去重，不能只依赖复合唯一索引。
 
 ### 5.1 原子性和即时撤销
 
-账号写入、范围替换、会话撤销和成功审计使用同一个公共数据库事务；任一失败全部回滚，不能先返回成功再异步撤销。停用、删除、改密/重置和权限变更还要同事务作废该用户未完成的登录/改密事务及授权码，令牌交换必须锁用户并重新核验。统一审计不可写时拒绝安全管理变更；失败登录审计使用独立事务，写失败也不允许因此发出令牌。
+账号写入、范围替换、会话撤销和成功审计使用同一个公共数据库事务；任一失败全部回滚，不能先返回成功再异步撤销。停用、删除、改密/重置和权限变更同时撤销完整及受限改密会话；登录完成前锁定用户，重新核验认证相关字段，不能使用撤权前的结果创建旧权限会话。统一审计不可写时拒绝安全管理变更；失败登录审计使用独立事务，写失败也不允许因此创建会话。
 
-锁顺序固定为“安全守卫（需要时）→ 涉及用户按 ID 排序 → 会话/令牌 → 业务站根”。账号管理事务和业务写事务遵循相同顺序，不能先锁站根后补锁账号造成反向等待。
+锁顺序固定为“安全守卫（需要时）→ 涉及用户按 ID 排序 → 会话 → 业务站根”。账号管理事务和业务写事务遵循相同顺序，不能先锁站根后补锁账号造成反向等待。
 
 普通读取以鉴权时状态为准，已鉴权的在途只读请求可以完成。配置写入、用户管理和控制意图提交在同一事务持有当前用户共享锁，重新核验权限与范围；停用/降权事务需要独占锁，二者按提交先后排序。权限变更成功返回后，旧身份不能再提交新的关键写入。后续异步控制任务在最终执行前再次授权；已发到现场的命令不能通过撤销会话“收回”。
 
 管理界面读详情获取 `edit_token`：服务端对当前可编辑字段生成不可伪造摘要，用于检测并发编辑，既不存配置版本也不提供历史。更新/启停/删除/授权/重置提交 `expected_edit_token`；服务端锁行后核对，过期返回 409，要求重新读取。`last_login_at`、失败计数等运行字段不参与摘要，避免正常登录使管理编辑频繁冲突。
 
-登录临时记录和授权码过期后由有界清理任务删除；已消费 Refresh Token 记录至少保留到其会话绝对期限后 24 小时，撤销会话同样保留用于诊断；统一审计默认保留 180 天，具体部署可调整。账号逻辑删除不触发审计级联清理。清理任务分批运行，不持有全表长锁。
+过期或撤销会话至少保留到绝对期限后 24 小时用于诊断，再由有界任务分批删除；统一审计默认保留 180 天，具体部署可调整。账号逻辑删除不触发审计级联清理。清理任务分批运行，不持有全表长锁。
 
 ## 6. 用户与自助 API
 
-业务接口遵循固定 URL、仅 GET/POST、有参 POST JSON、snake_case 和统一信封；所有 POST 校验 Origin + CSRF，响应 `Cache-Control: no-store`。用户 ID、会话 ID 等均放 JSON，不放路径或查询串。OAuth2 协议例外仅见[登录设计](login.md)。
+业务接口遵循固定 URL、仅 GET/POST、有参 POST JSON、snake_case 和统一信封；所有 POST 校验 Origin + CSRF，响应 `Cache-Control: no-store`。用户 ID、会话 ID 等均放 JSON，不放路径或查询串。登录同样采用直接 POST JSON，不增加认证协议例外。
 
 ### 6.1 管理员接口
 
@@ -175,6 +167,8 @@ Cookie、授权码、Refresh Token 均为高熵随机值，检索仅存不可逆
 | POST `/api/users/set-status` | `user_id/status/expected_edit_token` | `user.write`；status 仅 enabled/disabled，停用时撤销会话 |
 | POST `/api/users/set-access` | `user_id/role_code/scope_mode/scopes/expected_edit_token` | `user.grant`；一次替换角色和完整范围，撤销全部会话 |
 | POST `/api/users/reset-password` | `user_id/temporary_password/expected_edit_token` | `user.security`；临时密码、强制改密、撤销全部会话 |
+| GET `/api/users/security-settings` | 无 | `user.security`；登录失败阈值、锁定时长、空闲超时、密码长度、登录通知及 edit_token |
+| POST `/api/users/security-settings/update` | 上述五项策略及 expected_edit_token | `user.security` + 最近重新认证；锁定安全守卫、策略行，校验范围并同事务写审计 |
 | POST `/api/users/unlock` | `user_id/expected_edit_token` | `user.security`；清理锁定及失败窗口 |
 | POST `/api/users/delete` | `user_id/expected_edit_token` | `user.write`；逻辑删除，撤销全部会话，返回 removed_id |
 | POST `/api/users/sessions/list` | `user_id/page/page_size` | `session.manage`；脱敏设备/IP、最近活动、期限、当前会话标识 |
@@ -235,6 +229,7 @@ Cookie、授权码、Refresh Token 均为高熵随机值，检索仅存不可逆
 | 创建/编辑抽屉 | 用户名、姓名、角色、状态；树形资源范围；临时密码仅创建时输入，既有用户不展示密码 |
 | 资源授权 | 显示整站/子树及继承范围；切换为 all 必须是管理员；展示当前用户会话将失效的影响 |
 | 安全操作 | 停用、删除、改角色、重置、踢人显示目标与影响并确认；有需要时先要求当前管理员重新认证 |
+| 登录保护 | 管理员配置连续失败 3～6 次、锁定/空闲超时 10～30 分钟、密码最小长度 12～32 及纯文本登录通知 |
 | 在线会话 | 展示当前/其他会话、脱敏来源、最近活动、绝对到期；支持单个或全部撤销 |
 | 个人中心 | 只读用户名/角色/范围；可改展示名、按旧密码改密、退出其他会话 |
 | 登录/首次改密 | 登录流程、密码可见切换、错误/锁定提示、首次改密与成功后重新登录 |
@@ -243,19 +238,19 @@ Cookie、授权码、Refresh Token 均为高熵随机值，检索仅存不可逆
 
 ## 8. 审计、实施与验收
 
-统一审计记录登录成功/失败、锁定/解锁、密码修改/重置、用户创建/启停/删除、角色与范围差异、单会话/全会话撤销、刷新重放、首次初始化及主机恢复。只记录事件类型和脱敏差异，密码类事件仅记“已变更”，不记录密码、哈希、Cookie 或令牌。审计访问本身需 `audit.read`，用户管理日志不提供编辑/删除接口。
+统一审计记录登录成功/失败、锁定/解锁、密码修改/重置、用户创建/启停/删除、角色与范围差异、单会话/全会话撤销、登录策略变更、首次初始化及主机恢复。只记录事件类型和脱敏差异，密码类事件仅记“已变更”，不记录密码、哈希、Cookie 或令牌。审计访问本身需 `audit.read`，用户管理日志不提供编辑/删除接口。
 
-实施顺序为公共账号/审计 Repository 与初始化 → 登录协议与持久会话 → 角色及资源授权 → 用户/自助 API → Vue 页面 → 各业务模块接入。未实现的运行权限不对应可用接口，不能用 mock 按钮声称设备命令已经执行。
+实施顺序为公共账号/审计 Repository 与初始化 → 用户名密码登录、加密与持久会话 → 角色及资源授权 → 用户/自助 API → Vue 页面 → 各业务模块接入。未实现的运行权限不对应可用接口，不能用 mock 按钮声称设备命令已经执行。
 
 | 验收组 | 必须验证 |
 | --- | --- |
 | 角色隔离 | 三角色逐项覆盖矩阵；operator 不能改配置/管理账号，observer 不能确认告警或发 YK/YT |
 | 资源隔离 | 跨站、子树、仅导航祖先、component 来源、共享通道、分页 total、批量混入越权对象 |
 | 生命周期 | 默认停用、启用、临时锁定、解锁不启用、临时密码过期、逻辑删除、用户名不复用 |
-| 防提权 | 自助篡改 user_id/role/status/scope、伪造 Principal、伪造 scope、未知字段、旧 JWT 越权全部拒绝 |
+| 防提权 | 自助篡改 user_id/role/status/scope、伪造 Principal、伪造资源范围、未知字段、已撤销会话越权全部拒绝 |
 | 管理员保护 | 空库并发初始化、最后管理员删除/停用/降级、两管理员互相降级与并发撤权 |
-| 密码/会话 | 不回显凭据，首次改密无业务令牌，改密/重置/停用/权限变更撤销全部会话 |
-| 并发原子性 | edit_token 冲突、授权与关键业务写入竞态、审计失败整批回滚、刷新与停用并发 |
+| 密码/会话 | 不回显凭据，首次改密无完整业务会话，改密/重置/停用/权限变更撤销全部会话 |
+| 并发原子性 | edit_token 冲突、授权与关键业务写入竞态、审计失败整批回滚、登录与停用并发 |
 | 控制边界 | 有 command 权限仍需安全联锁和范围；撤销后待执行任务重新授权，配置接口不直接控制 |
 | 前端与部署 | 刷新恢复身份、路由/按钮权限、401/403/409/503 分流、无默认口令、离线恢复及密钥权限 |
 

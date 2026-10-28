@@ -2,7 +2,7 @@
 
 > 日期：2026-10-24｜状态：首期 Web 与设备模块已实现；[构建运行](running.md)。[设备设计](device/index.md) · [API 契约](device/api.md)。
 
-登录及用户管理的目标设计见[OAuth2 + JWT 登录](user/login.md)和[用户管理与角色权限](user/index.md)。当前仍为内存会话骨架；下文身份目标约定不表示协议和持久账号已经实现。
+登录及用户管理的目标设计见[用户名、密码与加密登录](user/login.md)和[用户管理与角色权限](user/index.md)。当前仍为内存会话骨架；下文身份目标约定不表示持久账号已经实现。
 
 ## 1. 进程与业务模块
 
@@ -119,7 +119,6 @@ flowchart TD
 | 参数 | 有参数一律 POST + JSON；GET 只用于无参数读取 |
 | 并发参数 | expected_config_revision、expected_preview_hash 均放 JSON |
 | 上传例外 | multipart：file 为二进制文件，metadata 为 JSON 业务参数 |
-| 认证协议例外（目标） | OAuth2/OIDC authorize 与 callback 允许协议查询参数，token/revoke 与本地授权登录页使用表单；仅限[登录设计](user/login.md)列出的认证端点 |
 | 身份 | cookie、认证/CSRF 等安全头保留，不承载业务筛选与 ID |
 | 编码 | UTF-8、snake_case；对象/数组直接传 JSON，不传转义 JSON 字符串 |
 | JSON 库 | 业务、配置、DTO 与序列化统一 nlohmann::json；JsonCpp 仅为 Drogon 内部依赖，不进入业务接口 |
@@ -183,8 +182,8 @@ flowchart LR
 | 项目 | 约定 |
 | --- | --- |
 | 连接 | 沿用 EMS_DATABASE_CONFIG / EMS_MYSQL_*；Web 不复制数据库配置结构 |
-| 身份 | 目标为公共数据库账号、三类固定角色和资源范围；OAuth2 授权码 + PKCE、JWT，见[登录设计](user/login.md)；运行配置不含账号清单 |
-| 会话 | 当前内存会话重启失效；目标 BFF 持久会话，浏览器只持 HttpOnly/Secure/SameSite=Lax Cookie，JWT 与刷新令牌由服务端持有 |
+| 身份 | 目标为本地用户名/密码、HTTPS、密码哈希、公共账号及三类角色和资源范围，见[登录设计](user/login.md)；运行配置不含账号清单 |
+| 会话 | 当前内存会话重启失效；目标持久会话，浏览器持 HttpOnly/Secure/SameSite=Strict 的不透明 Cookie，后端读取当前权限 |
 | 授权 | 按数据库实际关系校验站、设备子树、绑定和任务，过滤列表与 total |
 | CSRF | POST 查询与写入统一检查；登录检查 Origin；后续 WebSocket 也检查来源 |
 | 审计 | 同公共事务对接统一审计；不在 Web 建私有审计表 |

@@ -6,7 +6,7 @@
 | --- | --- |
 | [构建与运行](running.md) | 构建依赖、账号、数据库配置、验证边界 |
 | [Web 进程设计](design.md) | 模块目录、依赖、请求、线程、启停与身份 |
-| [登录设计](user/login.md) | OAuth2 授权码 + PKCE、JWT、会话刷新与撤销（待实现） |
+| [登录设计](user/login.md) | 用户名/密码、HTTPS 加密、密码哈希与登录会话（待实现） |
 | [用户管理与角色权限](user/index.md) | 管理员/操作员/观察员、资源授权、账号生命周期及 API（待实现） |
 | [设备模块设计](device/index.md) | 设备树、绑定、四遥、保存与导入流程图 |
 | [设备模块 API](device/api.md) | 固定路由、JSON 参数、multipart 导入与响应 |

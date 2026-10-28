@@ -292,6 +292,17 @@ button:focus-visible {
     flex-wrap: wrap;
   }
 }
+.permission-yes,
+.permission-no {
+  font-size: 18px;
+  font-weight: 700;
+}
+.permission-yes {
+  color: #15803d;
+}
+.permission-no {
+  color: #dc2626;
+}
 @media (prefers-reduced-motion: reduce) {
   .module-card {
     transition: none !important;

@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import zhCn from 'element-plus/es/locale/lang/zh-cn'
 import { useThemeStore } from '@/stores/theme'
+import { useSessionLifecycle } from '@/composables/useSessionLifecycle'
 
 // 启动即应用主题：设计图深色为默认值
 useThemeStore().apply()
+useSessionLifecycle()
 </script>
 
 <template>

@@ -39,7 +39,11 @@ function pick(key: string) {
       :class="open ? 'bg-panel' : 'hover:bg-panel'"
     >
       <AppIcon name="circle-user" :size="24" class="text-accent" />
-      <span class="text-[13px] text-ink">{{ props.name }}</span>
+      <span
+        class="max-w-[120px] truncate text-[13px] text-ink sm:max-w-[240px]"
+        :title="props.name"
+        >{{ props.name }}</span
+      >
       <AppIcon
         :name="open ? 'chevron-up' : 'chevron-down'"
         :size="12"

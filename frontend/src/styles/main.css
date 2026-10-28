@@ -1,5 +1,6 @@
 @import 'tailwindcss';
 @import './tokens.css';
+@import './identity.css';
 
 /* 深色为设计图基准：html 默认带 .dark，切换为浅色时替换为 .light */
 @custom-variant dark (&:where(.dark, .dark *));

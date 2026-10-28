@@ -2,7 +2,7 @@
   {
     "type": "file",
     "name": "login",
-    "label": "登录设计（OAuth2 + JWT）"
+    "label": "登录设计（用户名、密码与加密）"
   },
   {
     "type": "file",

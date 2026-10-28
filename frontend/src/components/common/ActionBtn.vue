@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, useAttrs } from 'vue'
 import AppIcon from './AppIcon.vue'
+
+defineOptions({ inheritAttrs: false })
+const attrs = useAttrs()
 
 /** 操作层级：主操作 / 次操作 / 不可用（画板 09） */
 const props = withDefaults(
@@ -10,10 +13,12 @@ const props = withDefaults(
     /** md=38px，sm=34px */
     size?: 'md' | 'sm'
     disabled?: boolean
+    loading?: boolean
+    type?: 'button' | 'submit' | 'reset'
     /** 不可用原因，给出时以 tooltip 说明（设计规范要求禁用须说明原因） */
     disabledReason?: string
   }>(),
-  { variant: 'secondary', size: 'md' },
+  { variant: 'secondary', size: 'md', type: 'button' },
 )
 
 const variantClass = computed(
@@ -40,12 +45,19 @@ const sizeClass = computed(() =>
   >
     <span class="inline-flex">
       <button
-        type="button"
+        v-bind="attrs"
+        :type="type"
         class="inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[5px] font-medium whitespace-nowrap transition-colors"
         :class="[variantClass, sizeClass, disabled && 'cursor-not-allowed opacity-50']"
-        :disabled="disabled"
+        :disabled="disabled || loading"
+        :aria-busy="loading"
       >
-        <AppIcon v-if="icon" :name="icon" :size="size === 'md' ? 15 : 14" />
+        <AppIcon
+          v-if="loading || icon"
+          :name="loading ? 'loader-circle' : icon!"
+          :size="size === 'md' ? 15 : 14"
+          :class="loading && 'animate-spin'"
+        />
         <slot />
       </button>
     </span>
@@ -53,12 +65,19 @@ const sizeClass = computed(() =>
 
   <button
     v-else
-    type="button"
+    v-bind="attrs"
+    :type="type"
     class="inline-flex shrink-0 items-center justify-center gap-[7px] rounded-[5px] font-medium whitespace-nowrap transition-colors"
     :class="[variantClass, sizeClass, disabled && 'cursor-not-allowed opacity-50']"
-    :disabled="disabled"
+    :disabled="disabled || loading"
+    :aria-busy="loading"
   >
-    <AppIcon v-if="icon" :name="icon" :size="size === 'md' ? 15 : 14" />
+    <AppIcon
+      v-if="loading || icon"
+      :name="loading ? 'loader-circle' : icon!"
+      :size="size === 'md' ? 15 : 14"
+      :class="loading && 'animate-spin'"
+    />
     <slot />
   </button>
 </template>

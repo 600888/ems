@@ -6,20 +6,27 @@ import MetricStrip from '@/components/device/MetricStrip.vue'
 import MonitorDeviceTree from '@/components/device/MonitorDeviceTree.vue'
 import MonitorHeader from '@/components/device/MonitorHeader.vue'
 import UnderlineTabs from '@/components/common/UnderlineTabs.vue'
+import EmptyState from '@/components/common/EmptyState.vue'
 import { useMonitorStore } from '@/stores/monitor'
+import { useAuthStore } from '@/stores/auth'
 import type { TabItem } from '@/types/ui'
 
 const route = useRoute()
 const router = useRouter()
 const monitor = useMonitorStore()
+const auth = useAuthStore()
 
 const tabs = computed<TabItem[]>(() => [
   { key: 'overview', label: '运行总览' },
   { key: 'telemetry', label: '遥测', count: monitor.profile.tabCounts.telemetry },
   { key: 'signals', label: '遥信', count: monitor.profile.tabCounts.signal },
-  { key: 'control', label: '遥控', count: monitor.profile.tabCounts.control },
-  { key: 'setpoints', label: '遥调', count: monitor.profile.tabCounts.setpoint },
-  { key: 'curves', label: '实时曲线' },
+  ...(auth.can('command.yk')
+    ? [{ key: 'control', label: '遥控', count: monitor.profile.tabCounts.control }]
+    : []),
+  ...(auth.can('command.yt')
+    ? [{ key: 'setpoints', label: '遥调', count: monitor.profile.tabCounts.setpoint }]
+    : []),
+  ...(auth.can('history.read') ? [{ key: 'curves', label: '实时曲线' }] : []),
 ])
 
 const activeTab = computed(() => route.path.replace('/monitor/', '') || 'overview')
@@ -47,7 +54,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
   <div class="flex min-h-0 flex-1 gap-5">
     <MonitorDeviceTree />
 
-    <section class="flex min-w-0 flex-1 flex-col gap-4">
+    <section v-if="monitor.selectedId" class="flex min-w-0 flex-1 flex-col gap-4">
       <MonitorHeader />
       <MetricStrip />
       <UnderlineTabs
@@ -58,5 +65,12 @@ onBeforeUnmount(() => window.clearInterval(timer))
       />
       <router-view class="min-h-0 flex-1" />
     </section>
+    <EmptyState
+      v-else
+      title="授权范围内暂无设备"
+      desc="请联系管理员确认设备接入与授权范围。"
+      icon="inbox"
+      class="flex-1"
+    />
   </div>
 </template>
