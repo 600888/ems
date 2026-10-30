@@ -1,0 +1,711 @@
+<!doctype html>
+<html lang="zh">
+  <head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EMS Web 数据库与表设计 - EMS 设计文档</title>
+<script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
+<link href="/ems/static/css/styles.7321a7d029.css" rel="stylesheet">
+<link rel="preload" href="/ems/static/js/async/route-9f7a33c034c6.846710d85d.js" as="script">
+<script defer src="/ems/static/js/styles.560b9eab4d.js"></script>
+<script defer src="/ems/static/js/lib-react.0685ac4d75.js"></script>
+<script defer src="/ems/static/js/lib-router.de7486675c.js"></script>
+<script defer src="/ems/static/js/m3.da04ef77ed.js"></script>
+<script defer src="/ems/static/js/index.e435ed2e63.js"></script>
+<meta http-equiv="X-UA-Compatible" content="IE=edge">
+<meta name="generator" content="Rspress v2.0.21">
+<link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
+<meta property="og:type" content="website">
+<meta property="og:title" content="EMS Web 数据库与表设计 - EMS 设计文档">
+<meta name="description" content="日期：2026-10-30｜状态：独立 SQLAlchemy 模型、初始化迁移和策略种子已实现；生产数据库部署、C++ 持久化身份服务与真实 MySQL 联调待完成。 关联：用户管理与角色权限 · 登录设计 · 公共数据库访问层。 Web 账号、授权、会话、登录策略和 Web 操作审计使用独立的 ems_web 数据库，共 5 张表。设备配置继续使用现有工程库 ems，不复制设备树、通道或四遥数据。">
+<meta property="og:description" content="日期：2026-10-30｜状态：独立 SQLAlchemy 模型、初始化迁移和策略种子已实现；生产数据库部署、C++ 持久化身份服务与真实 MySQL 联调待完成。 关联：用户管理与角色权限 · 登录设计 · 公共数据库访问层。 Web 账号、授权、会话、登录策略和 Web 操作审计使用独立的 ems_web 数据库，共 5 张表。设备配置继续使用现有工程库 ems，不复制设备树、通道或四遥数据。"></head>
+
+  <body>
+    <div id="__rspress_root"><link rel="preload" as="image" href="/ems/logo.svg"/><header class="rp-nav"><div class="rp-nav__left"><div class="rp-nav__title"><a href="/ems/" class="rp-nav__title__link rp-link"><div class="rp-nav__title__logo"><img src="/ems/logo.svg" alt="logo" id="logo" class="rspress-logo rp-nav__title__logo-image"/></div><span>EMS</span></a></div><ul class="rp-nav-menu rp-nav-menu--left"><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/" class="rp-nav-menu__item__container rp-link">首页</a></li><li class="rp-nav-menu__item"><a href="/ems/architecture/" class="rp-nav-menu__item__container rp-link">架构</a></li><li class="rp-nav-menu__item"><a href="/ems/processes/" class="rp-nav-menu__item__container rp-link">进程</a></li><li class="rp-nav-menu__item rp-nav-menu__item--active"><a href="/ems/common/" class="rp-nav-menu__item__container rp-link">公共模块</a></li><li class="rp-nav-menu__item"><a href="/ems/decisions/" class="rp-nav-menu__item__container rp-link">技术决策</a></li><li class="rp-nav-menu__item"><a href="/ems/reference/" class="rp-nav-menu__item__container rp-link">开发参考</a></li><li class="rp-nav-menu__item"><a href="/ems/guide/" class="rp-nav-menu__item__container rp-link">文档维护</a></li></ul></div><div class="rp-nav__right"><button class="rp-search-button"><div class="rp-search-button__content"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21" class="rp-search-button__icon"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg><span class="rp-search-button__word">搜索</span></div><div class="rp-search-button__hotkey" style="opacity:0"><span></span><span>K</span></div></button><div class="rp-search-button--mobile"><svg xmlns="http://www.w3.org/2000/svg" width="1em" height="1em" fill="none" viewBox="0 0 20 21"><path fill="currentColor" d="M8.333 1.913A6.667 6.667 0 0 1 15 8.58c0 1.54-.525 2.957-1.402 4.085l4.49 4.492a.834.834 0 0 1-1.177 1.178l-4.491-4.49a6.64 6.64 0 0 1-4.087 1.402 6.667 6.667 0 0 1 0-13.334m0 1.667a5 5 0 1 0 0 10 5 5 0 0 0 0-10"></path></svg></div><div class="rp-nav__others"><div class="rp-nav-menu__divider"></div><div class="rp-switch-appearance"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 24 24" class="rp-switch-appearance__icon rp-switch-appearance__icon--sun"><path fill="currentColor" d="m7.001 15.848-1.226 1.226a.58.58 0 0 0 0 .818.58.58 0 0 0 .818 0l1.226-1.226a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0m-.352-8.735a.584.584 0 0 0 .825-.825L6.237 5.051a.584.584 0 0 0-.825.825zM5.011 11.07h-1.75a.584.584 0 0 0 0 1.167h1.75c.324 0 .584-.26.584-.583a.585.585 0 0 0-.584-.584m7.003-5.835c.324 0 .584-.26.584-.584V2.9a.58.58 0 0 0-.584-.584.58.58 0 0 0-.583.583V4.65c0 .323.262.584.583.584m5.616 1.621 1.226-1.225a.58.58 0 0 0 0-.818.58.58 0 0 0-.818 0l-1.226 1.225a.58.58 0 0 0 0 .818.576.576 0 0 0 .818 0m3.138 4.214h-1.75a.58.58 0 0 0-.584.584c0 .324.26.584.583.584h1.751a.584.584 0 1 0 0-1.167m-3.389 5.124a.584.584 0 0 0-.825.825l1.238 1.238a.584.584 0 0 0 .825-.826zm-5.365-9.795a5.256 5.256 0 0 0-5.257 5.258 5.256 5.256 0 0 0 5.257 5.257 5.256 5.256 0 0 0 5.257-5.257 5.256 5.256 0 0 0-5.257-5.258m0 11.675a.58.58 0 0 0-.583.583v1.751a.582.582 0 1 0 1.167 0v-1.75a.584.584 0 0 0-.584-.584"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" fill="currentColor" viewBox="0 0 19 19" class="rp-switch-appearance__icon rp-switch-appearance__icon--moon"><path fill="currentColor" d="M9.166 0a9.2 9.2 0 0 1 1.857.188.834.834 0 0 1 .042 1.623 4.47 4.47 0 1 0 5.457 5.457l.048-.135a.834.834 0 0 1 1.575.177q.186.902.188 1.856A9.168 9.168 0 1 1 9.166 0"></path></svg></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__sm"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg></button><button aria-label="mobile hamburger" class="rp-nav-hamburger rp-nav-hamburger__md"><svg xmlns="http://www.w3.org/2000/svg" width="21" height="21" fill="none" viewBox="0 0 21 21"><path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.667" d="M3.645 5.225h13.333M3.645 10.225h13.333M3.645 15.225h13.333"></path></svg><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"><div class="rp-nav-menu__others-mobile__container"><div class="rp-nav-hamburger__md__hover-group"><div class="rp-nav-screen-appearance"><div class="rp-nav-screen-appearance__left">主题</div><div class="rp-nav-screen-appearance__right"></div></div><div class="rp-nav-screen-divider"></div><div class="rp-social-links"><a href="https://github.com/600888/ems" target="_blank" rel="noopener noreferrer" class="rp-social-links__item"><div class="rp-social-links__icon"><div class="rp-social-links__icon"><svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 24 24"><path fill="currentColor" d="M12 .297c-6.63 0-12 5.373-12 12c0 5.303 3.438 9.8 8.205 11.385c.6.113.82-.258.82-.577c0-.285-.01-1.04-.015-2.04c-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729c1.205.084 1.838 1.236 1.838 1.236c1.07 1.835 2.809 1.305 3.495.998c.108-.776.417-1.305.76-1.605c-2.665-.3-5.466-1.332-5.466-5.93c0-1.31.465-2.38 1.235-3.22c-.135-.303-.54-1.523.105-3.176c0 0 1.005-.322 3.3 1.23c.96-.267 1.98-.399 3-.405c1.02.006 2.04.138 3 .405c2.28-1.552 3.285-1.23 3.285-1.23c.645 1.653.24 2.873.12 3.176c.765.84 1.23 1.91 1.23 3.22c0 4.61-2.805 5.625-5.475 5.92c.42.36.81 1.096.81 2.22c0 1.606-.015 2.896-.015 3.286c0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg></div></div></a><ul class="rp-hover-group rp-hover-group--hidden rp-hover-group--right"></ul></div></div></div></ul></button></div></header><div class="rp-doc-layout__menu"><div class="rp-sidebar-menu"><button type="button" class="rp-sidebar-menu__left"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M4 6h24v2H4zm0 18h24v2H4zm0-12h24v2H4zm0 6h24v2H4z"></path></svg><span>菜单</span></button><button type="button" class="rp-sidebar-menu__right"><span class="rp-sidebar-menu__right__text">目录</span><svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-sidebar-menu__right__icon" style="transform:rotate(0deg);transition:transform 0.2s ease-out"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></button></div></div><div class="rp-doc-layout__container"><aside class="rp-doc-layout__sidebar rp-scrollbar"><a href="/ems/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">返回文档首页</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-divider" style="padding-left:12px"></div><div class="rp-sidebar-section-header"><div class="rp-sidebar-section-header__left"><span>公共模块</span></div><div class="rp-sidebar-section-header__right"></div></div><a href="/ems/common/" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">公共模块概览</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/design" class="rp-sidebar-item rp-link" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">公共模块设计与实施</span></div><div class="rp-sidebar-item__right"></div></a><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">数据库设计</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/common/database/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">公共数据库访问层</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/database/device-management" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">设备管理数据库设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/database/ems-web" class="rp-sidebar-item rp-sidebar-item--active rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">EMS Web 数据库与表设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div><div class="rp-sidebar-item rp-sidebar-group" style="padding-left:12px" data-depth="0"><div class="rp-sidebar-item__left"><span class="rp-doc">实时数据访问</span></div><div class="rp-sidebar-item__right"><div style="cursor:pointer;transition:transform 0.2s ease-out;transform:rotate(90deg)"><svg width="1em" height="1em" viewBox="0 0 32 32"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></div></div></div><div style="display:grid;grid-template-rows:1fr;transition:grid-template-rows 0.2s ease-out"><div style="overflow:hidden"><a href="/ems/common/realtime/" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">实时数据与配置</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/access-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">C++17 多后端访问接口</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/service-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">类型化实时业务门面</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/zeromq-messaging-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">ZeroMQ 消息与命令设计</span></div><div class="rp-sidebar-item__right"></div></a><a href="/ems/common/realtime/redis-key-design" class="rp-sidebar-item rp-sidebar-item--group-item rp-link" style="padding-left:calc(12px * 1 + 12px)" data-depth="1"><div class="rp-sidebar-item__left"><span class="rp-doc">Redis 键设计</span></div><div class="rp-sidebar-item__right"></div></a></div></div></aside><div class="rp-doc-layout__doc"><main class="rp-doc-layout__doc-container"><div class="rp-doc rspress-doc"><!--$--><h1 class="rp-toc-include" id="ems-web-数据库与表设计"><a href="#ems-web-数据库与表设计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>EMS Web 数据库与表设计<!-- --> </h1>
+<blockquote>
+<p>日期：2026-10-30｜状态：独立 SQLAlchemy 模型、初始化迁移和策略种子已实现；生产数据库部署、C++ 持久化身份服务与真实 MySQL 联调待完成。
+关联：<a href="/ems/processes/web/user/" class="rp-link">用户管理与角色权限</a> · <a href="/ems/processes/web/user/login" class="rp-link">登录设计</a> · <a href="/ems/common/database/" class="rp-link">公共数据库访问层</a>。</p>
+</blockquote>
+<p>Web 账号、授权、会话、登录策略和 Web 操作审计使用独立的 <strong><code>ems_web</code> 数据库，共 5 张表</strong>。设备配置继续使用现有工程库 <code>ems</code>，不复制设备树、通道或四遥数据。</p>
+<h2 class="rp-toc-include" id="1-数据库划分"><a href="#1-数据库划分" class="rp-header-anchor rp-link" aria-hidden="true">#</a>1. 数据库划分</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>数据库</th><th>保存内容</th><th>写入责任</th></tr></thead><tbody><tr><td><code>ems_web</code></td><td>用户、设备授权范围、登录会话、登录保护策略、Web 操作审计</td><td>Web 业务模块通过公共 Repository 写入</td></tr><tr><td><code>ems</code></td><td>现有设备、通道、绑定、四遥、模板、导入任务等工程数据</td><td>继续使用现有配置 Repository</td></tr><tr><td>历史与实时存储</td><td>历史时序、实时值和运行状态</td><td>继续使用对应公共接口，不迁入 <code>ems_web</code></td></tr></tbody></table></div>
+<p>两个 MySQL 库部署在<strong>同一个 MySQL 实例</strong>，业务表使用 InnoDB。独立数据库用于划分业务数据，不增加数据库代理或分布式事务。</p>
+<div></div>
+<ul>
+<li>Web 继续复用公共数据库层的一套 MySQL 连接池，默认库保持现有工程库；身份和审计 Repository 使用固定的 <code>ems_web.表名</code>。不使用请求参数拼接库名、表名，也不在连接借还时执行 <code>USE</code> 切库。</li>
+<li>配置修改需要身份校验及操作审计时，<code>ems_web</code> 与 <code>ems</code> 的读写必须使用同一条连接、同一个事务；两个独立连接各自提交不具备原子性。</li>
+<li>当前公共实现仍以单库工程配置为主，实施时需补齐公共 Repository 内的库限定查询、身份行锁和就绪检查；本文不表示这些能力已经实现。</li>
+<li>Web 用户保存不修改设备站根 <code>config_revision</code>；设备配置保存仍按原规则递增。账号和策略不引入配置版本、发布或回滚机制。</li>
+</ul>
+<h2 class="rp-toc-include" id="2-表清单与公共约定"><a href="#2-表清单与公共约定" class="rp-header-anchor rp-link" aria-hidden="true">#</a>2. 表清单与公共约定</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>表</th><th>用途</th><th>主要关联</th></tr></thead><tbody><tr><td><code>auth_user</code></td><td>账号、密码哈希、角色与账号状态</td><td>一个用户对应多个范围和会话</td></tr><tr><td><code>auth_user_scope</code></td><td>用户可访问的站或设备子树</td><td>关联用户；逻辑引用工程库的设备 ID</td></tr><tr><td><code>auth_session</code></td><td>完整会话和首次改密受限会话</td><td>关联用户</td></tr><tr><td><code>auth_login_policy</code></td><td>全实例唯一的登录保护策略</td><td>固定一行，同时承担管理员管理事务的串行锁</td></tr><tr><td><code>audit_log</code></td><td>Web 登录、安全管理及业务操作审计</td><td>记录操作主体、目标和结果</td></tr></tbody></table></div>
+<p>三种固定角色直接保存为 <code>auth_user.role_code</code>，权限集合由代码集中定义。不建角色表、权限表、菜单授权表或用户角色关联表；首次改密和失败锁定也不拆表。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>项目</th><th>约定</th></tr></thead><tbody><tr><td>字符与比较</td><td>展示文本使用 <code>utf8mb4</code>；稳定 ID、用户名和令牌使用区分大小写的二进制排序规则</td></tr><tr><td>内部主键</td><td>多行表统一使用 <code>BIGINT UNSIGNED AUTO_INCREMENT</code> 的 <code>id</code>；策略表固定 <code>id=1</code></td></tr><tr><td>对外 ID</td><td>用户、会话和审计事件分别使用服务端生成的稳定字符串 ID，字段为 <code>VARCHAR(64)</code>；内部自增 ID 不作为 API 身份</td></tr><tr><td>用户名</td><td>4～64 位 ASCII，首位字母，允许数字、下划线、点和连字符；先转小写再校验唯一性</td></tr><tr><td>时间</td><td><code>DATETIME(3)</code>，由服务端写入 UTC；API 转为 UTC RFC 3339，不依赖数据库服务器本地时区</td></tr><tr><td>枚举</td><td>下文列出的固定值使用 MySQL <code>ENUM</code>；布尔值为 <code>TINYINT UNSIGNED</code>，限制为 0 或 1</td></tr><tr><td>可空与默认</td><td>表格中的 <code>NULL</code> 表示允许空；“必填”表示写入时必须提供；不为未知数据填写伪造值</td></tr><tr><td>更新</td><td>业务 Service 显式设置时间并提交事务；不依赖触发器或启动时自动补数据</td></tr></tbody></table></div>
+<h2 class="rp-toc-include" id="3-表结构"><a href="#3-表结构" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3. 表结构</h2>
+<h3 class="rp-toc-include" id="31-auth_user用户账号"><a href="#31-auth_user用户账号" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.1 <code>auth_user</code>：用户账号</h3>
+<p>一个用户一行，认证和管理所需字段集中保存。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>类型</th><th>默认 / 可空</th><th>含义</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT UNSIGNED</td><td>自增主键</td><td>内部行 ID</td></tr><tr><td><code>user_id</code></td><td>VARCHAR(64)</td><td>必填，唯一</td><td>稳定用户 ID，删除后不复用</td></tr><tr><td><code>username</code></td><td>VARCHAR(64)</td><td>必填，唯一</td><td>归一化后的用户名，创建后不可修改</td></tr><tr><td><code>display_name</code></td><td>VARCHAR(64)</td><td>必填</td><td>姓名，去首尾空白后为 1～64 个字符</td></tr><tr><td><code>password_hash</code></td><td>VARCHAR(255)</td><td>必填</td><td>编码后的密码哈希，包含算法、盐和成本，不保存明文</td></tr><tr><td><code>role_code</code></td><td>ENUM</td><td><code>observer</code></td><td><code>admin</code> / <code>operator</code> / <code>observer</code></td></tr><tr><td><code>status</code></td><td>ENUM</td><td><code>disabled</code></td><td><code>enabled</code> / <code>disabled</code> / <code>deleted</code></td></tr><tr><td><code>scope_mode</code></td><td>ENUM</td><td><code>selected</code></td><td><code>all</code> / <code>selected</code>；all 仅管理员可持有</td></tr><tr><td><code>must_change_password</code></td><td>TINYINT UNSIGNED</td><td><code>1</code></td><td>创建或重置后必须修改临时密码</td></tr><tr><td><code>temporary_password_expires_at</code></td><td>DATETIME(3)</td><td>NULL</td><td>临时密码期限；必须改密时必填，默认设置为创建/重置后 24 小时</td></tr><tr><td><code>failed_attempts</code></td><td>TINYINT UNSIGNED</td><td><code>0</code></td><td>连续失败次数，达到当前阈值后锁定；锁定期间不继续累加</td></tr><tr><td><code>locked_until</code></td><td>DATETIME(3)</td><td>NULL</td><td>临时锁定期限，与账号停用独立</td></tr><tr><td><code>password_changed_at</code></td><td>DATETIME(3)</td><td>NULL</td><td>最近设置个人密码或重置密码的时间；初次创建临时密码时可空</td></tr><tr><td><code>created_at</code></td><td>DATETIME(3)</td><td>必填</td><td>创建时间</td></tr><tr><td><code>updated_at</code></td><td>DATETIME(3)</td><td>必填</td><td>资料、授权或安全管理变更时间；普通登录不更新</td></tr><tr><td><code>last_login_at</code></td><td>DATETIME(3)</td><td>NULL</td><td>最近成功登录时间；失败登录不更新</td></tr><tr><td><code>deleted_at</code></td><td>DATETIME(3)</td><td>NULL</td><td>逻辑删除时间，status=deleted 时必填</td></tr></tbody></table></div>
+<p>约束和索引：</p>
+<ul>
+<li>主键 <code>id</code>；唯一键 <code>user_id</code>、<code>username</code>。已删除账号继续占用用户名。</li>
+<li>查询索引 <code>(status, role_code)</code> 与 <code>(created_at, user_id)</code>，分别支持筛选和默认稳定分页；首期关键词按有界模糊查询处理，不建全文检索表。</li>
+<li><code>scope_mode=all</code> 要求 <code>role_code=admin</code>；<code>must_change_password=1</code> 要求临时密码期限非空，完成改密后同时清空期限；<code>status</code> 与 <code>deleted_at</code> 保持一致。</li>
+<li>行内约束使用 <code>CHECK</code>，跨行规则由事务处理。必须始终保留至少一个 enabled 管理员，不允许用普通查询后无锁更新来实现这一规则。</li>
+<li>密码哈希只在内部认证记录中使用，用户列表、详情、导出和审计均不得返回。</li>
+</ul>
+<h3 class="rp-toc-include" id="32-auth_user_scope设备授权范围"><a href="#32-auth_user_scope设备授权范围" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.2 <code>auth_user_scope</code>：设备授权范围</h3>
+<p>每行表示一个授权根。<code>selected</code> 模式将所有行取并集；<code>all</code> 模式不保存范围行。空列表表示无设备权限，不影响用户维护个人资料。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>类型</th><th>默认 / 可空</th><th>含义</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT UNSIGNED</td><td>自增主键</td><td>内部行 ID</td></tr><tr><td><code>user_id</code></td><td>VARCHAR(64)</td><td>必填</td><td>关联 auth_user.user_id</td></tr><tr><td><code>station_id</code></td><td>VARCHAR(64)</td><td>必填</td><td>逻辑引用 ems.cfg_device.device_id，节点必须为 station</td></tr><tr><td><code>device_root_id</code></td><td>VARCHAR(64)</td><td><code>&#x27;&#x27;</code>，非空</td><td>空串表示整个站；非空表示站内设备子树，包含该根及全部后代</td></tr></tbody></table></div>
+<p>约束和索引：</p>
+<ul>
+<li>主键 <code>id</code>；唯一键 <code>(user_id, station_id, device_root_id)</code>，同时支持按用户读取。</li>
+<li><code>user_id</code> 建本库外键，物理删除限制为 RESTRICT；业务逻辑删除用户时显式删除其范围行。</li>
+<li><strong>API 中整站仍使用 <code>device_root_id=null</code></strong>；Repository 在入库时转换为 <code>&#x27;&#x27;</code>，出库时转回 null。这样不增加生成列，也能通过唯一键防止重复整站授权。</li>
+<li>不跨库建立设备外键。保存时从 <code>ems.cfg_device</code> 校验站、根和实际父链；读取时重新计算有效范围。根被删除后失效，不自动扩大到父节点。</li>
+<li>整站与子树重叠、父子授权重叠时仅保留最上层授权根；整批替换在锁定用户的事务内完成。每用户最多保存 200 个规范化范围。</li>
+</ul>
+<p>例如，API 的 <code>{&quot;station_id&quot;:&quot;ess000001&quot;,&quot;device_root_id&quot;:null}</code> 保存为 <code>(user_id, &#x27;ess000001&#x27;, &#x27;&#x27;)</code>；对子树 <code>unit01</code> 的授权保存为 <code>(user_id, &#x27;ess000001&#x27;, &#x27;unit01&#x27;)</code>。不复制设备名称、路径或子设备列表。</p>
+<h3 class="rp-toc-include" id="33-auth_session登录会话"><a href="#33-auth_session登录会话" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.3 <code>auth_session</code>：登录会话</h3>
+<p>同一张表保存完整与首次改密受限会话。浏览器持有 Cookie 原值，数据库只保存其 SHA-256 摘要。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>类型</th><th>默认 / 可空</th><th>含义</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT UNSIGNED</td><td>自增主键</td><td>内部行 ID</td></tr><tr><td><code>session_id</code></td><td>VARCHAR(64)</td><td>必填，唯一</td><td>会话管理用 ID，不能作为登录凭证</td></tr><tr><td><code>user_id</code></td><td>VARCHAR(64)</td><td>必填</td><td>关联 auth_user.user_id</td></tr><tr><td><code>kind</code></td><td>ENUM</td><td>必填</td><td><code>full</code> / <code>password_change</code></td></tr><tr><td><code>token_hash</code></td><td>BINARY(32)</td><td>必填，唯一</td><td>高熵 Cookie 的 SHA-256 摘要，不存 Cookie 原值</td></tr><tr><td><code>csrf_token</code></td><td>CHAR(43)</td><td>必填</td><td>32 随机字节的无填充 base64url 值；仅在认证成功或受保护会话响应中交给前端</td></tr><tr><td><code>created_at</code></td><td>DATETIME(3)</td><td>必填</td><td>会话创建时间</td></tr><tr><td><code>auth_time</code></td><td>DATETIME(3)</td><td>必填</td><td>最近密码认证时间，敏感操作要求 5 分钟内认证</td></tr><tr><td><code>last_interactive_at</code></td><td>DATETIME(3)</td><td>必填</td><td>最近有效用户交互时间，轮询不续期</td></tr><tr><td><code>absolute_expires_at</code></td><td>DATETIME(3)</td><td>必填</td><td>完整会话创建后 8 小时；受限会话创建后 5 分钟</td></tr><tr><td><code>revoked_at</code></td><td>DATETIME(3)</td><td>NULL</td><td>撤销时间；空值不等于会话一定有效</td></tr><tr><td><code>revoke_reason</code></td><td>VARCHAR(32)</td><td>NULL</td><td>如 logout、password_changed、access_changed、user_disabled、session_limit</td></tr><tr><td><code>source_ip</code></td><td>VARCHAR(45)</td><td>NULL</td><td>规范化 IP；仅信任已配置代理提供的来源</td></tr><tr><td><code>user_agent</code></td><td>VARCHAR(256)</td><td><code>&#x27;&#x27;</code></td><td>去控制字符并截断的客户端信息，仅供展示</td></tr></tbody></table></div>
+<p>约束和索引：</p>
+<ul>
+<li>主键 <code>id</code>；唯一键 <code>session_id</code>、<code>token_hash</code>；<code>user_id</code> 建本库外键，物理删除限制为 RESTRICT。</li>
+<li>查询索引 <code>(user_id, revoked_at, last_interactive_at)</code>，支持会话列表、批量撤销及最早活动会话选择；索引 <code>(absolute_expires_at)</code> 支持分批清理。</li>
+<li>有效会话必须同时满足：未撤销、未超过绝对期限、未超过当前空闲期限、用户 enabled 且未删除；受限会话固定 5 分钟，不靠交互续期。</li>
+<li>不存 <code>idle_expires_at</code>、角色或权限副本：空闲期限由当前策略计算，权限由当前用户和范围读取。会话响应中的这些字段均为计算结果。</li>
+<li>同一用户最多 3 个有效完整会话；登录事务锁定用户后计数，必要时撤销最早活动会话，再插入新会话。</li>
+<li>过期或撤销记录至少保留到绝对期限后 24 小时，再分批物理删除；永久审计不依赖会话行存续。</li>
+</ul>
+<h3 class="rp-toc-include" id="34-auth_login_policy登录保护策略"><a href="#34-auth_login_policy登录保护策略" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.4 <code>auth_login_policy</code>：登录保护策略</h3>
+<p>只允许一行，<code>id=1</code>。管理员修改时原地 UPDATE，未提供的实例策略行视为部署未完成，不能静默采用宽松默认值。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>类型</th><th>默认 / 可空</th><th>含义</th></tr></thead><tbody><tr><td><code>id</code></td><td>TINYINT UNSIGNED</td><td>主键，固定 <code>1</code></td><td>实例唯一策略行</td></tr><tr><td><code>failed_login_limit</code></td><td>TINYINT UNSIGNED</td><td><code>6</code></td><td>连续失败阈值，3～6 次</td></tr><tr><td><code>lock_minutes</code></td><td>TINYINT UNSIGNED</td><td><code>10</code></td><td>账号锁定时长，10～30 分钟</td></tr><tr><td><code>idle_timeout_minutes</code></td><td>TINYINT UNSIGNED</td><td><code>10</code></td><td>空闲超时，10～30 分钟</td></tr><tr><td><code>password_min_length</code></td><td>TINYINT UNSIGNED</td><td><code>12</code></td><td>密码最小长度，12～32 个字符；最大固定为 32</td></tr><tr><td><code>login_notice</code></td><td>VARCHAR(500)</td><td><code>&#x27;&#x27;</code></td><td>登录页纯文本通知</td></tr><tr><td><code>updated_at</code></td><td>DATETIME(3)</td><td>必填</td><td>最近策略更新时间</td></tr></tbody></table></div>
+<ul>
+<li>对 <code>id=1</code> 及四个数值范围建立 <code>CHECK</code>，不增加其他索引。</li>
+<li>完整会话 8 小时、受限会话 5 分钟、临时密码 24 小时、并发完整会话 3 个为当前固定业务规则，不为尚无配置入口的参数增加列。</li>
+<li>该行也用作首管理员初始化、管理员数量保护和权限管理事务的串行锁：先 <code>SELECT ... FOR UPDATE</code> 锁定它，再锁用户。不再建立 <code>auth_security_guard</code> 表或增加锁编号、修订号列。</li>
+<li>普通会话读取不需要独占锁定此行；登录与鉴权读取当前策略。来源 IP 限流仍由入口限流组件处理，不为请求计数单独建表。</li>
+</ul>
+<h3 class="rp-toc-include" id="35-audit_logweb-操作审计"><a href="#35-audit_logweb-操作审计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>3.5 <code>audit_log</code>：Web 操作审计</h3>
+<p>在 <code>ems_web</code> 中集中保存 Web 发起的认证、安全管理和业务变更事件，复用公共审计接口与事件语义；不在各 Web 模块重复建日志表。采集回执、控制生命周期和告警记录继续留在各自业务域，不在这里复制完整业务状态。</p>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>字段</th><th>类型</th><th>默认 / 可空</th><th>含义</th></tr></thead><tbody><tr><td><code>id</code></td><td>BIGINT UNSIGNED</td><td>自增主键</td><td>内部行 ID</td></tr><tr><td><code>event_id</code></td><td>VARCHAR(64)</td><td>必填，唯一</td><td>稳定事件 ID，用于审计去重和提交结果核对</td></tr><tr><td><code>actor_user_id</code></td><td>VARCHAR(64)</td><td>NULL</td><td>当前操作主体；未认证的登录失败或主机初始化可空</td></tr><tr><td><code>target_user_id</code></td><td>VARCHAR(64)</td><td>NULL</td><td>用户管理操作的目标用户</td></tr><tr><td><code>action</code></td><td>VARCHAR(64)</td><td>必填</td><td>稳定动作码，如 auth.login、user.create、user.set_access、device.update</td></tr><tr><td><code>resource_type</code></td><td>VARCHAR(32)</td><td>必填</td><td>user / session / login_policy / device 等资源类型</td></tr><tr><td><code>resource_id</code></td><td>VARCHAR(128)</td><td>NULL</td><td>目标稳定 ID；登录策略为 <code>1</code></td></tr><tr><td><code>outcome</code></td><td>ENUM</td><td>必填</td><td><code>success</code> / <code>failure</code></td></tr><tr><td><code>reason</code></td><td>VARCHAR(64)</td><td>NULL</td><td>稳定原因码，不直接保存数据库异常或完整报文</td></tr><tr><td><code>request_id</code></td><td>VARCHAR(64)</td><td>必填</td><td>请求关联 ID；主机命令同样生成关联 ID</td></tr><tr><td><code>source_ip</code></td><td>VARCHAR(45)</td><td>NULL</td><td>请求来源；对外查询时脱敏</td></tr><tr><td><code>details</code></td><td>JSON</td><td>NULL</td><td>白名单字段的必要变更前后值或补充信息，大小受业务载荷上限约束</td></tr><tr><td><code>occurred_at</code></td><td>DATETIME(3)</td><td>必填</td><td>事件发生时间</td></tr></tbody></table></div>
+<p>约束和索引：</p>
+<ul>
+<li>主键 <code>id</code>；唯一键 <code>event_id</code>；查询索引 <code>(occurred_at, id)</code>、<code>(actor_user_id, occurred_at)</code>、<code>(target_user_id, occurred_at)</code>。</li>
+<li>不对用户或设备建立物理外键，避免审计受业务清理影响。稳定 ID 保留历史关联；用户逻辑删除不会级联删除审计。</li>
+<li>记录登录成功/失败、锁定/解锁、首次改密、重置、用户及授权变更、会话撤销、策略修改、初始化与主机恢复，以及已实现的 Web 业务写操作。普通列表轮询不逐条写审计。</li>
+<li>不记录密码、哈希、Cookie、CSRF 或完整认证请求。未知账号的失败事件仅记录原因与来源，不复制原始登录表单。<code>details</code> 不作为任意请求体的存档。</li>
+<li>业务界面只提供授权查询，不提供编辑或删除入口；默认保留 180 天，由受限维护任务按时间和批次清理。</li>
+</ul>
+<h2 class="rp-toc-include" id="4-事务与并发规则"><a href="#4-事务与并发规则" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4. 事务与并发规则</h2>
+<h3 class="rp-toc-include" id="41-账号与会话"><a href="#41-账号与会话" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4.1 账号与会话</h3>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>用例</th><th>同一事务内完成</th></tr></thead><tbody><tr><td>首管理员初始化</td><td>锁定策略行 → 确认从未创建过用户 → 创建 enabled 管理员并要求首次改密 → 记录审计</td></tr><tr><td>新建用户</td><td>锁定策略行及当前管理员 → 校验权限 → 新增用户及规范化范围 → 记录审计</td></tr><tr><td>角色/范围变更</td><td>锁定策略行及涉及用户 → 核验 edit_token、管理员数量和设备关系 → 更新角色并替换范围 → 撤销全部会话 → 记录审计</td></tr><tr><td>停用/删除</td><td>锁定策略行及涉及用户 → 最后管理员校验 → 修改状态，删除时清理范围 → 撤销全部会话 → 记录审计</td></tr><tr><td>改密/重置</td><td>核验当前认证及目标账号 → 更新哈希、首次改密标记与临时期限 → 撤销全部会话 → 记录审计</td></tr><tr><td>成功登录</td><td>锁定用户并复核认证相关字段 → 清理失败计数 → 控制完整会话数量 → 创建会话及更新时间 → 记录审计</td></tr><tr><td>登录失败/解锁</td><td>锁定已有用户 → 更新失败次数或锁定期限 → 记录失败/解锁事件；未知用户只写脱敏审计</td></tr><tr><td>登录策略变更</td><td>锁定策略行及当前管理员 → 核验权限与 edit_token → 更新策略 → 记录审计</td></tr></tbody></table></div>
+<p>密码派生在有界工作池执行，尽量不持锁；提交前锁定用户并重读认证字段，已被停用、改密或撤权时拒绝使用旧校验结果创建会话。账号暂时锁定不撤销此前合法会话；人工停用、删除和凭据/权限变更才撤销会话。</p>
+<p>锁顺序统一为：<strong>策略行（管理用例需要时）→ 涉及用户按内部 id 升序 → 会话 → 工程站根</strong>。首次初始化依赖部署工具已写入的策略行，不靠锁定“空用户表”保证唯一。</p>
+<p>授予站/设备范围时，按站 ID 固定顺序锁定涉及的工程站根，再校验当前设备关系；不允许在锁定站根后反向申请用户锁。</p>
+<p><code>edit_token</code> 由服务端对当前可编辑状态生成不可伪造摘要，更新时在行锁内重算比对。它不入库，不增加用户版本列；登录时间、失败计数等运行字段不参与摘要。策略使用同样规则。</p>
+<h3 class="rp-toc-include" id="42-工程配置与审计"><a href="#42-工程配置与审计" class="rp-header-anchor rp-link" aria-hidden="true">#</a>4.2 工程配置与审计</h3>
+<p>配置、用户授权与审计能参与同一事务的前提是两库同实例、InnoDB、同连接。配置写入持有当前用户共享锁，复核完整会话、当前权限、资源范围后，再锁站根并保存。管理员撤权需要用户独占锁，因此按事务先后顺序生效。</p>
+<div class="rp-codeblock language-text"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="text"><code><span class="line"><span>BEGIN</span></span>
+<span class="line"><span>  校验并锁定 ems_web.auth_user / auth_session</span></span>
+<span class="line"><span>  读取 ems_web.auth_user_scope，核对 ems.cfg_device 实际关系</span></span>
+<span class="line"><span>  锁定 ems.cfg_device 站根，校验请求的 config_revision</span></span>
+<span class="line"><span>  保存工程配置，递增站根 config_revision</span></span>
+<span class="line"><span>  插入 ems_web.audit_log</span></span>
+<span class="line"><span>COMMIT</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p>上例是事务步骤，不是可直接执行的 SQL。任一步失败整体回滚；审计不可写不能先返回业务成功。已经鉴权的在途只读请求可完成，异步人工控制在执行前仍须重新授权。</p>
+<p>提交结果不明确时返回 <code>effect=Unknown</code>，使用原用户 ID、唯一用户名、资源状态及稳定 event_id 重新核对，不自动重放重置密码或配置操作。两库分置不同实例不属于本期部署方案，不能把两个 COMMIT 当作本方案的替代实现。</p>
+<h2 class="rp-toc-include" id="5-初始化访问权限与验收"><a href="#5-初始化访问权限与验收" class="rp-header-anchor rp-link" aria-hidden="true">#</a>5. 初始化、访问权限与验收</h2>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+<div class="rp-table-scroll-container rp-scrollbar"><table><thead><tr><th>项目</th><th>规则</th></tr></thead><tbody><tr><td>建库建表</td><td>两库共用 backend/python/database.yaml；使用 ems-db --database ems_web init，仅加载独立 Web 模型及迁移历史，不把工程模型建入该库。MySQL 空库由部署预先准备</td></tr><tr><td>初始数据</td><td>仅写 auth_login_policy 的 id=1 和默认策略，不预置任何账号、默认口令或会话</td></tr><tr><td>首个账号</td><td>一次性受控主机命令交互创建，只有 auth_user 从未有过记录时允许；不通过 Web 公开注册</td></tr><tr><td>运行连接</td><td>使用公共配置加载方式；Web 运行账号具备 ems_web 业务 DML 及所需 ems 配置权限，不授予建库、建表或授权权限</td></tr><tr><td>其他进程</td><td>不默认授予 Web 账号表权限；异步人工任务如需最终鉴权，仅按用例授予必要的公共身份只读能力</td></tr><tr><td>审计权限</td><td>业务运行仅追加/查询审计，不更新、删除；保留期清理由独立受限维护身份执行</td></tr><tr><td>就绪检查</td><td>验证工程库现有依赖、ems_web 5 表、唯一策略行及身份密钥；缺失返回 503，不自动建表或绕过身份校验</td></tr><tr><td>备份与恢复</td><td>两库按一致恢复点备份；恢复后统一撤销会话并重新校验授权根，避免设备关系与授权来自不同时间点</td></tr></tbody></table></div>
+<h3 class="rp-toc-include" id="python-工具入口"><a href="#python-工具入口" class="rp-header-anchor rp-link" aria-hidden="true">#</a>Python 工具入口</h3>
+<p>工程库模型在 <code>backend/python/db/models/</code>，Web 库模型在 <code>backend/python/web_db/models/</code>；
+二者各有独立的 <code>migrations/</code>、<code>tests/</code> 与种子入口，只共用连接配置和底层工具代码。
+命令行 <code>--database</code> 同时选择目标库和模型集合，未指定时保留原工程库行为。</p>
+<div class="rp-codeblock language-bash"><div class="rp-codeblock__content"><div class="rp-codeblock__content__scroll-container rp-scrollbar rp-scrollbar--always"><pre class="shiki css-variables" style="background-color:var(--shiki-background);color:var(--shiki-foreground)" tabindex="0" data-lang="bash"><code><span class="line"><span style="color:var(--shiki-token-function)">ems-db</span><span style="color:var(--shiki-token-string)"> --database</span><span style="color:var(--shiki-token-string)"> ems</span><span style="color:var(--shiki-token-string)"> init</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">ems-db</span><span style="color:var(--shiki-token-string)"> --database</span><span style="color:var(--shiki-token-string)"> ems</span><span style="color:var(--shiki-token-string)"> seed</span><span style="color:var(--shiki-token-string)"> catalog</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">ems-db</span><span style="color:var(--shiki-token-string)"> --database</span><span style="color:var(--shiki-token-string)"> ems_web</span><span style="color:var(--shiki-token-string)"> init</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">ems-db</span><span style="color:var(--shiki-token-string)"> --database</span><span style="color:var(--shiki-token-string)"> ems_web</span><span style="color:var(--shiki-token-string)"> seed</span><span style="color:var(--shiki-token-string)"> policy</span></span>
+<span class="line"><span style="color:var(--shiki-token-function)">ems-db</span><span style="color:var(--shiki-token-string)"> --database</span><span style="color:var(--shiki-token-string)"> ems_web</span><span style="color:var(--shiki-token-string)"> check</span></span></code></pre></div><div class="rp-code-button-group"><button class="rp-code-button-group__button rp-code-wrap-button" title="切换代码换行" aria-label="切换代码换行"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrapped"><path fill="currentColor" d="M21 5H3v2h18zM3 19h7v-2H3zm0-6h15c1 0 2 .43 2 2s-1 2-2 2h-2v-2l-4 3 4 3v-2h2c2.95 0 4-1.27 4-4 0-2.72-1-4-4-4H3z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-button-group__icon--wrap"><path fill="currentColor" d="M16 7H3V5h13zM3 19h13v-2H3zm19-7-4-3v2H3v2h15v2z"></path></svg></button><button class="rp-code-button-group__button rp-code-copy-button" title="复制代码"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--copy"><path fill="currentColor" d="M20 8v12H8V8zm0-2H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2"></path><path fill="currentColor" d="M4 16H2V4a2 2 0 0 1 2-2h12v2H4Z"></path></svg><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" class="rp-code-button-group__icon rp-code-copy-button__icon rp-code-copy-button__icon--success"><path fill="currentColor" d="m9.55 18-5.7-5.7 1.425-1.425L9.55 15.15l9.175-9.175L20.15 7.4z"></path></svg></button></div></div></div>
+<p><code>seed policy</code> 只在缺少时创建默认策略，不覆盖已有设置。两库的 <code>alembic_version</code> 分别存放于各自
+数据库；新 Web 初始迁移不追加到工程库迁移链。SQLite 验证使用同目录的两个独立文件，
+MySQL / PostgreSQL 仍使用各自独立数据库。当前验证覆盖 SQLite 实际建表与约束、三种方言的
+DDL 编译，不等同于真实 MySQL / PostgreSQL 联调。实际命令及配置优先级见 <code>backend/python/README.md</code>。</p>
+<p>落地时验证以下场景即可，不为尚未实现的扩展能力预建表：</p>
+<ol>
+<li>用户名唯一且逻辑删除后不复用；三种角色、默认停用和空范围语义正确。</li>
+<li>整站/子树授权去重，API null 与数据库空串正确转换；设备移动或删除后立即按新关系鉴权。</li>
+<li>首次改密、失败锁定、会话超时与撤销可跨重启/多 Web 实例生效，不从会话复制旧权限。</li>
+<li>并发初始化、最后管理员保护、范围替换和会话数量检查具备真实 MySQL 行锁保证。</li>
+<li>用同一连接验证两库业务与审计全部提交或全部回滚；审计失败、撤权竞态和提交结果未知不会绕过校验。</li>
+</ol>
+<p>本设计不预建自定义角色、用户组、组织、菜单、密码历史、登录流水或通用键值配置等扩展表。后续新增 Web 业务时再按明确用例增加专用表。</p><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/common/database/ems-web.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/10/30 00:06:12</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/common/database/device-management" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>设备管理数据库设计</span></span></a><a href="/ems/common/realtime/" class="rp-prev-next-page__item rp-prev-next-page__next rp-link"><span class="rp-prev-next-page__item__desc">下一页</span><span class="rp-prev-next-page__item__title"><span>实时数据与配置</span><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></span></a></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#1-数据库划分" class="rp-toc-item rp-link" title="1. 数据库划分" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">1. 数据库划分</span></a><a href="#2-表清单与公共约定" class="rp-toc-item rp-link" title="2. 表清单与公共约定" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">2. 表清单与公共约定</span></a><a href="#3-表结构" class="rp-toc-item rp-link" title="3. 表结构" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">3. 表结构</span></a><a href="#31-auth_user用户账号" class="rp-toc-item rp-link" title="3.1 auth_user：用户账号" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.1 <code>auth_user</code>：用户账号</span></a><a href="#32-auth_user_scope设备授权范围" class="rp-toc-item rp-link" title="3.2 auth_user_scope：设备授权范围" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.2 <code>auth_user_scope</code>：设备授权范围</span></a><a href="#33-auth_session登录会话" class="rp-toc-item rp-link" title="3.3 auth_session：登录会话" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.3 <code>auth_session</code>：登录会话</span></a><a href="#34-auth_login_policy登录保护策略" class="rp-toc-item rp-link" title="3.4 auth_login_policy：登录保护策略" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.4 <code>auth_login_policy</code>：登录保护策略</span></a><a href="#35-audit_logweb-操作审计" class="rp-toc-item rp-link" title="3.5 audit_log：Web 操作审计" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">3.5 <code>audit_log</code>：Web 操作审计</span></a><a href="#4-事务与并发规则" class="rp-toc-item rp-link" title="4. 事务与并发规则" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">4. 事务与并发规则</span></a><a href="#41-账号与会话" class="rp-toc-item rp-link" title="4.1 账号与会话" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">4.1 账号与会话</span></a><a href="#42-工程配置与审计" class="rp-toc-item rp-link" title="4.2 工程配置与审计" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">4.2 工程配置与审计</span></a><a href="#5-初始化访问权限与验收" class="rp-toc-item rp-link" title="5. 初始化、访问权限与验收" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">5. 初始化、访问权限与验收</span></a><a href="#python-工具入口" class="rp-toc-item rp-link" title="Python 工具入口" style="padding-left:12px" data-depth="1"><span class="rp-toc-item__text rp-doc">Python 工具入口</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/common/database/ems-web.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+    <div id="__rspress_modal_container"></div>
+  </body>
+</html>
