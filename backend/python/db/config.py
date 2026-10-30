@@ -10,7 +10,28 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.orm import sessionmaker
 
 
-def load_url(path: str | Path | None = None, environ: Mapping[str, str] | None = None) -> URL:
+def load_url(
+    path: str | Path | None = None,
+    environ: Mapping[str, str] | None = None,
+    *,
+    database: str | None = None,
+) -> URL:
+    """Share connection settings; an explicit CLI target selects only its database/file."""
+    if database not in (None, "ems", "ems_web"):
+        raise ValueError("database target must be ems or ems_web")
+    url = _load_url(path, environ)
+    if database is None:
+        return url
+    if url.get_backend_name() != "sqlite":
+        return url.set(database=database)
+    if url.database in (None, "", ":memory:"):
+        return url
+    if url.query.get("uri"):
+        raise ValueError("Database target selection requires a normal SQLite file URL")
+    return url.set(database=str(Path(url.database).with_name(database + ".sqlite3")))
+
+
+def _load_url(path: str | Path | None = None, environ: Mapping[str, str] | None = None) -> URL:
     """Load selected YAML backend; environment URL takes precedence. Legacy JSON remains valid."""
     env = os.environ if environ is None else environ
     if env.get("EMS_DATABASE_URL"):

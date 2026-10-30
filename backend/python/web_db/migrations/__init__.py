@@ -1,0 +1,1 @@
+"""Independent Web database migrations."""

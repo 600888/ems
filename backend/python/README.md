@@ -1,7 +1,8 @@
 # 数据库 ORM 与迁移
 
-`db/models/` 使用 SQLAlchemy 2 的 `DeclarativeBase`、`Mapped`、`mapped_column` 定义现有
-19 张业务表。四遥对应 `YcPoint` / `YxPoint` / `YkPoint` / `YtPoint`，共享抽象 `PointBase`，
+`db/models/` 使用 SQLAlchemy 2 的 `DeclarativeBase`、`Mapped`、`mapped_column` 定义工程库
+19 张业务表；`web_db/models/` 独立定义 Web 库的 5 张表。两套模型不共用 Base 或 metadata。
+四遥对应 `YcPoint` / `YxPoint` / `YkPoint` / `YtPoint`，共享抽象 `PointBase`，
 仍是四张物理表。Alembic 管理数据库结构的初始化和迁移，业务进程不在启动时执行 DDL。
 
 19 张业务表统一具有数据库生成的整数 `id` 主键。设备类型、类型固有点、模板、导入任务、
@@ -32,6 +33,7 @@ SQLite 不需要额外驱动。安装命令需在运行 `ems-db` 的同一虚拟
 
 编辑本目录的 [`database.yaml`](database.yaml)。它**仅供 Python 数据库迁移工具使用**，
 不是全局配置，也不改变 C++ 进程的数据库配置。
+两库共用这一份连接配置，通过 `--database ems` / `--database ems_web` 选择模型及目标库。
 
 ```yaml
 database: postgresql
@@ -65,6 +67,12 @@ databases:
 选中 MySQL 时，`EMS_MYSQL_*` 可以覆盖该组连接字段；仍兼容原来的 MySQL JSON 文件。
 实际密码建议通过环境变量或本地独立配置提供，仓库模板保持空密码。
 
+指定 `--database` 时，只覆盖连接 URL 的数据库名称；host、port、username、password、驱动
+与连接选项仍来自同一份配置和既有环境变量。CLI 目标优先于配置及环境变量中的库名。
+SQLite 使用配置文件所指目录下的 `ems.sqlite3` / `ems_web.sqlite3`，分别初始化与迁移，
+不把两套表写入同一个文件。未指定参数时保留原有工程库及连接配置行为。
+YAML 的 `database: mysql` 仍表示数据库后端；CLI 的 `--database ems_web` 表示业务库。
+
 ## 初始化与常用命令
 
 先创建空 MySQL / PostgreSQL 数据库并授予部署账号 DDL 权限；SQLite 自动创建文件，父目录需存在。
@@ -84,6 +92,74 @@ ems-db check                  # 比对 ORM 与当前库；差异返回非零退�
 种子使用 ORM `Session`，由调用方统一提交或回滚，不使用数据库专属的 UPSERT SQL。
 
 安装后可以在任意工作目录调用 `ems-db`。在本目录中也可以使用 `python -m db ...`。
+
+## 独立 Web 业务库
+
+目录与工程库保持对应，模型只在 `models/` 中定义，迁移历史只在各自的 `migrations/` 中维护：
+
+```text
+backend/python/
+  database.yaml                 # 两库共用的唯一连接配置
+  db/
+    models/                     # 工程库 19 表，Base
+    migrations/                 # 工程库独立迁移历史
+    tests/
+    seeds.py                    # catalog / demo
+    cli.py                      # 唯一 ems-db 命令入口
+    config.py                   # 共用连接配置、Engine、Session
+  web_db/
+    models/
+      __init__.py               # 独立 WebBase / metadata
+      identity.py               # 账号、授权、会话、策略、审计 5 表
+    migrations/                 # Web 库独立迁移历史
+    tests/
+    seeds.py                    # 仅 policy
+```
+
+先准备独立空库 `ems_web`，部署账号需具有相应建表权限。命令不自动创建 MySQL / PostgreSQL
+数据库；SQLite 初始化会创建独立文件。在 `backend/python` 内运行：
+
+```powershell
+ems-db --database ems init
+ems-db --database ems seed catalog
+
+ems-db --database ems_web init
+ems-db --database ems_web seed policy
+ems-db --database ems_web check
+ems-db --database ems_web current
+ems-db --database ems_web history
+ems-db --database ems_web upgrade head --sql --dialect mysql
+```
+
+Web 初始化只创建 `auth_user`、`auth_user_scope`、`auth_session`、`auth_login_policy`、
+`audit_log` 和本库自己的 `alembic_version`。工程库的初始迁移不变；两库同名的
+`alembic_version` 位于不同数据库，各自记录独立 revision 链。
+`seed policy` 幂等写入默认策略 `id=1`，保留已有策略，不创建用户、口令或会话。
+Web 不支持 catalog/demo 种子，工程库不支持 policy 种子。
+
+命令在 DDL、结构比对、自动生成迁移与种子操作之前检查库范围，遇到另一套模型的表会拒绝，
+不会试图删除或“修复”另一业务库。Web 库也拒绝混入其他业务表。
+自动生成迁移同样使用当前选择的 metadata 和迁移目录：
+
+```powershell
+ems-db --database ems_web revision --autogenerate -m "adjust web field"
+ems-db --database ems_web upgrade head
+```
+
+Web 的默认值、约束、索引与库划分见 [EMS Web 数据库设计](../../website/docs/common/database/ems-web.md)。
+账号生命周期、授权归一化、会话撤销及审计追加策略仍需业务 Service 实现；ORM 不代替认证服务。
+
+```python
+from db.config import load_url, make_engine, session_factory
+from web_db.models import AuthLoginPolicy
+
+engine = make_engine(load_url(database="ems_web"))
+try:
+    with session_factory(engine)() as session:
+        policy = session.get(AuthLoginPolicy, 1)
+finally:
+    engine.dispose()
+```
 
 ## 修改结构与迁移
 
@@ -157,6 +233,7 @@ PostgreSQL 使用自己的序列与类型；MySQL 通过类型 variant 保留原
 可从当前 ORM 自动生成删除变更，审查后再 `ems-db upgrade head`。不能用 `stamp` 代替结构变更。
 
 本工具覆盖现有 19 张关系表，表结构与种子数据分别维护在 `db/models/` 和 `db/seed_data.py`。
+另外通过独立 `web_db` 模型与迁移覆盖 Web 业务库的 5 表，使用同一命令显式选择目标。
 原 `backend/data` 下的 SQL 脚本已移除。TDengine 历史库不在当前 SQLAlchemy 迁移范围内，
 需根据[存储设计](../../website/docs/processes/storage/design.md#31-表结构与时间)由部署单独准备。
 现有 C++ 运行时仍通过 MySQL/ormpp 访问数据库；本次支持三库的是 Python ORM 与迁移工具，
@@ -166,13 +243,17 @@ PostgreSQL 使用自己的序列与类型；MySQL 通过类型 variant 保留原
 
 ```powershell
 python -m pip install -e "./backend/python[test]"
-python -m pytest backend/python/db/tests
+python -m pytest backend/python/db/tests backend/python/web_db/tests
 ```
 
 测试包含 SQLite 实际建表、ORM 读写、外键/CHECK/级联、种子幂等/回滚、迁移升降级、
 batch 重建时的关联数据保留和 DDL 回滚，
 以及三个方言下固定迁移与 ORM 建表 DDL 的一致性。MySQL / PostgreSQL 的 DDL 编译检查
 不等同于真实服务器联调。
+
+Web 测试另覆盖：两库 metadata/迁移历史隔离、单份配置选择不同库及 SQLite 文件、
+误选库拒绝、种子隔离、默认策略保留、整站授权唯一性、逻辑删除用户名保留、
+会话摘要唯一性、账号/策略 CHECK，以及三个方言下独立冻结迁移与 ORM DDL 的一致性。
 
 实现参考 [SQLAlchemy 声明式映射](https://docs.sqlalchemy.org/en/20/orm/declarative_tables.html)
 和 [Alembic 自动迁移](https://alembic.sqlalchemy.org/en/latest/autogenerate.html)。

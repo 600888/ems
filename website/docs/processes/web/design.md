@@ -4,6 +4,8 @@
 
 登录及用户管理的目标设计见[用户名、密码与加密登录](user/login.md)和[用户管理与角色权限](user/index.md)。当前仍为内存会话骨架；下文身份目标约定不表示持久账号已经实现。
 
+Web 账号、授权、会话、登录策略与操作审计存入独立的 `ems_web` 数据库，表结构见 [EMS Web 数据库与表设计](../../common/database/ems-web.md)。工程配置继续使用原库，两库同实例并复用公共数据库层。
+
 ## 1. 进程与业务模块
 
 ```mermaid
@@ -16,7 +18,9 @@ flowchart TB
     HTTP -.后续.-> History[history 历史查询]
     HTTP -.后续.-> Commands[commands 控制意图]
     Device --> Repo[公共 Repository]
-    Repo --> DB[(MySQL)]
+    Identity --> Repo
+    Repo --> DB[(MySQL ems 工程配置)]
+    Repo --> WebDB[(MySQL ems_web 业务库)]
     Monitor --> RT[公共实时客户端]
     History --> Storage[存储进程 RPC]
     Commands --> Intent[持久意图与 outbox]
@@ -182,11 +186,12 @@ flowchart LR
 | 项目 | 约定 |
 | --- | --- |
 | 连接 | 沿用 EMS_DATABASE_CONFIG / EMS_MYSQL_*；Web 不复制数据库配置结构 |
-| 身份 | 目标为本地用户名/密码、HTTPS、密码哈希、公共账号及三类角色和资源范围，见[登录设计](user/login.md)；运行配置不含账号清单 |
+| 业务库 | 目标使用独立 ems_web 库；与工程库同实例、同连接池，以公共 Repository 内固定库限定名访问 |
+| 身份 | 目标为本地用户名/密码、HTTPS、密码哈希、ems_web 持久账号及三类角色和资源范围，见[登录设计](user/login.md)；运行配置不含账号清单 |
 | 会话 | 当前内存会话重启失效；目标持久会话，浏览器持 HttpOnly/Secure/SameSite=Strict 的不透明 Cookie，后端读取当前权限 |
 | 授权 | 按数据库实际关系校验站、设备子树、绑定和任务，过滤列表与 total |
 | CSRF | POST 查询与写入统一检查；登录检查 Origin；后续 WebSocket 也检查来源 |
-| 审计 | 同公共事务对接统一审计；不在 Web 建私有审计表 |
+| 审计 | 公共审计接口集中写 ems_web.audit_log，与账号变更或工程配置在同连接事务提交，不在各模块重复建表 |
 | 健康 | GET `/health/live`、`/health/ready`；依赖缺失返回 503，采集离线不阻断配置 |
 | 身份就绪 | 当前未装配账号服务可启动但拒绝受保护请求；目标生产部署必须启用身份模块，身份表/密钥等依赖缺失时 ready 返回 503 |
 | 部署 | 同源；Drogon 静态服务或 Nginx 唯一入口；只信任配置中的代理 |

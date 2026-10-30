@@ -8,5 +8,10 @@
     "type": "file",
     "name": "device-management",
     "label": "设备管理数据库设计"
+  },
+  {
+    "type": "file",
+    "name": "ems-web",
+    "label": "EMS Web 数据库与表设计"
   }
 ]

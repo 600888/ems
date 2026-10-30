@@ -10,13 +10,15 @@ from alembic.config import Config
 from alembic.util.exc import CommandError
 
 from .config import load_url, make_engine, session_factory
-from .schema import require_supported, schema_differences
+from .schema import schema_differences
 from .seeds import apply_seed
+from .targets import target_directory, target_metadata, target_retired_tables, require_target
 
 
-def migration_config(*, connection=None, dialect=None, output=None) -> Config:
+def migration_config(*, connection=None, dialect=None, output=None, database="ems") -> Config:
     """Locate Alembic independently of the current working directory."""
-    config = Config(str(Path(__file__).with_name("alembic.ini")), stdout=output or sys.stdout)
+    config = Config(str(target_directory(database) / "alembic.ini"), stdout=output or sys.stdout)
+    config.attributes["database_target"] = database
     if output is not None:
         config.output_buffer = output
     if connection is not None:
@@ -33,6 +35,11 @@ def parser() -> argparse.ArgumentParser:
         type=Path,
         help="migration YAML (default: backend/python/database.yaml); legacy JSON is supported",
     )
+    result.add_argument(
+        "--database",
+        choices=("ems", "ems_web"),
+        help="select engineering or Web models and target database (default: engineering)",
+    )
     actions = result.add_subparsers(dest="action", required=True)
     actions.add_parser("init", help="apply schema migrations to head")
     for name, default in (("upgrade", "head"), ("downgrade", None)):
@@ -44,7 +51,7 @@ def parser() -> argparse.ArgumentParser:
     actions.add_parser("history")
     actions.add_parser("check", help="compare ORM schema to database (read only)")
     seed = actions.add_parser("seed", help="explicitly insert catalog or development demo data")
-    seed.add_argument("kind", choices=("catalog", "demo"))
+    seed.add_argument("kind", choices=("catalog", "demo", "policy"))
     revision = actions.add_parser("revision", help="create a migration script for review")
     revision.add_argument("-m", "--message", required=True)
     revision.add_argument("--autogenerate", action="store_true")
@@ -53,24 +60,32 @@ def parser() -> argparse.ArgumentParser:
 
 def main(argv=None) -> int:
     args = parser().parse_args(argv)
+    database = args.database or "ems"
     try:
+        if args.action == "seed" and (
+            (database == "ems_web" and args.kind != "policy")
+            or (database == "ems" and args.kind == "policy")
+        ):
+            raise ValueError("ems supports catalog/demo seeds; ems_web supports only policy")
         if args.action == "history":
-            command.history(migration_config())
+            command.history(migration_config(database=database))
             return 0
         if args.action in ("upgrade", "downgrade") and args.sql:
             config = migration_config(
-                dialect=args.dialect or load_url(args.config).get_backend_name()
+                dialect=args.dialect
+                or load_url(args.config, database=args.database).get_backend_name(),
+                database=database,
             )
             getattr(command, args.action)(config, args.revision, sql=True)
             return 0
         if args.action == "revision" and not args.autogenerate:
-            command.revision(migration_config(), message=args.message)
+            command.revision(migration_config(database=database), message=args.message)
             return 0
-        engine = make_engine(load_url(args.config))
+        engine = make_engine(load_url(args.config, database=args.database))
         try:
             with engine.connect() as connection:
-                require_supported(connection)
-                config = migration_config(connection=connection)
+                require_target(connection, database)
+                config = migration_config(connection=connection, database=database)
                 if args.action in ("init", "upgrade"):
                     command.upgrade(config, "head" if args.action == "init" else args.revision)
                 elif args.action == "downgrade":
@@ -80,7 +95,11 @@ def main(argv=None) -> int:
                 elif args.action == "revision":
                     command.revision(config, message=args.message, autogenerate=True)
                 elif args.action == "check":
-                    differences = schema_differences(connection)
+                    differences = schema_differences(
+                        connection,
+                        metadata=target_metadata(database),
+                        retired_tables=target_retired_tables(database),
+                    )
                     if differences:
                         print("\n".join(differences), file=sys.stderr)
                         return 1
@@ -90,7 +109,12 @@ def main(argv=None) -> int:
                 elif args.action == "seed":
                     with connection.begin():
                         with session_factory(connection).begin() as session:
-                            apply_seed(session, args.kind)
+                            if database == "ems_web":
+                                from web_db.seeds import apply_seed as apply_web_seed
+
+                                apply_web_seed(session, args.kind)
+                            else:
+                                apply_seed(session, args.kind)
         finally:
             engine.dispose()
         return 0

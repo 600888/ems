@@ -21,15 +21,19 @@ postgresql = ["psycopg[binary]>=3.2,<4"]
 [project.scripts]
 ems-db = "db.cli:main"
 
+[tool.setuptools]
+include-package-data = false
+
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["db", "db.models", "db.migrations", "db.migrations.versions"]
+include = ["db", "db.models", "db.migrations", "db.migrations.versions", "web_db", "web_db.models", "web_db.migrations", "web_db.migrations.versions"]
 
 [tool.setuptools.package-data]
 db = ["alembic.ini", "migrations/script.py.mako"]
+web_db = ["alembic.ini", "migrations/script.py.mako"]
 
 [tool.pytest.ini_options]
-testpaths = ["db/tests"]
+testpaths = ["db/tests", "web_db/tests"]
 pythonpath = ["."]
 
 [tool.ruff]

@@ -1,7 +1,7 @@
 # 用户管理与角色权限设计
 
 > 日期：2026-10-27｜状态：待实现的目标设计；角色、持久账号和用户管理接口尚未落地。
-> 关联：[登录设计（用户名、密码与加密）](login.md) · [Web 进程设计](../design.md) · [设备模块 API](../device/api.md)。
+> 关联：[登录设计（用户名、密码与加密）](login.md) · [Web 数据库与表设计](../../../common/database/ems-web.md) · [Web 进程设计](../design.md) · [设备模块 API](../device/api.md)。
 
 ## 1. 范围与基本规则
 
@@ -11,7 +11,7 @@
 - 默认拒绝；授权必须同时满足“操作权限”和“站/设备资源范围”。前端菜单或按钮隐藏不能代替后端授权。
 - 用户、角色和授权保存后直接生效；不建立配置版本、发布、快照或回滚机制，也不递增设备站根 `config_revision`。
 - 站、单元、设备、部件都引用 `cfg_device.device_id` 和实际父子关系，不能建立第二套资产或设备目录。
-- 生产账号来自公共数据库，不从 Web JSON 或环境变量读取账号清单；环境配置仅提供连接、密钥来源和预算。
+- 生产账号存入独立的 `ems_web` 数据库，通过公共数据库层访问，不从 Web JSON 或环境变量读取账号清单；环境配置仅提供连接、密钥来源和预算。
 
 ## 2. 三类角色与权限矩阵
 
@@ -105,8 +105,8 @@ flowchart TD
 
 ### 4.2 密码规则与重置
 
-- 参考 EMS300CP，密码长度为 12～32 个 Unicode 字符，最小长度由管理员在 12～32 之间配置；大写字母、小写字母、数字、特殊符号至少三类。允许粘贴和密码管理器，不静默截断、去空格或隐式归一化；拒绝弱密码和与用户名相同的密码。以[登录设计](login.md)为统一认证规则。
-- 默认使用成熟实现的 Argon2id，最低参数 `m=19 MiB/t=2/p=1`，每用户独立随机盐，编码存储算法及成本。参数基线参考 [OWASP 密码存储指南](https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html)，上线前在目标 ARM/Windows 硬件压测有界并发及派生成本。
+- 密码长度为 12～32 个 Unicode 字符，最小长度由管理员在 12～32 之间配置；大写字母、小写字母、数字、特殊符号至少三类。允许粘贴和密码管理器，不静默截断、去空格或隐式归一化；拒绝弱密码和与用户名相同的密码。以[登录设计](login.md)为统一认证规则。
+- 默认使用成熟实现的 Argon2id，最低参数 `m=19 MiB/t=2/p=1`，每用户独立随机盐，编码存储算法及成本。上线前在目标 ARM/Windows 硬件压测有界并发及派生成本。
 - 当前测试骨架的 PBKDF2 不是目标新账号默认值；已有合法 PBKDF2 哈希可在成功登录后重哈希，不能直接“转换”摘要。没有生产账号时无需构造兼容数据。
 - 创建用户时管理员设置符合策略的临时密码，服务端只写哈希并置首次改密；请求/响应与审计均不回显密码。临时密码通过现场受控渠道告知，系统不自动发送邮件或消息。
 - 临时密码有效期 24 小时；过期需管理员再次重置。首次改密不会自动启用 disabled 账号。
@@ -120,30 +120,29 @@ flowchart TD
 
 始终保留至少一个未删除且 `enabled` 的管理员。自助页面禁止修改自己的角色/状态/范围、删除自己或用管理重置接口重置自己；可修改展示名、按旧密码改密和退出会话。其他管理员不能停用、删除或降级最后一名 enabled 管理员。
 
-管理员变更在公共事务中先锁定唯一安全守卫行，再锁定涉及用户，检查变更后的管理员数量，写入账号/权限、撤销会话和审计后提交。并发两名管理员互相停用/降级时不允许同时通过。临时密码锁定不计为人工停用，需结合管理员解锁/主机恢复处理，不能靠禁止锁定管理员绕过暴力破解防护。
+管理员变更在公共事务中先锁定唯一登录策略行，再锁定涉及用户，检查变更后的管理员数量，写入账号/权限、撤销会话和审计后提交。策略行同时承担管理事务的串行锁，不单独建立安全守卫表。并发两名管理员互相停用/降级时不允许同时通过。临时密码锁定不计为人工停用，需结合管理员解锁/主机恢复处理，不能靠禁止锁定管理员绕过暴力破解防护。
 
 ## 5. 持久化与事务设计
 
-以下是目标逻辑模型，本次只新增设计文档，不新增 SQL、迁移编号或 ORM 实现。实现时沿用仓库公共数据库层与现有 Python 数据库管理入口，账号表不混入设备配置表；不恢复已移除的建表脚本。详细字段映射在实现时同步唯一公共行结构。
+账号与 Web 业务使用独立的 `ems_web` 数据库，与工程库 `ems` 位于同一个 MySQL 实例。共 5 张表，字段、类型、索引及初始化规则统一见 [Web 数据库与表设计](../../../common/database/ems-web.md)。独立 SQLAlchemy 模型与迁移入口已实现，两库共用 `backend/python/database.yaml`，通过 `ems-db --database ems_web` 选择；C++ 公共 Repository 与身份服务仍待落地。
 
-| 逻辑实体 | 核心字段 / 约束 |
+| 表 | 职责 |
 | --- | --- |
-| `auth_user` | user_id、username、display_name、password_hash、role_code、status、scope_mode、must_change_password、temporary_password_expires_at、failed_attempts、locked_until、password_changed_at、created_at、updated_at、last_login_at、deleted_at；user_id/归一化 username 分别唯一 |
-| `auth_user_scope` | user_id、station_id、可空 device_root_id；实际关系校验；规范化后不重复，删除账号时清理范围 |
-| `auth_session` | session_id、user_id、kind（full/password_change）、Cookie 摘要、csrf_token、auth_time、last_interactive_at、created_at、absolute_expires_at、revoked_at/reason、来源 IP/UA 摘要；Cookie 摘要唯一，受限会话固定 5 分钟 |
-| `auth_login_policy` | 唯一实例策略行；failed_login_limit（默认 6，3～6）、lock_minutes（默认 10，10～30）、idle_timeout_minutes（默认 10，10～30）、password_min_length（默认 12，12～32）、login_notice（最多 500 字符）、updated_at；保存即生效 |
-| `auth_security_guard` | 唯一实例安全守卫行；串行首管理员初始化、管理员数量保护及权限管理事务，不是配置修订计数 |
-| 统一 `audit_log` | event_id、actor/target_user_id、action、resource、脱敏差异、outcome/reason、request_id、来源、occurred_at；复用公共审计契约，不建 Web 私有表 |
+| `auth_user` | 账号、密码哈希、固定角色、状态和失败锁定 |
+| `auth_user_scope` | 站或设备子树授权；只存稳定 ID，不复制设备目录 |
+| `auth_session` | 完整/受限会话、Cookie 摘要、CSRF、活动期限与撤销状态 |
+| `auth_login_policy` | 唯一登录策略行，同时串行首管理员初始化和管理员管理事务 |
+| `audit_log` | Web 认证、安全管理和业务操作审计，复用公共审计契约 |
 
 会话 Cookie 为高熵随机值，服务端只保存其摘要；密码使用专用哈希。会话原值仅通过 Set-Cookie 交给浏览器，不进入 JSON。每会话的随机 csrf_token 保存在服务端会话记录中，以便页面刷新后由受保护的 session 接口恢复，多标签使用同一值；CSRF 单独不能充当登录凭证。ID 对外都是字符串，密码哈希不得进入公共用户 DTO。资源范围属于设备授权数据。
 
-推荐索引：用户 `(status, role_code)`、会话 `(user_id, revoked_at, absolute_expires_at)` 和 Cookie 摘要唯一索引；列表默认 `created_at,user_id` 稳定排序。MySQL 对可空列的 UNIQUE 不能保证“整站授权”去重，须在锁定用户的事务内规范化/去重，不能只依赖复合唯一索引。
+API 的整站授权仍为 `device_root_id=null`；数据库以非空的空串表示，由 Repository 转换，唯一键 `(user_id, station_id, device_root_id)` 保证重复整站行无法写入。父子授权重叠仍在锁定用户的事务内规范化。详细索引只在数据库设计中维护。
 
 ### 5.1 原子性和即时撤销
 
 账号写入、范围替换、会话撤销和成功审计使用同一个公共数据库事务；任一失败全部回滚，不能先返回成功再异步撤销。停用、删除、改密/重置和权限变更同时撤销完整及受限改密会话；登录完成前锁定用户，重新核验认证相关字段，不能使用撤权前的结果创建旧权限会话。统一审计不可写时拒绝安全管理变更；失败登录审计使用独立事务，写失败也不允许因此创建会话。
 
-锁顺序固定为“安全守卫（需要时）→ 涉及用户按 ID 排序 → 会话 → 业务站根”。账号管理事务和业务写事务遵循相同顺序，不能先锁站根后补锁账号造成反向等待。
+锁顺序固定为“登录策略行（管理用例需要时）→ 涉及用户按内部 id 升序 → 会话 → 业务站根”。账号管理事务和业务写事务遵循相同顺序，不能先锁站根后补锁账号造成反向等待。工程写入与 Web 审计使用同实例、同连接的两库事务，不能分别提交。
 
 普通读取以鉴权时状态为准，已鉴权的在途只读请求可以完成。配置写入、用户管理和控制意图提交在同一事务持有当前用户共享锁，重新核验权限与范围；停用/降权事务需要独占锁，二者按提交先后排序。权限变更成功返回后，旧身份不能再提交新的关键写入。后续异步控制任务在最终执行前再次授权；已发到现场的命令不能通过撤销会话“收回”。
 
@@ -168,7 +167,7 @@ flowchart TD
 | POST `/api/users/set-access` | `user_id/role_code/scope_mode/scopes/expected_edit_token` | `user.grant`；一次替换角色和完整范围，撤销全部会话 |
 | POST `/api/users/reset-password` | `user_id/temporary_password/expected_edit_token` | `user.security`；临时密码、强制改密、撤销全部会话 |
 | GET `/api/users/security-settings` | 无 | `user.security`；登录失败阈值、锁定时长、空闲超时、密码长度、登录通知及 edit_token |
-| POST `/api/users/security-settings/update` | 上述五项策略及 expected_edit_token | `user.security` + 最近重新认证；锁定安全守卫、策略行，校验范围并同事务写审计 |
+| POST `/api/users/security-settings/update` | 上述五项策略及 expected_edit_token | `user.security` + 最近重新认证；锁定唯一策略行及当前管理员，校验范围并同事务写审计 |
 | POST `/api/users/unlock` | `user_id/expected_edit_token` | `user.security`；清理锁定及失败窗口 |
 | POST `/api/users/delete` | `user_id/expected_edit_token` | `user.write`；逻辑删除，撤销全部会话，返回 removed_id |
 | POST `/api/users/sessions/list` | `user_id/page/page_size` | `session.manage`；脱敏设备/IP、最近活动、期限、当前会话标识 |

@@ -83,3 +83,6 @@ coverage.xml
 /backend/python/ems.sqlite3
 /backend/python/ems.sqlite3-shm
 /backend/python/ems.sqlite3-wal
+/backend/python/ems_web.sqlite3
+/backend/python/ems_web.sqlite3-shm
+/backend/python/ems_web.sqlite3-wal

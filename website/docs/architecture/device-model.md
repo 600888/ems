@@ -3,7 +3,7 @@
 > 版本：1.4｜更新日期：2026-09-26｜状态：公共 C++ 设备核心与 Modbus CSV 导入草稿已实现；持久化及运行闭环待实现。
 > 本文定义设备类型、固有点位、厂家点表、设备实例绑定及导入配置流程。整体架构见 [EMS 系统架构设计](system-design.md)，键格式见 [Redis 键设计](../common/realtime/redis-key-design.md)，协议执行见 [数据采集架构](../processes/collector/design.md)。文中的设备目录是 EMS 项目抽象，厂家 A/B 的地址与编码均为示例，不是现场设备参数或行业强制标准。
 > 首期新格式 Modbus CSV 的列和加载行为见 [点表 CSV 导入与内存加载](point-table-import.md)。
-> 设备点表的 XLSX 模板沿用 `ems_simulate`，统一放在根目录 [data/](https://github.com/600888/ems/blob/main/data/README.md)。四遥中文模板支持事务写入现有数据库配置表；公共模型导入接口另支持与 CSV 相同英文列名的 XLSX。数据库配置入库与标准绑定的运行发布分别处理。
+> 设备点表的 XLSX 模板统一放在根目录 [data/](https://github.com/600888/ems/blob/main/data/README.md)。四遥中文模板支持事务写入现有数据库配置表；公共模型导入接口另支持与 CSV 相同英文列名的 XLSX。数据库配置入库与标准绑定的运行发布分别处理。
 
 ## 1. 目标与核心约定
 
@@ -50,7 +50,7 @@ flowchart LR
 
 类型描述业务角色，协议描述通信方式，两者独立。例如使用同一种通信协议的电表与空调不会共享一个设备类型。一个网关采集多种设备时，网关是通信来源，下面各资产仍按各自业务类型配置。
 
-公共 C++ 核心采用设备业务模型继承：`DeviceModel` 基类只保存类型 code、版本和名称；`PcsDeviceModel`、`BmsDeviceModel`、`FireDeviceModel` 子类分别定义自己的固有点和能力。基类没有通用固有点或能力集合。子类生成版本化的 `DeviceTypeDefinition` 值对象，实例 `Device` 仍以稳定 ID、资产和类型版本引用参与配置快照；协议连接和控制执行不放在业务模型基类中。此划分参考 `ems_simulate` 的设备继承方式，并保持本项目设备与通道多对多的配置关系。
+公共 C++ 核心采用设备业务模型继承：`DeviceModel` 基类只保存类型 code、版本和名称；`PcsDeviceModel`、`BmsDeviceModel`、`FireDeviceModel` 子类分别定义自己的固有点和能力。基类没有通用固有点或能力集合。子类生成版本化的 `DeviceTypeDefinition` 值对象，实例 `Device` 仍以稳定 ID、资产和类型版本引用参与配置快照；协议连接和控制执行不放在业务模型基类中。设备与通道保持多对多的配置关系。
 
 ### 2.2 实例与子设备
 

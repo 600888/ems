@@ -1,4 +1,6 @@
 # 仅供数据库迁移工具使用。选择 sqlite、mysql 或 postgresql。
+# 工程库和 Web 库共用此连接配置；通过 ems-db --database ems / ems_web 选择。
+# --database 只覆盖库名；SQLite 在同一目录分别使用 ems.sqlite3 / ems_web.sqlite3。
 database: mysql
 
 databases:
