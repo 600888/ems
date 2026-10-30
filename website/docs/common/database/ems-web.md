@@ -1,7 +1,7 @@
 # EMS Web 数据库与表设计
 
 > 日期：2026-10-30｜状态：独立 SQLAlchemy 模型、初始化迁移和策略种子已实现；生产数据库部署、C++ 持久化身份服务与真实 MySQL 联调待完成。
-> 关联：[用户管理与角色权限](../../processes/web/user/index.md) · [登录设计](../../processes/web/user/login.md) · [公共数据库访问层](index.md)。
+> 关联：[用户管理与角色权限](../../processes/web/user/index.md) · [后端实现设计](../../processes/web/user/backend.md) · [登录设计](../../processes/web/user/login.md) · [公共数据库访问层](index.md)。
 
 Web 账号、授权、会话、登录策略和 Web 操作审计使用独立的 **`ems_web` 数据库，共 5 张表**。设备配置继续使用现有工程库 `ems`，不复制设备树、通道或四遥数据。
 

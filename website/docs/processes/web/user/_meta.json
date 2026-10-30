@@ -8,5 +8,10 @@
     "type": "file",
     "name": "index",
     "label": "用户管理与角色权限设计"
+  },
+  {
+    "type": "file",
+    "name": "backend",
+    "label": "Web 后端用户管理实现设计"
   }
 ]

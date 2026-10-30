@@ -1,7 +1,7 @@
 # 登录设计（用户名、密码与加密）
 
 > 日期：2026-10-27｜状态：待实现的目标设计；当前仅有测试用内存账号与会话骨架。
-> 关联：[用户管理与角色权限](index.md) · [Web 数据库与表设计](../../../common/database/ems-web.md) · [Web 进程设计](../design.md) · [当前运行边界](../running.md)。
+> 关联：[用户管理与角色权限](index.md) · [后端实现设计](backend.md) · [Web 数据库与表设计](../../../common/database/ems-web.md) · [Web 进程设计](../design.md) · [当前运行边界](../running.md)。
 
 ## 1. 登录方案
 

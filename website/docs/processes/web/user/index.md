@@ -1,11 +1,13 @@
 # 用户管理与角色权限设计
 
 > 日期：2026-10-27｜状态：待实现的目标设计；角色、持久账号和用户管理接口尚未落地。
-> 关联：[登录设计（用户名、密码与加密）](login.md) · [Web 数据库与表设计](../../../common/database/ems-web.md) · [Web 进程设计](../design.md) · [设备模块 API](../device/api.md)。
+> 关联：[登录设计（用户名、密码与加密）](login.md) · [后端实现设计](backend.md) · [Web 数据库与表设计](../../../common/database/ems-web.md) · [Web 进程设计](../design.md) · [设备模块 API](../device/api.md)。
 
 ## 1. 范围与基本规则
 
 用户管理属于 Web 的 `identity` 业务模块，对外提供账号生命周期、角色分配、资源范围、密码维护、会话撤销和安全审计。认证与授权统一由该模块实现，设备、监视、历史和控制模块消费 `Principal`。
+
+本页定义业务规则及 HTTP 契约；C++ 服务分层、公共 Repository、事务接入和验收顺序见[后端实现设计](backend.md)，数据库字段只在数据库专题维护。
 
 - 内置三种固定角色：**管理员 `admin`、操作员 `operator`、观察员 `observer`**。每个用户恰好一个角色，首期不支持自定义角色、多角色合并和逐用户权限补丁。
 - 默认拒绝；授权必须同时满足“操作权限”和“站/设备资源范围”。前端菜单或按钮隐藏不能代替后端授权。
@@ -158,7 +160,7 @@ API 的整站授权仍为 `device_root_id=null`；数据库以非空的空串表
 
 | 方法与路径 | 请求关键字段 | 权限 / 结果 |
 | --- | --- | --- |
-| GET `/api/users/capabilities` | 无 | `user.read`；三种角色、权限说明、密码规则及范围模式 |
+| GET `/api/users/capabilities` | 无 | `user.read`；三种角色、权限说明、密码规则、范围模式、登录通知与有界完整 scope_tree；超限不截断 |
 | POST `/api/users/list` | `keyword/role_code/status/page/page_size`，筛选可省略 | `user.read`；脱敏列表、稳定排序和真实 total |
 | POST `/api/users/detail` | `user_id` | `user.read`；用户、范围、edit_token，不含哈希/令牌 |
 | POST `/api/users/create` | `username/display_name/role_code/status/scope_mode/scopes/temporary_password` | `user.write + user.grant`；201 用户摘要；status 省略为 disabled |
@@ -173,7 +175,7 @@ API 的整站授权仍为 `device_root_id=null`；数据库以非空的空串表
 | POST `/api/users/sessions/list` | `user_id/page/page_size` | `session.manage`；脱敏设备/IP、最近活动、期限、当前会话标识 |
 | POST `/api/users/sessions/revoke` | `user_id/session_id` 或 `user_id/all=true` | `session.manage`；校验会话归属，撤销幂等 |
 
-创建管理员、授予/扩大范围、角色变更、重置/解锁、删除/启停和撤销他人会话均要求最近 5 分钟重新认证。`POST /api/auth/reauthenticate` 接收当前密码，在已登录 Cookie、Origin 和 CSRF 下校验并仅更新当前会话 `auth_time`；不接受目标用户 ID，不产生业务新权限。
+创建管理员或已启用用户、授予/扩大范围、角色变更、重置/解锁、删除/启停和撤销他人会话均要求最近 5 分钟重新认证。`POST /api/auth/reauthenticate` 接收当前密码，在已登录 Cookie、Origin 和 CSRF 下校验并仅更新当前会话 `auth_time`；不接受目标用户 ID，不产生业务新权限。
 
 创建流程返回的用户摘要含新 `user_id`；不返回临时密码。创建结果未知不能盲目重复提交，按唯一 username 查询确认；同名冲突返回 409，绝不能覆盖既有用户。管理接口修改当前本人受第 4 节限制，不能绕开自助规则。
 
@@ -212,7 +214,7 @@ API 的整站授权仍为 `device_root_id=null`；数据库以非空的空串表
 | 403 `permission_denied` / `reauthentication_required` | 无权限或需要当前用户重新认证；不创建新角色权限 |
 | 404 `user_not_found` / `session_not_found` | 目标不存在、已删除或不属于自助用户 |
 | 409 `username_conflict` / `edit_conflict` / `last_admin_required` | 唯一名、并发编辑或最后管理员保护 |
-| 422 `invalid_scope` / `password_policy_failed` / `self_management_forbidden` | 资源关系、密码策略或本人管理限制 |
+| 422 `invalid_scope` / `password_policy_failed` / `self_management_forbidden` / `scope_tree_too_large` | 资源关系、密码策略、本人管理限制或授权目录超过树预算 |
 | 429 `rate_limited` | 达到凭据或敏感管理操作限流 |
 | 503 `identity_unavailable` / `audit_unavailable` | 身份或审计依赖不可用，拒绝变更 |
 
