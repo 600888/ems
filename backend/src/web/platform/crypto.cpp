@@ -1,9 +1,15 @@
 #include "crypto.h"
 
+#include <argon2.h>
+
 #include <array>
+#include <atomic>
+#include <cstdio>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
+
+#include "web/transport/json.h"
 #if defined(_WIN32)
 #include <windows.h>
 #endif
@@ -11,10 +17,24 @@
 #include <bcrypt.h>
 #else
 #include <openssl/evp.h>
+#include <openssl/hmac.h>
 #include <openssl/rand.h>
 #endif
 namespace ems::web {
 namespace {
+std::atomic<int> deriving{0};
+
+struct PasswordSlot {
+    PasswordSlot() {
+        if (deriving.fetch_add(1) >= 2) {
+            deriving.fetch_sub(1);
+            throw ApiError(429, "ResourceExhausted", "rate_limited");
+        }
+    }
+
+    ~PasswordSlot() { deriving.fetch_sub(1); }
+};
+
 std::string hex(const unsigned char* p, std::size_t n) {
     static const char* digits = "0123456789abcdef";
     std::string s;
@@ -92,13 +112,31 @@ bool secure_equal(const std::string& a, const std::string& b) {
 std::string hash_password(const std::string& password) {
     if (password.empty() || password.size() > 1024) throw std::invalid_argument("password length");
 
-    // 每次生成独立随机盐；编码保存算法及成本，验证时不接受低于约定的迭代数。
-    auto salt = random_token();
-    return "pbkdf2_sha256$210000$" + salt + "$" + derive(password, salt, 210000);
+    PasswordSlot slot;
+    auto salt = digest_bytes(random_token());
+    std::array<char, 256> encoded{};
+    if (argon2id_hash_encoded(3, 65536, 1, password.data(), password.size(), salt.data(), 16, 32,
+                              encoded.data(), encoded.size()) != ARGON2_OK)
+        throw ApiError(503, "Unavailable", "password_derivation_unavailable");
+    return encoded.data();
 }
 
 bool verify_password(const std::string& password, const std::string& encoded) {
+    PasswordSlot slot;
     try {
+        if (encoded.rfind("$argon2id$", 0) == 0) {
+            unsigned m = 0, t = 0, p = 0;
+            int end = 0;
+            if (std::sscanf(encoded.c_str(), "$argon2id$v=19$m=%u,t=%u,p=%u$%n", &m, &t, &p,
+                            &end) != 3 ||
+                end == 0 || m < 19456 || m > 65536 || t < 2 || t > 4 || p != 1 ||
+                encoded.size() > 256 || password.empty() || password.size() > 1024)
+                return false;
+            const auto status = argon2id_verify(encoded.c_str(), password.data(), password.size());
+            if (status == ARGON2_MEMORY_ALLOCATION_ERROR || status == ARGON2_THREAD_FAIL)
+                throw ApiError(503, "Unavailable", "password_derivation_unavailable");
+            return status == ARGON2_OK;
+        }
         if (password.empty() || password.size() > 1024) return false;
         std::istringstream input(encoded);
         std::string alg, count, salt, digest, extra;
@@ -114,8 +152,65 @@ bool verify_password(const std::string& password, const std::string& encoded) {
         auto iterations = std::stoul(count);
         if (iterations < 210000 || iterations > 1000000) return false;
         return secure_equal(digest, derive(password, salt, iterations));
+    } catch (const ApiError&) {
+        throw;
     } catch (...) {
         return false;
     }
+}
+
+std::vector<char> digest_bytes(const std::string& value) {
+    if (value.size() % 2) throw std::invalid_argument("hex");
+    auto nibble = [](char c) -> int {
+        if (c >= '0' && c <= '9') return c - '0';
+        if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+        throw std::invalid_argument("hex");
+    };
+    std::vector<char> bytes;
+    for (std::size_t i = 0; i < value.size(); i += 2)
+        bytes.push_back(char((nibble(value[i]) << 4) | nibble(value[i + 1])));
+    return bytes;
+}
+
+std::string random_csrf() {
+    const auto bytes = digest_bytes(random_token());
+    constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
+    unsigned bits = 0;
+    int count = 0;
+    std::string out;
+    for (unsigned char c : bytes) {
+        bits = (bits << 8) | c;
+        count += 8;
+        while (count >= 6) {
+            count -= 6;
+            out += alphabet[(bits >> count) & 63];
+        }
+    }
+    if (count) out += alphabet[(bits << (6 - count)) & 63];
+    return out;
+}
+
+std::string hmac_sha256(const std::string& key, const std::string& value) {
+    std::array<unsigned char, 32> bytes{};
+#ifdef _WIN32
+    BCRYPT_ALG_HANDLE alg{};
+    BCRYPT_HASH_HANDLE hash{};
+    if (BCryptOpenAlgorithmProvider(&alg, BCRYPT_SHA256_ALGORITHM, nullptr,
+                                    BCRYPT_ALG_HANDLE_HMAC_FLAG) != 0)
+        throw std::runtime_error("crypto");
+    auto status =
+        BCryptCreateHash(alg, &hash, nullptr, 0, (PUCHAR)key.data(), (ULONG)key.size(), 0);
+    if (status == 0) status = BCryptHashData(hash, (PUCHAR)value.data(), (ULONG)value.size(), 0);
+    if (status == 0) status = BCryptFinishHash(hash, bytes.data(), (ULONG)bytes.size(), 0);
+    if (hash) BCryptDestroyHash(hash);
+    BCryptCloseAlgorithmProvider(alg, 0);
+    if (status != 0) throw std::runtime_error("crypto");
+#else
+    unsigned int size = 0;
+    if (!HMAC(EVP_sha256(), key.data(), (int)key.size(), (const unsigned char*)value.data(),
+              value.size(), bytes.data(), &size))
+        throw std::runtime_error("crypto");
+#endif
+    return hex(bytes.data(), bytes.size());
 }
 }  // namespace ems::web

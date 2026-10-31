@@ -26,7 +26,7 @@ struct Upload {
 class DeviceRequest {
    public:
     database::MySqlDatabaseContext& database;
-    const Principal& principal;
+    Principal principal;
     core::CallContext context;
     std::unique_ptr<database::ITransaction> transaction;
     Json station;
@@ -34,14 +34,16 @@ class DeviceRequest {
     std::set<std::string> deleting_points;
 
     /**
-     * @brief 建立调用方事务，先锁站根确保查询和校验不混合不同保存。
+     * @brief 接收调用方事务，先复核用户及会话，再锁站根。
      * @param[in,out] database 进程公共数据库上下文。
      * @param[in] principal 已认证主体。
      * @param[in] context 请求期限。
      * @param[in] write 是否使用工程写锁。
+     * @param[in] caller_transaction 可选调用方事务，所有权转入请求；空时为直接调用建立事务。
      */
     DeviceRequest(database::MySqlDatabaseContext& database, const Principal& principal,
-                  core::CallContext context, bool write);
+                  core::CallContext context, bool write,
+                  std::unique_ptr<database::ITransaction> caller_transaction = {});
     /**
      * @brief 以绑定条件查询一页内部行，保留服务所需数字主键。
      * @param[in] query 受支持查询。

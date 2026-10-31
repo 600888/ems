@@ -8,6 +8,7 @@
 
 #include "web/modules/device/infrastructure/point_table_parser.h"
 #include "web/modules/device/infrastructure/station_package_parser.h"
+#include "web/modules/identity/application/authorization_service.h"
 #include "web/platform/crypto.h"
 
 namespace ems::web {
@@ -23,11 +24,14 @@ std::string sql_time() {
 }  // namespace
 
 DeviceRequest::DeviceRequest(MySqlDatabaseContext& db, const Principal& actor,
-                             core::CallContext ctx, bool write)
+                             core::CallContext ctx, bool write,
+                             std::unique_ptr<ITransaction> caller_transaction)
     : database(db), principal(actor), context(std::move(ctx)) {
-    transaction = take(database.database->begin(context));
+    transaction = caller_transaction ? std::move(caller_transaction)
+                                     : take(database.database->begin(context));
+    principal = AuthorizationService::recheck(database, *transaction, actor, context);
 
-    // 先锁站根再读业务数据；读请求用共享锁，写请求独占锁。
+    // 身份已在同一事务中复核并持有用户锁，再锁站根；读共享、写独占。
     DeviceQuery q;
     q.table = DeviceTable::Device;
     q.filters = {{"node_kind", "station"}};
@@ -39,6 +43,16 @@ DeviceRequest::DeviceRequest(MySqlDatabaseContext& db, const Principal& actor,
 
     station = roots.front();
     auto id = station.at("device_id").get<std::string>();
+    if (!principal.session_id.empty() && principal.scope_mode == "selected") {
+        principal.device_roots.clear();
+        principal.station_ids.clear();
+        for (const auto& scope : principal.scopes)
+            if (scope.station_id == id) {
+                principal.station_ids.insert(id);
+                principal.device_roots.insert(scope.device_root_id.empty() ? id
+                                                                           : scope.device_root_id);
+            }
+    }
     if (!principal.station_ids.count("*") && !principal.station_ids.count(id)) {
         throw ApiError(403, "PermissionDenied", "station_not_allowed");
     }
@@ -140,6 +154,8 @@ DeviceResult DeviceRequest::finish(DeviceResult result) {
         put(DeviceTable::Device, station, false);
     }
 
+    // 锁等待和校验也消耗会话期限；提交前复核当前时间及最新空闲策略。
+    principal = AuthorizationService::recheck(database, *transaction, principal, context);
     // 只有 commit 成功才向客户端报告保存完成；公共层的 Unknown 不被覆盖。
     take(transaction->commit(context));
     result.meta["config_revision"] =
@@ -223,7 +239,7 @@ DeviceResult DeviceService::execute(const std::string& path, const Json& body,
         // 预授权用短事务完成；真正的文件解析绝不占用连接或站根锁。
         {
             DeviceRequest preflight(database_, actor, ctx, false);
-            actor.require("import.write");
+            preflight.principal.require("import.write");
             auto owner = preflight.device(text(body, "device_id"));
             auto binding =
                 preflight.one(DeviceTable::Binding, "binding_id", text(body, "binding_id"));
@@ -241,8 +257,11 @@ DeviceResult DeviceService::execute(const std::string& path, const Json& body,
     const bool write = action == "create" || action == "update" || action == "delete" ||
                        action == "batch-change" || action == "apply" || action == "validate";
     const bool preview = path.rfind("/api/point-imports/", 0) == 0 && action != "apply";
-    DeviceRequest request(database_, actor, ctx,
-                          (write && !preview) || path == "/api/point-imports/create");
+    auto transaction = take(database_.database->begin(ctx));
+    auto current = AuthorizationService::recheck(database_, *transaction, actor, ctx);
+    DeviceRequest request(database_, current, ctx,
+                          (write && !preview) || path == "/api/point-imports/create",
+                          std::move(transaction));
     DeviceResult result;
 
     // 固定模块分派，不从 URL 或 JSON 拼接类名、函数名或表名。
@@ -272,6 +291,20 @@ DeviceResult DeviceService::execute(const std::string& path, const Json& body,
         auto issues = request.validate();
         if (!issues.empty())
             throw ApiError(422, "InvalidArgument", "configuration_invalid", "NotApplied", issues);
+    }
+    if (write && !actor.session_id.empty()) {
+        AuditRecord event;
+        event.event_id = random_token();
+        event.actor_user_id = request.principal.subject_id;
+        event.action = "device." + action;
+        event.resource_type = "engineering";
+        event.resource_id = request.station.at("device_id").get<std::string>();
+        event.outcome = "success";
+        event.request_id = ctx.trace_id.empty() ? random_token() : ctx.trace_id;
+        event.details = Json({{"route", path}, {"engineering_changed", request.changed}}).dump();
+        event.occurred_at = identity_time();
+        auto audit = database_.audit->append(*request.transaction, event, ctx);
+        if (!core::is_ok(audit)) throw ApiError(503, "Unavailable", "audit_unavailable");
     }
     return request.finish(std::move(result));
 }

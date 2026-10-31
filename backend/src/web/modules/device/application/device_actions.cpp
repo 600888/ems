@@ -158,7 +158,16 @@ DeviceResult device_action(DeviceRequest& request, const std::string& path, cons
         auto parent = row.at("parent_device_id").get<std::string>();
         while (!parent.empty()) {
             auto node = request.one(DeviceTable::Device, "device_id", parent);
-            ancestors.push_back(public_row(node));
+            try {
+                request.device(node.at("device_id"));
+                ancestors.push_back(public_row(node));
+            } catch (const ApiError& error) {
+                if (error.status != 404) throw;
+                ancestors.push_back({{"device_id", node.at("device_id")},
+                                     {"name", node.at("name")},
+                                     {"node_kind", node.at("node_kind")},
+                                     {"navigation_only", true}});
+            }
             parent = node.at("parent_device_id");
         }
         detail["ancestors"] = ancestors;

@@ -40,7 +40,7 @@ Json new_channel(const std::string& id, const Json& patch) {
 DeviceResult binding_action(DeviceRequest& request, const std::string& path, const Json& body) {
     const bool is_channel = path.rfind("/api/channels/", 0) == 0;
     const auto action = path.substr(path.find_last_of('/') + 1);
-    request.principal.require(is_channel ? "channel.read" : "device.read");
+    request.principal.require("channel.read");
 
     if (is_channel) {
         if (action == "list") {

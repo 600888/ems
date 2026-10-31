@@ -8,7 +8,7 @@
 #include "module_registry.h"
 #include "web/modules/device/application/device_service.h"
 #include "web/modules/health/api/health_service.h"
-#include "web/modules/identity/application/session_service.h"
+#include "web/modules/identity/module.h"
 #include "web/platform/crypto.h"
 #include "web/platform/executor/bounded_executor.h"
 #include "web_options.h"
@@ -61,6 +61,7 @@ struct Reply {
 struct State {
     WebOptions options;
     std::shared_ptr<SessionService> identity;
+    std::unique_ptr<UserService> users;
     DeviceService device;
     BoundedExecutor business;
     BoundedExecutor imports;
@@ -70,14 +71,20 @@ struct State {
           std::shared_ptr<SessionService> sessions)
         : options(o),
           identity(sessions ? std::move(sessions)
-                            : std::make_shared<SessionService>(Json::array(), o.session_capacity,
-                                                               o.session_ttl_seconds)),
+                   : database.users
+                       ? std::make_shared<SessionService>(std::make_shared<AuthorizationService>(
+                             database, load_identity_key(o.identity_key_file)))
+                       : std::make_shared<SessionService>(Json::array(), 1000, 3600)),
           device(std::move(database), o.workspace),
           business(o.workers, o.queue_size),
-          imports(o.import_workers, o.import_queue_size) {}
+          imports(o.import_workers, o.import_queue_size) {
+        if (identity->authorization())
+            users = std::make_unique<UserService>(identity->authorization());
+    }
 };
 
 Json session_json(const Session& session) {
+    if (!session.data.is_null()) return session.data;
     return {{"subject_id", session.principal.subject_id},
             {"permissions", session.principal.permissions},
             {"station_ids", session.principal.station_ids},
@@ -103,7 +110,11 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
     const auto context = core::make_call_context(std::chrono::milliseconds(budget), reply->trace);
     const auto action = path.substr(path.find_last_of('/') + 1);
     const bool write = action == "create" || action == "update" || action == "delete" ||
-                       action == "apply" || action == "batch-change";
+                       action == "apply" || action == "batch-change" || action == "set-status" ||
+                       action == "set-access" || action == "reset-password" || action == "unlock" ||
+                       action == "revoke" || action == "complete" || action == "change-password" ||
+                       action == "login" || action == "logout" || action == "logout-all" ||
+                       action == "reauthenticate" || action == "activity";
 
     // 完成与期限竞争只回复一次；开始后的写超时不能宣称确定未保存。
     std::weak_ptr<Reply> weak_reply = reply;
@@ -118,6 +129,17 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
     auto task = [state, request, reply, post, path, upload, context] {
         if (reply->finished || core::has_expired(context)) return;
         reply->started = true;
+        IdentityCall identity_call{context, request->peerAddr().toIp(),
+                                   request->getHeader("user-agent")};
+        for (auto& c : identity_call.user_agent)
+            if (static_cast<unsigned char>(c) < 32 || static_cast<unsigned char>(c) > 126) c = '?';
+        if (identity_call.user_agent.size() > 256) identity_call.user_agent.resize(256);
+        std::string actor_id;
+        const auto cookie_name =
+            state->options.secure_cookie ? "__Host-ems_session" : "ems_session";
+        const auto clear_cookie = std::string(cookie_name) +
+                                  "=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict" +
+                                  (state->options.secure_cookie ? "; Secure" : "");
         try {
             if (!request->query().empty())
                 throw ApiError(400, "InvalidArgument", "url_parameters_not_allowed");
@@ -161,13 +183,16 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
             if (path == "/health/ready") {
                 if (!state->health->ready()) throw ApiError(503, "NotReady", "process_not_ready");
                 state->device.check_schema(context);
+                if (state->identity->authorization())
+                    state->identity->authorization()->check_schema(context);
                 reply->send(
                     200, {{"data", {{"ready", true}}}, {"meta", {{"request_id", reply->trace}}}});
                 return;
             }
             if (path == "/api/auth/login") {
-                auto login = state->identity->login(body);
-                auto cookie = "ems_session=" + login.first + "; Path=/; HttpOnly; SameSite=Strict" +
+                auto login = state->identity->login(body, identity_call);
+                auto cookie = std::string(cookie_name) + "=" + login.first +
+                              "; Path=/; HttpOnly; SameSite=Strict" +
                               (state->options.secure_cookie ? "; Secure" : "");
                 reply->send(200,
                             {{"data", session_json(login.second)},
@@ -176,8 +201,28 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
                 return;
             }
 
-            auto token = request->getCookie("ems_session");
-            auto session = state->identity->get(token);
+            if (path == "/api/auth/login-options") {
+                if (!state->identity->authorization())
+                    throw ApiError(503, "NotReady", "identity_unavailable");
+                auto data = state->identity->execute(path, "", body, identity_call);
+                reply->send(200, {{"data", data}, {"meta", {{"request_id", reply->trace}}}});
+                return;
+            }
+            auto token = request->getCookie(cookie_name);
+            Session session;
+            try {
+                session = state->identity->get(token, identity_call);
+            } catch (const ApiError& error) {
+                if (error.status != 401 || path != "/api/auth/logout") throw;
+                fields(body, {});
+                state->identity->logout(token, identity_call);
+                reply->send(
+                    200,
+                    {{"data", {{"logged_out", true}}}, {"meta", {{"request_id", reply->trace}}}},
+                    clear_cookie);
+                return;
+            }
+            actor_id = session.principal.subject_id;
             if (post && !secure_equal(request->getHeader("x-csrf-token"), session.csrf))
                 throw ApiError(403, "PermissionDenied", "csrf_mismatch");
             if (path == "/api/auth/session") {
@@ -185,19 +230,36 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
                                   {"meta", {{"request_id", reply->trace}}}});
                 return;
             }
+            if (path == "/api/auth/logout" && !state->users) {
+                fields(body, {});
+                state->identity->logout(token, identity_call);
+                reply->send(
+                    200,
+                    {{"data", {{"logged_out", true}}}, {"meta", {{"request_id", reply->trace}}}},
+                    clear_cookie);
+                return;
+            }
+            if (state->users &&
+                (path.rfind("/api/auth/", 0) == 0 || path.rfind("/api/users/", 0) == 0 ||
+                 path.rfind("/api/profile/", 0) == 0)) {
+                Json data;
+                if (path.rfind("/api/auth/", 0) == 0 || path == "/api/profile/change-password")
+                    data = state->identity->execute(path, token, body, identity_call);
+                else
+                    data = state->users->execute(path, token, body, identity_call);
+                bool clear = data.value("logged_out", false) ||
+                             data.value("reauthentication_required", false);
+                reply->send(path == "/api/users/create" ? 201 : 200,
+                            {{"data", data}, {"meta", {{"request_id", reply->trace}}}},
+                            clear ? clear_cookie : "");
+                return;
+            }
+            if (!session.principal.session_id.empty() && session.principal.kind != "full")
+                throw ApiError(403, "PermissionDenied", "password_change_required");
             if (path == "/api/system/metrics") {
                 session.principal.require("system.read");
                 reply->send(200, {{"data", state->health->metrics()},
                                   {"meta", {{"request_id", reply->trace}}}});
-                return;
-            }
-            if (path == "/api/auth/logout") {
-                fields(body, {});
-                state->identity->logout(token);
-                reply->send(
-                    200,
-                    {{"data", {{"logged_out", true}}}, {"meta", {{"request_id", reply->trace}}}},
-                    "ems_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict");
                 return;
             }
             if (!state->health->ready()) throw ApiError(503, "NotReady", "process_not_ready");
@@ -205,7 +267,28 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
             result.meta["request_id"] = reply->trace;
             reply->send(result.status, {{"data", result.data}, {"meta", result.meta}});
         } catch (const ApiError& error) {
-            reply->error(error);
+            if (state->identity->authorization() && !actor_id.empty() &&
+                (error.status == 403 || error.status == 409 || error.status == 422)) {
+                try {
+                    auto a = state->identity->authorization();
+                    auto tx = take(a->db.database->begin(context));
+                    a->audit(*tx, identity_call, actor_id, "", "request.denied", "failure",
+                             error.reason, {{"route", path}});
+                    take(tx->commit(context));
+                } catch (const ApiError& audit_error) {
+                    reply->error(audit_error);
+                    return;
+                } catch (...) {
+                    reply->error(ApiError(503, "Unavailable", "audit_unavailable"));
+                    return;
+                }
+            }
+            if (error.status == 503 && error.reason == "database_operation_failed" &&
+                (path.rfind("/api/users/", 0) == 0 || path.rfind("/api/profile/", 0) == 0 ||
+                 path.rfind("/api/auth/", 0) == 0))
+                reply->error(ApiError(503, "Unavailable", "identity_unavailable", error.effect));
+            else
+                reply->error(error);
         } catch (const Json::exception&) {
             reply->error(ApiError(400, "InvalidArgument", "invalid_json_or_field_type"));
         } catch (const std::exception&) {
@@ -233,6 +316,9 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
                           std::shared_ptr<SessionService> identity) {
     auto state = std::make_shared<State>(options, std::move(database), std::move(identity));
     state->device.check_schema(core::make_call_context(std::chrono::seconds(15)));
+    if (state->identity->authorization())
+        state->identity->authorization()->check_schema(
+            core::make_call_context(std::chrono::seconds(15)));
     std::filesystem::create_directories(std::filesystem::u8path(options.workspace));
 
     auto& app = drogon::app();
@@ -248,7 +334,13 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
                                     drogon::AdviceCallback&& reject,
                                     drogon::AdviceChainCallback&& next) {
         bool mismatch = request->method() != drogon::Get && request->method() != drogon::Post;
-        for (const auto& route : device_routes()) {
+        auto routes = device_routes();
+        const auto& identity = identity_routes();
+        routes.insert(routes.end(), identity.begin(), identity.end());
+        routes.insert(
+            routes.end(),
+            {{"/api/system/metrics", false}, {"/health/live", false}, {"/health/ready", false}});
+        for (const auto& route : routes) {
             if (request->path() == route.path && (request->method() == drogon::Post) != route.post)
                 mismatch = true;
         }
@@ -261,7 +353,10 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
         }
         next();
     });
-    for (const auto& route : device_routes()) {
+    auto routes = device_routes();
+    const auto& identity_routes_list = identity_routes();
+    routes.insert(routes.end(), identity_routes_list.begin(), identity_routes_list.end());
+    for (const auto& route : routes) {
         app.registerHandler(
             route.path,
             [state, post = route.post](const drogon::HttpRequestPtr& request, Callback&& callback) {
@@ -269,12 +364,8 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
             },
             {route.post ? drogon::Post : drogon::Get});
     }
-    for (const auto& route : std::vector<Route>{{"/api/auth/login", true},
-                                                {"/api/auth/logout", true},
-                                                {"/api/auth/session", false},
-                                                {"/api/system/metrics", false},
-                                                {"/health/live", false},
-                                                {"/health/ready", false}}) {
+    for (const auto& route : std::vector<Route>{
+             {"/api/system/metrics", false}, {"/health/live", false}, {"/health/ready", false}}) {
         app.registerHandler(
             route.path,
             [state, post = route.post](const drogon::HttpRequestPtr& request, Callback&& callback) {
@@ -307,6 +398,20 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
     app.registerBeginningAdvice([host = options.host, port = options.port] {
         LOG_INFO << "ems-web ready, listen=" << host << ':' << port;
     });
+    if (state->users)
+        app.registerBeginningAdvice([state] {
+            drogon::app().getLoop()->runEvery(60, [state] {
+                state->business.submit([state] {
+                    try {
+                        state->users->maintain(
+                            {core::make_call_context(std::chrono::seconds(5)), "", ""},
+                            state->options.audit_retention_days);
+                    } catch (...) {
+                        LOG_WARN << "identity retention batch failed";
+                    }
+                });
+            });
+        });
     app.run();
     state->health->set_ready(false);
     state->business.stop();

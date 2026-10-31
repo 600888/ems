@@ -40,6 +40,7 @@ set(REDIS_PLUS_PLUS_BUILD_STATIC
 add_subdirectory(redis-plus-plus)
 
 if(EMS_BUILD_WEB)
+    include(Argon2)
     include(WebDependencies)
     # 保留父工程开关；Drogon 只提供 HTTP，数据库仍由公共层管理。
     function(ems_add_drogon)

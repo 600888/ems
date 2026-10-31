@@ -4,6 +4,7 @@
 #include <common/database/configuration/i_device_management_store.h>
 #include <common/database/history/repositories.h>
 #include <common/database/i_database.h>
+#include <common/database/identity/repositories.h>
 
 #include <chrono>
 #include <cstdint>
@@ -32,6 +33,8 @@ struct MySqlDatabaseContext {
     std::shared_ptr<IHistoryEventRepository> history_events;
     std::shared_ptr<IDeviceConfigRepository> device_config;
     std::shared_ptr<IDeviceManagementStore> device_management;
+    std::shared_ptr<IUserRepository> users;
+    std::shared_ptr<IAuditRepository> audit;
 };
 
 /**

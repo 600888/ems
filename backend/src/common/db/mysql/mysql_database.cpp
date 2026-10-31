@@ -14,6 +14,7 @@
 
 #include "../configuration/orm_device_config_repository.h"
 #include "../configuration/orm_device_management_store.h"
+#include "../identity/user_repository.h"
 #include "../runtime/transaction_database.h"
 
 namespace ems::database::mysql_rows {
@@ -89,7 +90,9 @@ core::Error mysql_error_result(unsigned int code, core::WriteEffect effect, cons
     if (code == 1044 || code == 1045 || code == 1142) category = core::ErrorCode::PermissionDenied;
     if (code == 1054 || code == 1146) category = core::ErrorCode::SchemaMismatch;
     if (code == 3024) category = core::ErrorCode::DeadlineExceeded;
-    return core::make_error(category, effect, std::string("MySQL ") + action + " failed");
+    return core::make_error(
+        category, effect,
+        std::string("MySQL ") + action + " failed (" + std::to_string(code) + ")");
 }
 
 bool mysql_thread_ready() {
@@ -610,7 +613,17 @@ core::Result<MySqlDatabaseContext> connect_mysql_database(const MySqlConnectionO
             return mysql_error_result(driver.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "device management operation");
         });
-    return MySqlDatabaseContext{pool, repositories, repositories, device_config, management};
+    auto identity = std::make_shared<detail::OrmIdentityRepository<MySqlConnection>>(
+        [repositories](ITransaction& transaction, const core::CallContext& context) {
+            return repositories->session(transaction, context);
+        },
+        [pool](ITransaction& transaction) { pool->invalidate(transaction); },
+        [](MySqlConnection& driver) {
+            return mysql_error_result(driver.orm.get_last_error_code(),
+                                      core::WriteEffect::NotApplied, "identity operation");
+        });
+    return MySqlDatabaseContext{pool,       repositories, repositories, device_config,
+                                management, identity,     identity};
 }
 
 }  // namespace ems::database

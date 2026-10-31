@@ -435,7 +435,7 @@ TEST_F(WebDevice, HttpLoginCookieCsrfAndFixedJsonRoutes) {
                       {"permissions", Json::array({"*"})},
                       {"station_ids", Json::array({"*"})},
                       {"device_roots", Json::array({"*"})}}}),
-        options.session_capacity, options.session_ttl_seconds);
+        1000, 3600);
 
     // 服务在当前主线程运行；客户端放到独立线程，保证事件循环的创建和销毁线程一致。
     (void)drogon::app();

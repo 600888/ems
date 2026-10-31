@@ -10,7 +10,7 @@
   "import_queue_size": 8,
   "request_timeout_ms": 5000,
   "import_timeout_ms": 30000,
-  "session_ttl_seconds": 3600,
-  "session_capacity": 1000,
+  "identity_key_file": "",
+  "audit_retention_days": 180,
   "secure_cookie": false
 }

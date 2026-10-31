@@ -13,11 +13,11 @@ struct WebOptions {
     unsigned short port{8080};
     std::string allowed_origin{"http://127.0.0.1:8080"};
     std::string database_config;
+    std::string identity_key_file;
     std::string document_root;
     std::string workspace{"web-upload"};
     std::size_t io_threads{2}, workers{4}, queue_size{128}, import_workers{1}, import_queue_size{8};
-    int request_timeout_ms{5000}, import_timeout_ms{30000}, session_ttl_seconds{3600};
-    std::size_t session_capacity{1000};
+    int request_timeout_ms{5000}, import_timeout_ms{30000}, audit_retention_days{180};
     bool secure_cookie{false};
 };
 
@@ -34,7 +34,7 @@ int run_web(const WebOptions& options);
 /** @brief 使用显式数据库上下文运行 HTTP 入口，允许集成测试注入公共测试驱动。
  * @param[in] options 已校验运行选项。
  * @param[in] database 独立公共数据库上下文。
- * @param[in] identity 可选会话服务，共享所有权；未提供时拒绝登录，不影响进程启动。
+ * @param[in] identity 可选显式测试服务，共享所有权；未提供时使用数据库身份仓储和受限密钥。
  * @return 正常退出为 0。
  */
 int run_web_with_database(const WebOptions& options, database::MySqlDatabaseContext database,
