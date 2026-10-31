@@ -12,7 +12,13 @@ import { ModuleCards } from '../theme/ModuleCards';
 
 <ModuleCards />
 
-本目录面向 EMS 重新设计，按系统架构、业务进程、公共模块、技术决策和开发参考组织。自研 C++ 使用 C++17；文中未完成实现与验收的部分均为目标设计。
+本目录面向 EMS 重新设计，按远程接入、系统架构、业务进程、公共模块、技术决策和开发参考组织。自研 C++ 使用 C++17；文中未完成实现与验收的部分均为目标设计。
+
+## 远程接入
+
+- [OpenVPN 服务端部署](remote-access/openvpn/server.md)：安装、证书、完整配置、端口放行与服务管理。
+- [OpenVPN 客户端部署](remote-access/openvpn/client.md)：签发证书、传输文件、逐步配置 Linux / Windows 并验证互通。
+- [远程接入概览](remote-access/index.md)：OpenVPN、Frp、向日葵的适用场景与文档状态。
 
 ## 架构与公共契约
 
@@ -53,6 +59,7 @@ import { ModuleCards } from '../theme/ModuleCards';
 ```text
 website/docs/
   index.mdx                        文档首页（模块卡片）
+  remote-access/openvpn/           远程接入，OpenVPN 服务端与客户端部署
   architecture/                    系统架构、设备模型、通道与协议
   processes/
     collector/                     采集与上送，C++17

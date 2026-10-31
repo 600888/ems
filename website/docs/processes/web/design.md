@@ -2,7 +2,7 @@
 
 > 日期：2026-10-24｜状态：首期 Web 与设备模块已实现；[构建运行](running.md)。[设备设计](device/index.md) · [API 契约](device/api.md)。
 
-登录及用户管理的目标设计见[用户名、密码与加密登录](user/login.md)和[用户管理与角色权限](user/index.md)。当前仍为内存会话骨架；下文身份目标约定不表示持久账号已经实现。
+登录及用户管理的目标设计见[用户名、密码与加密登录](user/login.md)和[用户管理与角色权限](user/index.md)。持久身份、三角色权限、用户管理和设备写入复核已实现，部署与验收见[运行说明](running.md)。
 
 用户管理的 C++ 服务、路由、公共仓储、鉴权复核及现有设备事务改造见[后端实现设计](user/backend.md)。
 
@@ -190,7 +190,7 @@ flowchart LR
 | 连接 | 沿用 EMS_DATABASE_CONFIG / EMS_MYSQL_*；Web 不复制数据库配置结构 |
 | 业务库 | 目标使用独立 ems_web 库；与工程库同实例、同连接池，以公共 Repository 内固定库限定名访问 |
 | 身份 | 目标为本地用户名/密码、HTTPS、密码哈希、ems_web 持久账号及三类角色和资源范围，见[登录设计](user/login.md)；运行配置不含账号清单 |
-| 会话 | 当前内存会话重启失效；目标持久会话，浏览器持 HttpOnly/Secure/SameSite=Strict 的不透明 Cookie，后端读取当前权限 |
+| 会话 | 持久会话跨进程重启恢复，浏览器持 HttpOnly/Secure/SameSite=Strict 的不透明 Cookie，后端读取当前权限 |
 | 授权 | 按数据库实际关系校验站、设备子树、绑定和任务，过滤列表与 total |
 | CSRF | POST 查询与写入统一检查；登录检查 Origin；后续 WebSocket 也检查来源 |
 | 审计 | 公共审计接口集中写 ems_web.audit_log，与账号变更或工程配置在同连接事务提交，不在各模块重复建表 |

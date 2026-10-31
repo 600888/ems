@@ -6,6 +6,13 @@
   },
   {
     "type": "dir",
+    "name": "remote-access",
+    "label": "远程接入",
+    "collapsible": true,
+    "collapsed": false
+  },
+  {
+    "type": "dir",
     "name": "architecture",
     "label": "架构与业务模型",
     "collapsible": true,

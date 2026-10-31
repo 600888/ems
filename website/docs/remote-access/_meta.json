@@ -1,0 +1,6 @@
+[
+  { "type": "file", "name": "index", "label": "远程接入概览" },
+  { "type": "dir", "name": "openvpn", "label": "OpenVPN", "collapsible": true, "collapsed": false },
+  { "type": "file", "name": "frp", "label": "Frp（待补充）" },
+  { "type": "file", "name": "sunlogin", "label": "向日葵（待补充）" }
+]

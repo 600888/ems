@@ -2,6 +2,14 @@ import { Link } from '@rspress/core/theme-original'
 
 const modules = [
   {
+    label: '远程接入',
+    en: 'REMOTE ACCESS',
+    href: '/remote-access/',
+    description: '部署 OpenVPN 服务端与客户端，建立异地设备之间的远程运维通道。',
+    tags: 'OpenVPN · Frp · 向日葵',
+    icon: 'network',
+  },
+  {
     label: '架构与业务模型',
     en: 'ARCHITECTURE',
     href: '/architecture/',

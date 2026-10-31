@@ -1,6 +1,6 @@
 # 用户管理与角色权限设计
 
-> 日期：2026-10-27｜状态：待实现的目标设计；角色、持久账号和用户管理接口尚未落地。
+> 日期：2026-10-31｜状态：持久账号、三角色权限、用户与自助 API 已实现；监视/控制业务按对应模块进度接入。
 > 关联：[登录设计（用户名、密码与加密）](login.md) · [后端实现设计](backend.md) · [Web 数据库与表设计](../../../common/database/ems-web.md) · [Web 进程设计](../design.md) · [设备模块 API](../device/api.md)。
 
 ## 1. 范围与基本规则
@@ -126,7 +126,7 @@ flowchart TD
 
 ## 5. 持久化与事务设计
 
-账号与 Web 业务使用独立的 `ems_web` 数据库，与工程库 `ems` 位于同一个 MySQL 实例。共 5 张表，字段、类型、索引及初始化规则统一见 [Web 数据库与表设计](../../../common/database/ems-web.md)。独立 SQLAlchemy 模型与迁移入口已实现，两库共用 `backend/python/database.yaml`，通过 `ems-db --database ems_web` 选择；C++ 公共 Repository 与身份服务仍待落地。
+账号与 Web 业务使用独立的 `ems_web` 数据库，与工程库 `ems` 位于同一个 MySQL 实例。共 5 张表，字段、类型、索引及初始化规则统一见 [Web 数据库与表设计](../../../common/database/ems-web.md)。独立 SQLAlchemy 模型与迁移入口已实现，两库共用 `backend/python/database.yaml`，通过 `ems-db --database ems_web` 选择；C++ 公共 Repository、身份服务和固定 HTTP 接口已接入。
 
 | 表 | 职责 |
 | --- | --- |

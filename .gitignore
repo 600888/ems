@@ -86,3 +86,6 @@ coverage.xml
 /backend/python/ems_web.sqlite3
 /backend/python/ems_web.sqlite3-shm
 /backend/python/ems_web.sqlite3-wal
+
+# Local Web identity keys and deployment overrides
+/backend/.local/

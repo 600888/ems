@@ -1,20 +1,20 @@
 # Web 后端用户管理实现设计
 
-> 日期：2026-10-30｜状态：待实现的 C++ 后端设计；Python Web 库模型和初始化迁移已实现，持久化身份服务及用户管理 API 尚未接入。
+> 日期：2026-10-31｜状态：C++ 持久身份服务、用户管理 API 及设备写入鉴权已实现；部署初始化与目标环境验收见运行说明。
 > 关联：[业务规则与权限矩阵](index.md) · [登录设计](login.md) · [Web 数据库与表设计](../../../common/database/ems-web.md) · [Web 进程设计](../design.md)。
 
 本设计确定 `ems-web` 的 `identity` 模块如何落地：复用 Drogon HTTP 入口、现有工作池和公共数据库层，实现持久登录、用户管理、自助资料及密码维护、设备范围鉴权、会话撤销和审计。业务规则及字段以关联文档为准，本页不另建角色体系、数据库表或独立身份进程。
 
 ## 1. 现状与实施边界
 
-| 部分 | 当前实现 | 需要完成 |
-| --- | --- | --- |
-| 数据库工具 | `web_db/models/` 独立定义 5 表，两库共用 database.yaml，通过 --database 选择 | 部署准备 ems_web，执行初始化和策略种子 |
-| C++ 数据库 | 公共 MySqlDatabaseContext 已装配工程配置等仓储 | 增加用户/会话/策略及审计仓储，共用现有连接和事务 |
-| SessionService | 账号由测试注入，内存保存会话；生产未配置时拒绝认证 | 改为读取 ems_web 持久数据，移除生产路径对内存账号、会话映射的依赖 |
-| HTTP 分派 | 已注册 login、session、logout，主要在 web_application.cpp 分派 | 在 identity 模块集中注册 auth、users、profile 固定路由 |
-| Principal | 当前含权限集合和分离的站/设备根集合，测试允许星号 | 使用当前固定角色和结构化范围，生产禁止星号权限放行 |
-| 设备写入 | DeviceRequest 当前自行开启事务并先锁站根 | 接受调用方事务，先完成用户/会话锁定，再进入站根与配置写入 |
+| 部分 | 当前实现 |
+| --- | --- |
+| 数据库工具 | web_db 独立定义 5 表；两库共用 database.yaml，通过 --database 选择 |
+| C++ 数据库 | MySqlDatabaseContext 装配 users/audit，固定 ems_web 限定名，同一连接和事务访问两库 |
+| SessionService | 生产读取持久账号、会话和策略；内存构造器仅供显式测试注入 |
+| HTTP 分派 | identity/module 集中声明固定路由；统一入口执行 Origin/CSRF 与服务分派 |
+| Principal | 当前角色生成明确权限；结构化站/根配对；关键写入在事务内复核 |
+| 设备写入 | DeviceService 建立调用方事务，先持有用户共享锁，再锁站根；设备变更与审计一起提交 |
 
 Python SQLAlchemy 负责结构定义、部署迁移和显式种子；C++ 请求通过公共 ormpp Repository 访问 MySQL，不在请求中调用 Python，也不启动时建表。前端演示接口不能作为生产账号来源。
 
@@ -40,10 +40,7 @@ flowchart TB
 backend/src/web/modules/identity/
   module.h/.cpp                     固定路由、服务装配
   api/
-    auth_controller.h/.cpp          登录、首次改密、认证、退出
-    user_controller.h/.cpp          用户、范围、策略与管理会话
-    profile_controller.h/.cpp       个人资料、改密和自己的会话
-    identity_codec.h/.cpp           字段白名单、DTO 与响应编码
+    identity_codec.h/.cpp           固定用例字段白名单、UTF-8 校验、DTO 与响应编码
   application/
     session_service.h/.cpp          改造现有认证与会话服务
     user_service.h/.cpp             管理员及自助用例
@@ -56,11 +53,10 @@ backend/include/common/database/identity/
   repositories.h                   IUserRepository、IAuditRepository
 backend/src/common/db/identity/
   identity_rows.h                   唯一 ormpp 行映射
-  user_repository.h/.cpp            账号、范围、会话、策略查询与锁
-  audit_repository.h/.cpp           审计追加与有界查询
+  user_repository.h                 受检 ormpp 模板适配器，实现用户/会话/策略及审计仓储
 ```
 
-以上为目标路径，只创建实施时实际需要的文件。模块仍只有三个应用服务，不按每张表、每个按钮再拆一层 Service。
+以上为实际模块路径。统一 HTTP 入口承担 Controller 的薄分派职责，字段与 DTO 集中在 identity codec；公共模板适配器复用同一套错误处理和连接借用。模块只有三个应用服务，不按每张表、每个按钮再拆一层 Service。
 
 | 层 | 职责 |
 | --- | --- |
@@ -77,7 +73,7 @@ backend/src/common/db/identity/
 
 ### 3.1 一套运行连接、两个业务库
 
-运行进程沿用公共 MySQL 连接配置，默认库为工程库 `ems`，账号和审计使用公共适配器内固定的 `ems_web.表名`。公共上下文目标增加 `users`、`audit` 仓储成员，依赖同一 `IDatabase`；不为 Web 库再次初始化一套不同配置的 ormpp 池，不逐请求执行 `USE`。
+运行进程沿用公共 MySQL 连接配置，默认库为工程库 `ems`，账号和审计使用公共适配器内固定的 `ems_web.表名`。公共上下文提供 `users`、`audit` 仓储成员，依赖同一 `IDatabase`；不为 Web 库再次初始化一套不同配置的 ormpp 池，不逐请求执行 `USE`。
 
 Python 部署入口仍为同一份 `backend/python/database.yaml`：
 
@@ -92,7 +88,7 @@ ems-db --database ems_web check
 
 ### 3.2 公共 Repository
 
-以下是目标操作分组，不表示这些 C++ 接口已经存在：
+公共接口已在 `common/database/identity/repositories.h` 定义，操作分组如下：
 
 | 接口 | 操作分组 | 返回和限制 |
 | --- | --- | --- |
@@ -224,7 +220,7 @@ sequenceDiagram
 
 ### 6.2 接入现有设备写入
 
-必须改造现有 DeviceRequest 的事务所有权和加锁顺序，不能只在 HTTP 入口检查一次身份，然后继续按原逻辑先锁站根。
+DeviceRequest 已接收调用方事务，先复核当前用户及会话，再锁站根。提交前再次检查期限和当前策略；HTTP 入口的检查不代替事务内复核。
 
 ```text
 应用服务取得一个 ITransaction
@@ -259,7 +255,7 @@ edit_token 是对当前可编辑状态的服务端 HMAC 摘要，不增加数据
 | 不存在、越范围或会话不属于目标用户 | 404 user_not_found / session_not_found；设备复用现有不可见原因码 | 不泄露其他资源存在性 |
 | 用户名或表单冲突、最后管理员 | 409 username_conflict / edit_conflict / last_admin_required | 回读最新状态并人工确认 |
 | 密码、范围、授权目录容量或本人管理规则失败 | 422 password_policy_failed / invalid_scope / scope_tree_too_large / self_management_forbidden | 修正业务输入或明确处理目录容量限制 |
-| 请求来源或认证尝试限流 | 429 rate_limited | Retry-After，不自动重放写入 |
+| 请求来源、认证尝试或用户变更限流 | 429 rate_limited | Retry-After，不自动重放写入 |
 | 身份、审计、工作池或密码派生容量不可用 | 503 identity_unavailable / audit_unavailable 或既有容量原因码 | 尚未执行时 NotApplied，提交不确定时保留 Unknown |
 | 提交响应丢失/超时，无法确认提交 | 公共错误转换为既有失败状态 | effect=Unknown，使用原 ID/用户名/资源及审计事件核对结果 |
 
@@ -269,7 +265,7 @@ edit_token 是对当前可编辑状态的服务端 HMAC 摘要，不增加数据
 
 现有 SessionService(Json users, ...) 只保留在显式测试装配边界，生产运行路径不允许从配置注入测试权限、内存账号或演示默认密码。日志与指标仅记录 request_id、动作、原因、耗时、容量等，不包含认证表单、Cookie、哈希或密钥。
 
-## 8. 实施顺序与验收
+## 8. 实施结果与验收
 
 | 阶段 | 完成条件 |
 | --- | --- |
@@ -288,4 +284,8 @@ edit_token 是对当前可编辑状态的服务端 HMAC 摘要，不增加数据
 6. 撤权与设备写入并发、站根锁顺序、两库单事务回滚、审计不可写和提交结果未知。
 7. UTF-8 多字节姓名和密码边界、无效编码、超限 scope_tree、字段白名单、日志脱敏、池耗尽与退出。
 
-SQLAlchemy/SQLite 测试验证结构与基本约束；C++ 应用测试验证权限、DTO 和用例分支；真实 MySQL 另行验证行锁、跨库事务、重启与多实例行为。文档站构建不代表后端用户管理已经实现。
+当前 C++ 应用测试覆盖角色、受限会话、持久恢复、失败计数、编辑冲突、范围规范化、会话上限/归属、审计故障及撤权复核。独立 `test_web_mysql` 在空隔离实例验证并发首管理员初始化、用户共享锁与撤权排序、两个管理员互相停用、中文搜索及工程变更/审计跨库回滚。两种驱动使用不同测试二进制，避免 ormpp 方言宏产生 ODR 冲突。
+
+完整 HTTP 入口与前端契约使用生产持久服务联调；部署步骤和测试实例准备见[运行说明](../running.md)。Linux/ARM 性能、多主机运行及现场控制仍需目标环境验收，权限名称不会自动启用未实现的监视/控制业务。
+
+来源限流及未知账号同形计数使用进程内有界集合；已存在账号的连续失败/锁定由数据库持久化并跨实例一致。身份管理及自助变更每用户每进程每分钟最多 60 次，认证来源每 IP 每进程每分钟最多 30 次；密码派生最多两个并发，超出返回 429。审计保留天数由 Web 运行配置调整，定时任务有界清理，不增加业务表。

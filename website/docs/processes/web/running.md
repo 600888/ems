@@ -29,8 +29,8 @@ cmake -S backend -B build/web -G "Ninja Multi-Config" `
   -DEMS_BUILD_WEB=ON -DBUILD_TESTS=ON -DBUILD_EXAMPLES=OFF `
   -DEMS_BUILD_LEGACY_MODBUS=OFF `
   -DCMAKE_PREFIX_PATH="已有平台依赖前缀"
-cmake --build build/web --config Release --target ems-web test_web --parallel 4
-ctest --test-dir build/web -C Release -R "WebDevice|WebIdentity|WebExecutor" --output-on-failure
+cmake --build build/web --config Release --target ems-web test_web test_web_mysql --parallel 4
+ctest --test-dir build/web -C Release -R "WebDevice|WebIdentity|WebExecutor|PersistentIdentity|IdentityCodec|IdentityHost" --output-on-failure
 ```
 
 平台依赖沿用仓库现有构建配置：MySQL/MariaDB 客户端、SQLite 测试库、libmodbus、hiredis、Boost、OpenXLSX 依赖。`setup_web_dependencies.ps1` 不下载或替换用户提供的 Drogon。Trantor 锁定与 Drogon 1.9.14 配套的提交；Linux 可使用同版本依赖和现有平台脚本构建。
@@ -45,6 +45,8 @@ MinGW 在 GCC/G++ 环境中执行 `./scripts/setup_web_dependencies.ps1 -Toolcha
 Windows 启用 Web 测试时，缺少 SQLite 安装库会自动准备固定的 3.50.2 amalgamation，
 并使用当前工具链编译为 `tests/archive/` 下的静态库；正式 Web 进程仍使用公共 MySQL 驱动。
 `EMS_FETCH_SQLITE=OFF` 可关闭自动准备，离线源码可用 `FETCHCONTENT_SOURCE_DIR_EMS_SQLITE` 指定。
+
+密码使用固定归档和 SHA-256 校验的 Argon2 参考库，默认构建单线程可移植实现（不依赖本机 SIMD）。首次配置需要下载源码；离线构建使用 `-DFETCHCONTENT_SOURCE_DIR_EMS_ARGON2_SOURCE=<已解压源码目录>`。新密码为 Argon2id（64 MiB、3 轮、1 lane），进程内最多同时执行两次密码派生。合法旧 PBKDF2 编码仅用于校验，不用于新密码写入。
 
 ## 2. 首次运行
 
@@ -68,19 +70,38 @@ $env:EMS_DATABASE_CONFIG = '公共数据库配置绝对路径'
 
 默认站根由既有种子脚本在缺少站根时建立；已有站根不覆盖。启动验证 14 表可读和唯一站根存在。
 
-账号体系与数据来源待后续设计，不从 Web JSON 或环境变量读取账号文件，
-也不作为配置检查和进程启动的前置条件。当前生产入口未装配账号服务，
-登录接口返回 `503 identity_not_configured`，受保护接口仍要求有效身份。
-健康检查可在数据库与表结构就绪后使用。
+生产身份服务已接入独立的 `ems_web` 数据库，与工程库共用 MySQL 实例、公共连接池及事务，不读取账号文件，也不自动创建默认账号。先准备两个数据库和权限，再通过共用的 Python 配置初始化：
 
-目标账号体系已在[登录设计](user/login.md)和[用户管理与角色权限](user/index.md)定义，
-采用用户名/密码、HTTPS、密码哈希与持久会话，尚未实现；下节仍描述当前测试会话协议。
+```bash
+ems-db --database ems init
+ems-db --database ems_web init
+ems-db --database ems_web seed policy
+ems-db --database ems_web check
+```
 
-目标持久化方案使用独立的 `ems_web` 数据库，与现有工程库位于同一 MySQL 实例，共用公共连接池和事务。5 张业务表、策略行初始化、权限及就绪条件见 [EMS Web 数据库与表设计](../../common/database/ems-web.md)。当前启动逻辑尚未创建或检查这些身份表，不能仅修改数据库名称就启用目标账号体系。
+Python 工具使用同一份 `backend/python/database.yaml`；C++ 继续使用公共 MySQL JSON/环境配置，默认库为 `ems`，身份仓储固定访问 `ems_web.表名`。运行账号需要工程表及 Web 五表的相应读写权限。两套配置的主机、端口和凭据应指向同一实例；详见 [数据库初始化说明](../../common/database/ems-web.md)。
+
+所有 Web 实例必须加载同一份编辑摘要密钥。文件路径通过 Web JSON 的 `identity_key_file` 或 `EMS_WEB_EDIT_KEY_FILE` 提供；配置字段非空时优先。下面以仓库内已忽略的本地部署目录为例：
+
+```powershell
+New-Item -ItemType Directory -Force backend/.local | Out-Null
+$env:EMS_WEB_EDIT_KEY_FILE = Join-Path (Resolve-Path backend/.local) 'web-edit.key'
+$env:EMS_DATABASE_CONFIG = (Resolve-Path backend/conf/db.json).Path
+./build/web/bin/Release/ems-web.exe --config backend/conf/web.json --create-identity-key
+./build/web/bin/Release/ems-web.exe --config backend/conf/web.json --check-identity
+./build/web/bin/Release/ems-web.exe --config backend/conf/web.json --init-admin
+./build/web/bin/Release/ems-web.exe --config backend/conf/web.json
+```
+
+密钥命令独占创建文件，拒绝覆盖；Linux 使用 0600，Windows 设置不继承的私有 DACL。首管理员命令交互输入用户名、姓名及临时密码，密码不回显、不接受标准输入重定向，也不放入参数或种子。仅从未有过用户记录的库允许初始化。首次登录必须修改临时密码，再重新登录。
+
+所有管理员不能登录时，在受控主机终端执行 `--recover-admin`，交互指定现有管理员及新临时密码。恢复启用该账号、清除登录锁定、撤销全部会话并写审计，下一次仍必须改密；不开放 HTTP 恢复入口。
+
+启动和 ready 检查工程依赖、身份五表及唯一策略行；缺表或缺密钥拒绝启动，不静默退回内存身份。完整会话绝对期限 8 小时、首次改密会话 5 分钟；每个用户最多 3 个有效完整会话。空闲超时及密码规则由管理界面写入唯一策略行。`audit_retention_days` 默认 180、范围 1–3650；每分钟通过工作池各清理至多 200 条过期审计/会话，会话至少保留到绝对到期后 24 小时。
 
 ## 3. 已有接口与验证
 
-以下会话流程由集成测试显式注入内存账号验证，不表示当前已提供生产账号管理。
+生产接口使用持久账号、Cookie 会话、集中角色权限和真实设备范围；完整接口见[登录设计](user/login.md#6-接口契约)及[用户管理 API](user/index.md#6-用户与自助-api)。内存身份构造器只用于显式测试注入。
 
 | 请求 | 入参与响应 |
 | --- | --- |
@@ -98,15 +119,23 @@ $env:EMS_DATABASE_CONFIG = '公共数据库配置绝对路径'
 | 能力 | 状态 |
 | --- | --- |
 | Windows 编译、配置检查、真实 HTTP 会话和设备接口 | 测试覆盖无账号运行配置、显式注入身份的 Cookie/CSRF、multipart、CSV/XLSX、重放和事务回滚 |
-| 公共仓储/事务/配置用例 | 本次 132 项回归通过；数据库测试使用 SQLite，生产入口使用 MySQL 公共工厂 |
+| 公共仓储/事务/配置用例 | SQLite 覆盖基本约束、权限、会话与回滚；MySQL 使用独立测试程序，避免两种 ORM 方言宏混用 |
 | 文档 | 构建和类型检查通过，25 张 Mermaid 图通过语法解析 |
 | CSV / 英文列 XLSX | 真实解析与持久预览，最多 2 MiB / 10,000 行；XLSX 校验解压预算 |
 | 中文四遥 XLSX | 当前返回 Unsupported，不调用旧表写入流程 |
 | 导入 YK / YT | 新点先停用，补齐写入及反馈规则后显式启用 |
 | 共享写地址 | 执行侧互斥尚未接新工程表，当前明确拒绝；读写共享可逐行确认 |
-| MySQL 生产库、Linux/ARM、现场热加载 | 需要对应环境验收；不由 SQLite 测试推断已通过 |
-| 统一业务审计、前端 mock 替换、监视/历史/控制模块 | 独立后续接入；普通进程指标不充当持久审计 |
+| MySQL 身份与事务 | 隔离真实实例验证并发初始化、撤权、互相停用及跨库审计回滚；生产库部署另行检查 |
+| Linux/ARM、现场热加载 | 尚需目标环境验收 |
+| 身份与设备写入审计 | 成功变更与审计同事务；拒绝事件单独提交；后台有界保留清理 |
+| 监视/历史/告警/控制模块 | 业务能力仍按对应模块进度接入，权限名称不代表现场命令已执行 |
 
 当前入口提供 HTTP；默认依赖脚本使用 Trantor 无 TLS 构建。本机开发直接监听，远程部署由 Nginx 终止 TLS，并配置 HTTPS allowed_origin 和 secure_cookie。脚本的 openssl 选项仅控制依赖编译，进程原生 TLS 配置尚未开放。
 
 Windows 测试应在正常开发终端运行：受限沙箱的虚拟临时目录可能使 XLSX 库的原生文件接口报告文件不存在。
+
+真实 MySQL 集成测试必须使用专门准备的空实例：工程库名为 `ems_identity_test`，同一实例另有空的 `ems_web` 五表及策略种子；不能指向现有业务实例。设置 `EMS_WEB_TEST_MYSQL_CONFIG` 为该实例的公共 JSON 配置，再运行 `test_web_mysql`。未设置时该测试跳过；重复运行前需重新准备隔离空库。测试不负责清空库。Windows 原生客户端使用系统 TLS，须在正常开发终端验证，沙箱可能无法获取 Schannel 凭据。
+
+前后端联调时关闭 Vite 演示接口（`EMS_IDENTITY_MOCK=false`），将 `EMS_API_TARGET` 指向实际后端；前端页面 Origin 必须与 `allowed_origin` 完全一致。正式部署使用同源 HTTPS 代理及 `secure_cookie=true`，Cookie 为 `__Host-ems_session`；本机 HTTP 开发使用 `ems_session`。
+
+来源 IP 以连接对端为准，不直接信任客户端自填的 X-Forwarded-For。反向代理部署时，网关按原始客户端地址实施来源限流，应用内的来源计数则针对网关连接地址。

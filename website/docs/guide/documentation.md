@@ -6,6 +6,7 @@
 
 | 目录 | 放什么 | 不放什么 |
 | --- | --- | --- |
+| remote-access | OpenVPN、Frp、向日葵等远程接入与运维部署 | EMS 业务接口与协议实现 |
 | architecture | 系统边界、设备等跨进程业务模型 | 第三方库函数手册 |
 | processes/collector | 采集与上送进程，通道调度、协议实例/会话、分发与执行 | 另一份公共设备或 Redis 键规范 |
 | processes/data | 常驻实时后端管理、共享段生命周期、接入、健康与受控维护 | 每次数据读写代理、聚合算法、历史与控制仲裁 |
@@ -72,7 +73,7 @@ website/
 | `rspress.config.ts` | 标题、Logo、导航适配、搜索、编辑链接与 Mermaid 插件 |
 | `theme/index.css` | 从 dlt698 主题迁入的配色、排版与响应式布局 |
 | `theme/index.tsx` | 加载样式并导出 Rspress 原主题 |
-| `theme/ModuleCards.tsx` | EMS 首页的六个模块卡片 |
+| `theme/ModuleCards.tsx` | EMS 首页的模块卡片 |
 | `docs/public/logo.svg` | EMS 站点标识 |
 
 导航仍以 `docs/_nav.json`、根及子目录 `_meta.json` 为内容来源。配置读取这些文件生成

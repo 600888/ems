@@ -224,6 +224,34 @@ body {
 .rp-doc code {
   font-size: 13px;
 }
+/* Keep copy controls visible and aligned with the first code line. */
+.rp-doc .rp-code-button-group {
+  top: 10px;
+  right: 12px;
+}
+.rp-doc .rp-code-button-group__button {
+  opacity: 1;
+  min-width: 32px;
+  min-height: 32px;
+}
+.rp-doc .rp-code-copy-button {
+  gap: 6px;
+  padding: 4px 10px;
+  border: 1px solid var(--rp-c-divider-light);
+  border-radius: 6px;
+  background: var(--rp-code-block-bg);
+  color: var(--rp-c-text-2);
+  font-size: 12px;
+}
+.rp-doc .rp-code-copy-button::after {
+  content: attr(title);
+}
+.rp-doc .rp-code-copy-button--copied::after {
+  content: '已复制';
+}
+.rp-doc .rp-code-copy-button__icon--success {
+  left: 20px;
+}
 a:focus-visible,
 button:focus-visible {
   outline: 2px solid var(--rp-c-brand);
