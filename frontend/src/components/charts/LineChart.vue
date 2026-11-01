@@ -17,6 +17,10 @@ const props = withDefaults(
 
 const yMax = computed(() => props.yTicks[0] ?? 100)
 const yMin = computed(() => props.yTicks[props.yTicks.length - 1] ?? 0)
+const timeBounds = computed(() => {
+  const times = props.series.flatMap((item) => item.timestamps ?? [])
+  return times.length ? [Math.min(...times), Math.max(...times)] : [0, 0]
+})
 
 /** 归一化到 0–100 的 viewBox 高度，配合 preserveAspectRatio=none 精确铺满 */
 function toY(value: number) {
@@ -34,7 +38,14 @@ const paths = computed(() =>
         open = false
         return
       }
-      const x = count > 1 ? (index / (count - 1)) * 1000 : 0
+      const start = timeBounds.value[0]!
+      const end = timeBounds.value[1]!
+      const x =
+        item.timestamps && end > start
+          ? ((item.timestamps[index]! - start) / (end - start)) * 1000
+          : count > 1
+            ? (index / (count - 1)) * 1000
+            : 0
       d += `${open ? 'L' : 'M'}${x.toFixed(2)},${toY(value).toFixed(2)} `
       open = true
     })

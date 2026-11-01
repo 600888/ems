@@ -227,6 +227,34 @@ void RtDb::shutdown() {
     impl_->client.reset();
 }
 
+core::Result<std::string> RtDb::readPointJson(const std::string& point_type,
+                                              const std::string& point_id,
+                                              const core::CallContext& ctx) {
+    std::lock_guard<std::recursive_mutex> lock(impl_->mutex);
+    if (point_type != "yc" && point_type != "yx" && point_type != "yk" && point_type != "yt")
+        return core::make_error(ErrorCode::InvalidArgument, WriteEffect::NotApplicable,
+                                "invalid point type");
+    if (!impl_->client)
+        return core::make_error(ErrorCode::NotReady, WriteEffect::NotApplicable,
+                                "realtime unavailable");
+    auto result = impl_->client->read(impl_->key("rtdb:" + point_type + ":" + point_id), ctx);
+    if (!core::is_ok(result)) return core::error_of(result);
+    try {
+        if (impl_->expired(core::value_of(result)))
+            return core::make_error(ErrorCode::NotFound, WriteEffect::NotApplicable,
+                                    "expired point record");
+        const auto payload = Json::parse(core::value_of(result).fields.at("payload"));
+        if (payload.at("type") != "hash") throw std::runtime_error("point record type");
+        auto value = payload.at("value").at("json").get<std::string>();
+        const auto sample = Json::parse(value);
+        if (sample.at("code") != point_id) throw std::runtime_error("point record identity");
+        return value;
+    } catch (const std::exception&) {
+        return core::make_error(ErrorCode::CorruptData, WriteEffect::NotApplicable,
+                                "invalid point record");
+    }
+}
+
 bool RtDb::isConnected() const {
     std::lock_guard<std::recursive_mutex> lock(impl_->mutex);
     return bool(impl_->client);

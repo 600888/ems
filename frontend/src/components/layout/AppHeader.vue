@@ -1,15 +1,21 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useMonitorStore } from '@/stores/monitor'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import AppIcon from '@/components/common/AppIcon.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import AccountMenu from '@/components/identity/AccountMenu.vue'
-import { monitorNav } from '@/mocks/nav'
+import { monitorNav } from '@/domain/navigation'
 import { useClock } from '@/composables/useClock'
 defineProps<{ admin?: boolean }>()
 const route = useRoute(),
   router = useRouter()
+const monitor = useMonitorStore()
+const serviceLabel = computed(() =>
+  monitor.error ? '数据服务不可用' : monitor.lastUpdated === '—' ? '数据待加载' : '数据已更新',
+)
 const { text: nowText } = useClock()
 function go(to?: string) {
   if (to) void router.push(to)
@@ -31,6 +37,8 @@ function go(to?: string) {
       <button
         v-for="item in monitorNav"
         :key="item.key"
+        :disabled="!item.to"
+        :title="!item.to ? '尚未接通' : undefined"
         type="button"
         class="flex h-full items-center gap-2 border-b-2 text-[13px]"
         :class="
@@ -48,19 +56,19 @@ function go(to?: string) {
       <span
         v-if="!admin"
         class="hidden rounded-[5px] border border-line bg-panel px-3 py-2 text-[12px] text-muted 2xl:inline-flex"
-        >华东示范储能站</span
+        >{{ monitor.tree[0]?.name ?? '站端' }}</span
       >
       <StatusTag
         class="hidden! lg:inline-flex!"
-        tone="ok"
-        :label="admin ? '后台服务正常' : '采集正常'"
+        :tone="admin ? 'accent' : monitor.error ? 'warn' : 'mute'"
+        :label="admin ? '后台配置' : serviceLabel"
       />
       <span class="hidden text-[12px] text-muted 2xl:block">{{ nowText }}</span>
       <button
         type="button"
         aria-label="告警通知"
         class="hidden text-muted hover:text-ink md:block"
-        @click="ElMessage.info('当前账号没有新的系统通知')"
+        @click="ElMessage.info('告警通知服务尚未接通')"
       >
         <AppIcon name="bell" :size="17" />
       </button>

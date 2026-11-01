@@ -7,6 +7,8 @@ import MonitorDeviceTree from '@/components/device/MonitorDeviceTree.vue'
 import MonitorHeader from '@/components/device/MonitorHeader.vue'
 import UnderlineTabs from '@/components/common/UnderlineTabs.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import InfoBar from '@/components/common/InfoBar.vue'
+import ActionBtn from '@/components/common/ActionBtn.vue'
 import { useMonitorStore } from '@/stores/monitor'
 import { useAuthStore } from '@/stores/auth'
 import type { TabItem } from '@/types/ui'
@@ -26,24 +28,17 @@ const tabs = computed<TabItem[]>(() => [
   ...(auth.can('command.yt')
     ? [{ key: 'setpoints', label: '遥调', count: monitor.profile.tabCounts.setpoint }]
     : []),
-  ...(auth.can('history.read') ? [{ key: 'curves', label: '实时曲线' }] : []),
+  ...(auth.can('history.read') ? [{ key: 'curves', label: '历史曲线' }] : []),
 ])
 
 const activeTab = computed(() => route.path.replace('/monitor/', '') || 'overview')
 
-/** 设计图中遥控 / 遥调画板以 PCS 01 为例，切页签时同步切到具备该能力的设备 */
-const tabDevice: Record<string, string> = { control: 'pcs01', setpoints: 'pcs01' }
-
 function changeTab(key: string) {
-  const target = tabDevice[key]
-  if (target && monitor.selectedId !== target) monitor.selectDevice(target)
   router.push(`/monitor/${key}`)
 }
 
 let timer = 0
 onMounted(() => {
-  const initial = tabDevice[activeTab.value]
-  if (initial) monitor.selectDevice(initial)
   monitor.load()
   timer = window.setInterval(() => monitor.tick(), 2000)
 })
@@ -55,6 +50,12 @@ onBeforeUnmount(() => window.clearInterval(timer))
     <MonitorDeviceTree />
 
     <section v-if="monitor.selectedId" class="flex min-w-0 flex-1 flex-col gap-4">
+      <div v-if="monitor.error" class="flex shrink-0 items-center gap-3">
+        <InfoBar class="flex-1" :text="monitor.error" tone="danger" /><ActionBtn
+          @click="monitor.load"
+          >重试</ActionBtn
+        >
+      </div>
       <MonitorHeader />
       <MetricStrip />
       <UnderlineTabs
@@ -68,9 +69,10 @@ onBeforeUnmount(() => window.clearInterval(timer))
     <EmptyState
       v-else
       title="授权范围内暂无设备"
-      desc="请联系管理员确认设备接入与授权范围。"
+      :desc="monitor.error || '请联系管理员确认设备接入与授权范围。'"
       icon="inbox"
       class="flex-1"
-    />
+      ><ActionBtn @click="monitor.load">重新加载</ActionBtn></EmptyState
+    >
   </div>
 </template>

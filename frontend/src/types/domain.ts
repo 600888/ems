@@ -49,6 +49,7 @@ export interface Metric {
 
 /** 遥测点 */
 export interface YcPoint {
+  pointId?: string
   code: string
   name: string
   value: string
@@ -81,6 +82,7 @@ export interface YxChange {
 
 /** 遥控点 */
 export interface YkCommand {
+  pointId?: string
   name: string
   desc: string
   current: string
@@ -99,6 +101,7 @@ export interface ControlLog {
 
 /** 遥调点 */
 export interface YtPoint {
+  pointId?: string
   name: string
   current: string
   modified: string

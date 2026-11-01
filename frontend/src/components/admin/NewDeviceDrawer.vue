@@ -1,193 +1,171 @@
 <script setup lang="ts">
-import { computed, reactive } from 'vue'
+import { reactive, ref, watch } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-
-import AppIcon from '@/components/common/AppIcon.vue'
-import InfoBar from '@/components/common/InfoBar.vue'
-import { deviceTypeOptions } from '@/mocks/devices'
+import { deviceApi, stableId, engineeringRevision } from '@/api/device'
+import { errorMessage } from '@/api/http'
 import { useDeviceStore } from '@/stores/device'
-
-const device = useDeviceStore()
-
+import ActionBtn from '@/components/common/ActionBtn.vue'
+import FormField from '@/components/common/FormField.vue'
+import InfoBar from '@/components/common/InfoBar.vue'
+import type { EngineeringRecord } from '@/types/engineering'
+const device = useDeviceStore(),
+  router = useRouter(),
+  busy = ref(false),
+  error = ref(''),
+  types = ref<Record<string, unknown>[]>([]),
+  parents = ref<EngineeringRecord[]>([])
 const form = reactive({
-  kind: '通信设备',
-  name: '储能变流器 02',
-  code: 'pcs02',
-  type: 'PCS · 储能变流器',
-  parent: '储能单元 01',
-  vendor: '示例厂商 A',
-  model: 'PCS-125K',
-  firmware: 'FW 2.1.6',
-  power: '125 kW',
-  template: '复用型号模板 · PCS-125K / v2.3',
-  desc: '',
+  name: '',
+  code: '',
+  node_kind: 'device',
+  parent_device_id: '',
+  source_device_id: '',
+  type: '',
+  vendor: '',
+  model: '',
+  firmware_version: '',
+  description: '',
 })
-
-const codeValid = computed(() => form.code.trim().length > 0)
-
-function close() {
-  device.createDrawerOpen = false
-}
-
-function submit() {
+let id = '',
+  editRevision = ''
+watch(
+  () => device.createDrawerOpen,
+  async (open) => {
+    if (!open) return
+    id = stableId('dev')
+    error.value = ''
+    Object.assign(form, {
+      name: '',
+      code: '',
+      parent_device_id: device.parent,
+      type: '',
+      source_device_id: '',
+    })
+    try {
+      types.value = (await deviceApi.types()).items
+      parents.value = (await deviceApi.allDevices()).items
+      editRevision = engineeringRevision()
+    } catch (e) {
+      error.value = errorMessage(e)
+    }
+  },
+)
+async function submit() {
   if (!form.name.trim() || !form.code.trim()) {
-    ElMessage.warning('请填写设备名称与设备编码')
+    error.value = '请填写名称和编码'
     return
   }
-  ElMessage.success(`已创建 ${form.code}，下一步配置通道与点表`)
-  close()
+  busy.value = true
+  error.value = ''
+  try {
+    const selected = types.value.find((t) => `${t.type_code}@${t.type_version}` === form.type)
+    if (form.node_kind !== 'unit' && !selected) throw new Error('请选择设备类型')
+    await deviceApi.create(
+      id,
+      {
+        name: form.name.trim(),
+        code: form.code.trim(),
+        node_kind: form.node_kind,
+        parent_device_id: form.parent_device_id,
+        ...(form.node_kind === 'unit'
+          ? {}
+          : {
+              device_type_code: selected!.type_code,
+              type_version: selected!.type_version,
+              source_device_id: form.node_kind === 'component' ? form.source_device_id : '',
+            }),
+        vendor: form.vendor,
+        model: form.model,
+        firmware_version: form.firmware_version,
+        description: form.description,
+        enabled: false,
+      },
+      editRevision,
+    )
+    device.createDrawerOpen = false
+    await device.load()
+    ElMessage.success('设备已保存')
+    void router.push(
+      form.node_kind === 'device' ? `/admin/devices/${id}/channels` : `/admin/hierarchy/${id}`,
+    )
+  } catch (e) {
+    error.value = errorMessage(e)
+  } finally {
+    busy.value = false
+  }
 }
 </script>
-
 <template>
   <el-drawer
     v-model="device.createDrawerOpen"
-    :with-header="false"
+    title="新建设备"
     size="560px"
-    class="ems-drawer"
-    append-to-body
-  >
-    <div class="flex h-full flex-col">
-      <!-- 抽屉标题 -->
-      <header class="flex items-start justify-between border-b border-line px-5 py-[18px]">
-        <div class="flex flex-col gap-[5px]">
-          <h2 class="text-[20px] leading-none font-semibold text-ink">新建设备</h2>
-          <p class="text-[11px] text-muted">在当前设备层级下创建设备</p>
-        </div>
-        <button type="button" class="text-muted transition-colors hover:text-ink" @click="close">
-          <AppIcon name="x" :size="18" />
-        </button>
-      </header>
-
-      <!-- 表单区 -->
-      <div class="flex min-h-0 flex-1 flex-col gap-[18px] overflow-y-auto px-5 py-4">
-        <InfoBar text="所属路径：华东示范储能站 / 储能单元 01" />
-
-        <div class="flex flex-col gap-[7px]">
-          <span class="text-[11px] text-muted">节点性质 *</span>
-          <div class="flex gap-2">
-            <button
-              v-for="option in ['通信设备', '层级节点']"
-              :key="option"
-              type="button"
-              class="h-[34px] rounded-[5px] border px-4 text-[12px] font-medium transition-colors"
-              :class="
-                form.kind === option
-                  ? 'border-accent bg-sel text-accent'
-                  : 'border-line bg-raised text-muted hover:text-ink'
-              "
-              @click="form.kind = option"
-            >
-              {{ option }}
-            </button>
-          </div>
-        </div>
-
-        <el-form label-position="top" class="drawer-form">
-          <div class="grid grid-cols-2 gap-4">
-            <el-form-item label="设备名称 *">
-              <el-input v-model="form.name" class="ctl" placeholder="请输入设备名称" />
-            </el-form-item>
-            <el-form-item label="设备编码 *">
-              <el-input v-model="form.code" class="ctl" placeholder="请输入设备编码" />
-            </el-form-item>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <el-form-item label="设备类型 *">
-              <el-select v-model="form.type" class="ctl w-full">
-                <el-option
-                  v-for="item in deviceTypeOptions"
-                  :key="item"
-                  :label="item"
-                  :value="item"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="父级节点 *">
-              <el-select v-model="form.parent" class="ctl w-full">
-                <el-option label="储能单元 01" value="储能单元 01" />
-                <el-option label="储能单元 02" value="储能单元 02" />
-                <el-option label="站级公共设备" value="站级公共设备" />
-              </el-select>
-            </el-form-item>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <el-form-item label="设备厂家">
-              <el-input v-model="form.vendor" class="ctl" />
-            </el-form-item>
-            <el-form-item label="设备型号">
-              <el-input v-model="form.model" class="ctl" />
-            </el-form-item>
-          </div>
-
-          <div class="grid grid-cols-2 gap-4">
-            <el-form-item label="固件版本">
-              <el-input v-model="form.firmware" class="ctl" />
-            </el-form-item>
-            <el-form-item label="额定有功功率">
-              <el-input v-model="form.power" class="ctl" />
-            </el-form-item>
-          </div>
-        </el-form>
-
-        <p v-if="codeValid" class="flex items-center gap-[6px] text-[10px] text-ok">
-          <AppIcon name="circle-check" :size="13" />
-          {{ form.code }} 在当前父节点下可用；发布后编码保持稳定
-        </p>
-
-        <div class="h-px w-full bg-line" />
-
-        <div class="flex flex-col gap-[7px]">
-          <span class="text-[11px] text-muted">点表初始化</span>
-          <el-select v-model="form.template" class="ctl w-full">
-            <el-option
-              label="复用型号模板 · PCS-125K / v2.3"
-              value="复用型号模板 · PCS-125K / v2.3"
-            />
-            <el-option
-              label="复用型号模板 · BMS-215 / v1.8"
-              value="复用型号模板 · BMS-215 / v1.8"
-            />
-            <el-option label="不初始化，稍后导入点表" value="不初始化，稍后导入点表" />
-          </el-select>
-          <p class="text-[10px] text-subtle">模板仅复用点表与映射，实际通信通道需单独绑定。</p>
-        </div>
-
-        <div class="flex flex-col gap-[7px]">
-          <span class="text-[11px] text-muted">设备描述</span>
-          <el-input
-            v-model="form.desc"
-            type="textarea"
-            :rows="3"
-            resize="none"
-            placeholder="填写安装位置或设备用途（选填）"
-          />
-        </div>
-
-        <div class="flex-1" />
-
-        <InfoBar text="创建后继续配置通道、导入点表并完成发布。" />
+    :close-on-click-modal="!busy"
+    :before-close="
+      (done: () => void) => {
+        if (!busy) done()
+      }
+    "
+    ><form id="new-device" class="flex flex-col gap-5" @submit.prevent="submit">
+      <InfoBar v-if="error" :text="error" tone="danger" />
+      <div class="grid grid-cols-2 gap-5">
+        <FormField label="名称" v-slot="slot"
+          ><el-input :id="slot.id" v-model="form.name" /></FormField
+        ><FormField label="编码" v-slot="slot"
+          ><el-input :id="slot.id" v-model="form.code" /></FormField
+        ><FormField label="节点种类" v-slot="slot"
+          ><el-select :id="slot.id" v-model="form.node_kind"
+            ><el-option label="通信设备" value="device" /><el-option
+              label="部件"
+              value="component" /><el-option label="单元" value="unit" /></el-select></FormField
+        ><FormField label="父节点" v-slot="slot"
+          ><el-select :id="slot.id" v-model="form.parent_device_id"
+            ><el-option
+              v-for="p in parents"
+              :key="p.device_id"
+              :value="p.device_id"
+              :label="p.name" /></el-select></FormField
+        ><FormField v-if="form.node_kind !== 'unit'" label="设备类型" v-slot="slot"
+          ><el-select :id="slot.id" v-model="form.type"
+            ><el-option
+              v-for="t in types"
+              :key="String(t.type_code) + String(t.type_version)"
+              :value="`${t.type_code}@${t.type_version}`"
+              :label="`${t.name ?? t.type_code} / ${t.type_version}`" /></el-select></FormField
+        ><FormField v-if="form.node_kind === 'component'" label="采集来源设备" v-slot="slot"
+          ><el-select :id="slot.id" v-model="form.source_device_id"
+            ><el-option
+              v-for="p in parents.filter((p) => p.node_kind === 'device')"
+              :key="p.device_id"
+              :value="p.device_id"
+              :label="p.name" /></el-select></FormField
+        ><FormField
+          v-for="f in [
+            { key: 'vendor', label: '厂家' },
+            { key: 'model', label: '型号' },
+            { key: 'firmware_version', label: '固件版本' },
+          ] as const"
+          :key="f.key"
+          :label="f.label"
+          v-slot="slot"
+          ><el-input :id="slot.id" v-model="form[f.key]"
+        /></FormField>
       </div>
-
-      <!-- 抽屉操作 -->
-      <footer class="flex items-center justify-end gap-[10px] border-t border-line px-5 py-3">
-        <button
-          type="button"
-          class="h-[38px] rounded-[5px] border border-line bg-raised px-[14px] text-[13px] font-medium text-ink transition-colors hover:border-subtle"
-          @click="close"
+      <FormField label="描述" v-slot="slot"
+        ><el-input :id="slot.id" v-model="form.description" type="textarea"
+      /></FormField>
+      <p class="text-[12px] text-muted">
+        新建设备默认停用；完成通道和点位配置后可启用。保存即生效。
+      </p>
+    </form>
+    <template #footer
+      ><div class="flex justify-end gap-3">
+        <ActionBtn :disabled="busy" @click="device.createDrawerOpen = false">取消</ActionBtn
+        ><ActionBtn form="new-device" type="submit" variant="primary" :loading="busy"
+          >创建并配置</ActionBtn
         >
-          取消
-        </button>
-        <button
-          type="button"
-          class="flex h-[38px] items-center gap-[7px] rounded-[5px] border border-brand bg-brand px-[14px] text-[13px] font-medium text-white transition-all hover:brightness-110"
-          @click="submit"
-        >
-          创建并配置
-        </button>
-      </footer>
-    </div>
-  </el-drawer>
+      </div></template
+    ></el-drawer
+  >
 </template>

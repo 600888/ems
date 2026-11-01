@@ -33,5 +33,8 @@ const emit = defineEmits<{ 'update:modelValue': [key: string] }>()
         class="absolute -bottom-px left-0 right-0 h-[2px] bg-accent"
       />
     </button>
+    <div v-if="$slots.actions" class="ml-auto flex shrink-0 items-center gap-3 self-center">
+      <slot name="actions" />
+    </div>
   </div>
 </template>

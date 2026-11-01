@@ -5,7 +5,6 @@ import { ElMessage } from 'element-plus'
 import AppIcon from '@/components/common/AppIcon.vue'
 import ActionBtn from '@/components/common/ActionBtn.vue'
 import AsyncContent from '@/components/common/AsyncContent.vue'
-import PageHeading from '@/components/common/PageHeading.vue'
 import FormField from '@/components/common/FormField.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
 import RoleBadge from '@/components/identity/RoleBadge.vue'
@@ -105,18 +104,15 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="identity-page px-0 py-2 lg:px-8 xl:px-14">
-    <PageHeading title="个人中心" description="管理自己的资料、密码与登录设备。"
-      ><template #actions
-        ><ActionBtn
-          icon="chevron-left"
-          @click="router.push(auth.landing === '/profile' ? '/profile' : auth.landing)"
-          >返回工作台</ActionBtn
-        ></template
-      ></PageHeading
-    >
     <AsyncContent :loading="task.busy.value" :error="task.error.value" @retry="load"
       ><div v-if="profile" class="grid min-h-0 flex-1 gap-7 xl:grid-cols-[390px_minmax(0,1fr)]">
         <aside class="panel flex flex-col gap-6 p-7">
+          <ActionBtn
+            class="self-start"
+            icon="chevron-left"
+            @click="router.push(auth.landing === '/profile' ? '/profile' : auth.landing)"
+            >返回工作台</ActionBtn
+          >
           <AppIcon name="circle-user" :size="64" class="text-accent" />
           <h2 class="text-[26px] font-semibold">{{ profile.display_name }}</h2>
           <p class="text-[15px] text-muted">{{ profile.username }}</p>

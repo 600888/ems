@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 
+import InfoBar from '@/components/common/InfoBar.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
 import { useMonitorStore } from '@/stores/monitor'
@@ -20,18 +21,24 @@ const allValid = computed(() =>
 
 const activeRow = computed(() => changed.value[0] ?? monitor.ytList[0])
 
-function submit() {
+async function submit() {
   if (!monitor.ytList.length || !changed.value.length) return
   if (!allValid.value) {
     ElMessage.warning('存在超出允许范围的设定值，请修正后下发')
     return
   }
-  ElMessage.success(`${activeRow.value?.name ?? '设定值'} 已下发，正在等待设备反馈`)
+  try {
+    await monitor.submitSetpoints(reason.value)
+    ElMessage.info('控制意图已受理，执行结果尚未确认')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '提交失败')
+  }
 }
 </script>
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col gap-4">
+    <InfoBar text="遥调执行服务暂未接通，当前仅展示点位定义。" tone="warn" />
     <div class="panel flex h-[46px] shrink-0 items-center gap-[10px] px-4">
       <AppIcon name="sliders-horizontal" :size="16" class="text-accent" />
       <span class="text-[12px] text-ink">当前控制权：EMS 站端 · 远方控制 · 设备在线</span>
@@ -171,6 +178,7 @@ function submit() {
             <button
               type="button"
               class="h-[36px] rounded-[5px] border border-brand bg-brand px-[14px] text-[12px] font-medium text-white transition-all hover:brightness-110"
+              :disabled="true"
               @click="submit"
             >
               确认下发

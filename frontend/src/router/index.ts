@@ -38,6 +38,30 @@ const router = createRouter({
       children: [
         { path: '', redirect: '/admin/devices' },
         {
+          path: 'channels',
+          name: 'channels',
+          meta: { permission: 'channel.write' },
+          component: () => import('@/views/admin/ChannelsView.vue'),
+        },
+        {
+          path: 'templates',
+          name: 'templates',
+          meta: { permission: 'device.read' },
+          component: () => import('@/views/admin/TemplatesView.vue'),
+        },
+        {
+          path: 'audit',
+          name: 'audit',
+          meta: { permission: 'audit.read' },
+          component: () => import('@/views/admin/SystemView.vue'),
+        },
+        {
+          path: 'system',
+          name: 'system',
+          meta: { permission: 'system.read' },
+          component: () => import('@/views/admin/SystemView.vue'),
+        },
+        {
           path: 'users',
           name: 'users',
           meta: { permission: 'user.read' },

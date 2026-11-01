@@ -1,87 +1,45 @@
-# EMS 前端（前台设备监视 + 后台设备管理）
+# EMS Web 前端
 
-依据 `.pen/device_manage.pen` 设计稿实现的 14 个业务画板，界面结构、文案与配色对齐设计图。
+Vue、TypeScript、Pinia 与 Element Plus 实现的站端管理和设备监视界面。页面使用真实 C++ Web API，重复的页面标题栏已移除。
 
-## 技术栈
+## 开发与验证
 
-| 项 | 版本 |
-| --- | --- |
-| Vue | 3.5.44（`<script setup>` + TypeScript） |
-| Vite | 8.3.5 |
-| Element Plus | 2.14.7（按需注册，见 `src/main.ts`） |
-| Tailwind CSS | 4.3.3（`@tailwindcss/vite`） |
-| Pinia | 4.1.0 |
-| Vue Router | 5.4.0 |
-| 图标 | `@lucide/vue`（与设计稿的 lucide 名称一一对应） |
+在 `frontend` 目录执行：
 
-## 启动
-
-```bash
-cd frontend
+```powershell
+Copy-Item .env.example .env.local
 npm install
-npm run dev        # http://127.0.0.1:5173
-npm run build      # 类型检查 + 生产构建
-npm run typecheck
+npm run dev
+npm run build
+npm test
 ```
 
-## 页面与路由
+默认访问 `http://127.0.0.1:5173`，Vite 将 `/api` 代理到 `.env.local` 中的 `EMS_API_TARGET`（默认 `http://127.0.0.1:8080`），保留原始 Origin。后端 `conf/web.json` 的 `allowed_origins` 已列入此开发地址；使用其他域名或端口时同步修改精确允许列表。
 
-| 画板 | 路由 | 文件 |
-| --- | --- | --- |
-| 01 设备管理 · 层级总览 | `/admin/devices` | `views/admin/DeviceOverview.vue` |
-| 02 设备详情 · 基本信息 | `/admin/devices/:id/basic` | `views/admin/BasicInfo.vue` |
-| 03 设备接入 · 通道绑定 | `/admin/devices/:id/channels` | `views/admin/ChannelBinding.vue` |
-| 04 点表导入 · 预览与校验 | `/admin/devices/:id/points/import` | `views/admin/PointImport.vue` |
-| 05 固有点位 · 映射与能力 | `/admin/devices/:id/points/mapping` | `views/admin/PointMapping.vue` |
-| 06 配置发布 · 差异与应用 | `/admin/devices/:id/release` | `views/admin/ConfigRelease.vue` |
-| 07 新建设备 · 接入抽屉 | `/admin/devices?new=1` | `components/admin/NewDeviceDrawer.vue` |
-| 08 层级详情 | `/admin/hierarchy/:id` | `views/admin/HierarchyDetail.vue` |
-| 10 设备监视 · 运行总览 | `/monitor/overview` | `views/monitor/OverviewView.vue` |
-| 11 设备监视 · 遥测 | `/monitor/telemetry` | `views/monitor/TelemetryView.vue` |
-| 12 设备监视 · 遥信 | `/monitor/signals` | `views/monitor/SignalsView.vue` |
-| 13 设备监视 · 遥控与确认 | `/monitor/control` | `views/monitor/ControlView.vue` |
-| 14 设备监视 · 遥调与校验 | `/monitor/setpoints` | `views/monitor/SetpointsView.vue` |
-| 15 设备监视 · 实时曲线 | `/monitor/curves` | `views/monitor/CurvesView.vue` |
+`EMS_IDENTITY_MOCK=false` 是真实对接模式。仅身份界面演示可显式改成 `true`，演示账号见 `.env.example`；设备管理与监视没有模拟数据回退，生产构建不挂载模拟身份服务。
 
-画板 09（后台视觉规范）与 16（前台交互与边界状态）按要求未做成页面，其规范已落到组件与状态样式里（按钮层级、状态标签、加载/失败/空态、操作反馈）。画板 17 / 18（前台、后台顶栏的用户菜单展开态）落到 `components/common/UserMenu.vue`，由 `MonitorShell` / `AdminShell` 共用。
+## 后端配置
 
-## 前后台分工
+从 `backend` 目录启动已构建的 `ems-web --config conf/web.json`。需要先按仓库数据库和身份文档初始化 MySQL 表、身份密钥及管理员；Web 启动不自动建表。数据库连接配置使用 `database_config` 或现有 `EMS_MYSQL_*` 环境变量，身份密钥使用 `identity_key_file` 或 `EMS_WEB_EDIT_KEY_FILE`。
 
-- **前台设备监视**：顶栏右侧依次为站点选择、活动告警、采集状态、时间、消息、用户；页面不再有独立标题栏（原 94px 的「设备监视 / 实时掌握设备运行状态与四遥数据」已删除），内容区上内边距 20px。
-- **用户菜单**：点击用户区展开，前台首项为「后台管理」（进 `/admin/devices`），后台首项为「返回前台」（回 `/monitor/overview`），末项均是「退出登录」。
-- **后台只做配置**：设备管理列表、设备详情、通道绑定、层级详情均不展示采集数据。列表用「固有点位 / 配置版本」与「配置状态（已生效 / 有草稿）」；详情用「配置摘要（固有点位 / 映射覆盖率 / 待发布草稿）」；通道改用「配置状态（已启用）」与「通信参数（功能码 / 响应超时 / 重试次数）」；层级子节点用「映射点位 / 点表模板 / 配置状态」。运行数据只在前台设备监视出现。
+生产部署可在 Web 配置中把 `document_root` 指向 `frontend/dist` 的绝对路径。已知前端页面支持直接访问和刷新，未知 API 仍返回 JSON 404。外部访问须按 Web 配置要求使用 TLS 代理和安全 Cookie。
 
-## 主题
+实时读取需要 `realtime_config` 指向与采集进程一致的实时库配置，`realtime_scope_code` 与采集进程作用域一致。历史查询需要现有历史目录、已编译的 TDengine 驱动和 `EMS_TAOS_HOST`、`EMS_TAOS_PORT`、`EMS_TAOS_USER`、`EMS_TAOS_PASSWORD`、`EMS_TAOS_DATABASE` 配置。凭据不写入前端。
 
-- 深色为设计稿基准，默认启用；顶栏右侧可切换浅色，选择写入 `localStorage`。
-- 也支持 URL 直达：`/admin/devices?theme=light`、`?theme=dark`。
-- 令牌定义在 `src/styles/tokens.css`，Tailwind 语义色在 `src/styles/main.css` 的 `@theme inline` 中映射；
-  Element Plus 变量在 `src/styles/element.css` 中对齐同一套令牌。
+## 已对接功能
 
-| 令牌 | 深色（设计稿） | 浅色 |
-| --- | --- | --- |
-| 主背景 | `#09192D` | `#EEF2F7` |
-| 导航 | `#061426` | `#FFFFFF` |
-| 面板 | `#0F253F` | `#FFFFFF` |
-| 边框 | `#243D59` | `#D8E1EC` |
-| 正文 | `#EBF4FF` | `#0D1B2E` |
-| 次级文字 | `#9BB0C8` | `#5A7089` |
-| 强调 | `#55D9EF` | `#0E8FA6` |
-| 主操作 | `#287BFF` | `#1D6FE8` |
-| 正常 / 告警 / 故障 | `#48D8AD` / `#F5BC62` / `#FF7883` | `#169E7C` / `#B87A16` / `#DD4B58` |
+- 身份：登录、会话、个人资料、密码、角色、用户权限和登录策略。
+- 工程：设备树及档案、设备和部件创建修改删除、全局通信通道、设备绑定、四张点表、固有语义映射、型号模板应用和配置检查。
+- 导入：CSV/XLSX 上传、持久任务和分页预览、行修正与确认、校验及应用；整站 ZIP 导入生成分设备任务，进入点表导入页继续确认。
+- 监视：实时遥测和遥信、真实采样质量与更新时间、分页；历史曲线和 CSV 导出。
+- 运维：审计日志和 Web 系统指标。
 
-## 数据
+遥控、遥调执行按当前需求暂不对接，提交入口禁用。策略、告警等尚无对应页面和服务的导航也禁用，不能产生模拟成功结果。
 
-当前全部为 mock，未接入后端：
+## 配置与数据规则
 
-- `src/api/device.ts`：设备树与列表接口（含模拟延时），接真实后端时替换为 HTTP 请求。
-- `src/mocks/`：设备树、设备列表、四遥点位、通道绑定、点表预览、映射、差异预览。
-- `src/stores/`：`device` / `monitor` / `config` / `theme` 四个 Pinia store，页面状态、筛选、选中、操作流程都在这里。
-- 遥控、遥调、发布为本地模拟流程（延时 + 结果态），刷新后回到初始状态。
+配置保存即生效，不使用草稿、发布或配置版本。写请求携带读取表单时的站根 `config_revision`；冲突要求重新加载，不自动覆盖。新建设备、通道和点位默认停用，补齐配置后再启用。消费者比对修订计数后重建运行目录。
 
-## 与设计的已知差异
+实时接口为 `POST /api/monitor/points`；历史接口为 `POST /api/history/query`，支持最多 6 个遥测点、24 小时时间窗口和 10000 行上限。历史按实际时间绘图，超过上限提示截断。无样本显示空值，过期和质量异常不会显示为正常值。实时服务不可用时仍可读取配置点位用于历史查询。
 
-- 画板 01 的设备表格列宽已按设计稿重排，并在「设备名称」列使用自适应填充，避免右侧留白。
-- 曲线为手写 SVG（`components/charts/LineChart.vue`），按设计稿的网格与断点规则绘制，不引入图表库。
-- 字体优先使用本机 `Noto Sans SC`，缺失时回退 `PingFang SC` / `Microsoft YaHei`，不加载外部字体。
-- 顶栏保留主题切换按钮（设计稿无此控件），属于本地开发期的便捷入口。
+当前验证包含前端构建、API 合约测试、C++ Web 回归测试，以及隔离 SQLite 数据下的真实浏览器保存和刷新回读。实际 MySQL、TDengine、实时库和设备采集链路需在对应服务运行的部署环境联调。

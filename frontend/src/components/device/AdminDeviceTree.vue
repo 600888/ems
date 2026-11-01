@@ -119,7 +119,7 @@ function onNodeClick(
     </div>
 
     <div class="h-px w-full bg-line" />
-    <p class="text-[10px] text-accent">当前范围：ess000001</p>
+    <p class="text-[10px] text-accent">当前范围：{{ device.tree[0]?.name ?? '—' }}</p>
     <p class="text-[9px] text-muted">站 → 单元 → 设备 → 部件</p>
   </aside>
 </template>

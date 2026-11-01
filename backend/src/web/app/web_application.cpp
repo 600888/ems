@@ -1,5 +1,6 @@
 #include <drogon/drogon.h>
 
+#include <algorithm>
 #include <atomic>
 #include <filesystem>
 #include <iostream>
@@ -9,6 +10,7 @@
 #include "web/modules/device/application/device_service.h"
 #include "web/modules/health/api/health_service.h"
 #include "web/modules/identity/module.h"
+#include "web/modules/runtime/runtime_service.h"
 #include "web/platform/crypto.h"
 #include "web/platform/executor/bounded_executor.h"
 #include "web_options.h"
@@ -63,6 +65,7 @@ struct State {
     std::shared_ptr<SessionService> identity;
     std::unique_ptr<UserService> users;
     DeviceService device;
+    RuntimeService runtime;
     BoundedExecutor business;
     BoundedExecutor imports;
     std::shared_ptr<HealthService> health = std::make_shared<HealthService>();
@@ -75,7 +78,8 @@ struct State {
                        ? std::make_shared<SessionService>(std::make_shared<AuthorizationService>(
                              database, load_identity_key(o.identity_key_file)))
                        : std::make_shared<SessionService>(Json::array(), 1000, 3600)),
-          device(std::move(database), o.workspace),
+          device(database, o.workspace),
+          runtime(std::move(database), {o.realtime_config, o.realtime_scope_code}),
           business(o.workers, o.queue_size),
           imports(o.import_workers, o.import_queue_size) {
         if (identity->authorization())
@@ -145,8 +149,13 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
                 throw ApiError(400, "InvalidArgument", "url_parameters_not_allowed");
             if (!post && !request->body().empty())
                 throw ApiError(400, "InvalidArgument", "get_body_not_allowed");
-            if (post && request->getHeader("origin") != state->options.allowed_origin)
-                throw ApiError(403, "PermissionDenied", "origin_not_allowed");
+            if (post) {
+                const auto& origin = request->getHeader("origin");
+                const auto& origins = state->options.allowed_origins;
+                if (origin != state->options.allowed_origin &&
+                    std::find(origins.begin(), origins.end(), origin) == origins.end())
+                    throw ApiError(403, "PermissionDenied", "origin_not_allowed");
+            }
             Json body = Json::object();
             Upload file;
 
@@ -263,7 +272,12 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
                 return;
             }
             if (!state->health->ready()) throw ApiError(503, "NotReady", "process_not_ready");
-            auto result = state->device.execute(path, body, session.principal, context, file);
+            const bool runtime_route =
+                path.rfind("/api/monitor/", 0) == 0 || path.rfind("/api/history/", 0) == 0 ||
+                path.rfind("/api/audit/", 0) == 0 || path.rfind("/api/commands/", 0) == 0;
+            auto result = runtime_route
+                              ? state->runtime.execute(path, body, session.principal, context)
+                              : state->device.execute(path, body, session.principal, context, file);
             result.meta["request_id"] = reply->trace;
             reply->send(result.status, {{"data", result.data}, {"meta", result.meta}});
         } catch (const ApiError& error) {
@@ -324,8 +338,8 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
     auto& app = drogon::app();
     app.addListener(options.host, options.port)
         .setThreadNum(options.io_threads)
-        .setClientMaxBodySize(21 * 1024 * 1024)
-        .setClientMaxMemoryBodySize(21 * 1024 * 1024)
+        .setClientMaxBodySize(65 * 1024 * 1024)
+        .setClientMaxMemoryBodySize(65 * 1024 * 1024)
         .setUploadPath(options.workspace);
     if (!options.document_root.empty()) app.setDocumentRoot(options.document_root);
 
@@ -373,7 +387,18 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
             },
             {route.post ? drogon::Post : drogon::Get});
     }
-    app.setDefaultHandler([](const drogon::HttpRequestPtr&, Callback&& callback) {
+    app.setDefaultHandler([state](const drogon::HttpRequestPtr& request, Callback&& callback) {
+        const auto& path = request->path();
+        const bool page = path == "/" || path == "/profile" || path == "/forbidden" ||
+                          path == "/login" || path.rfind("/login/", 0) == 0 ||
+                          path.rfind("/admin/", 0) == 0 || path.rfind("/monitor/", 0) == 0;
+        const auto index = std::filesystem::u8path(state->options.document_root) / "index.html";
+        if (page && request->method() == drogon::Get && !state->options.document_root.empty() &&
+            request->getHeader("accept").find("text/html") != std::string::npos &&
+            std::filesystem::is_regular_file(index)) {
+            callback(drogon::HttpResponse::newFileResponse(index.u8string()));
+            return;
+        }
         auto reply = std::make_shared<Reply>();
         reply->callback = std::move(callback);
         reply->trace = random_token();

@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import ActionBtn from '@/components/common/ActionBtn.vue'
 import AsyncContent from '@/components/common/AsyncContent.vue'
-import PageHeading from '@/components/common/PageHeading.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import RoleBadge from '@/components/identity/RoleBadge.vue'
@@ -103,20 +102,6 @@ onMounted(() => {
 </script>
 <template>
   <div class="identity-page">
-    <PageHeading
-      title="用户管理"
-      description="管理站内账号、角色与设备访问范围。"
-      breadcrumb="系统管理 / 用户与权限"
-      ><template #actions
-        ><ActionBtn
-          v-if="auth.can('user.write') && auth.can('user.grant')"
-          variant="primary"
-          icon="plus"
-          @click="drawer = true"
-          >新建用户</ActionBtn
-        ></template
-      ></PageHeading
-    >
     <UserNavigation />
     <div class="flex flex-wrap items-center gap-x-8 gap-y-3 py-1">
       <div v-for="item in statItems" :key="item.key" class="flex items-center gap-[10px]">
@@ -162,6 +147,12 @@ onMounted(() => {
           aria-label="刷新用户列表"
           @click="users.load"
           >刷新</ActionBtn
+        ><ActionBtn
+          v-if="auth.can('user.write') && auth.can('user.grant')"
+          variant="primary"
+          icon="plus"
+          @click="drawer = true"
+          >新建用户</ActionBtn
         >
       </form>
       <AsyncContent

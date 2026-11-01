@@ -8,11 +8,7 @@ import type { DeviceNode } from '@/types/domain'
 const monitor = useMonitorStore()
 const tree = computed(() => monitor.filteredTree)
 
-const scopes: { key: MonitorScope; label: string }[] = [
-  { key: 'all', label: '全部' },
-  { key: 'alarm', label: '异常' },
-  { key: 'offline', label: '离线' },
-]
+const scopes: { key: MonitorScope; label: string }[] = [{ key: 'all', label: '全部' }]
 
 const scopeCount = computed(() => ({
   all: monitor.counts.all,

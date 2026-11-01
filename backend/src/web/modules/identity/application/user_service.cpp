@@ -99,7 +99,7 @@ Json UserService::scope_tree(ITransaction& tx, const IdentityCall& call) {
                                 {"name", row.name},
                                 {"code", row.code},
                                 {"kind", row.node_kind},
-                                {"icon", row.node_kind == "station" ? "Building2" : "Box"},
+                                {"icon", row.node_kind == "station" ? "building-2" : "boxes"},
                                 {"children", build(id, depth + 1)}});
             }
         return list;

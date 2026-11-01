@@ -101,8 +101,7 @@ DeviceResult station_import_action(DeviceRequest& request, const std::string& pa
                                                        {"address_base", "zero"}}})}}};
     }
     if (action != "create") throw ApiError(404, "NotFound", "route_not_found");
-    if (!upload.parsed.is_object() || !upload.package)
-        throw ApiError(500, "Internal", "package_not_preparsed");
+    if (!upload.package) throw ApiError(500, "Internal", "package_not_preparsed");
     // 整站导入跨越全部设备子树：限定子树的账号不能执行。
     if (!request.principal.device_roots.count("*"))
         throw ApiError(403, "PermissionDenied", "unscoped_station_import");

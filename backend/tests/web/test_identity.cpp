@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <ormpp/sqlite.hpp>
 
 #include "common/db/configuration/orm_device_management_store.h"
@@ -23,6 +24,7 @@ using namespace database;
 class IdentityConnection final : public detail::Connection {
    public:
     ormpp::sqlite orm;
+    std::unique_ptr<std::unique_lock<std::mutex>> browser_lease;
 
     core::Status prepare(const core::CallContext& ctx) {
         return core::has_expired(ctx)
@@ -83,10 +85,17 @@ class PersistentIdentity : public testing::Test {
         std::filesystem::create_directories(dir);
         sql(file_text(EMS_WEB_SCHEMA_FILE) + file_text(EMS_IDENTITY_SCHEMA_FILE));
         auto file = (dir / "ems.db").u8string(), web = (dir / "web.db").generic_u8string();
+        // SQLite 浏览器夹具串行借用连接，避免模拟 MySQL 行锁时发生快照升级冲突。
+        auto browser_gate =
+            std::getenv("EMS_WEB_BROWSER_VERIFY") ? std::make_shared<std::mutex>() : nullptr;
         runtime = std::make_shared<detail::TransactionDatabase>(
             detail::TransactionOptions{},
-            [file, web](const core::CallContext&) -> core::Result<detail::ConnectionLease> {
+            [file, web,
+             browser_gate](const core::CallContext&) -> core::Result<detail::ConnectionLease> {
                 auto c = std::make_shared<IdentityConnection>();
+                if (browser_gate)
+                    c->browser_lease =
+                        std::make_unique<std::unique_lock<std::mutex>>(*browser_gate);
                 if (!c->orm.connect("", "", "", file, {}, {}))
                     return core::make_error(core::ErrorCode::Unavailable,
                                             core::WriteEffect::NotApplied);
@@ -116,6 +125,8 @@ class PersistentIdentity : public testing::Test {
         db.device_management =
             std::make_shared<detail::OrmDeviceManagementStore<IdentityConnection>>(
                 acquire, invalidate, failure, false);
+        db.device_config = std::make_shared<detail::OrmDeviceConfigRepository<IdentityConnection>>(
+            acquire, invalidate, failure);
         {
             auto ctx = call().context;
             auto tx = take(db.database->begin(ctx));
@@ -432,7 +443,35 @@ TEST_F(PersistentIdentity, HttpPersistentUserLifecycleAndCsrf) {
     WebOptions options;
     options.port = 19764;
     options.allowed_origin = "http://127.0.0.1:19764";
+    options.allowed_origins = {"http://127.0.0.1:5173"};
     options.workspace = (dir / "http-upload").u8string();
+    options.document_root = (dir / "frontend").u8string();
+    std::filesystem::create_directories(dir / "frontend");
+    std::ofstream(dir / "frontend/index.html") << "<!doctype html><title>EMS test shell</title>";
+    if (std::getenv("EMS_WEB_BROWSER_VERIFY")) {
+        sql("UPDATE cfg_device SET path='/' WHERE node_kind='station';"
+            "UPDATE cfg_device SET config_revision=0,enabled=0 WHERE node_kind<>'station';"
+            "UPDATE cfg_device SET path='/'||code,depth=1 WHERE node_kind='unit';"
+            "UPDATE cfg_device SET path='/unit-a/device-a',depth=2,device_type_code='hvac',"
+            "type_version='hvac-v1' WHERE device_id='device-a';"
+            "UPDATE cfg_device SET path='/unit-b/device-b',depth=2,device_type_code='hvac',"
+            "type_version='hvac-v1' WHERE device_id='device-b';"
+            "INSERT INTO cfg_device_type(type_code,type_version,name,category,status,description,"
+            "created_at,updated_at) VALUES('hvac','hvac-v1','HVAC','hvac','active','','','');");
+        options.port = 8080;
+        options.allowed_origin = "http://127.0.0.1:8080";
+        options.allowed_origins = {"http://127.0.0.1:5173"};
+        options.document_root = (std::filesystem::path(EMS_WEB_SCHEMA_FILE)
+                                     .parent_path()
+                                     .parent_path()
+                                     .parent_path()
+                                     .parent_path() /
+                                 "frontend/dist")
+                                    .u8string();
+        drogon::app().getLoop()->runAfter(600, [] { drogon::app().quit(); });
+        run_web_with_database(options, db, std::make_shared<SessionService>(auth));
+        return;
+    }
     auto identity = std::make_shared<SessionService>(auth);
     (void)drogon::app();
     std::thread client_thread([&] {
@@ -501,6 +540,21 @@ TEST_F(PersistentIdentity, HttpPersistentUserLifecycleAndCsrf) {
                       403);
             EXPECT_EQ(request("/api/users/list", drogon::Post, Json::object(), admin)->statusCode(),
                       200);
+            EXPECT_EQ(request("/api/users/list", drogon::Post, Json::object(), admin, true,
+                              "http://127.0.0.1:5173")
+                          ->statusCode(),
+                      200);
+            auto page = drogon::HttpRequest::newHttpRequest();
+            page->setPath("/admin/devices/example/basic");
+            page->addHeader("Accept", "text/html");
+            auto shell = client->sendRequest(page, 10);
+            ASSERT_EQ(shell.first, drogon::ReqResult::Ok);
+            EXPECT_EQ(shell.second->statusCode(), 200);
+            EXPECT_NE(shell.second->body().find("EMS test shell"), std::string_view::npos);
+            page->setPath("/api/unknown-route");
+            auto unknown = client->sendRequest(page, 10);
+            ASSERT_EQ(unknown.first, drogon::ReqResult::Ok);
+            EXPECT_EQ(unknown.second->statusCode(), 404);
             auto create = request("/api/users/create", drogon::Post,
                                   {{"username", "http_observer"},
                                    {"display_name", "观察员"},

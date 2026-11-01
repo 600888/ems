@@ -38,8 +38,14 @@ const std::vector<Route>& device_routes() {
         {"/api/point-imports/update-row", true},
         {"/api/point-imports/validate", true},
         {"/api/point-imports/apply", true},
+        {"/api/station-imports/template", false},
+        {"/api/station-imports/create", true},
         {"/api/device-management/configuration", false},
         {"/api/device-management/validate", true},
+        {"/api/monitor/points", true},
+        {"/api/history/query", true},
+        {"/api/commands/submit", true},
+        {"/api/audit/list", true},
     };
     return routes;
 }

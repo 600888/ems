@@ -1,6 +1,8 @@
 #ifndef EMS_RTDB_H
 #define EMS_RTDB_H
 
+#include <common/core/call_context.h>
+#include <common/core/result.h>
 #include <rtdb/export.h>
 
 #include <atomic>
@@ -39,6 +41,16 @@ class EMS_RTDB_API RtDb {
      * @return true 表示操作成功；false 表示失败。
      */
     bool initialize(const RtDbConfig& config);
+    /**
+     * @brief 读取采集进程写入的测点 JSON，保留无数据、超时和后端不可用的区别。
+     * @param[in] point_type 四遥分类 yc/yx/yk/yt。
+     * @param[in] point_id 稳定点位 ID。
+     * @param[in] ctx 整次读取期限。
+     * @return 测点载荷；缺失返回 NotFound，不用零值替代错误。
+     */
+    core::Result<std::string> readPointJson(const std::string& point_type,
+                                            const std::string& point_id,
+                                            const core::CallContext& ctx);
     /** @brief 停止服务并释放资源。 */
     void shutdown();
 

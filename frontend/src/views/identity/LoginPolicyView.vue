@@ -6,7 +6,6 @@ import AsyncContent from '@/components/common/AsyncContent.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import FormField from '@/components/common/FormField.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
-import PageHeading from '@/components/common/PageHeading.vue'
 import UserNavigation from '@/components/identity/UserNavigation.vue'
 import SecurityDialog from '@/components/identity/SecurityDialog.vue'
 import { useAsyncTask } from '@/composables/useAsyncTask'
@@ -77,10 +76,7 @@ onMounted(load)
 </script>
 <template>
   <div class="identity-page">
-    <PageHeading
-      title="账户与会话保护"
-      description="配置登录保护与密码规则，设置保存后生效。"
-      breadcrumb="用户与权限 / 登录保护"
+    <UserNavigation
       ><template #actions
         ><ActionBtn
           variant="primary"
@@ -89,8 +85,8 @@ onMounted(load)
           @click="save"
           >保存设置</ActionBtn
         ></template
-      ></PageHeading
-    ><UserNavigation />
+      ></UserNavigation
+    >
     <AsyncContent :loading="task.busy.value" :error="task.error.value" @retry="load">
       <div
         v-if="ready"

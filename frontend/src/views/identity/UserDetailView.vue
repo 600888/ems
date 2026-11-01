@@ -7,7 +7,6 @@ import AppIcon from '@/components/common/AppIcon.vue'
 import AsyncContent from '@/components/common/AsyncContent.vue'
 import FormField from '@/components/common/FormField.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
-import PageHeading from '@/components/common/PageHeading.vue'
 import UnderlineTabs from '@/components/common/UnderlineTabs.vue'
 import RoleBadge from '@/components/identity/RoleBadge.vue'
 import RolePicker from '@/components/identity/RolePicker.vue'
@@ -173,16 +172,18 @@ function revoke(session?: SessionSummary) {
 </script>
 <template>
   <div class="identity-page">
-    <PageHeading
-      :title="user ? `${user.display_name} · ${user.username}` : '用户详情'"
-      :description="
-        user
-          ? `${user.status === 'enabled' ? '账号已启用' : '账号已停用'} · ${roleLabel(user.role_code)} · 最近登录 ${formatTime(user.last_login_at, true)}`
-          : ''
-      "
-      :breadcrumb="`用户与权限 / ${user?.display_name ?? '用户详情'} / ${tabs.find((tab) => tab.key === active)?.label}`"
-      ><template #actions
-        ><ActionBtn icon="chevron-left" @click="router.push({ name: 'users' })"
+    <div class="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-4">
+      <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
+        <h1 class="text-[18px] font-semibold text-ink">
+          {{ user ? `${user.display_name} · ${user.username}` : '用户详情' }}
+        </h1>
+        <p v-if="user && active !== 'security'" class="text-[12px] text-muted">
+          {{ user.status === 'enabled' ? '账号已启用' : '账号已停用' }} ·
+          {{ roleLabel(user.role_code) }} · 最近登录 {{ formatTime(user.last_login_at, true) }}
+        </p>
+      </div>
+      <div class="ml-auto flex shrink-0 items-center gap-3">
+        <ActionBtn icon="chevron-left" @click="router.push({ name: 'users' })"
           >返回用户列表</ActionBtn
         ><ActionBtn
           v-if="active === 'access' && auth.can('user.grant') && !own"
@@ -191,9 +192,9 @@ function revoke(session?: SessionSummary) {
           :disabled="task.busy.value || !user"
           @click="saveAccess"
           >保存授权</ActionBtn
-        ></template
-      ></PageHeading
-    >
+        >
+      </div>
+    </div>
     <UnderlineTabs
       :items="tabs"
       :model-value="active"

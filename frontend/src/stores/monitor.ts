@@ -1,304 +1,377 @@
 import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
-import { useAuthStore } from '@/stores/auth'
-import { scopedDeviceTree } from '@/domain/resource-scope'
-
-// 授权选择和运行导航共用设备目录，确保设备的父子关系一致。
-import { adminTree as monitorTree } from '@/mocks/devices'
-import {
-  monitorProfiles,
-  pcsYcPoints,
-  pcsYxSignals,
-  ycPoints,
-  ykCommands,
-  yxSignals,
-  ytPoints,
-  type DeviceProfile,
-} from '@/mocks/points'
-import type {
-  ControlLog,
-  DeviceNode,
-  Metric,
-  YcPoint,
-  YkCommand,
-  YtPoint,
-  YxSignal,
-} from '@/types/domain'
-
+import { useAuthStore } from './auth'
+import { deviceApi, stableId, clearEngineeringSession } from '@/api/device'
+import { monitorApi, type LivePoint, type HistorySample } from '@/api/monitor'
+import { errorMessage } from '@/api/http'
+import type { DeviceNode, YcPoint, YxSignal, YkCommand, YtPoint, ControlLog } from '@/types/domain'
+import type { EngineeringRecord, PointType } from '@/types/engineering'
 export type MonitorScope = 'all' | 'alarm' | 'offline'
-
-function findNode(nodes: DeviceNode[], id: string): DeviceNode | undefined {
-  for (const node of nodes) {
-    if (node.id === id) return node
-    const hit = node.children && findNode(node.children, id)
-    if (hit) return hit
-  }
-  return undefined
-}
-
-/** 未在示例档案中登记的设备：给出空能力档案，页面按「暂无测点」呈现 */
-function emptyProfile(node: DeviceNode | undefined): DeviceProfile {
-  const blankMetrics: Metric[] = ['实时数据', '通信状态', '更新时刻'].map((label, index) => ({
-    label,
-    value: '—',
-    note: index === 0 ? '该设备暂无实时点表' : '示例数据未覆盖',
-    tone: 'ink' as const,
-  }))
-  return {
-    id: node?.id ?? 'unknown',
-    name: node?.name ?? '未知设备',
-    code: node?.code ?? '—',
-    type: node?.kind === 'component' ? '层级节点' : '设备',
-    vendor: '示例厂商 · 待接入',
-    firmware: '—',
-    parentPath: `华东示范储能站  /  储能单元 01  /  ${node?.name ?? '未知设备'}`,
-    pathLabel: '储能单元 01',
-    icon: node?.icon ?? 'hard-drive',
-    dataSource: node?.name ?? '—',
-    status: node?.status === 'alarm' ? 'alarm' : node?.status === 'offline' ? 'offline' : 'online',
-    metrics: blankMetrics,
-    tabCounts: { telemetry: 0, signal: 0, control: 0, setpoint: 0 },
-  }
-}
-
-/** 前台设备监视：设备树、实时档案、四遥数据、运行操作 */
 export const useMonitorStore = defineStore('monitor', () => {
-  const auth = useAuthStore()
-  const authorized = computed(() =>
-    scopedDeviceTree(
-      monitorTree,
-      auth.full ? auth.session?.scope_mode : undefined,
-      auth.full ? (auth.session?.scopes ?? []) : [],
-    ),
-  )
-  const tree = computed(() => authorized.value.tree)
-  const selectedId = ref('bms01')
-  const keyword = ref('')
-  const scope = ref<MonitorScope>('all')
-  const loading = ref(false)
-  const error = ref('')
-  const paused = ref(false)
-  const lastUpdated = ref('14:32:08')
-
-  const selectedYcCodes = ref<string[]>(['soc', 'cell_temp_max', 'cell_temp_min'])
-  const curveWindow = ref('最近 30 分钟')
-  const sampleInterval = ref('2 秒')
-
-  const ytRows = ref<YtPoint[]>(ytPoints.map((row) => ({ ...row })))
-  const controlLogRows = ref<ControlLog[]>([])
-  const activeCommand = ref<YkCommand | null>(null)
-  const controlStep = ref<1 | 2 | 3>(1)
-  const controlReason = ref('计划维护停机')
-  const controlRunning = ref(false)
-  const controlResult = ref<'idle' | 'success' | 'failed' | 'timeout'>('idle')
-
-  const selectedNode = computed(() => findNode(tree.value, selectedId.value))
-  const profile = computed<DeviceProfile>(() =>
-    authorized.value.allowedIds.has(selectedId.value)
-      ? (monitorProfiles[selectedId.value] ?? emptyProfile(selectedNode.value))
-      : emptyProfile(undefined),
-  )
-
-  const isBms = computed(
-    () => authorized.value.allowedIds.has(selectedId.value) && selectedId.value === 'bms01',
-  )
+  const auth = useAuthStore(),
+    tree = ref<DeviceNode[]>([]),
+    selectedId = ref(''),
+    selected = ref<EngineeringRecord | null>(null),
+    keyword = ref(''),
+    scope = ref<MonitorScope>('all'),
+    loading = ref(false),
+    error = ref(''),
+    paused = ref(false),
+    lastUpdated = ref('—'),
+    selectedYcCodes = ref<string[]>([]),
+    curveWindow = ref('最近 30 分钟'),
+    sampleInterval = ref('2 秒')
+  const live = ref<Record<PointType, LivePoint[]>>({ yc: [], yx: [], yk: [], yt: [] }),
+    totals = ref({ yc: 0, yx: 0, yk: 0, yt: 0 }),
+    pages = ref({ yc: 1, yx: 1, yk: 1, yt: 1 }),
+    history = ref<HistorySample[]>([]),
+    historyError = ref(''),
+    historyBusy = ref(false),
+    historyTruncated = ref(false)
+  const ytRows = ref<YtPoint[]>([]),
+    controlLogRows = ref<ControlLog[]>([]),
+    activeCommand = ref<YkCommand | null>(null),
+    controlStep = ref<1 | 2 | 3>(1),
+    controlReason = ref(''),
+    controlRunning = ref(false),
+    controlResult = ref<'idle' | 'success' | 'failed' | 'timeout'>('idle'),
+    controlError = ref('')
+  let epoch = 0,
+    refreshing = false
+  const display = (row: LivePoint) =>
+    row.sample && row.quality === 'good' ? String(row.sample.value) : '—'
+  const timestamp = (row: LivePoint) =>
+    row.sample ? new Date(row.sample.timestamp).toLocaleTimeString('zh-CN', { hour12: false }) : '—'
   const ycList = computed<YcPoint[]>(() =>
-    isBms.value
-      ? ycPoints
-      : authorized.value.allowedIds.has(selectedId.value) && selectedId.value === 'pcs01'
-        ? pcsYcPoints
-        : [],
+    live.value.yc.map((r) => ({
+      pointId: r.definition.point_id,
+      code: r.definition.code,
+      name: r.definition.name,
+      value: display(r),
+      unit: r.definition.unit,
+      quality: r.quality === 'good' ? 'good' : r.quality === 'stale' ? 'timeout' : 'invalid',
+      ts: timestamp(r),
+      group: r.definition.semantic_code || '其他',
+      series: history.value
+        .filter((s) => s.point_id === r.definition.point_id)
+        .map((s) => (s.quality_code === 0 && typeof s.value === 'number' ? s.value : NaN)),
+    })),
   )
   const yxList = computed<YxSignal[]>(() =>
-    isBms.value
-      ? yxSignals
-      : authorized.value.allowedIds.has(selectedId.value) && selectedId.value === 'pcs01'
-        ? pcsYxSignals
-        : [],
+    live.value.yx.map((r) => ({
+      name: r.definition.name,
+      state: display(r),
+      raw: (r.sample?.value ? '1' : '0') as '0' | '1',
+      lastChange: timestamp(r),
+      group: r.definition.semantic_code || '其他',
+      level: r.quality === 'good' ? 'normal' : 'unknown',
+    })),
   )
   const ykList = computed<YkCommand[]>(() =>
-    auth.can('command.yk') && profile.value.tabCounts.control > 0 ? ykCommands : [],
+    auth.can('command.yk')
+      ? live.value.yk.map((r) => ({
+          pointId: r.definition.point_id,
+          name: r.definition.name,
+          desc: r.definition.description ? String(r.definition.description) : r.definition.code,
+          current: display(r),
+          action: String(r.definition.fixed_raw_value ?? '0'),
+          disabledReason: '遥控执行服务暂未接通',
+        }))
+      : [],
   )
-  const ytList = computed<YtPoint[]>(() =>
-    auth.can('command.yt') && profile.value.tabCounts.setpoint > 0 ? ytRows.value : [],
-  )
-
-  /** 树过滤：按状态范围 + 关键字，保留命中节点的祖先链 */
-  const filteredTree = computed<DeviceNode[]>(() => {
-    const kw = keyword.value.trim().toLowerCase()
-    if (scope.value === 'all' && !kw) return tree.value
-
-    const keep = (node: DeviceNode): DeviceNode | null => {
-      const children = (node.children ?? [])
-        .map(keep)
-        .filter((child): child is DeviceNode => Boolean(child))
-      const hitStatus =
-        scope.value === 'all' ||
-        (scope.value === 'alarm' ? node.status === 'alarm' : node.status === 'offline')
-      const hitKeyword =
-        !kw || node.name.toLowerCase().includes(kw) || node.code.toLowerCase().includes(kw)
-      if ((hitStatus && hitKeyword) || children.length > 0) return { ...node, children }
-      return null
-    }
-
-    return tree.value.map(keep).filter((node): node is DeviceNode => Boolean(node))
-  })
-
-  const counts = computed(() => {
-    const devices: DeviceNode[] = []
-    const visit = (nodes: DeviceNode[]) => {
-      for (const node of nodes) {
-        if (node.isDevice) devices.push(node)
-        visit(node.children ?? [])
-      }
-    }
-    visit(tree.value)
-    return {
-      all: devices.length,
-      alarm: devices.filter((n) => n.status === 'alarm').length,
-      offline: devices.filter((n) => n.status === 'offline').length,
-    }
-  })
-
-  watch(
-    () =>
-      JSON.stringify([
-        auth.user?.user_id,
-        auth.session?.scope_mode,
-        auth.session?.scopes,
-        auth.session?.permissions,
-      ]),
-    () => {
-      function firstDevice(nodes: DeviceNode[]): string | undefined {
-        for (const node of nodes) {
-          if (node.isDevice) return node.id
-          const id = firstDevice(node.children ?? [])
-          if (id) return id
-        }
-      }
-      selectedId.value = authorized.value.allowedIds.has('bms01')
-        ? 'bms01'
-        : (firstDevice(tree.value) ?? '')
-      keyword.value = ''
-      scope.value = 'all'
-      selectedYcCodes.value = ['soc', 'cell_temp_max', 'cell_temp_min']
-      activeCommand.value = null
-      controlRunning.value = false
-      controlResult.value = 'idle'
-      controlStep.value = 1
-      controlReason.value = ''
-      ytRows.value = ytPoints.map((row) => ({ ...row }))
-      controlLogRows.value = []
+  const ytList = computed(() => (auth.can('command.yt') ? ytRows.value : []))
+  const profile = computed(() => ({
+    id: selectedId.value,
+    name: selected.value?.name ?? '请选择设备',
+    code: selected.value?.code ?? '—',
+    type: selected.value?.device_type_code ?? '',
+    vendor: selected.value?.vendor ?? '',
+    firmware: selected.value?.firmware_version ?? '',
+    parentPath: selected.value?.path ?? '',
+    pathLabel: selected.value?.path ?? '',
+    icon: selected.value?.node_kind === 'component' ? 'battery' : 'cpu',
+    dataSource: selected.value?.source_device_id || selected.value?.code || '—',
+    status:
+      live.value.yc.some((r) => r.quality === 'good') ||
+      live.value.yx.some((r) => r.quality === 'good')
+        ? 'online'
+        : 'offline',
+    metrics: ycList.value.slice(0, 6).map((r) => ({
+      label: r.name,
+      value: r.value,
+      unit: r.unit,
+      note: r.quality === 'good' ? `更新于 ${r.ts}` : '数据不可用',
+      tone: r.quality === 'good' ? ('accent' as const) : ('warn' as const),
+    })),
+    tabCounts: {
+      telemetry: totals.value.yc,
+      signal: totals.value.yx,
+      control: totals.value.yk,
+      setpoint: totals.value.yt,
     },
-    { immediate: true },
-  )
-
-  /** 选中测点的曲线数据（最多 6 个） */
+  }))
+  const selectedNode = computed(() => selected.value)
+  const filteredTree = computed(() => {
+    const filter = (nodes: DeviceNode[]): DeviceNode[] =>
+      nodes.flatMap((n) => {
+        const children = filter(n.children ?? [])
+        return !keyword.value || `${n.name} ${n.code}`.includes(keyword.value) || children.length
+          ? [{ ...n, children }]
+          : []
+      })
+    return filter(tree.value)
+  })
+  const counts = computed(() => {
+    let all = 0
+    const walk = (nodes: DeviceNode[]) =>
+      nodes.forEach((n) => {
+        if (n.isDevice) all++
+        walk(n.children ?? [])
+      })
+    walk(tree.value)
+    return { all, alarm: 0, offline: 0 }
+  })
   const curveSeries = computed(() =>
-    selectedYcCodes.value
-      .map((code) => ycList.value.find((point) => point.code === code))
-      .filter((point): point is YcPoint => Boolean(point)),
+    ycList.value.filter((r) => selectedYcCodes.value.includes(r.code)),
   )
-
-  function selectDevice(id: string) {
-    if (!authorized.value.allowedIds.has(id) || !findNode(tree.value, id)?.isDevice) return
-    selectedId.value = id
-    controlRunning.value = false
-    controlResult.value = 'idle'
-    controlStep.value = 1
-    activeCommand.value = null
-    ytRows.value = ytPoints.map((row) => ({ ...row }))
-  }
-
-  function toggleYc(code: string) {
-    if (selectedYcCodes.value.includes(code)) {
-      selectedYcCodes.value = selectedYcCodes.value.filter((item) => item !== code)
-      return
-    }
-    if (selectedYcCodes.value.length >= 6) return
-    selectedYcCodes.value = [...selectedYcCodes.value, code]
-  }
-
-  function openCommand(command: YkCommand) {
-    if (!auth.can('command.yk') || !ykList.value.includes(command) || command.disabledReason) return
-    activeCommand.value = command
-    controlStep.value = 1
-    controlResult.value = 'idle'
-  }
-
-  function closeCommand() {
-    controlRunning.value = false
-    activeCommand.value = null
-    controlStep.value = 1
-    controlResult.value = 'idle'
-  }
-
-  /** 模拟指令下发：发送中 → 设备反馈 */
-  function executeCommand() {
-    if (
-      !auth.can('command.yk') ||
-      !activeCommand.value ||
-      controlRunning.value ||
-      !authorized.value.allowedIds.has(selectedId.value)
-    )
-      return
-    const command = activeCommand.value
-    const deviceId = selectedId.value
-    const userId = auth.user?.user_id
-    controlStep.value = 3
-    controlRunning.value = true
-    controlResult.value = 'idle'
-    setTimeout(() => {
-      if (
-        auth.user?.user_id !== userId ||
-        selectedId.value !== deviceId ||
-        activeCommand.value !== command ||
-        !auth.can('command.yk') ||
-        !authorized.value.allowedIds.has(deviceId)
+  async function refresh() {
+    if (refreshing || !selectedId.value || !auth.full) return
+    const owner = epoch,
+      id = selectedId.value
+    refreshing = true
+    error.value = ''
+    try {
+      const kinds = ['yc', 'yx', 'yk', 'yt'] as const
+      const result = await Promise.allSettled(
+        kinds.map(async (kind) => {
+          try {
+            return { ...(await monitorApi.points(id, kind, pages.value[kind])), error: '' }
+          } catch (cause) {
+            // 点位定义仍可供历史查询使用；实时服务失败不能生成或沿用旧样本。
+            const configured = await deviceApi.points(id, kind, pages.value[kind])
+            return {
+              ...configured,
+              items: configured.items.map(
+                (definition): LivePoint => ({
+                  definition,
+                  sample: null,
+                  quality: definition.enabled ? 'missing' : 'disabled',
+                }),
+              ),
+              error: errorMessage(cause),
+            }
+          }
+        }),
       )
-        return
-      controlRunning.value = false
-      controlResult.value = 'success'
-      controlLogRows.value = [
-        {
-          time: new Date().toLocaleTimeString('zh-CN', { hour12: false }),
-          command: command.name,
-          target: command.action,
-          operator: auth.user?.display_name ?? '',
-          result: 'success',
-        },
-        ...controlLogRows.value,
-      ]
-    }, 1200)
+      if (owner !== epoch || id !== selectedId.value) return
+      const failures: string[] = []
+      kinds.forEach((kind, i) => {
+        const response = result[i]!
+        if (response.status === 'fulfilled') {
+          live.value[kind] = response.value.items
+          totals.value[kind] = response.value.total
+          if (response.value.error) failures.push(response.value.error)
+        } else {
+          live.value[kind] = []
+          totals.value[kind] = 0
+          failures.push(errorMessage(response.reason))
+        }
+      })
+      error.value = [...new Set(failures)].join('；')
+      const previous = new Map(ytRows.value.map((r) => [r.pointId, r]))
+      ytRows.value = live.value.yt.map((r) => ({
+        pointId: r.definition.point_id,
+        name: r.definition.name,
+        current: display(r),
+        modified: previous.get(r.definition.point_id)?.modified ?? display(r),
+        unit: r.definition.unit,
+        min: Number(r.definition.range_min ?? -Number.MAX_VALUE),
+        max: Number(r.definition.range_max ?? Number.MAX_VALUE),
+      }))
+      lastUpdated.value = failures.length
+        ? '—'
+        : new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    } catch (e) {
+      if (owner === epoch) {
+        error.value = errorMessage(e)
+        live.value = { yc: [], yx: [], yk: [], yt: [] }
+        ytRows.value = []
+      }
+    } finally {
+      refreshing = false
+    }
   }
-
-  function setYtValue(name: string, value: string) {
-    if (!auth.can('command.yt') || !ytList.value.length) return
-    ytRows.value = ytRows.value.map((row) =>
-      row.name === name ? { ...row, modified: value } : row,
-    )
-  }
-
-  function resetYtValue(name: string) {
-    if (!auth.can('command.yt') || !ytList.value.length) return
-    ytRows.value = ytRows.value.map((row) =>
-      row.name === name ? { ...row, modified: row.current } : row,
-    )
-  }
-
-  /** 2 秒一次的心跳：只推进更新时间，数值保持示例稳定 */
-  function tick() {
-    if (paused.value) return
-    lastUpdated.value = new Date().toLocaleTimeString('zh-CN', { hour12: false })
-  }
-
   async function load() {
+    const owner = epoch
     loading.value = true
     error.value = ''
-    await new Promise((done) => setTimeout(done, 120))
-    loading.value = false
+    try {
+      const nextTree = await deviceApi.tree()
+      if (owner !== epoch) return
+      tree.value = nextTree
+      const first = (nodes: DeviceNode[]): string => {
+        for (const n of nodes) {
+          if (n.isDevice || n.kind === 'component') return n.id
+          const nested = first(n.children ?? [])
+          if (nested) return nested
+        }
+        return ''
+      }
+      if (!selectedId.value) selectedId.value = first(tree.value)
+      if (selectedId.value) {
+        const detail = await deviceApi.detail(selectedId.value)
+        if (owner !== epoch) return
+        selected.value = detail
+        await refresh()
+      }
+    } catch (e) {
+      if (owner === epoch) error.value = errorMessage(e)
+    } finally {
+      if (owner === epoch) loading.value = false
+    }
   }
-
+  async function selectDevice(id: string) {
+    const owner = ++epoch
+    selectedId.value = id
+    selected.value = null
+    activeCommand.value = null
+    history.value = []
+    selectedYcCodes.value = []
+    controlResult.value = 'idle'
+    controlError.value = ''
+    live.value = { yc: [], yx: [], yk: [], yt: [] }
+    ytRows.value = []
+    pages.value = { yc: 1, yx: 1, yk: 1, yt: 1 }
+    try {
+      const detail = await deviceApi.detail(id)
+      if (owner !== epoch) return
+      selected.value = detail
+      await refresh()
+    } catch (e) {
+      if (owner === epoch) error.value = errorMessage(e)
+    }
+  }
+  function toggleYc(code: string) {
+    selectedYcCodes.value = selectedYcCodes.value.includes(code)
+      ? selectedYcCodes.value.filter((c) => c !== code)
+      : selectedYcCodes.value.length < 6
+        ? [...selectedYcCodes.value, code]
+        : selectedYcCodes.value
+  }
+  function openCommand(command: YkCommand) {
+    if (!command.disabledReason && auth.can('command.yk')) {
+      activeCommand.value = command
+      controlStep.value = 1
+      controlResult.value = 'idle'
+      controlError.value = ''
+    }
+  }
+  function closeCommand() {
+    if (controlRunning.value) return
+    activeCommand.value = null
+    controlStep.value = 1
+    controlResult.value = 'idle'
+  }
+  async function executeCommand() {
+    if (!activeCommand.value || !controlReason.value.trim() || controlRunning.value) return
+    controlRunning.value = true
+    controlStep.value = 3
+    controlError.value = ''
+    const owner = epoch
+    try {
+      await monitorApi.submit({
+        device_id: selectedId.value,
+        point_id: activeCommand.value.pointId!,
+        point_type: 'yk',
+        value: Number(activeCommand.value.action),
+        reason: controlReason.value.trim(),
+        intent_id: stableId('intent'),
+      })
+      if (owner === epoch) controlError.value = '意图已受理，执行结果尚未确认'
+    } catch (e) {
+      if (owner === epoch) {
+        controlError.value = errorMessage(e)
+        controlResult.value = 'failed'
+      }
+    } finally {
+      controlRunning.value = false
+    }
+  }
+  async function submitSetpoints(reason: string) {
+    if (!reason.trim()) throw new Error('请填写操作原因')
+    const changed = ytRows.value.filter((r) => r.modified !== r.current)
+    for (const row of changed) {
+      const value = Number(row.modified)
+      if (!Number.isFinite(value) || value < row.min || value > row.max)
+        throw new Error('设定值超出允许范围')
+      await monitorApi.submit({
+        device_id: selectedId.value,
+        point_id: row.pointId!,
+        point_type: 'yt',
+        value,
+        reason,
+        intent_id: stableId('intent'),
+      })
+    }
+  }
+  function setYtValue(name: string, value: string) {
+    ytRows.value = ytRows.value.map((r) => (r.name === name ? { ...r, modified: value } : r))
+  }
+  function resetYtValue(name: string) {
+    ytRows.value = ytRows.value.map((r) => (r.name === name ? { ...r, modified: r.current } : r))
+  }
+  async function queryHistory() {
+    historyBusy.value = true
+    historyError.value = ''
+    const owner = epoch
+    try {
+      const ids = ycList.value
+        .filter((r) => selectedYcCodes.value.includes(r.code))
+        .map((r) => r.pointId!)
+      if (!ids.length) {
+        history.value = []
+        return
+      }
+      const end = Date.now(),
+        start = end - (curveWindow.value === '最近 2 小时' ? 7200000 : 1800000)
+      const result = await monitorApi.history(selectedId.value, ids, start, end)
+      if (owner === epoch) {
+        history.value = result.items
+        historyTruncated.value = result.truncated
+      }
+    } catch (e) {
+      if (owner === epoch) {
+        history.value = []
+        historyError.value = errorMessage(e)
+      }
+    } finally {
+      historyBusy.value = false
+    }
+  }
+  function tick() {
+    if (!paused.value) void refresh()
+  }
+  watch(
+    () => auth.user?.user_id,
+    () => {
+      epoch++
+      clearEngineeringSession()
+      tree.value = []
+      selectedId.value = ''
+      selected.value = null
+      live.value = { yc: [], yx: [], yk: [], yt: [] }
+      history.value = []
+      ytRows.value = []
+      activeCommand.value = null
+      controlLogRows.value = []
+      error.value = ''
+      clearHistory()
+    },
+  )
+  function clearHistory() {
+    historyError.value = ''
+    historyTruncated.value = false
+  }
   return {
     tree,
     selectedId,
@@ -318,8 +391,9 @@ export const useMonitorStore = defineStore('monitor', () => {
     controlReason,
     controlRunning,
     controlResult,
-    selectedNode,
+    controlError,
     profile,
+    selectedNode,
     ycList,
     yxList,
     ykList,
@@ -327,14 +401,24 @@ export const useMonitorStore = defineStore('monitor', () => {
     filteredTree,
     counts,
     curveSeries,
+    live,
+    totals,
+    pages,
+    history,
+    historyBusy,
+    historyError,
+    historyTruncated,
     selectDevice,
     toggleYc,
     openCommand,
     closeCommand,
     executeCommand,
+    submitSetpoints,
     setYtValue,
     resetYtValue,
     tick,
     load,
+    refresh,
+    queryHistory,
   }
 })

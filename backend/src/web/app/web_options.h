@@ -2,6 +2,7 @@
 #include <common/database/mysql_database.h>
 
 #include <memory>
+#include <vector>
 
 #include "web/transport/json.h"
 
@@ -12,9 +13,12 @@ struct WebOptions {
     std::string host{"127.0.0.1"};
     unsigned short port{8080};
     std::string allowed_origin{"http://127.0.0.1:8080"};
+    std::vector<std::string> allowed_origins;
     std::string database_config;
     std::string identity_key_file;
     std::string document_root;
+    std::string realtime_config;
+    std::string realtime_scope_code{"station001"};
     std::string workspace{"web-upload"};
     std::size_t io_threads{2}, workers{4}, queue_size{128}, import_workers{1}, import_queue_size{8};
     int request_timeout_ms{5000}, import_timeout_ms{30000}, audit_retention_days{180};

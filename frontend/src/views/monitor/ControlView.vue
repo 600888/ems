@@ -3,15 +3,22 @@ import { computed } from 'vue'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import EmptyState from '@/components/common/EmptyState.vue'
+import InfoBar from '@/components/common/InfoBar.vue'
 import { useMonitorStore } from '@/stores/monitor'
 
 const monitor = useMonitorStore()
 
-const checks = ['设备在线，数据有效', '设备处于远方控制', '遥控权限已通过']
+const checks = [
+  '提交前由后端核验账号和设备权限',
+  '控制意图必须经策略仲裁',
+  '只有设备执行回执可确认成功',
+]
 
 const current = computed(() => monitor.activeCommand)
 
-const canExecute = computed(() => Boolean(current.value) && !monitor.controlRunning)
+const canExecute = computed(
+  () => Boolean(current.value) && !!monitor.controlReason.trim() && !monitor.controlRunning,
+)
 
 const commandState = computed(() => {
   if (monitor.controlRunning)
@@ -35,7 +42,7 @@ const commandState = computed(() => {
       tone: 'text-danger',
       icon: 'circle-x',
       title: '执行失败',
-      desc: '设备拒绝：控制权已变更。请重新核对。',
+      desc: monitor.controlError || '控制意图未能提交，请检查后重试。',
       spin: false,
     }
   if (monitor.controlResult === 'timeout')
@@ -52,12 +59,13 @@ const commandState = computed(() => {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col gap-4">
+    <InfoBar v-if="monitor.controlError" :text="monitor.controlError" tone="warn" />
     <!-- 遥控操作状态 -->
     <div class="panel flex h-[46px] shrink-0 items-center gap-[10px] px-4">
       <AppIcon name="shield-check" :size="16" class="text-ok" />
-      <span class="text-[12px] text-ink">远方控制 · 通信正常 · 当前角色具备遥控权限</span>
+      <span class="text-[12px] text-ink">遥控需经策略服务受理和设备执行确认</span>
       <div class="flex-1" />
-      <span class="text-[11px] text-muted">操作人：值班员</span>
+      <span class="text-[11px] text-muted">当前会话操作</span>
     </div>
 
     <div class="flex min-h-0 flex-1 gap-4">

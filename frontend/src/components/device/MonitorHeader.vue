@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
-
 import AppIcon from '@/components/common/AppIcon.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import { useMonitorStore } from '@/stores/monitor'
@@ -49,7 +47,7 @@ const monitor = useMonitorStore()
           type="button"
           class="text-muted transition-colors hover:text-ink"
           aria-label="刷新"
-          @click="ElMessage.success('已刷新当前设备实时数据')"
+          @click="monitor.refresh"
         >
           <AppIcon name="refresh-cw" :size="14" />
         </button>

@@ -1,3 +1,4 @@
+#include <common/core/time.h>
 #include <drogon/drogon.h>
 #include <gtest/gtest.h>
 #include <sqlite3.h>
@@ -10,9 +11,11 @@
 
 #include "common/db/configuration/orm_device_management_store.h"
 #include "common/db/runtime/transaction_database.h"
+#include "web/app/module_registry.h"
 #include "web/app/web_options.h"
 #include "web/modules/device/application/device_service.h"
 #include "web/modules/identity/application/session_service.h"
+#include "web/modules/runtime/runtime_service.h"
 #include "web/platform/crypto.h"
 #include "web/platform/executor/bounded_executor.h"
 
@@ -141,6 +144,199 @@ class WebDevice : public ::testing::Test {
                   {"enabled", false}}}};
     }
 };
+
+TEST_F(WebDevice, RuntimeSamplesAreAuthorizedFreshAndNeverFabricated) {
+    execute("/api/devices/create", create());
+    execute("/api/bindings/create", {{"device_id", "hvac01"},
+                                     {"binding_id", "binding01"},
+                                     {"expected_config_revision", "1"},
+                                     {"fields",
+                                      {{"new_channel",
+                                        {{"channel_id", "channel01"},
+                                         {"code", "channel01"},
+                                         {"name", "Test"},
+                                         {"protocol", "modbus"},
+                                         {"conn_mode", "tcp_client"},
+                                         {"endpoint", "127.0.0.1:502"},
+                                         {"enabled", true}}},
+                                       {"device_address", "1"},
+                                       {"can_collect", true},
+                                       {"enabled", true}}}});
+    execute(
+        "/api/points/create",
+        {{"device_id", "hvac01"},
+         {"point_type", "yc"},
+         {"point_id", "temperature"},
+         {"expected_config_revision", "2"},
+         {"fields",
+          {{"binding_id", "binding01"},
+           {"code", "temperature"},
+           {"name", "Temperature"},
+           {"wire_type", "i16"},
+           {"value_type", "double"},
+           {"enabled", true},
+           {"address", {{"space", "holding_register"}, {"offset", 0}, {"register_count", 1}}}}}});
+    const Json body = {{"device_id", "hvac01"}, {"point_type", "yc"}};
+    execute("/api/devices/update", {{"device_id", "hvac01"},
+                                    {"expected_config_revision", "3"},
+                                    {"fields", {{"enabled", true}}}});
+    int reads = 0;
+    RuntimeService fresh(db, {}, [&](const auto& kind, const auto& id, const auto&) {
+        ++reads;
+        EXPECT_EQ(kind, "yc");
+        EXPECT_EQ(id, "temperature");
+        return core::Result<std::string>{Json({{"code", id},
+                                               {"value", 12.5},
+                                               {"quality", 0},
+                                               {"timestamp", core::now_utc_micros() / 1000}})
+                                             .dump()};
+    });
+    auto result = fresh.execute("/api/monitor/points", body, actor, context());
+    ASSERT_EQ(result.data.at("items").size(), 1);
+    EXPECT_EQ(result.data.at("items").front().at("sample").at("value"), 12.5);
+    EXPECT_EQ(result.data.at("items").front().at("quality"), "good");
+    Principal denied{"reader", {"monitor.read"}, {"station"}, {"other"}};
+    EXPECT_THROW(fresh.execute("/api/monitor/points", body, denied, context()), ApiError);
+    EXPECT_EQ(reads, 1);
+    RuntimeService missing(db, {}, [](const auto&, const auto&, const auto&) {
+        return core::Result<std::string>{
+            core::make_error(core::ErrorCode::NotFound, core::WriteEffect::NotApplicable)};
+    });
+    result = missing.execute("/api/monitor/points", body, actor, context());
+    EXPECT_TRUE(result.data.at("items").front().at("sample").is_null());
+    EXPECT_EQ(result.data.at("items").front().at("quality"), "missing");
+    RuntimeService stale(db, {}, [](const auto&, const auto& id, const auto&) {
+        return core::Result<std::string>{
+            Json({{"code", id}, {"value", 1}, {"quality", 0}, {"timestamp", 1}}).dump()};
+    });
+    result = stale.execute("/api/monitor/points", body, actor, context());
+    EXPECT_EQ(result.data.at("items").front().at("quality"), "stale");
+    RuntimeService unavailable(db, {});
+    EXPECT_THROW(unavailable.execute("/api/monitor/points", body, actor, context()), ApiError);
+}
+
+TEST_F(WebDevice, StationImportRoutesAreExplicitlyRegistered) {
+    const auto routes = device_routes();
+    EXPECT_NE(std::find_if(routes.begin(), routes.end(),
+                           [](const auto& route) {
+                               return route.path == "/api/station-imports/create" && route.post;
+                           }),
+              routes.end());
+    EXPECT_EQ(execute("/api/station-imports/template", Json::object()).data.at("schema"),
+              "ems-station-package/1");
+}
+
+TEST_F(WebDevice, HistoryReadsUnitScopeInBoundedPagesAndChecksOwnership) {
+    execute("/api/devices/create", {{"device_id", "unit"},
+                                    {"expected_config_revision", "0"},
+                                    {"fields",
+                                     {{"parent_device_id", "station"},
+                                      {"node_kind", "unit"},
+                                      {"code", "unit"},
+                                      {"name", "Unit"},
+                                      {"enabled", false}}}});
+    auto device = create("hvac01", "1");
+    device["fields"]["parent_device_id"] = "unit";
+    execute("/api/devices/create", device);
+    execute("/api/bindings/create", {{"device_id", "hvac01"},
+                                     {"binding_id", "binding"},
+                                     {"expected_config_revision", "2"},
+                                     {"fields",
+                                      {{"new_channel",
+                                        {{"channel_id", "channel"},
+                                         {"code", "channel"},
+                                         {"name", "Test"},
+                                         {"protocol", "modbus"},
+                                         {"conn_mode", "tcp_client"},
+                                         {"endpoint", "127.0.0.1:502"},
+                                         {"enabled", false}}},
+                                       {"device_address", "1"},
+                                       {"can_collect", true},
+                                       {"enabled", false}}}});
+    execute(
+        "/api/points/create",
+        {{"device_id", "hvac01"},
+         {"point_type", "yc"},
+         {"point_id", "temperature"},
+         {"expected_config_revision", "3"},
+         {"fields",
+          {{"binding_id", "binding"},
+           {"code", "temperature"},
+           {"name", "Temperature"},
+           {"wire_type", "i16"},
+           {"value_type", "double"},
+           {"enabled", false},
+           {"disabled_reason", "Test"},
+           {"address", {{"space", "holding_register"}, {"offset", 0}, {"register_count", 1}}}}}});
+
+    class Catalog final : public IHistoryCatalogRepository {
+       public:
+        core::Result<PointSnapshot> find_point(ITransaction&, const std::string&,
+                                               const std::string&, const std::string&,
+                                               const std::string&,
+                                               const core::CallContext&) override {
+            return core::make_error(core::ErrorCode::NotFound, core::WriteEffect::NotApplicable);
+        }
+
+        core::Result<SeriesMapping> find_series(ITransaction&, const std::string& id,
+                                                const core::CallContext&) override {
+            return SeriesMapping{id, ValueType::Numeric, "yc"};
+        }
+    };
+
+    db.history_catalog = std::make_shared<Catalog>();
+    int reads = 0;
+    RuntimeService history(
+        db, {}, {},
+        [&](const HistoryQuery& query, const std::vector<SeriesMapping>& mappings,
+            std::uint32_t limit, const auto&) {
+            ++reads;
+            EXPECT_LE(limit, 1001u);
+            EXPECT_EQ(mappings.size(), 1u);
+            std::vector<Sample> samples;
+            if (query.scope_kind == "unit") {
+                EXPECT_EQ(query.scope_id, "unit");
+                const auto start = query.cursor ? query.cursor->source_time_us / 1000 + 1 : 1;
+                for (auto i = start; i <= 1500 && samples.size() < limit; ++i) {
+                    Sample sample;
+                    sample.scope_kind = "unit";
+                    sample.scope_id = "unit";
+                    sample.point_id = "temperature";
+                    sample.series_key = "yc";
+                    sample.event_id = std::to_string(i);
+                    sample.source_time_us = i * 1000;
+                    sample.value = static_cast<double>(i);
+                    samples.push_back(sample);
+                }
+            }
+            return core::Result<std::vector<Sample>>{samples};
+        });
+    Json body = {{"device_id", "hvac01"},
+                 {"point_ids", {"temperature"}},
+                 {"start_ms", 0},
+                 {"end_ms", 2000},
+                 {"max_rows", 1200}};
+    auto result = history.execute("/api/history/query", body, actor, context());
+    EXPECT_EQ(reads, 3);
+    ASSERT_EQ(result.data.at("items").size(), 1200u);
+    EXPECT_EQ(result.data.at("items").back().at("timestamp"), 1200);
+    EXPECT_TRUE(result.data.at("truncated"));
+    body["max_rows"] = 2000;
+    result = history.execute("/api/history/query", body, actor, context());
+    EXPECT_EQ(result.data.at("items").size(), 1500u);
+    EXPECT_FALSE(result.data.at("truncated"));
+    Principal denied{"reader", {"history.read"}, {"station"}, {"other"}};
+    const auto before = reads;
+    EXPECT_THROW(history.execute("/api/history/query", body, denied, context()), ApiError);
+    EXPECT_EQ(reads, before);
+    RuntimeService corrupt(db, {}, {}, [](const auto&, const auto&, auto, const auto&) {
+        Sample sample;
+        sample.scope_kind = "station";
+        sample.scope_id = "other-station";
+        return core::Result<std::vector<Sample>>{std::vector<Sample>{sample}};
+    });
+    EXPECT_THROW(corrupt.execute("/api/history/query", body, actor, context()), ApiError);
+}
 
 TEST_F(WebDevice, CreateQueryRevisionAndNoOpSave) {
     auto saved = execute("/api/devices/create", create());

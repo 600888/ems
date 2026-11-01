@@ -12,6 +12,7 @@ export interface ChartSeries {
   /** CSS 颜色，一般取设计令牌 var(--c-accent) */
   color: string
   values: (number | null)[]
+  timestamps?: number[]
 }
 
 /** 顶栏用户菜单项（画板 17 后台管理 / 画板 18 返回前台） */

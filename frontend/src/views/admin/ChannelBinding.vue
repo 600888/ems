@@ -1,116 +1,307 @@
 <script setup lang="ts">
-import { ElMessage } from 'element-plus'
-
-import AppIcon from '@/components/common/AppIcon.vue'
+import { ref, reactive, watch, computed } from 'vue'
+import { useRoute } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import ActionBtn from '@/components/common/ActionBtn.vue'
+import FormField from '@/components/common/FormField.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
-import StatusTag from '@/components/common/StatusTag.vue'
-import { useConfigStore } from '@/stores/config'
+import { deviceApi, stableId, engineeringRevision, revisionOf } from '@/api/device'
+import { errorMessage } from '@/api/http'
+import type { Binding, Channel } from '@/types/engineering'
+const route = useRoute(),
+  id = computed(() => String(route.params.id)),
+  bindings = ref<Binding[]>([]),
+  channels = ref<Channel[]>([]),
+  protocols = ref<string[]>([]),
+  busy = ref(false),
+  error = ref(''),
+  dialog = ref(false),
+  channelDialog = ref(false),
+  editing = ref('')
+const form = reactive({
+  channel_id: '',
+  device_address: '',
+  profile_version: '',
+  can_collect: 1,
+  can_control: 0,
+  can_forward: 0,
+  enabled: 0,
+  description: '',
+})
+const connection = reactive({
+  channel_id: '',
+  code: '',
+  name: '',
+  protocol: 'modbus',
+  conn_mode: 'tcp_client',
+  endpoint: '',
+  poll_interval_ms: 1000,
+  timeout_ms: 3000,
+  retry_times: 2,
+  enabled: 0,
+  description: '',
+})
+async function load() {
+  busy.value = true
+  error.value = ''
+  try {
+    const [b, c, cap] = await Promise.all([
+      deviceApi.bindings(id.value),
+      deviceApi.channels(),
+      deviceApi.capabilities(),
+    ])
+    bindings.value = b.items
+    channels.value = c.items
+    protocols.value = cap.protocols
+  } catch (e) {
+    error.value = errorMessage(e)
+  } finally {
+    busy.value = false
+  }
+}
+function edit(row?: Binding) {
+  editing.value = row?.binding_id ?? ''
+  newBindingId = stableId('bind')
+  Object.assign(
+    form,
+    row
+      ? Object.fromEntries(
+          Object.keys(form).map((k) => [
+            k,
+            typeof row[k as keyof Binding] === 'boolean'
+              ? Number(row[k as keyof Binding])
+              : row[k as keyof Binding],
+          ]),
+        )
+      : {
+          channel_id: channels.value[0]?.channel_id ?? '',
+          device_address: '',
+          profile_version: '',
+          can_collect: 1,
+          can_control: 0,
+          can_forward: 0,
+          enabled: 0,
+          description: '',
+        },
+  )
+  editRevision = row ? revisionOf(row) : engineeringRevision()
+  dialog.value = true
+  error.value = ''
+}
+async function save() {
+  busy.value = true
+  try {
+    if (editing.value) {
+      const { channel_id: _, ...fields } = form
+      await deviceApi.updateBinding(id.value, editing.value, fields, editRevision)
+    } else await deviceApi.createBinding(id.value, newBindingId, { ...form }, editRevision)
+    dialog.value = false
+    await load()
+    ElMessage.success('绑定已保存并生效')
+  } catch (e) {
+    error.value = errorMessage(e)
+  } finally {
+    busy.value = false
+  }
+}
+async function remove(row: Binding) {
+  try {
+    await ElMessageBox.confirm('确认删除绑定？已被点位引用时无法删除。', '删除绑定')
+  } catch {
+    return
+  }
+  try {
+    await deviceApi.removeBinding(id.value, row.binding_id, revisionOf(row))
+    await load()
+  } catch (e) {
+    error.value = errorMessage(e)
+  }
+}
+function editChannel(row?: Channel) {
+  newChannelId = stableId('ch')
+  Object.assign(
+    connection,
+    row
+      ? Object.fromEntries(
+          Object.keys(connection).map((k) => [
+            k,
+            typeof row[k as keyof Channel] === 'boolean'
+              ? Number(row[k as keyof Channel])
+              : row[k as keyof Channel],
+          ]),
+        )
+      : {
+          channel_id: '',
+          code: '',
+          name: '',
+          protocol: protocols.value[0] ?? 'modbus',
+          conn_mode: 'tcp_client',
+          endpoint: '',
+          poll_interval_ms: 1000,
+          timeout_ms: 3000,
+          retry_times: 2,
+          enabled: 0,
+          description: '',
+        },
+  )
+  editRevision = row
+    ? revisionOf(channels.value.find((channel) => channel.channel_id === row.channel_id) ?? row)
+    : engineeringRevision()
+  channelDialog.value = true
+  error.value = ''
+}
+async function saveChannel() {
+  busy.value = true
+  try {
+    const { channel_id, code, protocol, conn_mode, ...values } = connection
+    if (channel_id) await deviceApi.updateChannel(channel_id, values, editRevision)
+    else
+      await deviceApi.createChannel(
+        newChannelId,
+        { code, protocol, conn_mode, ...values },
+        editRevision,
+      )
+    channelDialog.value = false
+    await load()
+    ElMessage.success('通道已保存并生效')
+  } catch (e) {
+    error.value = errorMessage(e)
+  } finally {
+    busy.value = false
+  }
+}
+watch(id, load, { immediate: true })
 
-const config = useConfigStore()
-
-const details = [
-  { label: '连接目标（示例）', value: '192.0.2.10 : 502' },
-  { label: '共享通信资源', value: 'res01 · PCS 采集网口' },
-  { label: '轮询周期 / 超时', value: '1,000 ms / 3,000 ms' },
-  { label: '采集 / 控制', value: 'telemetry_in / control_out' },
-]
-
-/** 通道配置参数，取代运行期的通信健康度 */
-const channelParams = [
-  { label: '功能码', value: '03', tone: 'text-accent' },
-  { label: '响应超时', value: '1,000 ms', tone: 'text-accent' },
-  { label: '重试次数', value: '3 次', tone: 'text-accent' },
-]
+let editRevision = ''
+let newBindingId = '',
+  newChannelId = ''
 </script>
-
 <template>
-  <div class="flex min-h-0 flex-1 flex-col gap-4">
-    <section class="panel flex min-h-0 flex-1 flex-col overflow-hidden">
-      <div class="flex shrink-0 items-center justify-between p-[18px]">
-        <div class="flex flex-col gap-[5px]">
-          <h3 class="text-[16px] font-semibold text-ink">采集与控制通道</h3>
-          <p class="text-[11px] text-muted">同一设备可绑定多个通道；操作角色与连接方式分别配置</p>
-        </div>
-        <button
-          type="button"
-          class="flex h-[38px] items-center gap-[7px] rounded-[5px] border border-brand bg-brand px-[14px] text-[13px] font-medium text-white transition-all hover:brightness-110"
-          @click="ElMessage.info('新增绑定不在本次示例范围内')"
-        >
-          <AppIcon name="plus" :size="15" />
-          新增绑定
-        </button>
+  <div class="flex min-h-0 flex-col gap-4 overflow-auto">
+    <InfoBar v-if="error" :text="error" tone="danger" />
+    <section class="panel">
+      <div class="flex flex-wrap gap-3 p-4">
+        <h3 class="mr-auto text-[16px] font-semibold">设备通道绑定</h3>
+        <ActionBtn :loading="busy" @click="load">刷新</ActionBtn
+        ><ActionBtn @click="editChannel()">新建通道</ActionBtn
+        ><ActionBtn variant="primary" @click="edit()">新增绑定</ActionBtn>
       </div>
-
-      <div class="dt-head shrink-0">
-        <div class="w-[224px] shrink-0"><span class="dt-th">绑定名称 / 通道</span></div>
-        <div class="w-[146px] shrink-0"><span class="dt-th">操作角色</span></div>
-        <div class="w-[168px] shrink-0"><span class="dt-th">协议 / Profile</span></div>
-        <div class="w-[122px] shrink-0"><span class="dt-th">设备地址</span></div>
-        <div class="w-[190px] shrink-0"><span class="dt-th">配置状态</span></div>
-        <div class="w-[138px] shrink-0"><span class="dt-th">配置版本</span></div>
-        <div class="min-w-0 flex-1"><span class="dt-th">操作</span></div>
-      </div>
-
-      <div class="min-h-0 flex-1 overflow-y-auto">
-        <div v-for="row in config.bindingRows" :key="row.name" class="dt-row h-[52px]">
-          <div class="dt-cell flex w-[224px] shrink-0 flex-col gap-[3px]">
-            <span class="truncate text-[11px] font-semibold text-ink">{{ row.name }}</span>
-            <span class="truncate text-[9px] text-subtle">{{ row.resource }}</span>
-          </div>
-          <div class="dt-cell w-[146px] shrink-0 truncate text-[11px] text-ink">{{ row.role }}</div>
-          <div class="dt-cell flex w-[168px] shrink-0 flex-col gap-[3px]">
-            <span class="text-[11px] text-ink">{{ row.protocol }}</span>
-            <span class="text-[9px] text-subtle">{{ row.profile }}</span>
-          </div>
-          <div class="dt-cell w-[122px] shrink-0 text-[11px] text-ink">{{ row.address }}</div>
-          <div class="dt-cell w-[190px] shrink-0">
-            <StatusTag
-              :tone="row.state === 'enabled' ? 'ok' : 'mute'"
-              :label="row.state === 'enabled' ? '已启用' : '已停用'"
-            />
-          </div>
-          <div class="dt-cell w-[138px] shrink-0 text-[11px] text-ink">{{ row.version }}</div>
-          <div class="dt-cell flex min-w-0 flex-1 items-center">
-            <span class="link-action" @click="ElMessage.info('通道编辑不在本次示例范围内')"
-              >编辑</span
-            >
-          </div>
-        </div>
-      </div>
-
-      <div class="shrink-0 p-4">
-        <InfoBar text="上送映射在通信管理中独立维护；厂家采集地址与上送地址分别配置。" />
+      <div class="overflow-auto">
+        <table class="identity-table">
+          <thead>
+            <tr>
+              <th>通道</th>
+              <th>协议 / 地址</th>
+              <th>设备地址</th>
+              <th>采集 / 控制</th>
+              <th>启用</th>
+              <th>操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="row in bindings" :key="row.binding_id">
+              <td>{{ row.channel?.name }}</td>
+              <td>{{ row.channel?.protocol }} / {{ row.channel?.endpoint }}</td>
+              <td>{{ row.device_address }}</td>
+              <td>{{ row.can_collect ? '采集' : '' }} {{ row.can_control ? '控制' : '' }}</td>
+              <td>{{ row.enabled ? '是' : '否' }}</td>
+              <td>
+                <div class="flex gap-4">
+                  <button class="identity-text-action" @click="edit(row)">编辑绑定</button
+                  ><button class="identity-text-action" @click="editChannel(row.channel)">
+                    编辑通道</button
+                  ><button class="text-danger" @click="remove(row)">删除绑定</button>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+        <p v-if="!bindings.length" class="p-8 text-muted">暂无绑定</p>
       </div>
     </section>
-
-    <div class="flex shrink-0 gap-4">
-      <section class="panel flex min-w-0 flex-1 flex-col gap-4 p-5">
-        <div class="flex items-center justify-between">
-          <h3 class="text-[14px] font-semibold text-ink">ch01 · 主采集连接</h3>
-          <span class="text-[11px] text-muted">主用通道</span>
-        </div>
-        <div class="grid grid-cols-2 gap-x-[18px] gap-y-4">
-          <div v-for="item in details" :key="item.label" class="flex flex-col gap-[7px]">
-            <span class="field-label">{{ item.label }}</span>
-            <span class="field-value">{{ item.value }}</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="panel flex w-[332px] shrink-0 flex-col gap-3 p-5">
-        <div class="flex items-center justify-between">
-          <h3 class="text-[14px] font-semibold text-ink">通信参数</h3>
-          <span class="text-[11px] text-muted">ch01 · 主采集</span>
-        </div>
-        <div
-          v-for="item in channelParams"
-          :key="item.label"
-          class="flex items-center justify-between"
-        >
-          <span class="text-[11px] text-muted">{{ item.label }}</span>
-          <span class="text-[13px] font-medium" :class="item.tone">{{ item.value }}</span>
-        </div>
-      </section>
-    </div>
+    <el-dialog v-model="dialog" :title="editing ? '编辑绑定' : '新增绑定'" width="560px"
+      ><form id="binding-form" class="flex flex-col gap-4" @submit.prevent="save">
+        <InfoBar v-if="error" :text="error" tone="danger" /><FormField label="通道" v-slot="s"
+          ><el-select :id="s.id" v-model="form.channel_id" :disabled="!!editing"
+            ><el-option
+              v-for="c in channels"
+              :key="c.channel_id"
+              :value="c.channel_id"
+              :label="`${c.name} · ${c.protocol}`" /></el-select></FormField
+        ><FormField label="设备地址" v-slot="s"
+          ><el-input
+            :id="s.id"
+            v-model="form.device_address"
+            placeholder="站号 / Unit ID" /></FormField
+        ><FormField label="协议 Profile" v-slot="s"
+          ><el-input :id="s.id" v-model="form.profile_version" /></FormField
+        ><label
+          v-for="f in [
+            { key: 'can_collect', label: '允许采集' },
+            { key: 'can_control', label: '允许控制' },
+            { key: 'enabled', label: '启用绑定' },
+          ] as const"
+          :key="f.key"
+          class="flex justify-between"
+          >{{ f.label }}<el-switch v-model="form[f.key]" :active-value="1" :inactive-value="0"
+        /></label>
+      </form>
+      <template #footer
+        ><ActionBtn type="submit" form="binding-form" variant="primary" :loading="busy"
+          >保存</ActionBtn
+        ></template
+      ></el-dialog
+    >
+    <el-dialog
+      v-model="channelDialog"
+      :title="connection.channel_id ? '编辑通道' : '新建通道'"
+      width="600px"
+      ><form id="channel-form" class="grid grid-cols-2 gap-5" @submit.prevent="saveChannel">
+        <InfoBar v-if="error" class="col-span-2" :text="error" tone="danger" /><FormField
+          v-for="f in [
+            { key: 'code', label: '通道编码' },
+            { key: 'name', label: '名称' },
+            { key: 'endpoint', label: '远端地址' },
+            { key: 'description', label: '描述' },
+          ] as const"
+          :key="f.key"
+          :label="f.label"
+          v-slot="s"
+          ><el-input
+            :id="s.id"
+            v-model="connection[f.key]"
+            :disabled="f.key === 'code' && !!connection.channel_id" /></FormField
+        ><FormField label="协议" v-slot="s"
+          ><el-select :id="s.id" v-model="connection.protocol" :disabled="!!connection.channel_id"
+            ><el-option
+              v-for="p in protocols"
+              :key="p"
+              :label="p"
+              :value="p" /></el-select></FormField
+        ><FormField label="连接方式" v-slot="s"
+          ><el-select :id="s.id" v-model="connection.conn_mode" :disabled="!!connection.channel_id"
+            ><el-option label="TCP 客户端" value="tcp_client" /><el-option
+              label="TCP 服务端"
+              value="tcp_server" /><el-option label="串口" value="serial" /></el-select></FormField
+        ><FormField
+          v-for="f in [
+            { key: 'poll_interval_ms', label: '轮询间隔 ms' },
+            { key: 'timeout_ms', label: '超时 ms' },
+            { key: 'retry_times', label: '重试次数' },
+          ] as const"
+          :key="f.key"
+          :label="f.label"
+          v-slot="s"
+          ><el-input-number :id="s.id" v-model="connection[f.key]" :min="0" /></FormField
+        ><label
+          >启用通道 <el-switch v-model="connection.enabled" :active-value="1" :inactive-value="0"
+        /></label>
+      </form>
+      <template #footer
+        ><ActionBtn type="submit" form="channel-form" variant="primary" :loading="busy"
+          >保存</ActionBtn
+        ></template
+      ></el-dialog
+    >
   </div>
 </template>

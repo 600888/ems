@@ -124,7 +124,7 @@ std::string address(const Point& point, const CfgBindingRow& binding, const CfgC
     if (kind == P::IEC104) {
         const int ca =
             extra.contains("casdu")
-                ? extra.at("casdu").get<int>()
+                ? extra.at("casdu").template get<int>()
                 : number(binding.device_address.empty() ? "1" : binding.device_address, 1, 65535);
         const int ioa = extra.at("ioa").template get<int>();
         int type = std::is_same_v<Point, CfgPointYcRow>
