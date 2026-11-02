@@ -89,3 +89,4 @@ coverage.xml
 
 # Local Web identity keys and deployment overrides
 /backend/.local/
+/backend/conf/web-edit.key

@@ -155,6 +155,12 @@ Web 还需要同工具链的 Trantor、JsonCpp 和 zlib；Windows 可先在对�
 `./scripts/setup_web_dependencies.ps1 -Toolchain msvc`。CMake 会自动查找
 `backend/build/web-deps-msvc/install`；MinGW 使用 `-Toolchain mingw` 和对应的独立依赖目录。
 自定义依赖位置可通过 `EMS_WEB_DEPENDENCY_PREFIX` 或 `CMAKE_PREFIX_PATH` 指定。
+Web 和采集进程还必须链接 MySQL/MariaDB 客户端；缺少头文件或库时 CMake 会拒绝配置。
+Windows 可执行 `./scripts/setup_database_dependencies.ps1 -Toolchain mingw`（MSVC 使用 `msvc`），
+将固定的 MariaDB Connector/C 3.4.8 编译并安装到
+`backend/build/database-deps/mariadb-<工具链>/install`，后续配置自动查找该目录。
+外部安装可通过 `EMS_DATABASE_DEPENDENCY_PREFIX` 或 `CMAKE_PREFIX_PATH` 指定；
+客户端 DLL 及 MySQL 8 认证插件随可执行文件部署。
 详细说明见 [Web 构建与运行](website/docs/processes/web/running.md) 和
 [采集进程构建与运行](website/docs/processes/collector/running.md)。
 MSVC 可执行文件及其运行依赖 DLL 位于 `backend/build/windows-msvc/bin/<配置>/`，

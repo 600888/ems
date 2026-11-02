@@ -31,6 +31,11 @@ ems-db init
 仅运行 `uv sync` 不会安装可选数据库驱动；切换数据库后需同步对应 extra。
 SQLite 不需要额外驱动。安装命令需在运行 `ems-db` 的同一虚拟环境中执行。
 
+拉取新增顶层包（例如 `web_db`）的代码后，旧的可编辑安装映射需要重新生成。
+若命令提示 `Missing Python module 'web_db'`，在本目录执行
+`uv sync --extra mysql --reinstall-package ems-db`；使用 pip 的环境执行
+`python -m pip install -e ".[mysql]"`。切换到源码目录不会刷新已安装命令的包映射。
+
 编辑本目录的 [`database.yaml`](database.yaml)。它**仅供 Python 数据库迁移工具使用**，
 不是全局配置，也不改变 C++ 进程的数据库配置。
 两库共用这一份连接配置，通过 `--database ems` / `--database ems_web` 选择模型及目标库。

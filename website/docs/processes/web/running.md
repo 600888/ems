@@ -59,14 +59,19 @@ flowchart LR
 | 配置 | 来源 |
 | --- | --- |
 | 监听、工作池、期限、上传目录 | `backend/conf/web.json`；默认 `127.0.0.1:8080` |
-| MySQL 连接 | 公共 `EMS_DATABASE_CONFIG` / `EMS_MYSQL_*`；不自动建库或迁移 |
+| MySQL 连接 | 示例 Web 配置指定 `database_config: "conf/db.json"`（相对进程工作目录）；`EMS_MYSQL_*` 可覆盖字段；不自动建库或迁移 |
 | 前端静态文件 | 可选 document_root；或同源 Nginx 转发 `/api` |
 
 ```powershell
-$env:EMS_DATABASE_CONFIG = '公共数据库配置绝对路径'
-./build/web/bin/Release/ems-web.exe --config backend/conf/web.json --check-config
-./build/web/bin/Release/ems-web.exe --config backend/conf/web.json
+# 从仓库根目录进入 MinGW 构建目录；数据库和身份密钥须先按下文准备。
+Push-Location backend/build/windows-mingw
+./bin/ems-web.exe --config conf/web.json --check-config
+./bin/ems-web.exe --config conf/web.json
+Pop-Location
 ```
+
+使用 `EMS_DATABASE_CONFIG` 指定文件时，删除 Web JSON 的 `database_config` 字段或设为空；
+显式 `database_config` 优先。运行示例配置时，从包含 `conf/` 的构建根目录启动。
 
 默认站根由既有种子脚本在缺少站根时建立；已有站根不覆盖。启动验证 14 表可读和唯一站根存在。
 
@@ -81,7 +86,11 @@ ems-db --database ems_web check
 
 Python 工具使用同一份 `backend/python/database.yaml`；C++ 继续使用公共 MySQL JSON/环境配置，默认库为 `ems`，身份仓储固定访问 `ems_web.表名`。运行账号需要工程表及 Web 五表的相应读写权限。两套配置的主机、端口和凭据应指向同一实例；详见 [数据库初始化说明](../../common/database/ems-web.md)。
 
-所有 Web 实例必须加载同一份编辑摘要密钥。文件路径通过 Web JSON 的 `identity_key_file` 或 `EMS_WEB_EDIT_KEY_FILE` 提供；配置字段非空时优先。下面以仓库内已忽略的本地部署目录为例：
+所有 Web 实例必须加载同一份编辑摘要密钥。示例 Web JSON 指向 `conf/web-edit.key`，
+首次启动前在构建根目录执行 `bin/ems-web.exe --config conf/web.json --create-identity-key` 生成；
+密钥不纳入 Git。文件路径也可通过 `EMS_WEB_EDIT_KEY_FILE` 提供；配置字段非空时优先。
+下面展示自定义路径：先将 `backend/conf/web.json` 的 `identity_key_file`、`database_config`
+设为空，再通过环境变量指定仓库内已忽略的本地部署路径。
 
 ```powershell
 New-Item -ItemType Directory -Force backend/.local | Out-Null
@@ -136,6 +145,10 @@ Windows 测试应在正常开发终端运行：受限沙箱的虚拟临时目录
 
 真实 MySQL 集成测试必须使用专门准备的空实例：工程库名为 `ems_identity_test`，同一实例另有空的 `ems_web` 五表及策略种子；不能指向现有业务实例。设置 `EMS_WEB_TEST_MYSQL_CONFIG` 为该实例的公共 JSON 配置，再运行 `test_web_mysql`。未设置时该测试跳过；重复运行前需重新准备隔离空库。测试不负责清空库。Windows 原生客户端使用系统 TLS，须在正常开发终端验证，沙箱可能无法获取 Schannel 凭据。
 
-前后端联调时关闭 Vite 演示接口（`EMS_IDENTITY_MOCK=false`），将 `EMS_API_TARGET` 指向实际后端；前端页面 Origin 必须与 `allowed_origin` 完全一致。正式部署使用同源 HTTPS 代理及 `secure_cookie=true`，Cookie 为 `__Host-ems_session`；本机 HTTP 开发使用 `ems_session`。
+前后端联调时关闭 Vite 演示接口（`EMS_IDENTITY_MOCK=false`），将 `EMS_API_TARGET` 指向实际后端；
+前端页面 Origin 必须与 `allowed_origin` 或 `allowed_origins` 中的一项完全一致。
+示例配置允许 `http://127.0.0.1:5173` 和 `http://localhost:5173`；二者是不同来源，
+使用其他域名或端口需修改精确允许列表并重启 Web。正式部署使用同源 HTTPS 代理及
+`secure_cookie=true`，Cookie 为 `__Host-ems_session`；本机 HTTP 开发使用 `ems_session`。
 
 来源 IP 以连接对端为准，不直接信任客户端自填的 X-Forwarded-For。反向代理部署时，网关按原始客户端地址实施来源限流，应用内的来源计数则针对网关连接地址。

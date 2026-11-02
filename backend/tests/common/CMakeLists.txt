@@ -63,19 +63,27 @@ set_target_properties(
 get_target_property(_ems_test_mysql ems_database_mysql EMS_MYSQL_AVAILABLE)
 if(_ems_test_mysql)
     add_executable(test_ems_database_mysql test_database_mysql.cpp)
-    target_include_directories(
-        test_ems_database_mysql SYSTEM PRIVATE ${EMS_DATABASE_MYSQL_INCLUDE_DIR}
-                                               ${CMAKE_SOURCE_DIR}/third_party/ormpp
-    )
-    target_compile_definitions(test_ems_database_mysql PRIVATE ORMPP_ENABLE_MYSQL)
     target_link_libraries(test_ems_database_mysql PRIVATE ems_database_mysql gtest_main)
+
+    # ormpp 的 inline thread_local 字符串在 MinGW 多编译单元链接时产生重复 TLS 初始化符号。
+    # 底层绑定测试独立链接客户端，公共接口测试仅通过数据库实现库访问 ormpp。
+    add_executable(test_ems_database_mysql_orm test_database_mysql_orm.cpp)
+    target_include_directories(
+        test_ems_database_mysql_orm SYSTEM PRIVATE ${EMS_DATABASE_MYSQL_INCLUDE_DIR}
+                                                   ${CMAKE_SOURCE_DIR}/third_party/ormpp
+    )
+    target_compile_definitions(test_ems_database_mysql_orm PRIVATE ORMPP_ENABLE_MYSQL)
+    target_link_libraries(
+        test_ems_database_mysql_orm PRIVATE ${EMS_DATABASE_MYSQL_LIBRARY} gtest_main Threads::Threads
+    )
     set_target_properties(
-        test_ems_database_mysql
+        test_ems_database_mysql test_ems_database_mysql_orm
         PROPERTIES CXX_STANDARD 17
                    CXX_STANDARD_REQUIRED YES
                    CXX_EXTENSIONS NO
     )
     ems_copy_mysql_runtime(test_ems_database_mysql)
+    ems_copy_mysql_runtime(test_ems_database_mysql_orm)
 endif()
 
 if(EMS_WITH_ZEROMQ)
@@ -107,4 +115,5 @@ gtest_discover_tests(test_ems_common)
 gtest_discover_tests(test_ems_database_runtime)
 if(TARGET test_ems_database_mysql)
     gtest_discover_tests(test_ems_database_mysql)
+    gtest_discover_tests(test_ems_database_mysql_orm)
 endif()

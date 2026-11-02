@@ -32,12 +32,40 @@ set_target_properties(
                POSITION_INDEPENDENT_CODE ON
 )
 
+# 与 Web 依赖一样，复用准备脚本安装的同工具链客户端。
+set(EMS_DATABASE_DEPENDENCY_PREFIX
+    ""
+    CACHE PATH "Optional installation prefix for the MySQL/MariaDB client"
+)
+if(EMS_DATABASE_DEPENDENCY_PREFIX)
+    list(PREPEND CMAKE_PREFIX_PATH "${EMS_DATABASE_DEPENDENCY_PREFIX}")
+elseif(WIN32 AND (MSVC OR MINGW))
+    if(MSVC)
+        set(_ems_database_toolchain msvc)
+    else()
+        set(_ems_database_toolchain mingw)
+    endif()
+    list(APPEND CMAKE_PREFIX_PATH
+         "${CMAKE_SOURCE_DIR}/build/database-deps/mariadb-${_ems_database_toolchain}/install"
+    )
+endif()
+if(EMS_DATABASE_MYSQL_INCLUDE_DIR AND NOT EXISTS "${EMS_DATABASE_MYSQL_INCLUDE_DIR}/mysql.h")
+    unset(EMS_DATABASE_MYSQL_INCLUDE_DIR CACHE)
+    unset(EMS_DATABASE_MYSQL_INCLUDE_DIR)
+endif()
+if(EMS_DATABASE_MYSQL_LIBRARY AND NOT EXISTS "${EMS_DATABASE_MYSQL_LIBRARY}")
+    unset(EMS_DATABASE_MYSQL_LIBRARY CACHE)
+    unset(EMS_DATABASE_MYSQL_LIBRARY)
+endif()
+
 find_path(
     EMS_DATABASE_MYSQL_INCLUDE_DIR
     NAMES mysql.h
     PATH_SUFFIXES mysql mariadb
 )
-find_library(EMS_DATABASE_MYSQL_LIBRARY NAMES mysqlclient mariadb libmariadb)
+find_library(EMS_DATABASE_MYSQL_LIBRARY NAMES mysqlclient mariadb libmariadb
+             PATH_SUFFIXES mysql mariadb
+)
 if(EMS_DATABASE_MYSQL_INCLUDE_DIR AND EMS_DATABASE_MYSQL_LIBRARY)
     if(WIN32)
         get_filename_component(_ems_mysql_lib_dir "${EMS_DATABASE_MYSQL_LIBRARY}" DIRECTORY)
@@ -68,6 +96,15 @@ if(EMS_DATABASE_MYSQL_INCLUDE_DIR AND EMS_DATABASE_MYSQL_LIBRARY)
         target_link_libraries(ems_database_mysql PRIVATE ws2_32)
     endif()
 else()
+    if(EMS_BUILD_WEB OR EMS_BUILD_COLLECTOR)
+        message(FATAL_ERROR
+            "MySQL/MariaDB client headers and library are required by ems-web/ems-collector. "
+            "On Windows, run scripts/setup_database_dependencies.ps1 -Toolchain msvc (or mingw) "
+            "from the repository root in the matching compiler terminal, then configure again. "
+            "For an external installation, set EMS_DATABASE_DEPENDENCY_PREFIX or CMAKE_PREFIX_PATH, "
+            "or set EMS_DATABASE_MYSQL_INCLUDE_DIR and EMS_DATABASE_MYSQL_LIBRARY explicitly."
+        )
+    endif()
     add_library(ems_database_mysql STATIC mysql/mysql_unavailable.cpp)
     set_property(TARGET ems_database_mysql PROPERTY EMS_MYSQL_AVAILABLE FALSE)
 endif()

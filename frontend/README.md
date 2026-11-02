@@ -14,7 +14,7 @@ npm run build
 npm test
 ```
 
-默认访问 `http://127.0.0.1:5173`，Vite 将 `/api` 代理到 `.env.local` 中的 `EMS_API_TARGET`（默认 `http://127.0.0.1:8080`），保留原始 Origin。后端 `conf/web.json` 的 `allowed_origins` 已列入此开发地址；使用其他域名或端口时同步修改精确允许列表。
+默认访问 `http://127.0.0.1:5173`（也可使用 `http://localhost:5173`），Vite 将 `/api` 代理到 `.env.local` 中的 `EMS_API_TARGET`（默认 `http://127.0.0.1:8080`），保留原始 Origin。后端 `conf/web.json` 的 `allowed_origins` 已列入这两个开发地址；使用其他域名或端口时同步修改精确允许列表，并重启 Web 使配置生效。
 
 `EMS_IDENTITY_MOCK=false` 是真实对接模式。仅身份界面演示可显式改成 `true`，演示账号见 `.env.example`；设备管理与监视没有模拟数据回退，生产构建不挂载模拟身份服务。
 
