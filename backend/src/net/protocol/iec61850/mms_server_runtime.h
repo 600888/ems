@@ -40,6 +40,11 @@ class MmsReadOnlyServer final {
      * @return 0 成功；-1 参数、类型或权限错误，原映像保持不变。
      */
     int write(const std::string& code, double value);
+    /** @brief 全批校验后原子提交本地出口映像，保留来源 UTC 毫秒时标。
+     * @param[in] samples_json 含 code/value/iec_quality/timestamp 的数组；null 值仅更新 q/t。
+     * @return 0 成功；-1 参数错误，整批不提交。
+     */
+    int update_image(const std::string& samples_json);
     /** @brief 返回最近错误的副本。
      * @return 诊断文本。
      */

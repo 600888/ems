@@ -59,18 +59,21 @@ ems::rtdb::ChannelConfig compile_channel(const CfgChannelRow& channel) {
     result.id_ = channel.id;
     result.name_ = channel.name;
     result.protocol_ = protocol(channel);
-    if (result.protocol_ == ems::model::ProtocolType::IEC61850 && channel.conn_mode != "tcp_client")
-        throw std::invalid_argument("IEC61850 currently supports MMS TCP client only");
+    if (result.protocol_ == ems::model::ProtocolType::IEC61850 &&
+        channel.conn_mode != "tcp_client" && channel.conn_mode != "tcp_server")
+        throw std::invalid_argument("IEC61850 requires MMS TCP transport");
     result.connection_ = channel.endpoint;
     result.status_ = channel.enabled;
     auto settings = object(channel.serial_json);
     if (result.protocol_ == ems::model::ProtocolType::IEC61850) {
         if (!settings.contains("iec61850")) settings["iec61850"] = json::object();
         auto& options = settings.at("iec61850");
-        if (!options.is_object() || options.contains("points"))
+        if (!options.is_object() ||
+            (channel.conn_mode != "tcp_server" && options.contains("points")))
             throw std::invalid_argument(
                 "IEC61850 points must be compiled from the four point tables");
-        options["points"] = json::array();
+        if (channel.conn_mode != "tcp_server") options["points"] = json::array();
+        settings.erase("forwarding");
     }
     result.baudRate_ = settings.value("baud_rate", settings.value("baudrate", 9600));
     result.dataBits_ = settings.value("data_bits", 8);
@@ -220,6 +223,7 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
         std::map<std::string, const CfgChannelRow*> channels;
         std::map<std::string, const CfgBindingRow*> bindings;
         std::map<std::int64_t, ems::rtdb::ChannelConfig> compiled;
+        std::map<std::int64_t, ForwardingChannelConfig> forwarding;
         std::map<std::int64_t, std::map<std::string, json>> mms_points;
         std::map<std::int64_t, std::map<std::string, ConfiguredDevice>> routes;
         std::int64_t revision = 0;
@@ -259,13 +263,26 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
             if (binding.binding_id.empty() ||
                 !bindings.emplace(binding.binding_id, &binding).second)
                 throw std::invalid_argument("binding identity is invalid or duplicated");
-            if (!binding.enabled || (!binding.can_collect && !binding.can_control)) continue;
+            if (!binding.enabled ||
+                (!binding.can_collect && !binding.can_control && !binding.can_forward))
+                continue;
             if (!enabled(binding.device_id)) continue;
             if (nodes.at(binding.device_id)->node_kind != "device")
                 throw std::invalid_argument("binding source must be a communication device");
             auto channel = channels.find(binding.channel_id);
             if (channel == channels.end()) throw std::invalid_argument("binding channel not found");
             if (channel->second->enabled) {
+                const auto& row = *channel->second;
+                if (protocol(row) == ems::model::ProtocolType::IEC61850 &&
+                    row.conn_mode == "tcp_server") {
+                    if (!binding.can_forward || binding.can_collect || binding.can_control)
+                        throw std::invalid_argument(
+                            "MMS server binding requires forwarding-only role");
+                    forwarding.try_emplace(row.id,
+                                           ForwardingChannelConfig{compile_channel(row), {}});
+                    continue;
+                }
+                if (!binding.can_collect && !binding.can_control) continue;
                 auto [entry, inserted] =
                     compiled.emplace(channel->second->id, compile_channel(*channel->second));
                 if (protocol(*channel->second) == ems::model::ProtocolType::DLT698) {
@@ -372,6 +389,90 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
         append(records.points_yx);
         append(records.points_yk);
         append(records.points_yt);
+
+        // 上送不占用四遥点的采集 binding；映射指向既有稳定 point_id。
+        struct Source {
+            std::string type;
+            bool enabled;
+        };
+
+        std::map<std::string, Source> sources;
+        auto source_points = [&](const auto& points, const std::string& type) {
+            for (const auto& point : points) {
+                const auto found = bindings.find(point.binding_id);
+                bool active = point.enabled && enabled(point.owner_device_id);
+                if (found == bindings.end())
+                    active = false;
+                else {
+                    const auto& binding = *found->second;
+                    const auto channel = channels.find(binding.channel_id);
+                    active = active && binding.enabled && binding.can_collect &&
+                             enabled(binding.device_id) && channel != channels.end() &&
+                             channel->second->enabled;
+                }
+                sources.emplace(point.point_id, Source{type, active});
+            }
+        };
+        source_points(records.points_yc, "yc");
+        source_points(records.points_yx, "yx");
+        for (auto& [_, output] : forwarding) {
+            const auto row =
+                std::find_if(records.channels.begin(), records.channels.end(),
+                             [&](const auto& item) { return item.id == output.channel.id_; });
+            const auto extension = object(row->serial_json);
+            const auto& maps = extension.at("forwarding");
+            auto settings = object(output.channel.settings_);
+            auto& points = settings.at("iec61850").at("points");
+            if (!maps.is_array() || maps.empty() || maps.size() > 65536 || !points.is_array() ||
+                maps.size() != points.size())
+                throw std::invalid_argument("MMS forwarding requires one mapping per model point");
+            std::map<std::string, json*> directory;
+            std::set<std::string> physical;
+            for (auto& point : points) {
+                const auto code = point.at("code").get<std::string>();
+                const auto ref = point.at("object_ref").get<std::string>() + ":" +
+                                 point.at("fc").get<std::string>();
+                if (code.empty() || !directory.emplace(code, &point).second ||
+                    !physical.insert(ref).second ||
+                    point.at("quality_ref").get<std::string>().empty() ||
+                    point.at("timestamp_ref").get<std::string>().empty())
+                    throw std::invalid_argument(
+                        "forwarding model points require unique code/ref and q/t");
+                point.erase("value");
+                point.erase("timestamp");
+                point["iec_quality"] = 1;
+            }
+            std::set<std::string> mapped;
+            for (const auto& map : maps) {
+                if (!map.is_object()) throw std::invalid_argument("invalid forwarding map");
+                for (auto it = map.begin(); it != map.end(); ++it)
+                    if (it.key() != "code" && it.key() != "source_point_id" &&
+                        it.key() != "stale_after_ms")
+                        throw std::invalid_argument("unknown forwarding map field");
+                ForwardingPoint target;
+                target.code = map.at("code").get<std::string>();
+                target.source_point_id = map.at("source_point_id").get<std::string>();
+                const auto source = sources.find(target.source_point_id);
+                if (!directory.count(target.code) || !mapped.insert(target.code).second ||
+                    source == sources.end())
+                    throw std::invalid_argument("forwarding source/target not found or duplicated");
+                target.mms_type = directory.at(target.code)->at("mms_type").get<std::string>();
+                if (target.mms_type != "boolean" && target.mms_type != "integer" &&
+                    target.mms_type != "unsigned" && target.mms_type != "float32" &&
+                    target.mms_type != "float64")
+                    throw std::invalid_argument("unsupported forwarding scalar type");
+                if (map.contains("stale_after_ms") && !map["stale_after_ms"].is_number_integer())
+                    throw std::invalid_argument("invalid forwarding freshness");
+                const auto freshness = map.value("stale_after_ms", std::int64_t{60000});
+                if (freshness < 1 || freshness > 86400000)
+                    throw std::invalid_argument("invalid forwarding freshness");
+                target.stale_after_ms = static_cast<int>(freshness);
+                target.point_type = source->second.type;
+                target.source_enabled = source->second.enabled;
+                output.points.push_back(std::move(target));
+            }
+            output.channel.settings_ = settings.dump();
+        }
         for (auto& [channel_id, directory] : mms_points) {
             auto& channel = compiled.at(channel_id);
             auto settings = object(channel.settings_);
@@ -384,7 +485,10 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
         for (auto& [_, channel] : compiled) new_channels.push_back(std::move(channel));
         for (auto& [id, devices] : routes)
             for (auto& [_, device] : devices) new_devices[id].push_back(std::move(device));
+        std::vector<ForwardingChannelConfig> outputs;
+        for (auto& [_, output] : forwarding) outputs.push_back(std::move(output));
         channels_ = std::move(new_channels);
+        forwarding_ = std::move(outputs);
         devices_ = std::move(new_devices);
         revision_ = revision;
         initialized_ = true;

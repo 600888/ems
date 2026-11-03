@@ -48,6 +48,7 @@ build/
 /website/node_modules/
 /website/doc_build/
 /website/.rspress/
+/website/docs/public/raw/
 
 # Python bytecode and package/build artifacts
 __pycache__/

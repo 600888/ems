@@ -12,6 +12,7 @@
 
 #include "net/para_loader/cfg_loader.h"
 #include "net/protocol/protocol_types.h"
+#include "rtdb/client/rtdb_manager.h"
 
 namespace ems {
 namespace net {
@@ -93,17 +94,14 @@ int CollectEngine::start_all(CfgLoader& loader) {
 
     // 1. 加载所有启用的通道配置
     auto channels = loader.channels();
-    if (channels.empty()) {
+    auto outputs = loader.forwarding_channels();
+    if (!dispatcher_) return -1;
+    if (channels.empty() && outputs.empty()) {
         LOG_INFO("数据库中没有启用的通道");
         return 0;
     }
 
-    if (channels.size() > static_cast<size_t>(config_.maxChannels_)) {
-        LOG_WARN(
-            fmt::format("通道数量{}超过最大值{}, 截断处理", channels.size(), config_.maxChannels_)
-                .c_str());
-        channels.resize(config_.maxChannels_);
-    }
+    if (channels.size() + outputs.size() > static_cast<size_t>(config_.maxChannels_)) return -1;
 
     LOG_INFO(fmt::format("从数据库加载了{}个通道配置", channels.size()).c_str());
 
@@ -150,6 +148,18 @@ int CollectEngine::start_all(CfgLoader& loader) {
         started++;
     }
 
+    for (auto& output : outputs) {
+        const auto id = output.channel.id_;
+        auto thread = std::make_shared<ForwardingChannel>(
+            std::move(output), dispatcher_->rtdb_manager()->getRtDb(), plugin_manager_);
+        if (!thread->start()) {
+            on_channel_error(id, thread->last_error());
+            continue;
+        }
+        std::lock_guard lock(channels_mutex_);
+        forwarding_[id] = std::move(thread);
+        ++started;
+    }
     state_.store(EngineState::Running);
     LOG_INFO(fmt::format("采集引擎启动完成, 成功启动{}个通道", started).c_str());
     return started;
@@ -163,7 +173,7 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
     if (channelConfig.status_ == 0) return false;
     std::lock_guard lock(channels_mutex_);
 
-    if (channels_.size() >= static_cast<size_t>(config_.maxChannels_)) {
+    if (channels_.size() + forwarding_.size() >= static_cast<size_t>(config_.maxChannels_)) {
         LOG_WARN(fmt::format("通道数量达到上限{}, 无法启动通道[{}]", config_.maxChannels_,
                              channelConfig.id_)
                      .c_str());
@@ -171,7 +181,7 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
     }
 
     // 检查是否已存在
-    if (channels_.find(channelConfig.id_) != channels_.end()) {
+    if (channels_.count(channelConfig.id_) || forwarding_.count(channelConfig.id_)) {
         LOG_WARN(fmt::format("通道[{}] 已存在, 跳过", channelConfig.id_).c_str());
         return false;
     }
@@ -200,6 +210,18 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
 bool CollectEngine::stop_channel(int64_t channel_id) {
     LOG_INFO(fmt::format("停止单个通道[{}]", channel_id).c_str());
     std::shared_ptr<ChannelThread> channel;
+    std::shared_ptr<ForwardingChannel> output;
+    {
+        std::lock_guard lock(channels_mutex_);
+        const auto found = forwarding_.find(channel_id);
+        if (found != forwarding_.end()) output = found->second;
+    }
+    if (output) {
+        output->stop();
+        std::lock_guard lock(channels_mutex_);
+        forwarding_.erase(channel_id);
+        return true;
+    }
     {
         std::lock_guard lock(channels_mutex_);
         auto it = channels_.find(channel_id);
@@ -229,12 +251,17 @@ bool CollectEngine::stop_channel(int64_t channel_id) {
 void CollectEngine::stop_all() {
     LOG_INFO(fmt::format("停止所有通道, 当前通道数={}", channels_.size()).c_str());
     std::vector<std::shared_ptr<ChannelThread>> allChannels;
+    std::vector<std::shared_ptr<ForwardingChannel>> outputs;
     {
         std::lock_guard lock(channels_mutex_);
         for (auto& [_, ch] : channels_) {
             allChannels.push_back(ch);
         }
+        for (auto& [_, output] : forwarding_) outputs.push_back(output);
     }
+
+    // 北向会话先结束，之后才允许停止采集和关闭共享 RTDB 客户端。
+    for (auto& output : outputs) output->stop();
 
     // 通知所有通道停止
     for (auto& ch : allChannels) {
@@ -251,6 +278,7 @@ void CollectEngine::stop_all() {
     {
         std::lock_guard lock(channels_mutex_);
         channels_.clear();
+        forwarding_.clear();
     }
 
     state_.store(EngineState::Stopped);
@@ -274,12 +302,14 @@ void CollectEngine::shutdown() {
 
 size_t CollectEngine::channel_count() const {
     std::lock_guard lock(channels_mutex_);
-    return channels_.size();
+    return channels_.size() + forwarding_.size();
 }
 
 size_t CollectEngine::running_count() const {
     std::lock_guard lock(channels_mutex_);
     return std::count_if(channels_.begin(), channels_.end(),
+                         [](const auto& pair) { return pair.second->is_running(); }) +
+           std::count_if(forwarding_.begin(), forwarding_.end(),
                          [](const auto& pair) { return pair.second->is_running(); });
 }
 

@@ -400,6 +400,40 @@ void run_server(const std::string& scenario) {
                                              IEC61850_FC_MX) == QUALITY_TEST);
         IedConnection_close(connection);
         IedConnection_destroy(connection);
+    } else if (scenario == "server_image") {
+        CHECK(server.api.update_image_fn);
+        auto update = [&](const Json& value) {
+            return server.api.update_image_fn(server.instance, value.dump().c_str());
+        };
+        Json image = Json::array(
+            {{{"code", "power"}, {"value", 86.25}, {"iec_quality", 0}, {"timestamp", kTimestamp}}});
+        CHECK(update(image) == 0);
+        CHECK(server.read({"power"})[0]["timestamp"] == kTimestamp);
+        image.push_back(
+            {{"code", "unknown"}, {"value", 99}, {"iec_quality", 0}, {"timestamp", kTimestamp}});
+        image[0]["value"] = 99;
+        CHECK(update(image) == -1);
+        CHECK(server.read({"power"})[0]["value"] == 86.25);
+        image.erase(1);
+        image[0]["value"] = nullptr;
+        CHECK(update(image) == -1);
+        image[0]["iec_quality"] = 129;
+        CHECK(update(image) == 0);
+        CHECK(server.read({"power"})[0]["quality"] == 1);
+        auto* connection = IedConnection_create();
+        IedClientError error;
+        IedConnection_connect(connection, &error, "127.0.0.1", port);
+        CHECK(error == IED_ERROR_OK);
+        CHECK(IedConnection_readFloatValue(connection, &error, "SIMLD0/MMXU1.TotW.mag.f",
+                                           IEC61850_FC_MX) == 86.25f);
+        CHECK(IedConnection_readQualityValue(connection, &error, "SIMLD0/MMXU1.TotW.q",
+                                             IEC61850_FC_MX) == 129);
+        Timestamp stamp{};
+        CHECK(IedConnection_readTimestampValue(connection, &error, "SIMLD0/MMXU1.TotW.t",
+                                               IEC61850_FC_MX, &stamp) == &stamp);
+        CHECK(Timestamp_getTimeInMs(&stamp) == kTimestamp);
+        IedConnection_close(connection);
+        IedConnection_destroy(connection);
     } else if (scenario == "server_connections") {
         std::vector<std::shared_ptr<sIedConnection>> peers;
         for (int i = 0; i < 7; ++i) {

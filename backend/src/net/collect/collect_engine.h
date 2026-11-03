@@ -31,6 +31,7 @@
 
 #include "channel_thread.h"
 #include "data_dispatcher.h"
+#include "forwarding_channel.h"
 #include "net/collect/collect_defaults.h"
 #include "net/collect/collect_types.h"
 #include "plugin_manager.h"
@@ -247,6 +248,7 @@ class CollectEngine {
     // 通道管理
     mutable std::mutex channels_mutex_;
     std::unordered_map<int64_t, std::shared_ptr<ChannelThread>> channels_;
+    std::unordered_map<int64_t, std::shared_ptr<ForwardingChannel>> forwarding_;
 
     // 数据分发器（所有通道线程共享）
     std::shared_ptr<DataDispatcher> dispatcher_;

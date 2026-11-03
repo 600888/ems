@@ -543,6 +543,79 @@ int MmsReadOnlyServer::write(const std::string& code, double value) {
     }
 }
 
+int MmsReadOnlyServer::update_image(const std::string& samples_json) {
+    try {
+        check(samples_json.size() <= 8 * 1024 * 1024, "image exceeds 8 MiB");
+        const auto samples = Json::parse(samples_json);
+        check(samples.is_array() && samples.size() <= static_cast<std::size_t>(impl_->max_points),
+              "invalid image size");
+
+        struct Update {
+            const Impl::Point* point;
+            std::unique_ptr<MmsValue, decltype(&MmsValue_delete)> value{nullptr, MmsValue_delete};
+            Quality quality;
+            std::uint64_t timestamp;
+        };
+
+        std::vector<Update> updates;
+        std::set<std::string> physical;
+        for (const auto& sample : samples) {
+            fields(sample, {"code", "value", "iec_quality", "timestamp"});
+            const auto& point = impl_->points.at(sample.at("code").get<std::string>());
+            check(physical.insert(point.ref + ":" + std::to_string(point.constraint)).second,
+                  "duplicate image point");
+            check(point.quality && point.timestamp, "image points require q/t attributes");
+            check(sample.contains("iec_quality"), "image requires IEC quality");
+            const auto quality = static_cast<Quality>(setting(sample, "iec_quality", 1, 0, 8191));
+            const auto& time = sample.at("timestamp");
+            check(time.is_number_integer(), "invalid image timestamp");
+            const auto timestamp = time.get<std::int64_t>();
+            check(timestamp > 0 && timestamp <= 4294967295999LL, "invalid image UTC time");
+            Update update{
+                &point, {nullptr, MmsValue_delete}, quality, static_cast<std::uint64_t>(timestamp)};
+            const auto& raw = sample.at("value");
+            if (!raw.is_null()) {
+                check(raw.is_number() || raw.is_boolean(), "invalid image value");
+                const double value =
+                    raw.is_boolean() ? (raw.get<bool>() ? 1.0 : 0.0) : raw.get<double>();
+                validate_value(point.name, value);
+                if (point.invalid.count(value)) update.quality |= QUALITY_VALIDITY_INVALID;
+                if (point.name == "boolean")
+                    update.value.reset(MmsValue_newBoolean(value != 0));
+                else if (point.name == "integer")
+                    update.value.reset(
+                        MmsValue_newIntegerFromInt32(static_cast<std::int32_t>(value)));
+                else if (point.name == "unsigned")
+                    update.value.reset(
+                        MmsValue_newUnsignedFromUint32(static_cast<std::uint32_t>(value)));
+                else if (point.name == "float32")
+                    update.value.reset(MmsValue_newFloat(static_cast<float>(value)));
+                else
+                    update.value.reset(MmsValue_newDouble(value));
+                check(update.value != nullptr, "cannot allocate image value");
+            } else {
+                check((quality & 3) != QUALITY_VALIDITY_GOOD,
+                      "missing value cannot have good quality");
+            }
+            updates.push_back(std::move(update));
+        }
+        Lock lock(impl_->server);
+        for (const auto& update : updates) {
+            if (update.value)
+                IedServer_updateAttributeValue(impl_->server, update.point->value,
+                                               update.value.get());
+            IedServer_updateQuality(impl_->server, update.point->quality, update.quality);
+            IedServer_updateUTCTimeAttributeValue(impl_->server, update.point->timestamp,
+                                                  update.timestamp);
+        }
+        impl_->error.clear();
+        return 0;
+    } catch (const std::exception& error) {
+        impl_->error = error.what();
+        return -1;
+    }
+}
+
 int MmsReadOnlyServer::read_batch(const std::vector<std::string>& codes, std::string& output) {
     try {
         check(codes.size() <= static_cast<std::size_t>(impl_->max_points),

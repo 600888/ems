@@ -155,6 +155,15 @@ EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_write(void* opaque, const char*
     });
 }
 
+EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_update_image(void* opaque, const char* samples) {
+    return invoke(opaque, [&](Instance& instance) {
+        if (!samples) return -1;
+        instance.pending.clear();
+        instance.pending_codes.clear();
+        return instance.protocol.update_image(samples);
+    });
+}
+
 EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_is_connected(void* opaque) {
     return invoke(opaque, [](Instance& instance) {
         return instance.protocol.is_connected() ? enum_value(ConnectionState::Connected)

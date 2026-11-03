@@ -33,6 +33,19 @@ struct ConfiguredDevice {
     std::vector<PointRoute> ycPoints_, yxPoints_, ykPoints_, ytPoints_;
 };
 
+/** @brief RTDB 标准点到固定服务端模型的单向映射；值已是工程值，不重复缩放。 */
+struct ForwardingPoint {
+    std::string code, source_point_id, point_type, mms_type;
+    int stale_after_ms{60000};
+    bool source_enabled{false};
+};
+
+/** @brief 与采集线程分开的只读 MMS 上送通道。 */
+struct ForwardingChannelConfig {
+    ems::rtdb::ChannelConfig channel;
+    std::vector<ForwardingPoint> points;
+};
+
 /** @brief 新设备配置加载器；读取失败或转换失败均保留上次有效配置。 */
 class CfgLoader {
    public:
@@ -60,6 +73,9 @@ class CfgLoader {
     /** @brief 返回启用且有有效绑定的通道。 @return 通道配置副本。 */
     std::vector<ems::rtdb::ChannelConfig> channels() const { return channels_; }
 
+    /** @brief 返回授权启用的 IEC61850 上送通道。 @return 通道及已校验映射的副本。 */
+    std::vector<ForwardingChannelConfig> forwarding_channels() const { return forwarding_; }
+
     /**
      * @brief 返回指定通道的设备与测点路由。
      * @param[in] channel_id cfg_channel 数字主键。
@@ -79,6 +95,7 @@ class CfgLoader {
    private:
     ems::database::MySqlDatabaseContext database_;
     std::vector<ems::rtdb::ChannelConfig> channels_;
+    std::vector<ForwardingChannelConfig> forwarding_;
     std::map<std::int64_t, std::vector<ConfiguredDevice>> devices_;
     std::int64_t revision_{0};
     bool initialized_{false};

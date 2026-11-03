@@ -154,15 +154,15 @@ int main(int argc, char** argv) {
         if (!loader.initialize(ems::core::value_of(database),
                                ems::core::make_call_context(std::chrono::seconds(10))))
             throw std::runtime_error("configuration load failed");
-        const auto channels = loader.channels();
-        if (channels.size() > static_cast<std::size_t>(options.engine.maxChannels_))
+        const auto channel_count = loader.channels().size() + loader.forwarding_channels().size();
+        if (channel_count > static_cast<std::size_t>(options.engine.maxChannels_))
             throw std::runtime_error("channel limit exceeded");
 
         ems::net::collect::CollectEngine engine;
         if (!engine.initialize(options.engine)) throw std::runtime_error("engine initialization");
         if (stopping) return 0;
         const auto started = engine.start_all(loader);
-        if (started < 0 || static_cast<std::size_t>(started) != channels.size())
+        if (started < 0 || static_cast<std::size_t>(started) != channel_count)
             throw std::runtime_error("channel startup failed");
         LOG_INFO("ems-collector started, channels={}", started);
         std::cout << "ems-collector started, channels=" << started << std::endl;
@@ -178,14 +178,15 @@ int main(int argc, char** argv) {
                 continue;
             }
             if (candidate.config_revision() == revision) continue;
-            if (candidate.channels().size() >
+            if (candidate.channels().size() + candidate.forwarding_channels().size() >
                 static_cast<std::size_t>(options.engine.maxChannels_)) {
                 LOG_WARN("ems-collector configuration exceeds channel limit");
                 continue;
             }
             engine.stop_all();
             loader = std::move(candidate);
-            if (engine.start_all(loader) != static_cast<int>(loader.channels().size()))
+            if (engine.start_all(loader) !=
+                static_cast<int>(loader.channels().size() + loader.forwarding_channels().size()))
                 throw std::runtime_error("channel reload failed");
             LOG_INFO("ems-collector reloaded, config_revision={}", loader.config_revision());
         }

@@ -52,6 +52,7 @@ class PluginManager {
         ems_plugin_disconnect_fn disconnect_fn{nullptr};
         ems_plugin_read_batch_fn read_batch_fn{nullptr};
         ems_plugin_write_fn write_fn{nullptr};
+        ems_plugin_update_image_fn update_image_fn{nullptr};  ///< 可选服务端扩展。
         ems_plugin_is_connected_fn is_connected_fn{nullptr};
         ems_plugin_last_error_fn last_error_fn{nullptr};
 

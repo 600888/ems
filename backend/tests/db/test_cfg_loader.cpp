@@ -65,6 +65,74 @@ DeviceConfigRecords configuration() {
     return result;
 }
 
+DeviceConfigRecords forwarding_configuration() {
+    auto records = configuration();
+    auto channel = records.channels[0];
+    channel.id = 8;
+    channel.channel_id = "mms-output";
+    channel.protocol = "iec61850_mms";
+    channel.conn_mode = "tcp_server";
+    channel.endpoint = "127.0.0.1:11002";
+    channel.serial_json =
+        R"({"iec61850":{"points":[{"code":"power","object_ref":"EMSLD0/MMXU1.TotW.mag.f","fc":"MX","mms_type":"float32","quality_ref":"EMSLD0/MMXU1.TotW.q","timestamp_ref":"EMSLD0/MMXU1.TotW.t"}]},"forwarding":[{"code":"power","source_point_id":"point-rack-voltage","stale_after_ms":5000}]})";
+    records.channels.push_back(channel);
+    auto binding = records.bindings[0];
+    binding.id = 11;
+    binding.binding_id = "output-binding";
+    binding.channel_id = channel.channel_id;
+    binding.can_collect = binding.can_control = 0;
+    binding.can_forward = 1;
+    records.bindings.push_back(binding);
+    return records;
+}
+
+TEST(CfgLoader, CompilesForwardingSeparatelyAndKeepsDisabledSourcesInvalid) {
+    auto records = forwarding_configuration();
+    CfgLoader loader;
+    ASSERT_TRUE(loader.configure(records)) << loader.last_error();
+    ASSERT_EQ(loader.channels().size(), 1u);
+    ASSERT_EQ(loader.forwarding_channels().size(), 1u);
+    const auto output = loader.forwarding_channels()[0];
+    ASSERT_EQ(output.points.size(), 1u);
+    EXPECT_EQ(output.points[0].source_point_id, "point-rack-voltage");
+    EXPECT_EQ(output.points[0].point_type, "yc");
+    EXPECT_TRUE(output.points[0].source_enabled);
+    const auto settings = nlohmann::json::parse(output.channel.settings_);
+    EXPECT_FALSE(settings.contains("forwarding"));
+    EXPECT_EQ(settings["iec61850"]["points"][0]["iec_quality"], 1);
+    EXPECT_FALSE(settings["iec61850"]["points"][0].contains("value"));
+    records.bindings[0].enabled = 0;
+    ASSERT_TRUE(loader.configure(records)) << loader.last_error();
+    EXPECT_FALSE(loader.forwarding_channels()[0].points[0].source_enabled);
+    records.bindings[1].can_forward = 0;
+    ASSERT_TRUE(loader.configure(records)) << loader.last_error();
+    EXPECT_TRUE(loader.forwarding_channels().empty());
+}
+
+TEST(CfgLoader, RejectsInvalidForwardingMapsAndPreservesPreviousDirectory) {
+    auto records = forwarding_configuration();
+    CfgLoader loader;
+    ASSERT_TRUE(loader.configure(records));
+    auto options = nlohmann::json::parse(records.channels[1].serial_json);
+    const auto valid = options;
+    for (const auto& field : {"source", "missing_quality", "duplicate", "freshness", "unknown"}) {
+        options = valid;
+        if (field == std::string("source")) options["forwarding"][0]["source_point_id"] = "absent";
+        if (field == std::string("missing_quality"))
+            options["iec61850"]["points"][0].erase("quality_ref");
+        if (field == std::string("duplicate"))
+            options["forwarding"].push_back(options["forwarding"][0]);
+        if (field == std::string("freshness")) options["forwarding"][0]["stale_after_ms"] = -1;
+        if (field == std::string("unknown")) options["forwarding"][0]["scale"] = 10;
+        records.channels[1].serial_json = options.dump();
+        EXPECT_FALSE(loader.configure(records)) << field;
+        EXPECT_EQ(loader.forwarding_channels().size(), 1u);
+    }
+    records.channels[1].serial_json = valid.dump();
+    records.bindings[1].can_control = 1;
+    EXPECT_FALSE(loader.configure(records));
+}
+
 TEST(CfgLoader, ReadsNewBindingsAndPreservesComponentIdentityAndStablePointId) {
     CfgLoader loader;
     ASSERT_TRUE(loader.configure(configuration())) << loader.last_error();

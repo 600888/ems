@@ -143,6 +143,14 @@ typedef int(EMS_PLUGIN_CALL* ems_plugin_write_fn)(void* instance, const char* po
                                                   double value);
 
 /**
+ * @brief 可选的服务端映像批量更新扩展；旧插件可不导出，不改变必需 ABI。
+ * @param[in] instance 服务端实例。
+ * @param[in] samples_json 数组，每项含 code、value（null 保留旧值）、iec_quality、timestamp。
+ * @return 0 全批校验后在模型锁内提交；-1 不支持或校验失败，映像不变。
+ */
+typedef int(EMS_PLUGIN_CALL* ems_plugin_update_image_fn)(void* instance, const char* samples_json);
+
+/**
  * @brief 获取连接状态
  * @param[in] instance 插件实例指针
  * @return 1 已连接, 0 未连接, -1 错误
@@ -168,6 +176,7 @@ typedef const char*(EMS_PLUGIN_CALL* ems_plugin_last_error_fn)(void* instance);
 #define EMS_PLUGIN_DISCONNECT_SYMBOL "ems_plugin_disconnect"
 #define EMS_PLUGIN_READ_BATCH_SYMBOL "ems_plugin_read_batch"
 #define EMS_PLUGIN_WRITE_SYMBOL "ems_plugin_write"
+#define EMS_PLUGIN_UPDATE_IMAGE_SYMBOL "ems_plugin_update_image"
 #define EMS_PLUGIN_IS_CONNECTED_SYMBOL "ems_plugin_is_connected"
 #define EMS_PLUGIN_LAST_ERROR_SYMBOL "ems_plugin_last_error"
 

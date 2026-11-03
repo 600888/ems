@@ -9,7 +9,7 @@
 #   - net_handler (统一处理器与平台动态库加载)
 #   - nlohmann_json (JSON 解析)
 
-add_library(net_collect STATIC collect_engine.cpp channel_thread.cpp data_dispatcher.cpp)
+add_library(net_collect STATIC collect_engine.cpp channel_thread.cpp data_dispatcher.cpp forwarding_channel.cpp)
 
 target_include_directories(
     net_collect

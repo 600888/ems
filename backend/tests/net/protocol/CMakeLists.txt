@@ -16,7 +16,7 @@ if(TARGET proto_iec61850)
                               concurrent_instances report_urcb report_brcb report_fallback
                               report_reconnect report_faults report_queue report_ownership
                               report_integrity report_isolation
-                              server_readonly server_reports server_lifecycle server_connections)
+                              server_readonly server_reports server_lifecycle server_connections server_image)
         add_test(NAME iec61850_${scenario} COMMAND test_iec61850_runtime ${scenario})
         set_tests_properties(iec61850_${scenario} PROPERTIES TIMEOUT 30)
     endforeach()

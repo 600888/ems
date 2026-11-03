@@ -24,6 +24,10 @@ function(ems_configure_libiec61850)
 endfunction()
 ems_configure_libiec61850()
 target_compile_definitions(hal PRIVATE DEBUG_SOCKET=$<BOOL:${DEBUG_SOCKET}>)
+if(MSVC)
+    # 上游 Windows HAL 的 C++ 兼容路径包含跨初始化 goto；隔离父工程 /permissive-。
+    target_compile_options(hal PRIVATE $<$<COMPILE_LANGUAGE:CXX>:/permissive>)
+endif()
 # Windows 下上游静态库与共享库导入库同名，集中输出目录会使 Ninja 产生重复规则。
 set_target_properties(iec61850 PROPERTIES OUTPUT_NAME ems_iec61850_stack)
 # 入库栈在分段报告分支误置 hasSequenceNumber，导致 hasSubSeqNum 永远为 false。

@@ -54,6 +54,11 @@ class Iec61850Protocol final {
      * @return 0 本地更新成功；-1 客户端写入、类型或别名错误，原映像不变。
      */
     int write(const std::string& point_code, double value);
+    /** @brief 服务端原子更新整批出口映像，客户端拒绝此操作。
+     * @param[in] samples_json 带 code/value/iec_quality/timestamp 的 JSON 数组。
+     * @return 0 成功；-1 参数错误、不支持或未初始化，原映像不变。
+     */
+    int update_image(const std::string& samples_json);
     /** @brief 返回最近一次操作错误的副本。
      * @return 错误说明；成功操作后可为空。
      */

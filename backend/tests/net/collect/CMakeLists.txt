@@ -30,3 +30,17 @@ add_test(NAME channel_handler_failure COMMAND test_channel_handlers channel_fail
 set_tests_properties(channel_handler_failure PROPERTIES TIMEOUT 30)
 
 ems_copy_directory_runtime_dependencies()
+
+if(TARGET proto_iec61850 AND EMS_REALTIME_WITH_SHM)
+    add_executable(test_iec61850_forwarding iec61850_forwarding_test.cpp)
+    target_link_libraries(test_iec61850_forwarding PRIVATE net_collect net_para_loader ems_libiec61850)
+    target_compile_definitions(test_iec61850_forwarding PRIVATE EMS_FORWARDING_PLUGIN="$<TARGET_FILE:proto_iec61850>")
+    set_target_properties(test_iec61850_forwarding PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)
+    add_dependencies(test_iec61850_forwarding proto_iec61850)
+    if(MSVC)
+        target_compile_options(test_iec61850_forwarding PRIVATE /utf-8)
+    endif()
+    add_test(NAME iec61850_rtdb_forwarding COMMAND test_iec61850_forwarding)
+    set_tests_properties(iec61850_rtdb_forwarding PROPERTIES TIMEOUT 45)
+    ems_copy_directory_runtime_dependencies()
+endif()

@@ -1308,6 +1308,17 @@ std::string Iec61850Protocol::last_error() const {
     return impl_->error;
 }
 
+int Iec61850Protocol::update_image(const std::string& samples_json) {
+    std::lock_guard<std::mutex> lock(impl_->io_mutex);
+    if (!impl_->server) {
+        impl_->error = "image update requires an initialized server";
+        return -1;
+    }
+    const int result = impl_->server->update_image(samples_json);
+    impl_->error = impl_->server->last_error();
+    return result;
+}
+
 int Iec61850Protocol::read_batch(const std::vector<std::string>& codes, std::string& output) {
     std::lock_guard<std::mutex> lock(impl_->io_mutex);
     if (impl_->server) {
