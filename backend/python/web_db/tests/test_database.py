@@ -1,5 +1,6 @@
 import importlib
 import io
+import hashlib
 from datetime import datetime, timedelta
 
 import pytest
@@ -119,6 +120,75 @@ def test_web_upgrade_downgrade_and_policy_seed(engine):
         command.downgrade(migration_config(connection=connection, database="ems_web"), "base")
         assert set(sa.inspect(connection).get_table_names()) == {"alembic_version"}
         command.upgrade(migration_config(connection=connection, database="ems_web"), "head")
+
+
+def test_admin_seed_creates_hashed_account_and_preserves_existing_account(engine):
+    factory = session_factory(engine)
+    with factory.begin() as session:
+        apply_seed(session, "admin")
+    with factory.begin() as session:
+        account = session.scalar(sa.select(AuthUser).where(AuthUser.username == "admin"))
+        assert account is not None
+        assert (account.role_code, account.status, account.scope_mode) == (
+            "admin",
+            "enabled",
+            "all",
+        )
+        assert account.must_change_password == 0
+        assert account.temporary_password_expires_at is None
+        algorithm, iterations, salt, digest = account.password_hash.split("$")
+        assert algorithm == "pbkdf2_sha256"
+        assert 210000 <= int(iterations) <= 1000000
+        assert len(salt) == 64 and len(digest) == 64
+        assert (
+            hashlib.pbkdf2_hmac("sha256", b"888888", salt.encode("ascii"), int(iterations)).hex()
+            == digest
+        )
+        assert (
+            hashlib.pbkdf2_hmac("sha256", b"wrong", salt.encode("ascii"), int(iterations)).hex()
+            != digest
+        )
+        assert session.get(AuthLoginPolicy, 1) is not None
+        assert session.scalar(sa.select(sa.func.count()).select_from(AuthSession)) == 0
+        identity = account.user_id
+        account.password_hash = "changed-password-hash"
+        account.status = "disabled"
+        session.get(AuthLoginPolicy, 1).login_notice = "保留已有设置"
+    with factory.begin() as session:
+        apply_seed(session, "admin")
+    with factory() as session:
+        account = session.scalar(sa.select(AuthUser))
+        assert (account.user_id, account.password_hash, account.status) == (
+            identity,
+            "changed-password-hash",
+            "disabled",
+        )
+        assert session.scalar(sa.select(sa.func.count()).select_from(AuthUser)) == 1
+        assert session.get(AuthLoginPolicy, 1).login_notice == "保留已有设置"
+
+
+def test_cli_web_init_includes_admin_and_reinitialization_never_resets_password(tmp_path):
+    path = tmp_path / "database.yaml"
+    path.write_text(
+        "database: sqlite\ndatabases:\n  sqlite:\n    url: sqlite:///ems.sqlite3\n", encoding="utf8"
+    )
+    args = ["--config", str(path), "--database", "ems_web"]
+    assert main(args + ["init"]) == 0
+    engine = make_engine(sa.URL.create("sqlite", database=str(tmp_path / "ems_web.sqlite3")))
+    try:
+        factory = session_factory(engine)
+        with factory.begin() as session:
+            account = session.scalar(sa.select(AuthUser).where(AuthUser.username == "admin"))
+            assert account is not None and account.status == "enabled"
+            account.password_hash = "updated-password"
+        assert main(args + ["init"]) == 0
+        assert main(args + ["seed", "admin"]) == 0
+        with factory() as session:
+            assert session.scalar(sa.select(AuthUser)).password_hash == "updated-password"
+            assert session.scalar(sa.select(sa.func.count()).select_from(AuthUser)) == 1
+    finally:
+        engine.dispose()
+    assert main(["--database", "ems", "seed", "admin"]) == 1
 
 
 @pytest.mark.parametrize(

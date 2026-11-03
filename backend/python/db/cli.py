@@ -41,7 +41,7 @@ def parser() -> argparse.ArgumentParser:
         help="select engineering or Web models and target database (default: engineering)",
     )
     actions = result.add_subparsers(dest="action", required=True)
-    actions.add_parser("init", help="apply schema migrations to head")
+    actions.add_parser("init", help="apply schema migrations; initialize the default Web admin")
     for name, default in (("upgrade", "head"), ("downgrade", None)):
         action = actions.add_parser(name)
         action.add_argument("revision", nargs="?" if default else None, default=default)
@@ -50,8 +50,8 @@ def parser() -> argparse.ArgumentParser:
     actions.add_parser("current")
     actions.add_parser("history")
     actions.add_parser("check", help="compare ORM schema to database (read only)")
-    seed = actions.add_parser("seed", help="explicitly insert catalog or development demo data")
-    seed.add_argument("kind", choices=("catalog", "demo", "policy"))
+    seed = actions.add_parser("seed", help="insert catalog, demo or Web initialization data")
+    seed.add_argument("kind", choices=("catalog", "demo", "policy", "admin"))
     revision = actions.add_parser("revision", help="create a migration script for review")
     revision.add_argument("-m", "--message", required=True)
     revision.add_argument("--autogenerate", action="store_true")
@@ -63,10 +63,10 @@ def main(argv=None) -> int:
     database = args.database or "ems"
     try:
         if args.action == "seed" and (
-            (database == "ems_web" and args.kind != "policy")
-            or (database == "ems" and args.kind == "policy")
+            (database == "ems_web" and args.kind not in ("policy", "admin"))
+            or (database == "ems" and args.kind in ("policy", "admin"))
         ):
-            raise ValueError("ems supports catalog/demo seeds; ems_web supports only policy")
+            raise ValueError("ems supports catalog/demo seeds; ems_web supports policy/admin")
         if args.action == "history":
             command.history(migration_config(database=database))
             return 0
@@ -88,6 +88,12 @@ def main(argv=None) -> int:
                 config = migration_config(connection=connection, database=database)
                 if args.action in ("init", "upgrade"):
                     command.upgrade(config, "head" if args.action == "init" else args.revision)
+                    if args.action == "init" and database == "ems_web":
+                        from web_db.seeds import apply_seed as apply_web_seed
+
+                        with connection.begin():
+                            with session_factory(connection).begin() as session:
+                                apply_web_seed(session, "admin")
                 elif args.action == "downgrade":
                     command.downgrade(config, args.revision)
                 elif args.action == "current":

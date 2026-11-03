@@ -120,8 +120,6 @@ void validate_point_files(const Json& manifest, const std::map<std::string, cons
         if (device == devices.end() ||
             device->second->at("node_kind").get<std::string>() != "device")
             reject("manifest_point_device_invalid");
-        const auto base = text(entry, "address_base");
-        if (base != "zero" && base != "one") reject("address_base_invalid");
         if (!entry.contains("file") || !entry.at("file").is_string())
             reject("manifest_file_required");
         const bool has_binding =

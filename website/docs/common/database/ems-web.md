@@ -252,7 +252,10 @@ ems-db --database ems_web seed policy
 ems-db --database ems_web check
 ```
 
-`seed policy` 只在缺少时创建默认策略，不覆盖已有设置。两库的 `alembic_version` 分别存放于各自
+Web `init` 建表后自动补齐默认策略和管理员 `admin / 888888`，账号为 enabled、admin 角色、
+scope_mode=all；密码以随机盐 PBKDF2-SHA256 哈希保存。重复执行不覆盖已有同名账号，
+不重置密码、不恢复停用/删除状态。已有库可用 `ems-db --database ems_web seed admin` 补建缺失账号。
+`seed policy` 只在缺少时创建默认策略，不覆盖已有设置或创建账号。两库的 `alembic_version` 分别存放于各自
 数据库；新 Web 初始迁移不追加到工程库迁移链。SQLite 验证使用同目录的两个独立文件，
 MySQL / PostgreSQL 仍使用各自独立数据库。当前验证覆盖 SQLite 实际建表与约束、三种方言的
 DDL 编译，不等同于真实 MySQL / PostgreSQL 联调。实际命令及配置优先级见 `backend/python/README.md`。

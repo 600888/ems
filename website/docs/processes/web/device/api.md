@@ -264,7 +264,7 @@ sequenceDiagram
 `file` 为原始 CSV/XLSX 二进制；`metadata` part 的 Content-Type 为 application/json，内容如下：
 
 ```json
-{"device_id": "pcs01", "binding_id": "bnd-pcs01-main", "source_kind": "vendor_csv", "address_base": "zero"}
+{"device_id": "pcs01", "binding_id": "bnd-pcs01-main", "source_kind": "vendor_csv"}
 ```
 
 ### POST /api/point-imports/update-row
@@ -290,11 +290,13 @@ sequenceDiagram
 | 任务详情 | 状态、文件摘要、行计数、preview_hash、allowed_operations |
 | 行修正 | 仅支持可持久化列和确认字段；confirm_by/at 由服务端生成；修改后旧确认失效 |
 | 哈希 | update-row/validate/apply 均在 JSON 带期望值；缺失 400、改变 409；不使用 If-Match |
-| 幂等 | 同设备+绑定+文件摘要返回原任务；source_kind/address_base 不同 409 |
+| 幂等 | 同设备+绑定+文件摘要返回原任务；source_kind 不同 409 |
 | 首次 apply | 校验未排除行、原子写点和任务；返回 created/updated/excluded 与 revision |
 | applied 重放 | 不重写、不再递增；不伪造未存储的原计数或原更新统计 |
 | failed/applied | 终态不可编辑；HTTP 201 仅表示任务创建，须检查 status 判断解析结果 |
 | merge | 稳定厂家键复用 point_id，缺席旧点保留；不支持隐式 replace |
+
+点表中的地址原样保留并用于通信，不提供从 0/1 开始的选项，不做减 1 或文档编号换算。
 
 上传有效限额由 capabilities 返回；multipart 总体、JSON metadata、文件、XLSX 解压量和行数分别限制。预览不写工程表、不增加 revision，当前无法持久化的专有字段返回 Unsupported。
 

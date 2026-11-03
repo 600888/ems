@@ -96,9 +96,8 @@ DeviceResult station_import_action(DeviceRequest& request, const std::string& pa
                                                     {"can_collect", 1},
                                                     {"can_control", 1},
                                                     {"can_forward", 0}}})},
-                     {"point_files", Json::array({Json{{"device_code", "pcs01"},
-                                                       {"file", "pcs01.xlsx"},
-                                                       {"address_base", "zero"}}})}}};
+                     {"point_files",
+                      Json::array({Json{{"device_code", "pcs01"}, {"file", "pcs01.xlsx"}}})}}};
     }
     if (action != "create") throw ApiError(404, "NotFound", "route_not_found");
     if (!upload.package) throw ApiError(500, "Internal", "package_not_preparsed");
@@ -208,12 +207,10 @@ DeviceResult station_import_action(DeviceRequest& request, const std::string& pa
             throw ApiError(422, "InvalidArgument", "station_point_file_invalid", "NotApplied",
                            Json::array({{{"device_code", device_code}, {"file", file.filename}}}));
         }
-        DeviceResult created = import_action(request, "/api/point-imports/create",
-                                             {{"device_id", device_id},
-                                              {"binding_id", binding_id},
-                                              {"source_kind", "vendor_xlsx"},
-                                              {"address_base", entry.at("address_base")}},
-                                             file, workspace);
+        DeviceResult created = import_action(
+            request, "/api/point-imports/create",
+            {{"device_id", device_id}, {"binding_id", binding_id}, {"source_kind", "vendor_xlsx"}},
+            file, workspace);
         Json summary = {{"device_code", device_code},
                         {"device_id", device_id},
                         {"binding_id", binding_id},

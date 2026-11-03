@@ -118,7 +118,7 @@ backend/python/
       identity.py               # 账号、授权、会话、策略、审计 5 表
     migrations/                 # Web 库独立迁移历史
     tests/
-    seeds.py                    # 仅 policy
+    seeds.py                    # 默认登录策略与管理员
 ```
 
 先准备独立空库 `ems_web`，部署账号需具有相应建表权限。命令不自动创建 MySQL / PostgreSQL
@@ -139,8 +139,13 @@ ems-db --database ems_web upgrade head --sql --dialect mysql
 Web 初始化只创建 `auth_user`、`auth_user_scope`、`auth_session`、`auth_login_policy`、
 `audit_log` 和本库自己的 `alembic_version`。工程库的初始迁移不变；两库同名的
 `alembic_version` 位于不同数据库，各自记录独立 revision 链。
-`seed policy` 幂等写入默认策略 `id=1`，保留已有策略，不创建用户、口令或会话。
-Web 不支持 catalog/demo 种子，工程库不支持 policy 种子。
+`ems-db --database ems_web init` 建表后自动补齐默认策略和管理员：账号 `admin`，
+密码 `888888`，启用状态、admin 角色、全部站点范围，可直接登录。
+数据库只保存随机盐的 PBKDF2-SHA256 哈希，格式与 Web 后端验证器兼容。
+重复初始化保留已有同名账号（包括密码、角色及停用/删除状态），不重置密码或生成会话。
+已有库可执行 `ems-db --database ems_web seed admin` 单独补建缺失账号；该命令也补齐默认策略。
+`seed policy` 仍仅补齐策略 `id=1`，保留已有设置，不创建用户或会话。
+Web 不支持 catalog/demo 种子，工程库不支持 policy/admin 种子。
 
 命令在 DDL、结构比对、自动生成迁移与种子操作之前检查库范围，遇到另一套模型的表会拒绝，
 不会试图删除或“修复”另一业务库。Web 库也拒绝混入其他业务表。

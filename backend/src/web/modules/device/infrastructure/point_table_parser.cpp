@@ -92,13 +92,10 @@ Json parse_vendor_xlsx(const std::string& bytes, const std::string& workspace) {
 }
 
 Json parse_upload(const Json& metadata, const Upload& upload, const std::string& workspace) {
-    fields(metadata, {"device_id", "binding_id", "source_kind", "address_base"});
+    fields(metadata, {"device_id", "binding_id", "source_kind"});
     const auto device = text(metadata, "device_id");
     const auto binding = text(metadata, "binding_id");
     const auto source = text(metadata, "source_kind");
-    const auto base = text(metadata, "address_base");
-    if (base != "zero" && base != "one")
-        throw ApiError(422, "InvalidArgument", "address_base_invalid");
     if (upload.bytes.empty() || upload.bytes.size() > 2 * 1024 * 1024)
         throw ApiError(413, "ResourceExhausted", "parser_file_limit");
     if (upload.filename.size() > 255) throw ApiError(400, "InvalidArgument", "filename_too_long");

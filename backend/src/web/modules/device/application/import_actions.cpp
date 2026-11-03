@@ -157,6 +157,7 @@ void save_preview(DeviceRequest& request, Json job, const Json& rows) {
 Json detail(Json job, const Json& rows) {
     const auto hash = preview_hash(job, rows);
     job = public_row(job);
+    job.erase("address_base");
     job["preview_hash"] = hash;
     job["allowed_operations"] = job.at("status") == "applied" || job.at("status") == "failed"
                                     ? Json::array()
@@ -176,14 +177,17 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
         auto q = page_query(DeviceTable::ImportJob, body, {});
         q.filters = {{"device_id", id}};
         auto result = request.query(q);
-        for (auto& row : result["items"]) row = public_row(row);
+        for (auto& row : result["items"]) {
+            row = public_row(row);
+            row.erase("address_base");
+        }
         result["page"] = body.value("page", 1);
         result["page_size"] = q.limit;
         return {result};
     }
     if (action == "create") {
         request.principal.require("import.write");
-        fields(body, {"device_id", "binding_id", "source_kind", "address_base"});
+        fields(body, {"device_id", "binding_id", "source_kind"});
         auto owner = request.device(text(body, "device_id"));
         auto binding = request.one(DeviceTable::Binding, "binding_id", text(body, "binding_id"));
         if (owner.at("node_kind") != "device" || binding.at("device_id") != owner.at("device_id"))
@@ -199,8 +203,9 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
         auto existing = request.rows(lookup);
         if (!existing.empty()) {
             auto old = existing.front();
-            if (old.at("source_kind") != body.at("source_kind") ||
-                old.at("address_base") != body.at("address_base"))
+            if (old.at("address_base") != "zero")
+                throw ApiError(409, "Conflict", "import_address_semantics_changed");
+            if (old.at("source_kind") != body.at("source_kind"))
                 throw ApiError(409, "Conflict", "idempotency_options_mismatch");
             DeviceResult result{detail(old, import_rows(request, old.at("import_job_id")))};
             result.meta["replayed"] = true;
@@ -212,7 +217,8 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
         job["device_id"] = owner.at("device_id");
         job["binding_id"] = binding.at("binding_id");
         job["source_kind"] = body.at("source_kind");
-        job["address_base"] = body.at("address_base");
+        // 兼容现有表结构；导入地址原样使用，不再提供地址基准配置。
+        job["address_base"] = "zero";
         job["file_name"] = upload.filename;
         job["file_sha256"] = digest;
         job["file_bytes"] = upload.bytes.size();
@@ -249,8 +255,6 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
                     row["point_type"] = definition.at("point_type");
                     row["value_type"] = definition.at("value_type");
                 }
-            if (body.at("address_base") == "one")
-                row["address_offset"] = row.at("address_offset").get<int>() - 1;
             const auto wire = source.at("wire_type").get<std::string>();
             row["register_count"] = (wire == "i32" || wire == "u32" || wire == "f32") ? 2 : 1;
             rows.push_back(std::move(row));

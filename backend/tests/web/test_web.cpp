@@ -523,17 +523,24 @@ TEST_F(WebDevice, CsvPreviewApplyStableIdentityAndReplay) {
     upload.filename = "points.csv";
     upload.bytes =
         "template_key,standard_code,vendor_name,address_space,address_offset,access,wire_type,byte_"
-        "order,scale,offset,unit\nreg0,,Temperature,holding_register,0,read,i16,,0.1,0,C\n";
-    Json metadata = {{"device_id", "hvac01"},
-                     {"binding_id", "binding01"},
-                     {"source_kind", "vendor_csv"},
-                     {"address_base", "zero"}};
+        "order,scale,offset,unit\nreg0,,Temperature,holding_register,0,read,i16,,0.1,0,C\n"
+        "reg1,,Voltage,holding_register,1,read,i16,,1,0,V\n"
+        "reg40001,,Power,holding_register,40001,read,i16,,1,0,W\n"
+        "reg65535,,Current,holding_register,65535,read,i16,,1,0,A\n";
+    Json metadata = {
+        {"device_id", "hvac01"}, {"binding_id", "binding01"}, {"source_kind", "vendor_csv"}};
     auto preview =
         service->execute("/api/point-imports/create", metadata, actor, context(), upload);
     EXPECT_EQ(preview.status, 201);
     EXPECT_EQ(preview.meta.at("config_revision"), "2");
     EXPECT_EQ(preview.data.at("status"), "confirmed") << preview.data;
     const auto id = preview.data.at("import_job_id");
+    EXPECT_FALSE(preview.data.contains("address_base"));
+    auto parsed_rows = execute("/api/point-imports/rows", {{"import_job_id", id}});
+    ASSERT_EQ(parsed_rows.data.at("items").size(), 4);
+    const std::vector<int> addresses = {0, 1, 40001, 65535};
+    for (std::size_t i = 0; i < addresses.size(); ++i)
+        EXPECT_EQ(parsed_rows.data.at("items").at(i).at("address").at("offset"), addresses[i]);
     auto replay = service->execute("/api/point-imports/create", metadata, actor, context(), upload);
     EXPECT_EQ(replay.data.at("import_job_id"), id);
     EXPECT_TRUE(replay.meta.at("replayed").get<bool>());
@@ -550,7 +557,11 @@ TEST_F(WebDevice, CsvPreviewApplyStableIdentityAndReplay) {
     auto rows = execute("/api/point-imports/rows", {{"import_job_id", id}});
     EXPECT_FALSE(rows.data.at("items").front().at("resolved_point_id").get<std::string>().empty());
     auto list = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yc"}});
-    EXPECT_EQ(list.data.at("total"), 1);
+    EXPECT_EQ(list.data.at("total"), 4);
+    std::set<int> saved_addresses;
+    for (const auto& point : list.data.at("items"))
+        saved_addresses.insert(point.at("address").at("offset").get<int>());
+    EXPECT_EQ(saved_addresses, (std::set<int>{0, 1, 40001, 65535}));
 }
 
 TEST_F(WebDevice, XlsxPreviewParsesRealWorkbookWithoutChangingRevision) {
@@ -579,7 +590,7 @@ TEST_F(WebDevice, XlsxPreviewParsesRealWorkbookWithoutChangingRevision) {
           std::string("wire_type"), std::string("byte_order"), std::string("scale"),
           std::string("offset"), std::string("unit")},
          {std::string("reg0"), std::string{}, std::string("温度"), std::string("holding_register"),
-          std::int64_t{0}, std::string("read"), std::string("i16"), std::string{}, 0.1, 0.0,
+          std::int64_t{1}, std::string("read"), std::string("i16"), std::string{}, 0.1, 0.0,
           std::string("C")}});
     excel.save();
     excel.close();
@@ -589,18 +600,17 @@ TEST_F(WebDevice, XlsxPreviewParsesRealWorkbookWithoutChangingRevision) {
     upload.filename = "厂家点表.xlsx";
     upload.bytes.assign(std::istreambuf_iterator<char>(input), {});
     input.close();
-    auto preview = service->execute("/api/point-imports/create",
-                                    {{"device_id", "hvac01"},
-                                     {"binding_id", "binding01"},
-                                     {"source_kind", "vendor_xlsx"},
-                                     {"address_base", "zero"}},
-                                    actor, context(), upload);
+    auto preview = service->execute(
+        "/api/point-imports/create",
+        {{"device_id", "hvac01"}, {"binding_id", "binding01"}, {"source_kind", "vendor_xlsx"}},
+        actor, context(), upload);
     EXPECT_EQ(preview.data.at("status"), "confirmed") << preview.data;
     EXPECT_EQ(preview.meta.at("config_revision"), "2");
     auto rows =
         execute("/api/point-imports/rows", {{"import_job_id", preview.data.at("import_job_id")}});
     ASSERT_EQ(rows.data.at("total"), 1);
     EXPECT_EQ(rows.data.at("items").front().at("vendor_name"), "温度");
+    EXPECT_EQ(rows.data.at("items").front().at("address").at("offset"), 1);
 
     // 重复表头必须保留解析错误，不能生成没有行的成功预览。
     excel.open(path);
@@ -610,12 +620,10 @@ TEST_F(WebDevice, XlsxPreviewParsesRealWorkbookWithoutChangingRevision) {
     std::ifstream invalid_input(path, std::ios::binary);
     upload.bytes.assign(std::istreambuf_iterator<char>(invalid_input), {});
     EXPECT_NE(sha256(upload.bytes), preview.data.at("file_sha256"));
-    const auto invalid = service->execute("/api/point-imports/create",
-                                          {{"device_id", "hvac01"},
-                                           {"binding_id", "binding01"},
-                                           {"source_kind", "vendor_xlsx"},
-                                           {"address_base", "zero"}},
-                                          actor, context(), upload);
+    const auto invalid = service->execute(
+        "/api/point-imports/create",
+        {{"device_id", "hvac01"}, {"binding_id", "binding01"}, {"source_kind", "vendor_xlsx"}},
+        actor, context(), upload);
     EXPECT_EQ(invalid.data.at("status"), "failed");
     EXPECT_EQ(invalid.meta.at("config_revision"), "2");
 }
@@ -735,8 +743,7 @@ TEST_F(WebDevice, HttpLoginCookieCsrfAndFixedJsonRoutes) {
                 "0.1,0,C\n";
             auto metadata = Json{{"device_id", "hvac01"},
                                  {"binding_id", "http-binding"},
-                                 {"source_kind", "vendor_csv"},
-                                 {"address_base", "zero"}}
+                                 {"source_kind", "vendor_csv"}}
                                 .dump();
             auto upload = drogon::HttpRequest::newHttpRequest();
             upload->setPath("/api/point-imports/create");

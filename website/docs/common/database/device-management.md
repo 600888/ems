@@ -32,7 +32,7 @@ Web 用例与保存边界见[设备模块设计](../../processes/web/device/inde
 - 设备类型、固有点目录（四遥）、型号模板复用。
 - 通道（连接）与设备-通道绑定，采集/控制/转发角色。
 - 四遥点：协议地址、取值转换、命令写入规则、反馈判据、固有点映射。
-- 点表导入（逐行预览、地址基准、逐项确认、幂等重放）。
+- 点表导入（逐行预览、地址原样保留、逐项确认、幂等重放）。
 - 配置保存后热加载：`config_revision` 单调递增，消费者轮询比对。
 - 与实时库配套的 5 分钟通信统计、设备/通道状态变化历史。
 
@@ -97,7 +97,7 @@ Web 用例与保存边界见[设备模块设计](../../processes/web/device/inde
 | 01 层级总览 | 站→单元→设备/部件；设备与部件同列表；固有点覆盖率、最近通信 | `cfg_device`、`cfg_type_point`、`cfg_point_*`、`ops_comm_stat_5m`、`ops_state_log` |
 | 02 设备详情 | 档案、所属单元、父级节点、设备能力、接入诊断 | `cfg_device`、`cfg_device_type`、`cfg_type_point`、`cfg_point_*` |
 | 03 通道绑定 | 同设备多绑定、采集/控制角色、协议/Profile、Unit ID、5 分钟健康度 | `cfg_channel`、`cfg_binding`、`ops_comm_stat_5m` |
-| 04 点表导入 | 地址基准、逐行预览、目标节点、地址冲突逐项确认 | `cfg_import_job`、`cfg_import_row`、`cfg_point_*`、`cfg_binding` |
+| 04 点表导入 | 原始地址、逐行预览、目标节点、地址冲突逐项确认 | `cfg_import_job`、`cfg_import_row`、`cfg_point_*`、`cfg_binding` |
 | 05 固有点位 | 四遥分页、启用/禁用、厂家来源、转换/写入、反馈规则 | `cfg_type_point`、`cfg_point_*`、`cfg_device_type` |
 | 06 配置校验 | 保存前离线校验、地址冲突、服务热加载状态 | 各配置表 + 站根 `config_revision` |
 | 07 新建设备 | 节点性质（通信设备/层级节点）、父级、类型、模板 | `cfg_device`、`cfg_device_type`、`cfg_template` |
@@ -292,7 +292,7 @@ erDiagram
 
 ### 6.11 `cfg_import_job` / `cfg_import_row`
 
-`cfg_import_job`：自增主键 `id`，唯一业务 ID `import_job_id`，以及 `device_id`、`binding_id`、`source_kind`、`file_name`、`file_sha256`、`address_base(zero/one)`、`idempotency_key`（`SHA-256(device|binding|sha256)`，唯一）、`status(parsed/confirmed/applied/failed)`、行数统计、提交人与时间。
+`cfg_import_job`：自增主键 `id`，唯一业务 ID `import_job_id`，以及 `device_id`、`binding_id`、`source_kind`、`file_name`、`file_sha256`、`address_base`（兼容现有表结构固定写 `zero`，不参与地址换算）、`idempotency_key`（`SHA-256(device|binding|sha256)`，唯一）、`status(parsed/confirmed/applied/failed)`、行数统计、提交人与时间。
 
 `cfg_import_row`：逐行 `vendor_key/vendor_name`、`point_type`（决定写入哪张点表）、`target_device_path`（空即“目标节点缺失”）、`semantic_code`、地址与取值列、`parse_status/parse_code/parse_message`、`confirm_state(none/accepted/fixed/rejected)` 与确认留痕、`resolved_point_id`。
 
@@ -341,7 +341,7 @@ COMMIT;
 ### 7.3 重复导入与稳定身份
 
 ```text
-1. 计算 idempotency_key；已存在则核对 source_kind/address_base，相同返回原任务，不同返回 Conflict。
+1. 计算 idempotency_key；已存在则核对 source_kind，相同返回原任务，不同返回 Conflict。
 2. 解析文件写 cfg_import_row，不写点表。
 3. 目标节点按 path 匹配（禁止按重名）；未命中即 parse_status='error'。
 4. 厂家点按 (binding_id, vendor_key) 命中 -> 复用 point_id 并 UPDATE；
@@ -399,7 +399,7 @@ station-package.zip
 | `devices[]` | `code/name/node_kind/parent_code`；device/component 另需 `device_type_code/type_version/vendor/model/firmware_version/rated_power_kw`；component 必填 `source_device_code` | 顺序即创建顺序，`parent_code` 只能引用已定义节点（天然无环）；`unit` 挂站根下（parent_code 为空） |
 | `channels[]` | `code/name/protocol/conn_mode/endpoint/poll_interval_ms/timeout_ms/retry_times/max_sessions` | 协议白名单与界面一致（modbus/iec104/dlt645） |
 | `bindings[]` | `device_code/channel_code/device_address/profile_version/can_collect/can_control/can_forward` | 目标必须是 `device` 节点；同设备同通道唯一 |
-| `point_files[]` | `device_code/file/address_base/binding_code` | `binding_code` 省略时取该设备唯一的采集绑定，多个则必须显式指定 |
+| `point_files[]` | `device_code/file/binding_code` | `binding_code` 省略时取该设备唯一的采集绑定，多个则必须显式指定 |
 
 编排语义（`station_import_action`）：
 
