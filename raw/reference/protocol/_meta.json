@@ -1,0 +1,37 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "协议库目录"
+  },
+  {
+    "type": "file",
+    "name": "handlers",
+    "label": "协议处理器接入"
+  },
+  {
+    "type": "file",
+    "name": "libmodbuspp-guide",
+    "label": "libmodbuspp 使用指南"
+  },
+  {
+    "type": "file",
+    "name": "iec104",
+    "label": "IEC 104 动态库接入"
+  },
+  {
+    "type": "file",
+    "name": "iec61850",
+    "label": "IEC 61850 动态库接入"
+  },
+  {
+    "type": "file",
+    "name": "dlt645",
+    "label": "DLT645 动态库接入"
+  },
+  {
+    "type": "file",
+    "name": "dlt698",
+    "label": "DLT698 动态库接入"
+  }
+]

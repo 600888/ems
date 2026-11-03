@@ -1,0 +1,22 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "进程职责与模块"
+  },
+  {
+    "type": "file",
+    "name": "running",
+    "label": "构建与运行"
+  },
+  {
+    "type": "file",
+    "name": "design",
+    "label": "采集执行与协议插件"
+  },
+  {
+    "type": "file",
+    "name": "protocol-design",
+    "label": "通讯协议动态库（PIMPL / 跨平台）"
+  }
+]

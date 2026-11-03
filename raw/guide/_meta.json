@@ -1,0 +1,12 @@
+[
+  {
+    "type": "file",
+    "name": "index",
+    "label": "文档维护入口"
+  },
+  {
+    "type": "file",
+    "name": "documentation",
+    "label": "文档组织与 Rspress"
+  }
+]
