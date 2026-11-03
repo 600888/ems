@@ -21,6 +21,11 @@
   },
   {
     "type": "file",
+    "name": "iec61850",
+    "label": "IEC 61850 动态库接入"
+  },
+  {
+    "type": "file",
     "name": "dlt645",
     "label": "DLT645 动态库接入"
   },

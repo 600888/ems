@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "node scripts/copy-raw-docs.mjs",
     "dev": "rspress dev --host 127.0.0.1",
+    "prebuild": "node scripts/copy-raw-docs.mjs",
     "build": "rspress build",
     "preview": "rspress preview --host 127.0.0.1",
     "typecheck": "tsc --noEmit"
   },
-  "engines": { "node": ">=22.12.0" },
+  "engines": {
+    "node": ">=22.12.0"
+  },
   "devDependencies": {
     "@rspress/core": "2.0.21",
     "@types/node": "^22.0.0",
@@ -18,5 +22,8 @@
     "react-dom": "^19.0.0",
     "rspress-plugin-mermaid": "1.0.3",
     "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "html-docx-js": "^0.3.1"
   }
 }

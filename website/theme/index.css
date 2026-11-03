@@ -336,3 +336,147 @@ button:focus-visible {
     transition: none !important;
   }
 }
+
+/* ---------- 当前文档右上角的导出菜单 ---------- */
+.doc-actions {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.export-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.export-menu__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--rp-c-divider-light);
+  border-radius: var(--rp-radius-small);
+  background: transparent;
+  color: var(--rp-c-text-1);
+  font-size: 14px;
+  cursor: pointer;
+  transition:
+    border-color 0.18s,
+    background 0.18s,
+    color 0.18s;
+}
+
+.export-menu__btn:hover {
+  border-color: var(--rp-c-brand-light);
+  background: var(--rp-c-brand-tint);
+  color: var(--rp-c-brand);
+}
+
+.export-menu__dropdown {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  min-width: 220px;
+  padding: 6px;
+  background: var(--rp-c-bg);
+  border: 1px solid var(--rp-c-divider-light);
+  border-radius: var(--rp-radius);
+  box-shadow: var(--rp-shadow-2, 0 8px 24px rgba(0, 0, 0, 0.1));
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+}
+
+.export-menu__item {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 8px 10px;
+  border: none;
+  border-radius: var(--rp-radius-small);
+  background: transparent;
+  color: var(--rp-c-text-1);
+  text-align: left;
+  cursor: pointer;
+}
+
+.export-menu__item:hover {
+  background: var(--rp-c-brand-tint);
+  color: var(--rp-c-brand);
+}
+
+.export-menu__item-label {
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.export-menu__item-hint {
+  font-size: 12px;
+  color: var(--rp-c-text-2);
+}
+
+/* ---------- 打印（导出 PDF） ---------- */
+@media print {
+  /* 隐藏站点外壳：导航、侧边栏、目录、页脚、导出菜单 */
+  .rp-nav,
+  .rp-doc-layout__menu,
+  .rp-doc-layout__sidebar,
+  .rp-doc-layout__sidebar-placeholder,
+  .rp-doc-layout__outline,
+  .rp-doc-layout__outline-placeholder,
+  .rp-doc-footer,
+  .doc-actions,
+  .export-menu {
+    display: none !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* 正文占满整页，去掉内边距与滚动裁剪 */
+  .rp-doc-layout__container {
+    display: block;
+    width: 100% !important;
+    max-width: none !important;
+  }
+
+  .rp-doc-layout__doc,
+  .rp-doc-layout__doc-container,
+  .rp-doc-layout__overview {
+    max-width: 100% !important;
+    width: 100% !important;
+    overflow: visible !important;
+    padding: 0 !important;
+  }
+
+  /* 避免标题悬孤、代码块与表格被拦腰截断 */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    break-after: avoid;
+  }
+
+  pre,
+  table,
+  blockquote,
+  img {
+    break-inside: avoid;
+  }
+
+  pre {
+    white-space: pre-wrap !important;
+    word-break: break-all;
+  }
+
+  a {
+    text-decoration: none;
+    color: inherit;
+  }
+}

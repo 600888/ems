@@ -33,7 +33,7 @@
 | IEC 60870-5-104 | TCP | 2404 | 远动设备、保护装置 | `libproto_iec104.so` |
 | IEC 61850 MMS | TCP | 102 | IED；报告/控制按能力验收 | `libproto_iec61850.so` |
 
-GOOSE/SV 需独立 profile、发布/订阅角色及验收，不属于 MMS TCP 接口。服务端模型与控制入口见[上送通道设计](../../architecture/channel-protocol.md#6-上送通道设计)。
+GOOSE 需独立 profile、发布/订阅角色及验收，不属于 MMS TCP 接口。服务端模型与控制入口见[上送通道设计](../../architecture/channel-protocol.md#6-上送通道设计)。
 
 ## 2. 整体架构
 
@@ -284,4 +284,12 @@ flowchart TD
 
 ### 10.3 IEC61850 DataSet 批量读取
 
-按 FC 分组，利用 DataSet 批量读取；连接时发现并缓存 LN/DO 模型。
+按实际 DataSet 目录建立有序成员、FC 与模型叶子的投影，每批同一 DataSet 最多读取一次，
+未覆盖点再做单点读取；DataSet 可以混合 FC，不能因分组改变其成员顺序。连接时按配置
+校验并缓存相关模型，完整发现作为有预算的管理任务，不在每轮采集中遍历全模型。
+首批 MMS 只读插件与 YC/YX 采集路由已实现，具体配置、报告/控制边界及验收见
+[IEC 61850 动态库接入](../../reference/protocol/iec61850.md)。
+
+MMS `tcp_server` 的 `can_forward` 绑定由独立 `ForwardingChannel` 维护，从同一 RTDB
+客户端读取工程值并批量提交值/q/t；不占用采集线程，不把出口映像回写实时库。
+配置映射放在通道 `serial_json.forwarding`，站根 config_revision 变化时与采集目录一起重建。

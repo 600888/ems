@@ -553,3 +553,15 @@ flowchart LR
 - 新增四项 handler 集成测试及四项真实通道测试，覆盖协议读写、重连、缓冲扩容、初始化回滚、重复启停和退出后的卸载。Windows MSVC / MinGW 全后端各 139 项测试通过；DLT645 单插件的 handler 独立子工程 12 项测试通过。
 
 目录、调用示例及构建方式见 [协议处理器接入](../../reference/protocol/handlers.md)。
+
+## 14. IEC 61850 接入方案
+
+第三方目录已放入 `backend/third_party/libiec61850`（其 CMake 声明为 1.6.2），
+首批已实现 IEC61850 PIMPL 协议对象、ABI v1 插件、独立构建与安装、YC/YX 配置编译和回环测试。
+MMS client 已支持指定点、持久 DataSet、URCB/BRCB 和 report/hybrid 模式；
+固定模型服务端支持读取、报告与本地映像更新，拒绝远端数据写入。客户端控制仍待实现。
+GOOSE 使用独立协议语义，不作为 MMS 插件的配置开关。
+接入范围不包含 SV 和图形化建模；SCL 仅用于文件导入、校验与协议模型解析。
+
+详细文件接线、配置、模型与 FC、报告生命周期、控制结果以及 ems_simulate 联调清单见
+[IEC 61850 动态库接入](../../reference/protocol/iec61850.md)。
