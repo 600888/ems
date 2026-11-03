@@ -1,0 +1,24 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AssemblyTitle>tls_client_example</AssemblyTitle>
+    <Copyright>mzillgit</Copyright>
+    <AssemblyVersion>1.0.%2a</AssemblyVersion>
+	<Deterministic>false</Deterministic>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\IEC61850forCSharp\IEC61850.NET.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Update="client.crt">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="client.key">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="root_CA1.pem">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+</Project>

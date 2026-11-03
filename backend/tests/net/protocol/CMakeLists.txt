@@ -2,6 +2,29 @@
 
 ems_set_output_directories("${CMAKE_BINARY_DIR}/tests")
 
+if(TARGET proto_iec61850)
+    add_executable(test_iec61850_runtime iec61850_runtime_test.cpp)
+    target_include_directories(test_iec61850_runtime SYSTEM PRIVATE
+        "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include")
+    target_link_libraries(test_iec61850_runtime PRIVATE ems_protocol_runtime ems_libiec61850)
+    target_compile_definitions(test_iec61850_runtime PRIVATE
+        EMS_IEC61850_PLUGIN="$<TARGET_FILE:proto_iec61850>")
+    set_target_properties(test_iec61850_runtime PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+    add_dependencies(test_iec61850_runtime proto_iec61850)
+    foreach(scenario IN ITEMS lazy_load invalid_config scalar dataset quality buffer_retry
+                              reconnect model_validation limits settings partial_access budget
+                              concurrent_instances report_urcb report_brcb report_fallback
+                              report_reconnect report_faults report_queue report_ownership
+                              report_integrity report_isolation
+                              server_readonly server_reports server_lifecycle server_connections)
+        add_test(NAME iec61850_${scenario} COMMAND test_iec61850_runtime ${scenario})
+        set_tests_properties(iec61850_${scenario} PROPERTIES TIMEOUT 30)
+    endforeach()
+    if(EMS_PROTOCOL_RUNTIME_DEPENDENCIES)
+        ems_copy_runtime_files(test_iec61850_runtime ${EMS_PROTOCOL_RUNTIME_DEPENDENCIES})
+    endif()
+endif()
+
 if(TARGET proto_dlt698)
     add_executable(test_dlt698_runtime dlt698_runtime_test.cpp)
     target_include_directories(

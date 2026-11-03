@@ -36,6 +36,7 @@ option(EMS_BUILD_MODBUS "Build Modbus protocol package" ON)
 option(EMS_BUILD_IEC104 "Build IEC104 protocol package" ON)
 option(EMS_BUILD_DLT645 "Build DL/T 645-2007 protocol package" ON)
 option(EMS_BUILD_DLT698 "Build DL/T 698.45 protocol package" ON)
+option(EMS_BUILD_IEC61850 "Build IEC 61850 MMS client protocol package" ON)
 set(EMS_PROTOCOL_RUNTIME_DEPENDENCIES
     ""
     CACHE STRING "Runtime dependency files to deploy with protocol modules"
@@ -55,6 +56,10 @@ endif()
 
 if(EMS_BUILD_DLT698)
     add_subdirectory(dlt698)
+endif()
+
+if(EMS_BUILD_IEC61850)
+    add_subdirectory(iec61850)
 endif()
 
 if(BUILD_TESTS)

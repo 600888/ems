@@ -250,3 +250,68 @@ TEST(CfgLoaderMySql, LoadsCurrentSchemaWithoutLegacyTables) {
     ASSERT_TRUE(loader.initialize(ems::core::value_of(database), ctx)) << loader.last_error();
     EXPECT_TRUE(loader.is_initialized());
 }
+
+TEST(CfgLoader, Iec61850CompilesMmsDirectoryAndKeepsComponentIdentity) {
+    auto rows = configuration();
+    rows.channels[0].protocol = "iec61850_mms";
+    rows.channels[0].endpoint = "127.0.0.1:10102";
+    rows.channels[0].serial_json = R"({"iec61850":{"datasets":["SIMLD0/LLN0$measurements"]}})";
+    rows.bindings[0].device_address = "LD-name-not-a-slave-number";
+    rows.points_yc[0].protocol_address_json =
+        R"({"object_ref":"SIMLD0/MMXU1.TotW.mag.f","fc":"MX","quality_ref":"SIMLD0/MMXU1.TotW.q"})";
+    CfgPointYxRow yx;
+    yx.point_id = "status";
+    yx.owner_device_id = "rack";
+    yx.binding_id = "binding";
+    yx.wire_type = "bool";
+    yx.protocol_address_json = R"({"object_ref":"SIMLD0/MMXU1.Status.stVal","fc":"ST"})";
+    rows.points_yx.push_back(yx);
+    CfgLoader loader;
+    ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
+    const auto channel = loader.channels()[0];
+    EXPECT_EQ(channel.protocol_, ems::model::ProtocolType::IEC61850);
+    auto options = nlohmann::json::parse(channel.settings_)["iec61850"];
+    ASSERT_EQ(options["points"].size(), 2u);
+    EXPECT_EQ(options["points"][0]["code"], "MX:SIMLD0/MMXU1.TotW.mag.f");
+    EXPECT_EQ(options["points"][0]["mms_type"], "float32");
+    EXPECT_EQ(options["points"][1]["mms_type"], "boolean");
+    const auto device = loader.devices(7)[0];
+    EXPECT_EQ(device.deviceKey_, "rack");
+    EXPECT_EQ(device.ycPoints_[0].point_id, "point-rack-voltage");
+    EXPECT_DOUBLE_EQ(device.ycPoints_[0].scale_factor, 0.1);
+    EXPECT_EQ(device.yxPoints_[0].protocol_code, "ST:SIMLD0/MMXU1.Status.stVal");
+    rows.channels[0].protocol = "IEC61850";
+    ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
+    rows.points_yc.push_back(rows.points_yc[0]);
+    rows.points_yc.back().point_id = "same-source-alias";
+    ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
+    EXPECT_EQ(nlohmann::json::parse(loader.channels()[0].settings_)["iec61850"]["points"].size(),
+              2u);
+    rows.points_yc.back().wire_type = "i32";
+    EXPECT_FALSE(loader.configure(rows));
+}
+
+TEST(CfgLoader, Iec61850RejectsServerControlAndDirectoryOverrides) {
+    auto rows = configuration();
+    rows.channels[0].protocol = "iec61850_mms";
+    rows.points_yc[0].protocol_address_json =
+        R"({"object_ref":"SIMLD0/MMXU1.TotW.mag.f","fc":"MX"})";
+    CfgLoader loader;
+    ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
+    rows.channels[0].conn_mode = "tcp_server";
+    EXPECT_FALSE(loader.configure(rows));
+    rows.channels[0].conn_mode = "tcp_client";
+    rows.channels[0].serial_json = R"({"iec61850":{"points":[]}})";
+    EXPECT_FALSE(loader.configure(rows));
+    rows.channels[0].serial_json.clear();
+    CfgPointYkRow control;
+    control.point_id = "command";
+    control.owner_device_id = "source";
+    control.binding_id = "binding";
+    control.protocol_address_json =
+        R"({"object_ref":"SIMLD0/CSWI1.Pos","fc":"CO","write_mode":"control"})";
+    rows.points_yk.push_back(control);
+    EXPECT_FALSE(loader.configure(rows));
+    EXPECT_EQ(loader.channels().size(), 1u);
+    EXPECT_EQ(loader.config_revision(), 7);
+}

@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <OutputType>Library</OutputType>
+    <RootNamespace>iec61850dotnet</RootNamespace>
+    <AssemblyName>iec61850dotnet</AssemblyName>
+    <AssemblyTitle>IEC61850 API for C#</AssemblyTitle>
+    <Company>MZ Automation GmbH</Company>
+    <Copyright>Michael Zillgith</Copyright>
+    <AssemblyVersion>1.0.%2a</AssemblyVersion>
+	  <Deterministic>false</Deterministic>
+  </PropertyGroup>
+</Project>
