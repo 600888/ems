@@ -58,7 +58,7 @@ const emit = defineEmits<{
         @update:model-value="emit('update:confirmation', String($event))"
     /></FormField>
   </div>
-  <p class="text-[12px] leading-relaxed text-muted">
+  <p class="text-small leading-relaxed text-muted">
     {{ minimum }}–32 个字符，大写、小写、数字、特殊符号中至少三类，且不能与当前密码相同。
   </p>
 </template>

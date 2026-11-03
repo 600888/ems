@@ -36,11 +36,9 @@ const iconName = computed(() => props.icon ?? toneMap[props.tone].icon)
   >
     <AppIcon :name="iconName" :size="size === 'md' ? 18 : 14" class="mt-0.5" />
     <div class="min-w-0 flex-1">
-      <p v-if="title" class="mb-1 text-[14px] font-medium">{{ title }}</p>
+      <p v-if="title" class="mb-1 text-body font-medium">{{ title }}</p>
       <p
-        :class="
-          size === 'md' ? 'text-[13px] leading-relaxed text-muted' : 'text-[11px] leading-[1.5]'
-        "
+        :class="size === 'md' ? 'text-body leading-relaxed text-muted' : 'text-small leading-[1.5]'"
       >
         <slot>{{ text }}</slot>
       </p>

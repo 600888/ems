@@ -14,7 +14,7 @@ const templates = ref(false),
 
 <template>
   <div class="flex min-h-10 shrink-0 flex-wrap items-center gap-x-4 gap-y-2">
-    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-[7px] text-[11px]">
+    <div class="flex min-w-0 flex-1 flex-wrap items-center gap-[7px] text-small">
       <slot />
     </div>
     <div class="ml-auto flex shrink-0 items-center gap-[10px]">

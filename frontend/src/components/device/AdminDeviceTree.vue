@@ -53,10 +53,10 @@ function onNodeClick(
 
 <template>
   <aside
-    class="flex w-[256px] shrink-0 flex-col gap-1 overflow-hidden rounded-[6px] border border-line bg-panel p-[14px]"
+    class="workspace-sidebar flex w-[256px] shrink-0 flex-col gap-1 overflow-hidden rounded-[6px] border border-line bg-panel p-[14px]"
   >
     <div class="flex items-center justify-between">
-      <h2 class="text-[14px] font-semibold text-ink">设备层级</h2>
+      <h2 class="text-body font-semibold text-ink">设备层级</h2>
       <AppIcon name="list-tree" :size="15" class="text-muted" />
     </div>
 
@@ -105,12 +105,12 @@ function onNodeClick(
               :class="data.id === device.currentId ? 'text-accent' : 'text-muted'"
             />
             <span
-              class="truncate text-[11px]"
+              class="truncate text-small"
               :class="data.id === device.currentId ? 'font-semibold text-accent' : 'text-ink'"
             >
               {{ data.name }}
             </span>
-            <span v-if="(data as DeviceNode).count" class="ml-auto text-[10px] text-subtle">
+            <span v-if="(data as DeviceNode).count" class="ml-auto text-caption text-subtle">
               {{ (data as DeviceNode).count }}
             </span>
           </div>
@@ -119,7 +119,7 @@ function onNodeClick(
     </div>
 
     <div class="h-px w-full bg-line" />
-    <p class="text-[10px] text-accent">当前范围：{{ device.tree[0]?.name ?? '—' }}</p>
-    <p class="text-[9px] text-muted">站 → 单元 → 设备 → 部件</p>
+    <p class="text-caption text-accent">当前范围：{{ device.tree[0]?.name ?? '—' }}</p>
+    <p class="text-caption text-muted">站 → 单元 → 设备 → 部件</p>
   </aside>
 </template>

@@ -16,7 +16,7 @@ const active = computed(() => String(route.name))
     :items="items"
     :model-value="active"
     :height="48"
-    class="px-0! [&>button]:text-[15px]!"
+    class="px-0! [&>button]:text-lead!"
     @update:model-value="router.push({ name: $event })"
   >
     <template v-if="$slots.actions" #actions><slot name="actions" /></template>

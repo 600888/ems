@@ -29,9 +29,9 @@ async function load() {
 watch(id, load, { immediate: true })
 </script>
 <template>
-  <section class="panel flex min-h-0 flex-col gap-5 overflow-auto p-6">
+  <section class="panel flex flex-col gap-5 p-6">
     <div class="flex items-center justify-between">
-      <h3 class="text-[17px] font-semibold">配置检查</h3>
+      <h3 class="text-section font-semibold">配置检查</h3>
       <ActionBtn :loading="busy" @click="load">重新检查</ActionBtn>
     </div>
     <InfoBar v-if="error" :text="error" tone="danger" /><InfoBar
@@ -39,12 +39,12 @@ watch(id, load, { immediate: true })
       :text="findings.length ? `发现 ${findings.length} 项配置问题` : '配置检查通过'"
       :tone="findings.length ? 'warn' : 'ok'"
     />
-    <p class="text-[13px] text-muted">
+    <p class="text-body text-muted">
       设备、通道和点位保存后立即生效；采集服务检测配置修订变化后自动重载。
     </p>
     <div v-for="(f, i) in findings" :key="i" class="border-b border-line py-3">
       <p class="text-warn">{{ f.reason }}</p>
-      <p class="mt-2 text-[12px] text-muted">{{ f.device_id }} {{ f.point_id }}</p>
+      <p class="mt-2 text-small text-muted">{{ f.device_id }} {{ f.point_id }}</p>
     </div>
   </section>
 </template>

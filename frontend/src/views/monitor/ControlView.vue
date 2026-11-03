@@ -63,9 +63,9 @@ const commandState = computed(() => {
     <!-- 遥控操作状态 -->
     <div class="panel flex h-[46px] shrink-0 items-center gap-[10px] px-4">
       <AppIcon name="shield-check" :size="16" class="text-ok" />
-      <span class="text-[12px] text-ink">遥控需经策略服务受理和设备执行确认</span>
+      <span class="text-small text-ink">遥控需经策略服务受理和设备执行确认</span>
       <div class="flex-1" />
-      <span class="text-[11px] text-muted">当前会话操作</span>
+      <span class="text-small text-muted">当前会话操作</span>
     </div>
 
     <div class="flex min-h-0 flex-1 gap-4">
@@ -73,13 +73,13 @@ const commandState = computed(() => {
         <!-- 遥控命令 -->
         <section class="panel flex min-h-0 flex-1 flex-col overflow-hidden">
           <div class="panel-bar">
-            <h3 class="text-[14px] font-semibold text-ink">遥控命令</h3>
-            <span class="text-[11px] text-muted">{{ monitor.ykList.length }} 个控制点</span>
+            <h3 class="text-body font-semibold text-ink">遥控命令</h3>
+            <span class="text-small text-muted">{{ monitor.ykList.length }} 个控制点</span>
           </div>
 
           <div
             v-if="monitor.ykList.length"
-            class="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 overflow-y-auto p-4"
+            class="grid min-h-0 flex-1 grid-cols-2 content-start gap-3 p-4"
           >
             <article
               v-for="command in monitor.ykList"
@@ -94,10 +94,10 @@ const commandState = computed(() => {
               "
             >
               <div class="flex items-center justify-between gap-2">
-                <span class="truncate text-[13px] font-semibold text-ink">{{ command.name }}</span>
+                <span class="truncate text-body font-semibold text-ink">{{ command.name }}</span>
                 <button
                   type="button"
-                  class="flex h-[28px] shrink-0 items-center gap-1 rounded-[4px] border px-2 text-[11px] font-medium"
+                  class="flex h-[28px] shrink-0 items-center gap-1 rounded-[4px] border px-2 text-small font-medium"
                   :class="
                     command.disabledReason
                       ? 'cursor-not-allowed border-line bg-raised text-subtle'
@@ -109,9 +109,9 @@ const commandState = computed(() => {
                   {{ command.action }}
                 </button>
               </div>
-              <span class="text-[10px] text-muted">{{ command.desc }}</span>
-              <span class="text-[10px] text-subtle">{{ command.current }}</span>
-              <span v-if="command.disabledReason" class="text-[9px] text-warn">{{
+              <span class="text-caption text-muted">{{ command.desc }}</span>
+              <span class="text-caption text-subtle">{{ command.current }}</span>
+              <span v-if="command.disabledReason" class="text-caption text-warn">{{
                 command.disabledReason
               }}</span>
             </article>
@@ -128,10 +128,10 @@ const commandState = computed(() => {
         </section>
 
         <!-- 最近控制记录 -->
-        <section class="panel flex h-[196px] shrink-0 flex-col overflow-hidden">
+        <section class="panel flex shrink-0 flex-col overflow-hidden">
           <div class="panel-bar">
-            <h3 class="text-[14px] font-semibold text-ink">最近控制记录</h3>
-            <span class="text-[11px] text-accent">全部记录 →</span>
+            <h3 class="text-body font-semibold text-ink">最近控制记录</h3>
+            <span class="text-small text-accent">全部记录 →</span>
           </div>
 
           <div class="dt-head shrink-0">
@@ -142,19 +142,17 @@ const commandState = computed(() => {
             <div class="w-[100px] shrink-0"><span class="dt-th">结果</span></div>
           </div>
 
-          <div class="min-h-0 flex-1 overflow-y-auto">
+          <div class="min-h-0 flex-1">
             <div v-for="log in monitor.controlLogRows" :key="log.time" class="dt-row h-[44px]">
-              <span class="dt-cell w-[100px] shrink-0 text-[11px] text-muted">{{ log.time }}</span>
-              <span class="dt-cell min-w-0 flex-1 truncate text-[11px] text-ink">{{
+              <span class="dt-cell w-[100px] shrink-0 text-table text-muted">{{ log.time }}</span>
+              <span class="dt-cell min-w-0 flex-1 truncate text-table text-ink">{{
                 log.command
               }}</span>
-              <span class="dt-cell w-[120px] shrink-0 text-[11px] text-muted">{{
-                log.target
-              }}</span>
-              <span class="dt-cell w-[110px] shrink-0 text-[11px] text-muted">{{
+              <span class="dt-cell w-[120px] shrink-0 text-table text-muted">{{ log.target }}</span>
+              <span class="dt-cell w-[110px] shrink-0 text-table text-muted">{{
                 log.operator
               }}</span>
-              <span class="dt-cell w-[100px] shrink-0 text-[11px] text-ok">执行成功</span>
+              <span class="dt-cell w-[100px] shrink-0 text-table text-ok">执行成功</span>
             </div>
           </div>
         </section>
@@ -163,13 +161,13 @@ const commandState = computed(() => {
       <!-- 遥控确认 -->
       <aside class="panel flex w-[360px] shrink-0 flex-col overflow-hidden">
         <div class="panel-bar">
-          <h3 class="text-[14px] font-semibold text-ink">
+          <h3 class="text-body font-semibold text-ink">
             遥控确认 · {{ current?.name ?? '未选择命令' }}
           </h3>
         </div>
 
-        <div class="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-3">
-          <div class="flex items-center gap-2 text-[10px] text-muted">
+        <div class="flex min-h-0 flex-1 flex-col gap-4 px-4 py-3">
+          <div class="flex items-center gap-2 text-caption text-muted">
             <span class="text-accent">01 选择命令</span>
             <span>/</span>
             <span class="text-accent">02 确认执行</span>
@@ -178,26 +176,26 @@ const commandState = computed(() => {
           </div>
 
           <div class="flex flex-col gap-2 rounded-[5px] bg-warnbox px-3 py-2">
-            <span class="text-[13px] font-medium text-warn">停机后，PCS 将停止功率输出</span>
-            <span class="text-[10px] text-muted">请确认当前调度允许，并核对目标设备。</span>
+            <span class="text-body font-medium text-warn">停机后，PCS 将停止功率输出</span>
+            <span class="text-caption text-muted">请确认当前调度允许，并核对目标设备。</span>
           </div>
 
           <div class="flex flex-col gap-2">
             <div class="flex items-center justify-between">
-              <span class="text-[11px] text-muted">目标设备</span>
-              <span class="text-[12px] text-ink">储能单元 01 / PCS 01</span>
+              <span class="text-small text-muted">目标设备</span>
+              <span class="text-small text-ink">储能单元 01 / PCS 01</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-[11px] text-muted">控制命令</span>
-              <span class="text-[12px] text-ink">{{ current?.name ?? '—' }}</span>
+              <span class="text-small text-muted">控制命令</span>
+              <span class="text-small text-ink">{{ current?.name ?? '—' }}</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-[11px] text-muted">当前状态</span>
-              <span class="text-[12px] text-ink">并网放电 · 240.0 kW</span>
+              <span class="text-small text-muted">当前状态</span>
+              <span class="text-small text-ink">并网放电 · 240.0 kW</span>
             </div>
             <div class="flex items-center justify-between">
-              <span class="text-[11px] text-muted">目标状态</span>
-              <span class="text-[12px] text-ink">停机 / 待机</span>
+              <span class="text-small text-muted">目标状态</span>
+              <span class="text-small text-ink">停机 / 待机</span>
             </div>
           </div>
 
@@ -205,20 +203,20 @@ const commandState = computed(() => {
             <span
               v-for="item in checks"
               :key="item"
-              class="flex items-center gap-2 text-[11px] text-ok"
+              class="flex items-center gap-2 text-small text-ok"
             >
               <i class="dot" />{{ item }}
             </span>
           </div>
 
           <div class="flex flex-col gap-[7px]">
-            <span class="text-[11px] text-muted">操作原因</span>
+            <span class="text-small text-muted">操作原因</span>
             <el-input v-model="monitor.controlReason" class="ctl" placeholder="填写操作原因" />
           </div>
 
           <el-checkbox :model-value="true">已核对设备和操作影响</el-checkbox>
 
-          <p class="text-[10px] text-subtle">超时或失败时显示原因，可在操作记录中查看。</p>
+          <p class="text-caption text-subtle">超时或失败时显示原因，可在操作记录中查看。</p>
 
           <div
             v-if="commandState"
@@ -231,8 +229,8 @@ const commandState = computed(() => {
               :class="[commandState.tone, commandState.spin && 'animate-spin']"
             />
             <div class="flex flex-col gap-1">
-              <span class="text-[11px] font-medium">{{ commandState.title }}</span>
-              <span class="text-[10px] text-muted">{{ commandState.desc }}</span>
+              <span class="text-small font-medium">{{ commandState.title }}</span>
+              <span class="text-caption text-muted">{{ commandState.desc }}</span>
             </div>
           </div>
 
@@ -241,14 +239,14 @@ const commandState = computed(() => {
           <div class="flex items-center justify-end gap-[10px] pb-1">
             <button
               type="button"
-              class="h-[36px] rounded-[5px] border border-line bg-raised px-[14px] text-[12px] font-medium text-ink"
+              class="h-[36px] rounded-[5px] border border-line bg-raised px-[14px] text-small font-medium text-ink"
               @click="monitor.closeCommand()"
             >
               取消
             </button>
             <button
               type="button"
-              class="h-[36px] rounded-[5px] border border-brand bg-brand px-[14px] text-[12px] font-medium text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
+              class="h-[36px] rounded-[5px] border border-brand bg-brand px-[14px] text-small font-medium text-white transition-all hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-60"
               :disabled="!canExecute"
               @click="monitor.executeCommand()"
             >

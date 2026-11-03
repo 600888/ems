@@ -114,17 +114,17 @@ onBeforeUnmount(() => {
             >返回工作台</ActionBtn
           >
           <AppIcon name="circle-user" :size="64" class="text-accent" />
-          <h2 class="text-[26px] font-semibold">{{ profile.display_name }}</h2>
-          <p class="text-[15px] text-muted">{{ profile.username }}</p>
+          <h2 class="text-metric font-semibold">{{ profile.display_name }}</h2>
+          <p class="text-lead text-muted">{{ profile.username }}</p>
           <RoleBadge :role="profile.role_code" />
-          <p class="text-[13px] text-muted">角色和设备范围由管理员分配。</p>
+          <p class="text-body text-muted">角色和设备范围由管理员分配。</p>
           <div class="border-t border-line pt-6">
-            <h3 class="mb-4 text-[15px] font-medium">当前设备范围</h3>
+            <h3 class="mb-4 text-lead font-medium">当前设备范围</h3>
             <p v-if="profile.scope_mode === 'all'">全部站与设备</p>
             <p v-else-if="!profile.scopes.length" class="text-muted">
               未分配设备范围，仅可使用个人中心。
             </p>
-            <ul v-else class="flex flex-col gap-3 text-[13px] text-muted">
+            <ul v-else class="flex flex-col gap-3 text-body text-muted">
               <li
                 v-for="(scope, index) in profile.scopes"
                 :key="`${scope.station_id}/${scope.device_root_id}`"
@@ -139,14 +139,14 @@ onBeforeUnmount(() => {
           </div>
           <div class="flex-1" />
           <div>
-            <p class="text-[12px] text-muted">本次登录</p>
-            <p class="mt-2 text-[14px]">{{ formatTime(profile.last_login_at) }}</p>
+            <p class="text-small text-muted">本次登录</p>
+            <p class="mt-2 text-body">{{ formatTime(profile.last_login_at) }}</p>
           </div>
-          <p class="text-[12px] leading-relaxed text-muted">发现异常登录请及时改密并联系管理员。</p>
+          <p class="text-small leading-relaxed text-muted">发现异常登录请及时改密并联系管理员。</p>
         </aside>
         <div class="flex min-h-0 flex-col gap-[22px]">
           <form class="panel flex flex-col gap-5 p-7" @submit.prevent="saveProfile">
-            <h2 class="text-[18px] font-semibold">基本资料</h2>
+            <h2 class="text-section font-semibold">基本资料</h2>
             <div class="grid gap-6 sm:grid-cols-2">
               <FormField label="用户名" hint="用户名创建后不可修改" v-slot="field"
                 ><el-input :id="field.id" :model-value="profile.username" disabled /></FormField
@@ -167,7 +167,7 @@ onBeforeUnmount(() => {
             </div>
           </form>
           <form class="panel flex flex-col gap-5 p-7" @submit.prevent="changePassword">
-            <h2 class="text-[18px] font-semibold">修改密码</h2>
+            <h2 class="text-section font-semibold">修改密码</h2>
             <PasswordFields
               v-model:old-password="oldPassword"
               v-model:new-password="password"
@@ -182,7 +182,7 @@ onBeforeUnmount(() => {
               size="md"
             />
             <div class="flex flex-wrap items-center justify-between gap-3">
-              <p class="text-[13px] text-warn">修改成功后，全部终端需要重新登录。</p>
+              <p class="text-body text-warn">修改成功后，全部终端需要重新登录。</p>
               <ActionBtn
                 type="submit"
                 variant="primary"

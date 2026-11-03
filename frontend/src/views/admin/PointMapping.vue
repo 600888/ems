@@ -153,7 +153,7 @@ let editRevision = ''
 let newPointId = ''
 </script>
 <template>
-  <div class="flex min-h-0 flex-col gap-4 overflow-auto">
+  <div class="flex flex-col gap-4">
     <InfoBar v-if="error" :text="error" tone="danger" />
     <section class="panel flex min-h-0 flex-1 flex-col">
       <div class="flex shrink-0 flex-wrap items-center gap-4 border-b border-line p-4">
@@ -172,7 +172,7 @@ let newPointId = ''
         ><ActionBtn class="ml-auto" :loading="busy" @click="load">刷新</ActionBtn
         ><ActionBtn variant="primary" @click="edit()">新增点位</ActionBtn>
       </div>
-      <div class="min-h-0 flex-1 overflow-auto">
+      <div class="min-h-0 flex-1 overflow-x-auto">
         <table class="identity-table">
           <thead>
             <tr>
@@ -188,7 +188,7 @@ let newPointId = ''
             <tr v-for="row in rows" :key="row.point_id">
               <td>
                 {{ row.name }}
-                <p class="text-[12px] text-muted">{{ row.code }}</p>
+                <p class="text-small text-muted">{{ row.code }}</p>
               </td>
               <td>{{ row.semantic_code || '—' }}</td>
               <td>{{ row.address?.space }} / {{ row.address?.offset }}</td>
@@ -272,7 +272,7 @@ let newPointId = ''
               value="ba" /></el-select></FormField
         ><FormField label="地址空间" v-slot="s"
           ><el-input :id="s.id" v-model="form.space" /></FormField
-        ><FormField label="地址偏移（从 0 开始）" v-slot="s"
+        ><FormField label="点表地址" v-slot="s"
           ><el-input-number :id="s.id" v-model="form.offset" :min="0" /></FormField
         ><template v-if="kind === 'yc' || kind === 'yt'"
           ><FormField label="倍率" v-slot="s"

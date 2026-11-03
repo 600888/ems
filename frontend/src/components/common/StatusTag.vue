@@ -29,7 +29,7 @@ const toneClass = computed(
 
 <template>
   <span
-    class="inline-flex shrink-0 items-center gap-[5px] rounded-[4px] px-2 py-1 text-[11px] leading-none font-medium"
+    class="inline-flex shrink-0 items-center gap-[5px] rounded-[4px] px-2 py-1 text-small leading-none font-medium"
     :class="toneClass"
   >
     <i v-if="dot" class="dot" />

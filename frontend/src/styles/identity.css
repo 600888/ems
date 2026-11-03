@@ -1,41 +1,48 @@
 @layer components {
   .identity-page {
-    @apply flex min-h-0 flex-1 flex-col gap-[22px] overflow-y-auto;
+    @apply flex min-h-full flex-col gap-[22px];
   }
   .identity-table {
-    @apply w-full min-w-[1050px] border-collapse text-left text-[14px];
+    @apply w-full border-collapse text-left text-table;
+    line-height: var(--line-height-table);
   }
   .identity-table th,
   .identity-table td {
-    @apply border-b border-line px-[18px] py-4;
+    @apply border-b border-line px-4 py-1.5;
   }
   .identity-table thead {
-    @apply sticky top-0 z-10 bg-raised;
+    @apply sticky top-0 z-10 bg-thead;
   }
   .identity-table thead th {
-    @apply h-12 py-3 text-[12px] font-medium text-muted;
+    @apply h-[38px] whitespace-nowrap py-0 text-table-head font-medium text-muted;
   }
   .identity-table tbody tr {
-    @apply h-[72px] bg-panel even:bg-rowalt;
+    @apply h-[52px] bg-panel even:bg-rowalt;
+  }
+  .identity-table .identity-text-action {
+    font-size: inherit;
+  }
+  .identity-table-compact tbody tr {
+    @apply h-[44px];
   }
   .identity-text-action {
-    @apply text-[13px] text-accent hover:underline disabled:cursor-not-allowed disabled:text-subtle;
+    @apply text-body text-accent hover:underline disabled:cursor-not-allowed disabled:text-subtle;
   }
   .identity-page .el-input__wrapper,
   .identity-page .el-select__wrapper,
   .identity-drawer .el-input__wrapper,
   .identity-drawer .el-select__wrapper,
   .identity-dialog .el-input__wrapper {
-    @apply min-h-10 bg-surface text-[14px];
+    @apply min-h-10 bg-surface text-control;
   }
   .identity-login-input .el-input__wrapper {
-    @apply h-[50px] bg-surface px-4 text-[15px];
+    @apply h-[50px] bg-surface px-4 text-lead;
   }
   .identity-dialog .el-dialog__header {
     @apply mb-5 pr-8;
   }
   .identity-dialog .el-dialog__title {
-    @apply text-[21px] font-semibold text-ink;
+    @apply text-title font-semibold text-ink;
   }
   .identity-dialog {
     @apply rounded-lg border border-line bg-panel p-7;

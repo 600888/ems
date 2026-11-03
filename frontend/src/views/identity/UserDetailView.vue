@@ -174,10 +174,10 @@ function revoke(session?: SessionSummary) {
   <div class="identity-page">
     <div class="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-4">
       <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-        <h1 class="text-[18px] font-semibold text-ink">
+        <h1 class="text-section font-semibold text-ink">
           {{ user ? `${user.display_name} · ${user.username}` : '用户详情' }}
         </h1>
-        <p v-if="user && active !== 'security'" class="text-[12px] text-muted">
+        <p v-if="user && active !== 'security'" class="text-small text-muted">
           {{ user.status === 'enabled' ? '账号已启用' : '账号已停用' }} ·
           {{ roleLabel(user.role_code) }} · 最近登录 {{ formatTime(user.last_login_at, true) }}
         </p>
@@ -199,7 +199,7 @@ function revoke(session?: SessionSummary) {
       :items="tabs"
       :model-value="active"
       :height="48"
-      class="px-0! [&_button]:text-[15px]!"
+      class="px-0! [&_button]:text-lead!"
       @update:model-value="router.push(`/admin/users/${route.params.userId}/${$event}`)"
     />
     <AsyncContent :loading="task.busy.value" :error="task.error.value" @retry="load">
@@ -214,8 +214,8 @@ function revoke(session?: SessionSummary) {
           v-if="active === 'access'"
           class="grid min-h-0 flex-1 gap-6 xl:grid-cols-[minmax(0,1.95fr)_minmax(300px,1fr)]"
         >
-          <section class="panel flex min-h-0 flex-col gap-[22px] overflow-y-auto p-6">
-            <h2 class="text-[17px] font-semibold">用户角色</h2>
+          <section class="panel flex min-h-0 flex-col gap-[22px] p-6">
+            <h2 class="text-section font-semibold">用户角色</h2>
             <RolePicker v-model="access.role_code" :disabled="own" /><ScopePicker
               v-model="access.scopes"
               v-model:scope-mode="access.scope_mode"
@@ -226,7 +226,7 @@ function revoke(session?: SessionSummary) {
           </section>
           <aside class="flex flex-col gap-5">
             <section class="panel flex flex-col gap-[18px] p-6">
-              <h2 class="text-[18px] font-semibold">
+              <h2 class="text-section font-semibold">
                 {{ roleLabel(access.role_code) }} · 权限预览
               </h2>
               <div
@@ -245,7 +245,7 @@ function revoke(session?: SessionSummary) {
                 class="flex items-center gap-3"
               >
                 <PermissionMark :allowed="row.roles.includes(access.role_code)" /><span
-                  class="text-[14px]"
+                  class="text-body"
                   :class="!row.roles.includes(access.role_code) && 'text-muted'"
                   >{{ row.label }}</span
                 >
@@ -260,7 +260,7 @@ function revoke(session?: SessionSummary) {
               tone="warn"
               size="md"
             />
-            <p class="text-[13px] leading-relaxed text-muted">
+            <p class="text-body leading-relaxed text-muted">
               操作权限与设备范围同时生效；遥控、遥调仍受运行联锁和安全校验约束。
             </p>
           </aside>
@@ -273,7 +273,7 @@ function revoke(session?: SessionSummary) {
             <div class="flex items-center gap-[14px]">
               <AppIcon name="circle-user" :size="44" class="text-accent" />
               <div>
-                <h2 class="text-[22px] font-semibold">{{ user.display_name }}</h2>
+                <h2 class="text-title font-semibold">{{ user.display_name }}</h2>
                 <p class="mt-1 text-muted">{{ user.username }}</p>
               </div>
             </div>
@@ -285,24 +285,24 @@ function revoke(session?: SessionSummary) {
             </div>
             <dl class="flex flex-col gap-5">
               <div>
-                <dt class="text-[12px] text-muted">密码状态</dt>
-                <dd class="mt-1.5 text-[15px]">
+                <dt class="text-small text-muted">密码状态</dt>
+                <dd class="mt-1.5 text-lead">
                   {{ user.must_change_password ? '待首次改密' : '已设置个人密码' }}
                 </dd>
               </div>
               <div>
-                <dt class="text-[12px] text-muted">最近修改密码</dt>
-                <dd class="mt-1.5 text-[15px]">{{ formatTime(user.password_changed_at) }}</dd>
+                <dt class="text-small text-muted">最近修改密码</dt>
+                <dd class="mt-1.5 text-lead">{{ formatTime(user.password_changed_at) }}</dd>
               </div>
               <div>
-                <dt class="text-[12px] text-muted">失败锁定</dt>
-                <dd class="mt-1.5 text-[15px]" :class="locked && 'text-warn'">
+                <dt class="text-small text-muted">失败锁定</dt>
+                <dd class="mt-1.5 text-lead" :class="locked && 'text-warn'">
                   {{ locked ? `锁定至 ${formatTime(user.locked_until)}` : '未锁定' }}
                 </dd>
               </div>
               <div>
-                <dt class="text-[12px] text-muted">当前有效会话</dt>
-                <dd class="mt-1.5 text-[15px]">{{ sessions.length }} / 3 个</dd>
+                <dt class="text-small text-muted">当前有效会话</dt>
+                <dd class="mt-1.5 text-lead">{{ sessions.length }} / 3 个</dd>
               </div>
             </dl>
             <div class="flex-1" />
@@ -330,7 +330,7 @@ function revoke(session?: SessionSummary) {
           class="panel flex max-w-[1000px] flex-col gap-6 p-7"
           @submit.prevent="saveName"
         >
-          <h2 class="text-[18px] font-semibold">基本资料</h2>
+          <h2 class="text-section font-semibold">基本资料</h2>
           <div class="grid gap-6 sm:grid-cols-2">
             <FormField label="用户名" hint="用户名创建后不可修改" v-slot="field"
               ><el-input :id="field.id" :model-value="user.username" disabled /></FormField
@@ -339,7 +339,7 @@ function revoke(session?: SessionSummary) {
             /></FormField>
           </div>
           <div class="flex items-center gap-4">
-            <RoleBadge :role="user.role_code" /><span class="text-[13px] text-muted">{{
+            <RoleBadge :role="user.role_code" /><span class="text-body text-muted">{{
               user.scope_mode === 'all'
                 ? '全部站与设备'
                 : scopeLabels(user.scopes, users.tree).join('；') || '未分配设备范围'

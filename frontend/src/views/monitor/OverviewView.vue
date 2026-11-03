@@ -9,14 +9,14 @@ const keyTelemetry = computed(() => monitor.ycList.slice(0, 12))
 </script>
 <template>
   <div class="grid min-h-0 flex-1 gap-4 xl:grid-cols-2">
-    <section class="panel min-h-0 overflow-auto">
+    <section class="panel min-h-0 overflow-x-auto">
       <div class="flex items-center justify-between p-4">
         <h3 class="font-semibold">遥测</h3>
         <ActionBtn @click="router.push('/monitor/telemetry')"
           >全部 {{ monitor.totals.yc }} 项</ActionBtn
         >
       </div>
-      <table class="identity-table min-w-0!">
+      <table class="identity-table identity-table-compact">
         <thead>
           <tr>
             <th>测点</th>
@@ -36,14 +36,14 @@ const keyTelemetry = computed(() => monitor.ycList.slice(0, 12))
       </table>
       <p v-if="!keyTelemetry.length" class="p-8 text-muted">暂无遥测点位</p>
     </section>
-    <section class="panel min-h-0 overflow-auto">
+    <section class="panel min-h-0 overflow-x-auto">
       <div class="flex items-center justify-between p-4">
         <h3 class="font-semibold">遥信</h3>
         <ActionBtn @click="router.push('/monitor/signals')"
           >全部 {{ monitor.totals.yx }} 项</ActionBtn
         >
       </div>
-      <table class="identity-table min-w-0!">
+      <table class="identity-table identity-table-compact">
         <thead>
           <tr>
             <th>信号</th>

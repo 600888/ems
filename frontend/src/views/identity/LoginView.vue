@@ -91,11 +91,11 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <form class="flex flex-col gap-6" @submit.prevent="submit">
-    <p class="flex items-center gap-3 text-[14px] font-medium text-accent">
+    <p class="flex items-center gap-3 text-body font-medium text-accent">
       <AppIcon name="shield-check" :size="23" />用户名与密码登录
     </p>
-    <h2 class="text-[32px] font-semibold">欢迎登录</h2>
-    <p class="text-[15px] text-muted">请输入管理员为你分配的站内账号。</p>
+    <h2 class="text-display font-semibold">欢迎登录</h2>
+    <p class="text-lead text-muted">请输入管理员为你分配的站内账号。</p>
     <InfoBar
       v-if="reasonMessages[String(route.query.reason)]"
       :tone="route.query.reason === 'password-changed' ? 'ok' : 'warn'"
@@ -129,7 +129,7 @@ onBeforeUnmount(() => {
     <ActionBtn
       type="submit"
       variant="primary"
-      class="h-[50px]! w-full text-[15px]!"
+      class="h-[50px]! w-full text-lead!"
       :disabled="!ready || retryIn > 0"
       :loading="busy"
       >{{ busy ? '正在登录' : retryIn ? `${retryIn} 秒后重试` : '登录' }}</ActionBtn
@@ -137,13 +137,13 @@ onBeforeUnmount(() => {
     <ActionBtn v-if="!ready && error" @click="load">重新连接服务</ActionBtn>
     <button
       type="button"
-      class="self-center text-[13px] text-muted hover:text-accent"
+      class="self-center text-body text-muted hover:text-accent"
       @click="ElMessage.info('请联系站内系统管理员重置临时密码，重置后首次登录需设置个人密码。')"
     >
       忘记密码？请联系系统管理员
     </button>
     <InfoBar v-if="notice" :text="notice" title="站内通知" size="md" />
-    <p class="flex items-center gap-2 border-t border-line pt-5 text-[12px] text-muted">
+    <p class="flex items-center gap-2 border-t border-line pt-5 text-small text-muted">
       <AppIcon name="lock-keyhole" :size="14" />请在可信终端登录，使用完毕及时退出。
     </p>
   </form>

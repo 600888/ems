@@ -43,12 +43,12 @@ function onCheck(_node: DeviceNode, info: { checkedKeys: (string | number)[] }) 
 <template>
   <div class="flex min-h-0 flex-col gap-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
-      <h3 class="text-[17px] font-semibold">设备授权范围</h3>
-      <span class="text-[13px] text-accent">{{
+      <h3 class="text-section font-semibold">设备授权范围</h3>
+      <span class="text-body text-accent">{{
         all ? '全部站与设备' : `已选择 ${modelValue.length} 个范围`
       }}</span>
     </div>
-    <div class="flex flex-wrap gap-x-6 gap-y-2 text-[14px]">
+    <div class="flex flex-wrap gap-x-6 gap-y-2 text-body">
       <label class="flex items-center gap-2"
         ><input
           type="radio"
@@ -67,7 +67,7 @@ function onCheck(_node: DeviceNode, info: { checkedKeys: (string | number)[] }) 
           :disabled="disabled || role !== 'admin'"
           class="accent-accent"
           @change="changeMode('all')"
-        />全部站与设备<span class="text-[12px] text-subtle">（仅管理员）</span></label
+        />全部站与设备<span class="text-small text-subtle">（仅管理员）</span></label
       >
     </div>
     <template v-if="!all">
@@ -96,7 +96,7 @@ function onCheck(_node: DeviceNode, info: { checkedKeys: (string | number)[] }) 
           @check="onCheck"
         >
           <template #default="{ data }"
-            ><span class="flex min-w-0 items-center gap-2 text-[14px]"
+            ><span class="flex min-w-0 items-center gap-2 text-body"
               ><AppIcon
                 :name="data.icon === 'container' ? 'boxes' : data.icon"
                 class="text-muted"
@@ -105,13 +105,13 @@ function onCheck(_node: DeviceNode, info: { checkedKeys: (string | number)[] }) 
           >
         </el-tree>
       </div>
-      <p class="text-[12px] leading-relaxed text-muted">
+      <p class="text-small leading-relaxed text-muted">
         勾选设备子树包含其全部下级。祖先仅用于导航，不自动获得访问权限。未选择范围的账号仅可使用个人中心。
       </p>
     </template>
     <p
       v-else
-      class="rounded-[5px] border border-line bg-surface p-5 text-[13px] leading-relaxed text-muted"
+      class="rounded-[5px] border border-line bg-surface p-5 text-body leading-relaxed text-muted"
     >
       此账号可访问当前系统管理的全部站和设备，仍受角色操作权限与安全联锁约束。
     </p>

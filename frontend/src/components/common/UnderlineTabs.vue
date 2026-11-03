@@ -20,12 +20,12 @@ const emit = defineEmits<{ 'update:modelValue': [key: string] }>()
       v-for="item in items"
       :key="item.key"
       type="button"
-      class="relative flex items-center gap-[6px] px-[3px] text-[12px] transition-colors"
+      class="relative flex items-center gap-[6px] px-[3px] text-small transition-colors"
       :class="item.key === modelValue ? 'font-semibold text-accent' : 'text-muted hover:text-ink'"
       @click="emit('update:modelValue', item.key)"
     >
       {{ item.label }}
-      <span v-if="item.count !== undefined" class="text-[10px] font-normal text-subtle">{{
+      <span v-if="item.count !== undefined" class="text-caption font-normal text-subtle">{{
         item.count
       }}</span>
       <span

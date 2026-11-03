@@ -49,11 +49,11 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <form class="flex flex-col gap-[18px]" @submit.prevent="submit">
-    <p class="flex items-center gap-3 text-[14px] font-medium text-accent">
+    <p class="flex items-center gap-3 text-body font-medium text-accent">
       <AppIcon name="key-round" :size="23" />设置个人密码
     </p>
-    <h2 class="text-[30px] font-semibold">首次登录，设置新密码</h2>
-    <p class="text-[15px] leading-relaxed text-muted">
+    <h2 class="text-display font-semibold">首次登录，设置新密码</h2>
+    <p class="text-lead leading-relaxed text-muted">
       当前使用临时密码。完成改密后，请使用新密码重新登录。
     </p>
     <div class="flex items-center gap-2 rounded-[5px] bg-panel px-4 py-3">
@@ -73,8 +73,8 @@ onBeforeUnmount(() => {
     <ActionBtn type="submit" variant="primary" class="h-12! w-full" :loading="task.busy.value"
       >保存密码并重新登录</ActionBtn
     >
-    <p class="text-[12px] text-muted">当前仅允许设置密码，尚未进入业务工作台。</p>
-    <div class="flex justify-between border-t border-line pt-4 text-[12px] text-muted">
+    <p class="text-small text-muted">当前仅允许设置密码，尚未进入业务工作台。</p>
+    <div class="flex justify-between border-t border-line pt-4 text-small text-muted">
       <span>修改成功后，原有登录状态将失效。</span
       ><button type="button" class="text-accent" :disabled="task.busy.value" @click="logout">
         退出

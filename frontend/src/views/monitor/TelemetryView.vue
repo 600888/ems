@@ -22,8 +22,8 @@ watch(
         >查看选中点历史曲线</ActionBtn
       >
     </div>
-    <div class="min-h-0 flex-1 overflow-auto">
-      <table class="identity-table">
+    <div class="min-h-0 flex-1 overflow-x-auto">
+      <table class="identity-table identity-table-compact">
         <thead>
           <tr>
             <th>曲线</th>

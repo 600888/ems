@@ -32,7 +32,7 @@ const variantClass = computed(
 )
 
 const sizeClass = computed(() =>
-  props.size === 'md' ? 'h-[38px] px-[14px] text-[13px]' : 'h-[34px] px-3 text-[12px]',
+  props.size === 'md' ? 'h-[38px] px-[14px] text-control' : 'h-[34px] px-3 text-small',
 )
 </script>
 

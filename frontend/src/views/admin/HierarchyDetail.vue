@@ -33,14 +33,14 @@ async function load() {
 watch(id, load, { immediate: true })
 </script>
 <template>
-  <div class="flex min-h-0 flex-1 gap-5">
+  <div class="device-workspace">
     <AdminDeviceTree />
-    <section class="flex min-w-0 flex-1 flex-col gap-[18px]">
+    <section class="workspace-content">
       <DeviceToolbar
         ><span>{{ device.current?.path }}</span></DeviceToolbar
       >
       <div class="panel flex shrink-0 flex-wrap items-center gap-5 p-4">
-        <h2 class="text-[20px] font-semibold">{{ device.current?.name }}</h2>
+        <h2 class="text-title font-semibold">{{ device.current?.name }}</h2>
         <ActionBtn @click="tab = 'basic'">基本信息</ActionBtn
         ><ActionBtn @click="tab = 'children'">子节点</ActionBtn
         ><ActionBtn v-if="device.current?.node_kind === 'component'" @click="tab = 'points'"
@@ -54,7 +54,7 @@ watch(id, load, { immediate: true })
         :empty="!children.length"
         empty-title="暂无子节点"
         @retry="load"
-        ><div class="panel overflow-auto">
+        ><div class="panel overflow-x-auto">
           <table class="identity-table">
             <thead>
               <tr>

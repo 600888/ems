@@ -9,10 +9,10 @@ const monitor = useMonitorStore()
 <template>
   <div class="flex h-[76px] shrink-0 items-center justify-between">
     <div class="flex min-w-0 flex-col gap-2">
-      <span class="truncate text-[11px] text-muted">{{ monitor.profile.parentPath }}</span>
+      <span class="truncate text-small text-muted">{{ monitor.profile.parentPath }}</span>
       <div class="flex items-center gap-[10px]">
         <AppIcon :name="monitor.profile.icon" :size="20" class="text-muted" />
-        <h2 class="truncate text-[21px] leading-none font-semibold text-ink">
+        <h2 class="truncate text-title leading-none font-semibold text-ink">
           {{ monitor.profile.name }}
         </h2>
         <StatusTag
@@ -35,12 +35,12 @@ const monitor = useMonitorStore()
     </div>
 
     <div class="flex shrink-0 flex-col items-end gap-2">
-      <span class="text-[11px] text-muted">
+      <span class="text-small text-muted">
         {{ monitor.profile.code }} · 数据来源：{{ monitor.profile.dataSource }}
       </span>
       <div class="flex items-center gap-[7px]">
         <i class="dot" :class="monitor.paused ? 'text-warn' : 'text-ok'" />
-        <span class="text-[11px] text-muted">
+        <span class="text-small text-muted">
           更新于 {{ monitor.lastUpdated }} · {{ monitor.paused ? '已暂停刷新' : '每 2 秒刷新' }}
         </span>
         <button

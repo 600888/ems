@@ -24,8 +24,8 @@ withDefaults(
       :size="26"
       :class="tone === 'warn' ? 'text-warn' : tone === 'danger' ? 'text-danger' : 'text-subtle'"
     />
-    <p class="text-[14px] font-medium text-ink">{{ title }}</p>
-    <p v-if="desc" class="max-w-[220px] text-[11px] leading-[1.6] text-muted">{{ desc }}</p>
+    <p class="text-body font-medium text-ink">{{ title }}</p>
+    <p v-if="desc" class="max-w-[220px] text-small leading-[1.6] text-muted">{{ desc }}</p>
     <slot />
   </div>
 </template>

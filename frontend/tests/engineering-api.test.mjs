@@ -95,13 +95,16 @@ test('上传使用 multipart 文件和 metadata，保留返回修订号', async 
     device_id: 'pcs',
     binding_id: 'binding',
     source_kind: 'vendor_csv',
-    address_base: 'zero',
   })
   assert.equal(sent.path, '/api/point-imports/create')
   assert.ok(sent.body instanceof FormData)
   assert.equal(sent.headers['Content-Type'], undefined)
   assert.equal(sent.body.get('file').name, 'points.csv')
-  assert.equal(JSON.parse(sent.body.get('metadata')).binding_id, 'binding')
+  assert.deepEqual(JSON.parse(sent.body.get('metadata')), {
+    device_id: 'pcs',
+    binding_id: 'binding',
+    source_kind: 'vendor_csv',
+  })
   assert.equal(api.engineeringRevision(), '4')
 })
 test('HTTP 响应封装保留 meta，账号切换后丢弃旧请求', async () => {

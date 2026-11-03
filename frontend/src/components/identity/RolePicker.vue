@@ -28,10 +28,10 @@ const emit = defineEmits<{ 'update:modelValue': [value: RoleCode] }>()
       /></span>
       <span class="flex flex-col gap-1"
         ><span
-          class="text-[15px] font-medium"
+          class="text-lead font-medium"
           :class="modelValue === role.code ? 'text-accent' : 'text-ink'"
           >{{ role.label }}</span
-        ><span class="text-[12px] text-muted">{{ role.description }}</span></span
+        ><span class="text-small text-muted">{{ role.description }}</span></span
       >
     </button>
   </div>

@@ -60,7 +60,7 @@ const gridYs = computed(() => props.yTicks.map((tick) => toY(tick)))
   <div class="flex min-h-0 flex-1 gap-3">
     <!-- 纵轴刻度：36px，右对齐，与画板一致 -->
     <div
-      class="flex w-9 shrink-0 flex-col justify-between pb-[22px] text-right text-[10px] text-subtle"
+      class="flex w-9 shrink-0 flex-col justify-between pb-[22px] text-right text-caption text-subtle"
     >
       <span v-for="tick in yTicks" :key="tick">{{ tick }}</span>
     </div>
@@ -100,7 +100,7 @@ const gridYs = computed(() => props.yTicks.map((tick) => toY(tick)))
         </svg>
       </div>
 
-      <div class="flex shrink-0 justify-between pt-[6px] text-[10px] text-subtle">
+      <div class="flex shrink-0 justify-between pt-[6px] text-caption text-subtle">
         <span v-for="label in xLabels" :key="label">{{ label }}</span>
       </div>
     </div>

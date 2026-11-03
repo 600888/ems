@@ -26,7 +26,7 @@ const steps = [
         </span>
         <span
           v-else
-          class="flex h-[18px] w-[18px] items-center justify-center rounded-full border text-[10px] font-medium"
+          class="flex h-[18px] w-[18px] items-center justify-center rounded-full border text-caption font-medium"
           :class="
             step.index === props.current
               ? 'border-accent bg-sel text-accent'
@@ -36,7 +36,7 @@ const steps = [
           {{ step.index }}
         </span>
         <span
-          class="text-[12px]"
+          class="text-small"
           :class="
             step.index === props.current
               ? 'font-semibold text-accent'

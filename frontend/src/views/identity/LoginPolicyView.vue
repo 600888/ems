@@ -92,9 +92,9 @@ onMounted(load)
         v-if="ready"
         class="grid min-h-0 flex-1 gap-6 xl:grid-cols-[minmax(0,1.95fr)_minmax(300px,1fr)]"
       >
-        <form class="panel flex flex-col gap-6 overflow-y-auto p-7" @submit.prevent="save">
+        <form class="panel flex flex-col gap-6 p-7" @submit.prevent="save">
           <section class="identity-policy-section">
-            <h2 class="text-[18px] font-semibold">账户保护</h2>
+            <h2 class="text-section font-semibold">账户保护</h2>
             <div class="grid gap-6 md:grid-cols-2">
               <FormField
                 v-for="item in values"
@@ -114,7 +114,7 @@ onMounted(load)
             </div>
           </section>
           <section class="identity-policy-section">
-            <h2 class="text-[18px] font-semibold">会话安全</h2>
+            <h2 class="text-section font-semibold">会话安全</h2>
             <FormField
               label="空闲超时时间"
               hint="范围 10–30 分钟；后台自动刷新不计为用户操作"
@@ -129,7 +129,7 @@ onMounted(load)
             >
           </section>
           <section class="identity-policy-section">
-            <h2 class="text-[18px] font-semibold">密码规则</h2>
+            <h2 class="text-section font-semibold">密码规则</h2>
             <div class="grid gap-6 md:grid-cols-2">
               <FormField
                 label="密码最小长度"
@@ -144,14 +144,14 @@ onMounted(load)
                 ></FormField
               >
               <div class="flex flex-col gap-2">
-                <p class="text-[14px] text-muted">字符要求</p>
-                <p class="text-[14px]">大写、小写、数字、特殊符号至少三类</p>
-                <p class="text-[12px] text-muted">首次及重置后登录必须修改密码</p>
+                <p class="text-body text-muted">字符要求</p>
+                <p class="text-body">大写、小写、数字、特殊符号至少三类</p>
+                <p class="text-small text-muted">首次及重置后登录必须修改密码</p>
               </div>
             </div>
           </section>
           <section class="identity-policy-section">
-            <h2 class="text-[18px] font-semibold">登录页通知</h2>
+            <h2 class="text-section font-semibold">登录页通知</h2>
             <FormField
               label="通知内容"
               hint="最多 500 个字符，仅显示纯文本。"
@@ -174,7 +174,7 @@ onMounted(load)
             size="md"
           />
           <section class="panel flex flex-col gap-5 p-6">
-            <h2 class="text-[18px] font-semibold">适用于站内全部账号</h2>
+            <h2 class="text-section font-semibold">适用于站内全部账号</h2>
             <div
               v-for="item in [
                 {
@@ -202,12 +202,12 @@ onMounted(load)
                 class="mt-0.5 text-accent"
               />
               <div>
-                <h3 class="text-[14px] font-medium">{{ item.title }}</h3>
-                <p class="mt-1 text-[13px] leading-relaxed text-muted">{{ item.text }}</p>
+                <h3 class="text-body font-medium">{{ item.title }}</h3>
+                <p class="mt-1 text-body leading-relaxed text-muted">{{ item.text }}</p>
               </div>
             </div>
           </section>
-          <p class="text-[13px] leading-relaxed text-muted">
+          <p class="text-body leading-relaxed text-muted">
             登录保护设置不改变用户角色及设备授权范围。
           </p>
         </aside>

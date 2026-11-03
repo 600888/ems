@@ -66,7 +66,7 @@ async function apply() {
   <el-dialog v-model="open" title="型号模板" width="760px"
     ><div class="flex flex-col gap-4">
       <InfoBar v-if="error" :text="error" tone="danger" />
-      <p class="text-[13px] text-muted">
+      <p class="text-body text-muted">
         选择设备详情中的采集绑定后，可以补充应用型号模板中尚未配置的点位。
       </p>
       <el-select v-model="selected" placeholder="选择模板"
@@ -82,7 +82,7 @@ async function apply() {
           :label="`${b.channel?.name} / ${b.device_address}`"
           :value="b.binding_id"
       /></el-select>
-      <p v-if="template" class="text-[13px] text-muted">
+      <p v-if="template" class="text-body text-muted">
         {{ template.vendor }} {{ template.model }} · {{ template.device_type_code }}
       </p>
       <p v-if="!rows.length && !busy" class="text-muted">暂无可用型号模板</p>

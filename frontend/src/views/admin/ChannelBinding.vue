@@ -177,16 +177,16 @@ let newBindingId = '',
   newChannelId = ''
 </script>
 <template>
-  <div class="flex min-h-0 flex-col gap-4 overflow-auto">
+  <div class="flex flex-col gap-4">
     <InfoBar v-if="error" :text="error" tone="danger" />
     <section class="panel">
       <div class="flex flex-wrap gap-3 p-4">
-        <h3 class="mr-auto text-[16px] font-semibold">设备通道绑定</h3>
+        <h3 class="mr-auto text-lead font-semibold">设备通道绑定</h3>
         <ActionBtn :loading="busy" @click="load">刷新</ActionBtn
         ><ActionBtn @click="editChannel()">新建通道</ActionBtn
         ><ActionBtn variant="primary" @click="edit()">新增绑定</ActionBtn>
       </div>
-      <div class="overflow-auto">
+      <div class="overflow-x-auto">
         <table class="identity-table">
           <thead>
             <tr>

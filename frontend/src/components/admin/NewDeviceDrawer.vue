@@ -155,7 +155,7 @@ async function submit() {
       <FormField label="描述" v-slot="slot"
         ><el-input :id="slot.id" v-model="form.description" type="textarea"
       /></FormField>
-      <p class="text-[12px] text-muted">
+      <p class="text-small text-muted">
         新建设备默认停用；完成通道和点位配置后可启用。保存即生效。
       </p>
     </form>

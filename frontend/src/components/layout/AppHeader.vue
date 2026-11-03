@@ -24,12 +24,12 @@ function go(to?: string) {
 </script>
 <template>
   <header
-    class="flex h-16 shrink-0 items-center gap-3 border-b border-line bg-nav px-3 sm:gap-8 sm:px-6"
+    class="app-header flex shrink-0 items-center gap-3 border-b border-line bg-nav px-3 sm:gap-8 sm:px-6"
   >
     <div class="flex shrink-0 items-center gap-[10px]">
-      <AppIcon name="zap" :size="26" class="text-accent" /><span class="text-[23px] font-bold"
+      <AppIcon name="zap" :size="26" class="text-accent" /><span class="text-title font-bold"
         >EMS</span
-      ><span class="hidden text-[15px] text-muted sm:block">{{
+      ><span class="hidden text-lead text-muted sm:block">{{
         admin ? '后台管理' : '能源管理系统'
       }}</span>
     </div>
@@ -40,7 +40,7 @@ function go(to?: string) {
         :disabled="!item.to"
         :title="!item.to ? '尚未接通' : undefined"
         type="button"
-        class="flex h-full items-center gap-2 border-b-2 text-[13px]"
+        class="flex h-full items-center gap-2 border-b-2 text-body"
         :class="
           route.path.startsWith('/monitor') && item.key === 'monitor'
             ? 'border-accent font-semibold text-accent'
@@ -55,7 +55,7 @@ function go(to?: string) {
     <div class="flex min-w-0 shrink-0 items-center gap-2 sm:gap-4">
       <span
         v-if="!admin"
-        class="hidden rounded-[5px] border border-line bg-panel px-3 py-2 text-[12px] text-muted 2xl:inline-flex"
+        class="hidden rounded-[5px] border border-line bg-panel px-3 py-2 text-small text-muted 2xl:inline-flex"
         >{{ monitor.tree[0]?.name ?? '站端' }}</span
       >
       <StatusTag
@@ -63,7 +63,7 @@ function go(to?: string) {
         :tone="admin ? 'accent' : monitor.error ? 'warn' : 'mute'"
         :label="admin ? '后台配置' : serviceLabel"
       />
-      <span class="hidden text-[12px] text-muted 2xl:block">{{ nowText }}</span>
+      <span class="hidden text-small text-muted 2xl:block">{{ nowText }}</span>
       <button
         type="button"
         aria-label="告警通知"

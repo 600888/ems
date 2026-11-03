@@ -40,7 +40,7 @@ onMounted(load)
     </div>
     <AsyncContent :loading="busy" :error="error" @retry="load"
       ><section v-if="audit" class="panel flex min-h-0 flex-1 flex-col">
-        <div class="min-h-0 flex-1 overflow-auto">
+        <div class="min-h-0 flex-1 overflow-x-auto">
           <table class="identity-table">
             <thead>
               <tr>
@@ -61,7 +61,7 @@ onMounted(load)
                 <td>{{ row.target || '—' }}</td>
                 <td>{{ row.outcome }}</td>
                 <td>{{ row.reason || '—' }}</td>
-                <td class="font-mono text-[11px]">{{ row.request_id }}</td>
+                <td class="font-mono text-small">{{ row.request_id }}</td>
               </tr>
             </tbody>
           </table>
@@ -76,7 +76,7 @@ onMounted(load)
               }
             "
             >上一页</ActionBtn
-          ><span class="text-[13px] text-muted">第 {{ page }} 页</span
+          ><span class="text-body text-muted">第 {{ page }} 页</span
           ><ActionBtn
             :disabled="!more"
             @click="
@@ -89,12 +89,12 @@ onMounted(load)
           >
         </div>
       </section>
-      <section v-else class="panel overflow-auto p-6">
-        <h2 class="mb-5 text-[18px] font-semibold">Web 服务指标</h2>
+      <section v-else class="panel overflow-x-auto p-6">
+        <h2 class="mb-5 text-section font-semibold">Web 服务指标</h2>
         <dl class="grid gap-4 md:grid-cols-2">
           <div v-for="(value, key) in metrics" :key="key" class="border-b border-line py-3">
-            <dt class="text-[13px] text-muted">{{ key }}</dt>
-            <dd class="mt-2 font-mono text-[14px]">
+            <dt class="text-body text-muted">{{ key }}</dt>
+            <dd class="mt-2 font-mono text-body">
               {{ typeof value === 'object' ? JSON.stringify(value) : value }}
             </dd>
           </div>

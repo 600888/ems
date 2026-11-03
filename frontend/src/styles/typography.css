@@ -1,0 +1,45 @@
+/* 全站字体入口：页面、表格与 Element Plus 共享这些变量。 */
+:root {
+  --font-family-sans:
+    'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', system-ui, -apple-system,
+    'Segoe UI', sans-serif;
+  --font-family-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
+
+  --font-size-caption: 12px;
+  --font-size-small: 13px;
+  --font-size-body: 14px;
+  --font-size-lead: 16px;
+  --font-size-section: 18px;
+  --font-size-title: 24px;
+  --font-size-metric: 28px;
+  --font-size-display: 32px;
+  --font-size-hero: 40px;
+  --font-size-hero-lg: 48px;
+
+  /* 可单独调整表格和表单，也可随上面的基础字号统一修改。 */
+  --font-size-table: var(--font-size-body);
+  --font-size-table-head: var(--font-size-small);
+  --font-size-control: var(--font-size-body);
+  --font-size-label: var(--font-size-small);
+  --line-height-body: 1.45;
+  --line-height-table: 1.4;
+}
+
+@theme inline {
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
+  --text-caption: var(--font-size-caption);
+  --text-small: var(--font-size-small);
+  --text-body: var(--font-size-body);
+  --text-lead: var(--font-size-lead);
+  --text-section: var(--font-size-section);
+  --text-title: var(--font-size-title);
+  --text-metric: var(--font-size-metric);
+  --text-display: var(--font-size-display);
+  --text-hero: var(--font-size-hero);
+  --text-hero-lg: var(--font-size-hero-lg);
+  --text-table: var(--font-size-table);
+  --text-table-head: var(--font-size-table-head);
+  --text-control: var(--font-size-control);
+  --text-label: var(--font-size-label);
+}

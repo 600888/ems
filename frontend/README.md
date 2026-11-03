@@ -18,6 +18,19 @@ npm test
 
 `EMS_IDENTITY_MOCK=false` 是真实对接模式。仅身份界面演示可显式改成 `true`，演示账号见 `.env.example`；设备管理与监视没有模拟数据回退，生产构建不挂载模拟身份服务。
 
+## 字体与字号
+
+全站字体族、字号和正文/表格行距统一在 `src/styles/typography.css` 中维护。默认正文与表格正文为 14px，表头与次要文字为 13px，辅助标注为 12px；表格继续使用紧凑行高。
+
+- 调整全站正文：修改 `--font-size-body`，表格和常规控件默认随之变化。
+- 单独调整表格：修改 `--font-size-table` 和 `--font-size-table-head`。
+- 调整字体族：修改 `--font-family-sans` 和 `--font-family-mono`，Element Plus 同步使用。
+- 页面按用途使用 `text-body`、`text-small`、`text-caption`、`text-section`、`text-title` 等语义类；表格使用 `text-table` / `text-table-head`，表单使用 `text-control` / `text-label`，避免在页面写死像素字号。
+
+## 页面滚动布局
+
+后台与设备监视统一使用 `src/styles/layout.css`：顶部栏和后台导航保持固定，右侧 `workspace-scroll` 是页面纵向滚动容器。正文随内容自然撑开，表格仅保留横向滚动。设备页使用 `device-workspace` / `workspace-content`，左侧 `workspace-sidebar` 设备树吸附在可视区内，超长树节点单独滚动；抽屉与选择器保留自身的滚动行为。
+
 ## 后端配置
 
 从 `backend` 目录启动已构建的 `ems-web --config conf/web.json`。需要先按仓库数据库和身份文档初始化 MySQL 表、身份密钥及管理员；Web 启动不自动建表。数据库连接配置使用 `database_config` 或现有 `EMS_MYSQL_*` 环境变量，身份密钥使用 `identity_key_file` 或 `EMS_WEB_EDIT_KEY_FILE`。

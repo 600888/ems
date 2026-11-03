@@ -49,8 +49,8 @@ function submit() {
     @close="emit('cancel')"
   >
     <form v-if="prompt" class="flex flex-col gap-5" @submit.prevent="submit">
-      <p v-if="prompt.target" class="text-[16px] font-medium text-ink">{{ prompt.target }}</p>
-      <p class="text-[14px] leading-relaxed text-muted">{{ prompt.message }}</p>
+      <p v-if="prompt.target" class="text-lead font-medium text-ink">{{ prompt.target }}</p>
+      <p class="text-body leading-relaxed text-muted">{{ prompt.message }}</p>
       <FormField
         v-if="prompt.temporaryPassword"
         label="新临时密码"

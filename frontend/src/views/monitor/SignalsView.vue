@@ -12,8 +12,8 @@ watch(
 <template>
   <section class="panel flex min-h-0 flex-1 flex-col overflow-hidden">
     <div class="p-4 font-semibold">遥信 · {{ monitor.totals.yx }} 项</div>
-    <div class="min-h-0 flex-1 overflow-auto">
-      <table class="identity-table">
+    <div class="min-h-0 flex-1 overflow-x-auto">
+      <table class="identity-table identity-table-compact">
         <thead>
           <tr>
             <th>信号名称</th>

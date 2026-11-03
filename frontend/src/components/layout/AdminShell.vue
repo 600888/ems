@@ -43,15 +43,15 @@ function go(item: (typeof adminNav)[number]) {
 </script>
 
 <template>
-  <div class="flex h-screen w-full flex-col overflow-hidden bg-surface">
+  <div class="app-shell">
     <AppHeader admin />
 
     <div class="flex min-h-0 flex-1">
       <!-- 后台主导航 -->
       <aside
-        class="hidden w-[200px] shrink-0 flex-col gap-2 border-r border-line bg-nav px-3 py-6 md:flex"
+        class="hidden w-[200px] shrink-0 flex-col gap-2 overflow-y-auto border-r border-line bg-nav px-3 py-6 md:flex"
       >
-        <p class="px-2 text-[10px] font-medium text-subtle">配置与运维</p>
+        <p class="px-2 text-caption font-medium text-subtle">配置与运维</p>
 
         <button
           v-for="item in visibleNav"
@@ -59,7 +59,7 @@ function go(item: (typeof adminNav)[number]) {
           :disabled="!item.to"
           :title="!item.to ? '尚未接通' : undefined"
           type="button"
-          class="flex h-[46px] w-full items-center gap-3 rounded-[5px] px-[14px] transition-colors"
+          class="flex h-[46px] w-full shrink-0 items-center gap-3 rounded-[5px] px-[14px] transition-colors"
           :class="activeKey === item.key ? 'bg-sel' : 'hover:bg-raised'"
           @click="go(item)"
         >
@@ -69,7 +69,7 @@ function go(item: (typeof adminNav)[number]) {
             :class="activeKey === item.key ? 'text-accent' : 'text-muted'"
           />
           <span
-            class="text-[14px]"
+            class="text-body"
             :class="activeKey === item.key ? 'font-semibold text-ink' : 'text-muted'"
           >
             {{ item.label }}
@@ -80,16 +80,13 @@ function go(item: (typeof adminNav)[number]) {
 
         <div class="flex flex-col gap-2 rounded-[6px] border border-line bg-sidebox p-3">
           <StatusTag tone="accent" label="工程配置" />
-          <p class="text-[10px] text-muted">配置保存后生效</p>
+          <p class="text-caption text-muted">配置保存后生效</p>
         </div>
-        <p class="text-[9px] text-subtle">EMS · 站端管理</p>
+        <p class="text-caption text-subtle">EMS · 站端管理</p>
       </aside>
 
       <!-- 工作区 -->
-      <main
-        class="flex min-w-0 flex-1 flex-col gap-5 overflow-hidden p-4 lg:p-6"
-        :class="isUsers && '2xl:p-8'"
-      >
+      <main class="workspace-scroll">
         <router-view :key="String(route.params.userId || route.name)" />
       </main>
     </div>

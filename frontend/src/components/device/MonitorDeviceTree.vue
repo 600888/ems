@@ -34,10 +34,10 @@ function onNodeClick(data: DeviceNode) {
 
 <template>
   <aside
-    class="flex w-[288px] shrink-0 flex-col gap-1 overflow-hidden rounded-[6px] border border-line bg-panel p-4"
+    class="workspace-sidebar flex w-[288px] shrink-0 flex-col gap-1 overflow-hidden rounded-[6px] border border-line bg-panel p-4"
   >
     <div class="flex items-center gap-[10px]">
-      <h2 class="text-[15px] font-semibold text-ink">设备目录</h2>
+      <h2 class="text-lead font-semibold text-ink">设备目录</h2>
       <div class="flex-1" />
       <AppIcon name="list-filter" :size="15" class="text-muted" />
       <AppIcon name="panel-left-close" :size="15" class="text-muted" />
@@ -59,7 +59,7 @@ function onNodeClick(data: DeviceNode) {
         v-for="scope in scopes"
         :key="scope.key"
         type="button"
-        class="rounded-[4px] px-[9px] py-1 text-[11px] transition-colors"
+        class="rounded-[4px] px-[9px] py-1 text-small transition-colors"
         :class="
           monitor.scope === scope.key
             ? 'bg-sel text-accent'
@@ -103,7 +103,7 @@ function onNodeClick(data: DeviceNode) {
               :class="data.id === monitor.selectedId ? 'text-accent' : 'text-muted'"
             />
             <span
-              class="truncate text-[12px]"
+              class="truncate text-small"
               :class="data.id === monitor.selectedId ? 'font-semibold text-ink' : 'text-muted'"
             >
               {{ data.name }}
@@ -122,16 +122,16 @@ function onNodeClick(data: DeviceNode) {
     <div class="h-px w-full bg-line" />
 
     <div class="flex items-center gap-3 py-[2px]">
-      <span class="flex items-center gap-[5px] text-[10px] text-muted">
+      <span class="flex items-center gap-[5px] text-caption text-muted">
         <i class="dot text-ok" />在线
       </span>
-      <span class="flex items-center gap-[5px] text-[10px] text-muted">
+      <span class="flex items-center gap-[5px] text-caption text-muted">
         <i class="dot text-warn" />告警
       </span>
-      <span class="flex items-center gap-[5px] text-[10px] text-muted">
+      <span class="flex items-center gap-[5px] text-caption text-muted">
         <i class="dot text-subtle" />离线
       </span>
     </div>
-    <p class="text-[10px] text-subtle">站 → 单元 → 设备 → 部件</p>
+    <p class="text-caption text-subtle">站 → 单元 → 设备 → 部件</p>
   </aside>
 </template>

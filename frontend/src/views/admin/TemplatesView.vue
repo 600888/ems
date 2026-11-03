@@ -29,8 +29,8 @@ onMounted(load)
       <ActionBtn :loading="busy" @click="load">刷新</ActionBtn>
     </div>
     <AsyncContent :loading="busy" :error="error" @retry="load"
-      ><section class="panel overflow-auto">
-        <h2 class="p-4 text-[17px] font-semibold">设备类型</h2>
+      ><section class="panel overflow-x-auto">
+        <h2 class="p-4 text-section font-semibold">设备类型</h2>
         <table class="identity-table">
           <thead>
             <tr>
@@ -52,8 +52,8 @@ onMounted(load)
           </tbody>
         </table>
       </section>
-      <section class="panel overflow-auto">
-        <h2 class="p-4 text-[17px] font-semibold">型号模板</h2>
+      <section class="panel overflow-x-auto">
+        <h2 class="p-4 text-section font-semibold">型号模板</h2>
         <table class="identity-table">
           <thead>
             <tr>
@@ -75,7 +75,7 @@ onMounted(load)
           </tbody>
         </table>
         <p v-if="!templates.length" class="p-8 text-muted">暂无型号模板</p>
-        <p class="p-4 text-[12px] text-muted">
+        <p class="p-4 text-small text-muted">
           在设备详情右侧选择“型号模板”，可将模板补充应用到设备绑定。
         </p>
       </section></AsyncContent

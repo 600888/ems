@@ -27,16 +27,16 @@ watch(
 )
 </script>
 <template>
-  <div class="flex min-h-0 flex-1 gap-5">
+  <div class="device-workspace">
     <AdminDeviceTree />
-    <section class="flex min-w-0 flex-1 flex-col gap-[18px]">
+    <section class="workspace-content">
       <DeviceToolbar
         ><span class="text-muted">{{ device.current?.path ?? id }}</span></DeviceToolbar
       >
       <section class="panel shrink-0 overflow-hidden">
         <div class="flex items-center gap-4 p-5">
-          <h2 class="text-[20px] font-semibold">{{ device.current?.name ?? id }}</h2>
-          <span class="text-[12px] text-muted"
+          <h2 class="text-title font-semibold">{{ device.current?.name ?? id }}</h2>
+          <span class="text-small text-muted"
             >{{ device.current?.code }} · {{ device.current?.device_type_code }}</span
           >
         </div>
@@ -48,9 +48,9 @@ watch(
           "
         />
       </section>
-      <AsyncContent :error="device.error" @retry="device.selectNode(id)"
-        ><router-view class="min-h-0 flex-1"
-      /></AsyncContent>
+      <AsyncContent :error="device.error" @retry="device.selectNode(id)">
+        <router-view />
+      </AsyncContent>
     </section>
   </div>
 </template>

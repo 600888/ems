@@ -40,7 +40,7 @@ function pick(key: string) {
     >
       <AppIcon name="circle-user" :size="24" class="text-accent" />
       <span
-        class="max-w-[120px] truncate text-[13px] text-ink sm:max-w-[240px]"
+        class="max-w-[120px] truncate text-body text-ink sm:max-w-[240px]"
         :title="props.name"
         >{{ props.name }}</span
       >
@@ -56,8 +56,8 @@ function pick(key: string) {
         <div class="flex items-center gap-[9px] px-[10px] py-[10px]">
           <AppIcon name="circle-user" :size="26" class="text-accent" />
           <div class="flex min-w-0 flex-col gap-[3px]">
-            <span class="truncate text-[13px] font-semibold text-ink">{{ props.name }}</span>
-            <span class="truncate text-[11px] text-muted">{{ props.role }}</span>
+            <span class="truncate text-body font-semibold text-ink">{{ props.name }}</span>
+            <span class="truncate text-small text-muted">{{ props.role }}</span>
           </div>
         </div>
 
@@ -75,7 +75,7 @@ function pick(key: string) {
             :size="15"
             :class="item.tone === 'danger' ? 'text-danger' : 'text-accent'"
           />
-          <span class="text-[13px]" :class="item.tone === 'danger' ? 'text-danger' : 'text-ink'">
+          <span class="text-body" :class="item.tone === 'danger' ? 'text-danger' : 'text-ink'">
             {{ item.label }}
           </span>
         </button>

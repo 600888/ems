@@ -70,16 +70,16 @@ onMounted(() => {
 })
 </script>
 <template>
-  <div class="flex min-h-0 flex-1 gap-5">
+  <div class="device-workspace">
     <AdminDeviceTree />
-    <section class="flex min-w-0 flex-1 flex-col gap-[18px]">
+    <section class="workspace-content">
       <DeviceToolbar
         ><span class="text-muted">{{ device.tree[0]?.name ?? '设备目录' }}</span></DeviceToolbar
       >
       <div class="grid shrink-0 grid-cols-4 gap-3">
         <article v-for="item in stats" :key="item.label" class="panel p-4">
-          <p class="text-[12px] text-muted">{{ item.label }}</p>
-          <p class="mt-2 text-[26px] text-accent">{{ item.value }}</p>
+          <p class="text-small text-muted">{{ item.label }}</p>
+          <p class="mt-2 text-metric text-accent">{{ item.value }}</p>
         </article>
       </div>
       <section class="panel flex min-h-0 flex-1 flex-col overflow-hidden">
@@ -99,7 +99,7 @@ onMounted(() => {
           :empty="!device.rows.length"
           empty-title="暂无设备"
           @retry="device.load"
-          ><div class="min-h-0 flex-1 overflow-auto">
+          ><div class="min-h-0 flex-1 overflow-x-auto">
             <table class="identity-table">
               <thead>
                 <tr>
@@ -140,7 +140,7 @@ onMounted(() => {
           </div></AsyncContent
         >
         <footer class="flex shrink-0 items-center justify-between border-t border-line p-4">
-          <span class="text-[12px] text-muted">共 {{ device.total }} 项</span
+          <span class="text-small text-muted">共 {{ device.total }} 项</span
           ><el-pagination
             v-model:current-page="device.page"
             :page-size="device.pageSize"

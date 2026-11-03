@@ -108,7 +108,7 @@ onMounted(load)
       <ActionBtn :loading="busy" @click="load">刷新</ActionBtn
       ><ActionBtn variant="primary" @click="edit()">新建通道</ActionBtn>
     </div>
-    <section class="panel min-h-0 flex-1 overflow-auto">
+    <section class="panel min-h-0 flex-1 overflow-x-auto">
       <table class="identity-table">
         <thead>
           <tr>

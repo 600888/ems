@@ -14,7 +14,6 @@ const route = useRoute(),
   error = ref(''),
   bindings = ref<Binding[]>([]),
   binding = ref(''),
-  base = ref('zero'),
   jobs = ref<ImportJob[]>([]),
   job = ref<ImportJob | null>(null),
   rows = ref<ImportEntry[]>([]),
@@ -67,7 +66,6 @@ async function upload() {
     job.value = await deviceApi.upload(selected, {
       device_id: id.value,
       binding_id: binding.value,
-      address_base: base.value,
       source_kind: selected.name.toLowerCase().endsWith('.csv') ? 'vendor_csv' : 'vendor_xlsx',
     })
     page.value = 1
@@ -197,7 +195,7 @@ async function saveCorrection() {
 }
 </script>
 <template>
-  <div class="flex min-h-0 flex-col gap-4 overflow-auto">
+  <div class="flex flex-col gap-4">
     <InfoBar v-if="error" :text="error" tone="danger" />
     <div class="panel flex shrink-0 flex-wrap items-center gap-3 p-4">
       <el-select v-model="binding" class="w-[240px]!" placeholder="采集绑定"
@@ -206,10 +204,6 @@ async function saveCorrection() {
           :key="b.binding_id"
           :value="b.binding_id"
           :label="`${b.channel?.name} / ${b.device_address}`" /></el-select
-      ><el-select v-model="base" class="w-[160px]!"
-        ><el-option label="地址从 0 开始" value="zero" /><el-option
-          label="地址从 1 开始"
-          value="one" /></el-select
       ><input
         ref="file"
         type="file"
@@ -236,7 +230,7 @@ async function saveCorrection() {
           :key="j.import_job_id"
           :value="j.import_job_id"
           :label="`${j.file_name} · ${j.status}`" /></el-select
-      ><span v-if="job" class="self-center text-[12px] text-muted">{{ job.status }}</span>
+      ><span v-if="job" class="self-center text-small text-muted">{{ job.status }}</span>
     </div>
     <template v-if="job"
       ><InfoBar v-if="job.error_message" :text="job.error_message" tone="warn" />
@@ -257,7 +251,7 @@ async function saveCorrection() {
             >应用点表</ActionBtn
           >
         </div>
-        <div class="min-h-0 flex-1 overflow-auto">
+        <div class="min-h-0 flex-1 overflow-x-auto">
           <table class="identity-table">
             <thead>
               <tr>
@@ -335,7 +329,7 @@ async function saveCorrection() {
               :label="v" /></el-select></FormField
         ><FormField
           v-for="f in [
-            { key: 'address_offset', label: '地址偏移' },
+            { key: 'address_offset', label: '点表地址' },
             { key: 'bit_offset', label: '位偏移（-1 表示整值）' },
             { key: 'register_count', label: '寄存器数量' },
             { key: 'scale_factor', label: '倍率' },

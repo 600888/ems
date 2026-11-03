@@ -89,7 +89,7 @@ onMounted(() => {
       text="结果已达到 10000 条上限，请缩小查询范围。"
       tone="warn"
     />
-    <section class="panel flex min-h-0 flex-1 flex-col p-5">
+    <section class="panel flex h-[420px] shrink-0 flex-col p-5">
       <LineChart
         v-if="monitor.history.length"
         :series="series"

@@ -149,8 +149,8 @@ async function submit() {
     <form class="flex h-full flex-col" @submit.prevent="submit">
       <header class="flex shrink-0 items-start justify-between gap-4 px-8 py-6">
         <div>
-          <h2 class="text-[24px] font-semibold">新建用户</h2>
-          <p class="mt-1.5 text-[14px] text-muted">创建站内账号，并设置初始访问权限。</p>
+          <h2 class="text-title font-semibold">新建用户</h2>
+          <p class="mt-1.5 text-body text-muted">创建站内账号，并设置初始访问权限。</p>
         </div>
         <button type="button" aria-label="关闭新建用户" :disabled="loading" @click="close">
           <AppIcon name="x" :size="22" />
@@ -200,16 +200,16 @@ async function submit() {
               :label="role.label"
               :value="role.code" /></el-select
         ></FormField>
-        <router-link class="self-end text-[13px] text-accent" :to="{ name: 'roles' }" @click="close"
+        <router-link class="self-end text-body text-accent" :to="{ name: 'roles' }" @click="close"
           >查看三类角色权限 ↗</router-link
         >
         <div class="flex items-center justify-between gap-3 border-y border-line py-4">
           <div>
-            <h3 class="text-[14px]">账号状态</h3>
-            <p class="mt-1 text-[12px] text-muted">初始为停用，分配范围后可手动启用。</p>
+            <h3 class="text-body">账号状态</h3>
+            <p class="mt-1 text-small text-muted">初始为停用，分配范围后可手动启用。</p>
           </div>
           <div class="flex items-center gap-3">
-            <span class="text-[13px] text-muted">{{
+            <span class="text-body text-muted">{{
               form.status === 'enabled' ? '已启用' : '已停用'
             }}</span
             ><el-switch
@@ -227,7 +227,7 @@ async function submit() {
         >
           <AppIcon name="list-tree" :size="20" class="text-subtle" />
           <div class="min-w-0 flex-1">
-            <h3 class="text-[14px]">
+            <h3 class="text-body">
               {{
                 form.scope_mode === 'all'
                   ? '全部站与设备'
@@ -236,7 +236,7 @@ async function submit() {
                     : '尚未选择站或设备'
               }}
             </h3>
-            <p class="mt-1 truncate text-[12px] text-muted">
+            <p class="mt-1 truncate text-small text-muted">
               {{
                 form.scopes.length
                   ? scopeLabels(form.scopes, users.tree).join('；')
@@ -246,7 +246,7 @@ async function submit() {
           </div>
           <button
             type="button"
-            class="text-[13px] text-accent"
+            class="text-body text-accent"
             :disabled="loading"
             @click="expanded = true"
           >

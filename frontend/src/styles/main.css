@@ -1,16 +1,13 @@
 @import 'tailwindcss';
 @import './tokens.css';
+@import './typography.css';
+@import './layout.css';
 @import './identity.css';
 
 /* 深色为设计图基准：html 默认带 .dark，切换为浅色时替换为 .light */
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme inline {
-  --font-sans:
-    'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', 'Hiragino Sans GB', system-ui, -apple-system,
-    'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', 'Cascadia Mono', Consolas, monospace;
-
   --color-surface: var(--c-bg);
   --color-nav: var(--c-nav);
   --color-panel: var(--c-panel);
@@ -54,9 +51,9 @@
     margin: 0;
     background-color: var(--c-bg);
     color: var(--c-ink);
-    font-family: var(--font-sans);
-    font-size: 14px;
-    line-height: 1.45;
+    font-family: var(--font-family-sans);
+    font-size: var(--font-size-body);
+    line-height: var(--line-height-body);
     -webkit-font-smoothing: antialiased;
     text-rendering: optimizeLegibility;
   }
@@ -164,12 +161,14 @@
   }
 
   .dt-th {
-    font-size: 10px;
+    font-size: var(--font-size-table-head);
     font-weight: 500;
     color: var(--c-muted);
   }
 
   .dt-row {
+    font-size: var(--font-size-table);
+    line-height: var(--line-height-table);
     display: flex;
     align-items: center;
     padding: 0 16px;
@@ -193,31 +192,31 @@
     min-width: 0;
   }
 
-  /* 两行单元格：主值 11px + 次值 9px */
+  /* 两行单元格共享全局的正文与次要文字字号。 */
   .cell-main {
-    font-size: 11px;
+    font-size: var(--font-size-table);
     color: var(--c-ink);
   }
 
   .cell-sub {
-    font-size: 9px;
+    font-size: var(--font-size-small);
     color: var(--c-subtle);
   }
 
-  /* 档案字段：标签 11px + 值 13px */
+  /* 档案字段共享表单标签与正文字号。 */
   .field-label {
-    font-size: 11px;
+    font-size: var(--font-size-label);
     color: var(--c-muted);
   }
 
   .field-value {
-    font-size: 13px;
+    font-size: var(--font-size-body);
     font-weight: 500;
     color: var(--c-ink);
   }
 
   .link-action {
-    font-size: 11px;
+    font-size: var(--font-size-body);
     color: var(--c-accent);
     cursor: pointer;
   }

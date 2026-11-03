@@ -42,13 +42,13 @@ async function upload() {
   <el-dialog v-model="open" title="整站包导入" width="700px"
     ><div class="flex flex-col gap-4">
       <InfoBar v-if="error" :text="error" tone="danger" />
-      <p class="text-[13px] text-muted">
+      <p class="text-body text-muted">
         上传包含 manifest.json 和设备 XLSX 点表的 ZIP
         文件。设备及通道保存后生效；点表需进入各设备导入任务确认后应用。
       </p>
       <input ref="file" type="file" accept=".zip" :disabled="busy" @change="upload" />
       <div v-if="result" class="max-h-[320px] overflow-auto">
-        <p class="text-[13px]">
+        <p class="text-body">
           已处理 {{ result.devices_created }} 个设备节点、{{ result.channels_created }} 个通道、{{
             result.bindings_created
           }}

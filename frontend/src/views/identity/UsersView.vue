@@ -105,13 +105,13 @@ onMounted(() => {
     <UserNavigation />
     <div class="flex flex-wrap items-center gap-x-8 gap-y-3 py-1">
       <div v-for="item in statItems" :key="item.key" class="flex items-center gap-[10px]">
-        <span class="text-[26px] font-semibold tabular-nums" :class="item.color">{{
+        <span class="text-metric font-semibold tabular-nums" :class="item.color">{{
           users.stats[item.key]
         }}</span
-        ><span class="text-[13px] text-muted">{{ item.label }}</span>
+        ><span class="text-body text-muted">{{ item.label }}</span>
       </div>
     </div>
-    <section class="panel flex min-h-[560px] shrink-0 flex-1 flex-col overflow-hidden lg:min-h-0">
+    <section class="panel flex flex-col overflow-hidden">
       <form class="flex shrink-0 flex-wrap items-center gap-3 p-5" @submit.prevent="search">
         <el-input
           v-model="users.query.keyword"
@@ -163,7 +163,7 @@ onMounted(() => {
         empty-description="尝试调整用户名、角色或状态筛选条件。"
         @retry="users.load"
         ><template #empty-action><ActionBtn @click="users.reset">清空筛选</ActionBtn></template>
-        <div class="min-h-0 flex-1 overflow-auto">
+        <div class="min-h-0 flex-1 overflow-x-auto">
           <table class="identity-table">
             <thead>
               <tr>
@@ -180,7 +180,7 @@ onMounted(() => {
               <tr v-for="user in users.rows" :key="user.user_id">
                 <td>
                   <span class="block font-medium">{{ user.username }}</span
-                  ><span class="mt-1 block text-[12px] text-muted"
+                  ><span class="mt-0.5 block text-small text-muted"
                     >{{ user.display_name
                     }}{{ user.user_id === auth.user?.user_id ? ' · 当前账号' : '' }}</span
                   >
@@ -195,7 +195,7 @@ onMounted(() => {
                 <td>
                   <span
                     v-if="locked(user)"
-                    class="rounded bg-warn-soft px-2 py-1 text-[12px] text-warn"
+                    class="rounded bg-warn-soft px-2 py-1 text-small text-warn"
                     :title="formatTime(user.locked_until)"
                     >临时锁定</span
                   ><span v-else>{{ user.must_change_password ? '待首次改密' : '正常' }}</span>
@@ -255,7 +255,7 @@ onMounted(() => {
       <footer
         class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-line px-5 py-4"
       >
-        <span class="text-[13px] text-muted">共 {{ users.total }} 个账号</span
+        <span class="text-body text-muted">共 {{ users.total }} 个账号</span
         ><el-pagination
           v-model:current-page="users.query.page"
           v-model:page-size="users.query.page_size"
@@ -267,7 +267,7 @@ onMounted(() => {
         />
       </footer>
     </section>
-    <p class="shrink-0 text-[12px] text-muted">
+    <p class="shrink-0 text-small text-muted">
       停用、重置密码或调整授权后，该用户的现有会话将失效。
     </p>
     <UserCreateDrawer v-model="drawer" @created="users.load" @resolve="resolveCreated" />

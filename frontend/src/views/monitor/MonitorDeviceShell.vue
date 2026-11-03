@@ -46,10 +46,10 @@ onBeforeUnmount(() => window.clearInterval(timer))
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 gap-5">
+  <div class="device-workspace">
     <MonitorDeviceTree />
 
-    <section v-if="monitor.selectedId" class="flex min-w-0 flex-1 flex-col gap-4">
+    <section v-if="monitor.selectedId" class="workspace-content">
       <div v-if="monitor.error" class="flex shrink-0 items-center gap-3">
         <InfoBar class="flex-1" :text="monitor.error" tone="danger" /><ActionBtn
           @click="monitor.load"
@@ -64,7 +64,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
         :height="42"
         @update:model-value="changeTab"
       />
-      <router-view class="min-h-0 flex-1" />
+      <router-view />
     </section>
     <EmptyState
       v-else

@@ -62,7 +62,7 @@ let editRevision = ''
 </script>
 <template>
   <AsyncContent :error="error" @retry="load"
-    ><form class="panel flex min-h-0 flex-col gap-6 overflow-auto p-6" @submit.prevent="save">
+    ><form class="panel flex flex-col gap-6 p-6" @submit.prevent="save">
       <div class="grid gap-6 md:grid-cols-2">
         <FormField
           v-for="field in [
@@ -82,7 +82,7 @@ let editRevision = ''
         ><el-input :id="slot.id" v-model="form.description" type="textarea" /></FormField
       ><label
         v-if="device.current?.node_kind !== 'station'"
-        class="flex items-center gap-3 text-[14px]"
+        class="flex items-center gap-3 text-body"
         >启用设备<el-switch v-model="form.enabled" :active-value="1" :inactive-value="0"
       /></label>
       <div class="flex justify-end">
