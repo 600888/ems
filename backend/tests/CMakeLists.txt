@@ -13,6 +13,9 @@ include_directories(
 
 add_subdirectory(common)
 add_subdirectory(rtdb)
+if(TARGET ems-daemon AND TARGET ems-rtdb AND EMS_REALTIME_WITH_SHM)
+    add_subdirectory(daemon)
+endif()
 add_subdirectory(util)
 add_subdirectory(log)
 add_subdirectory(db)

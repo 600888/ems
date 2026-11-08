@@ -31,86 +31,92 @@ class DefaultLogger {
 
    public:
     /**
-     * @brief 输出 trace 日志；异常时清理默认 logger。
+     * @brief 输出 trace 日志；日志不可用或格式错误时忽略该条消息。
      * @param[in] format 日志格式字符串。
      * @param[in] args 日志格式化参数。
      */
     template <typename... Args>
     static inline void trace(const char* format, const Args&... args) noexcept {
         try {
-            spdlog::default_logger()->log(spdlog::level::trace, format_message(format, args...));
+            if (auto logger = spdlog::default_logger())
+                logger->log(spdlog::level::trace, format_message(format, args...));
         } catch (...) {
-            spdlog::drop_all();
+            // 单条日志失败不能注销进程日志器。
         }
     }
 
     /**
-     * @brief 输出 debug 日志；异常时清理默认 logger。
+     * @brief 输出 debug 日志；日志不可用或格式错误时忽略该条消息。
      * @param[in] format 日志格式字符串。
      * @param[in] args 日志格式化参数。
      */
     template <typename... Args>
     static inline void debug(const char* format, const Args&... args) noexcept {
         try {
-            spdlog::default_logger()->log(spdlog::level::debug, format_message(format, args...));
+            if (auto logger = spdlog::default_logger())
+                logger->log(spdlog::level::debug, format_message(format, args...));
         } catch (...) {
-            spdlog::drop_all();
+            // 单条日志失败不能注销进程日志器。
         }
     }
 
     /**
-     * @brief 输出 info 日志；异常时清理默认 logger。
+     * @brief 输出 info 日志；日志不可用或格式错误时忽略该条消息。
      * @param[in] format 日志格式字符串。
      * @param[in] args 日志格式化参数。
      */
     template <typename... Args>
     static inline void info(const char* format, const Args&... args) noexcept {
         try {
-            spdlog::default_logger()->log(spdlog::level::info, format_message(format, args...));
+            if (auto logger = spdlog::default_logger())
+                logger->log(spdlog::level::info, format_message(format, args...));
         } catch (...) {
-            spdlog::drop_all();
+            // 单条日志失败不能注销进程日志器。
         }
     }
 
     /**
-     * @brief 输出 warn 日志；异常时清理默认 logger。
+     * @brief 输出 warn 日志；日志不可用或格式错误时忽略该条消息。
      * @param[in] format 日志格式字符串。
      * @param[in] args 日志格式化参数。
      */
     template <typename... Args>
     static inline void warn(const char* format, const Args&... args) noexcept {
         try {
-            spdlog::default_logger()->log(spdlog::level::warn, format_message(format, args...));
+            if (auto logger = spdlog::default_logger())
+                logger->log(spdlog::level::warn, format_message(format, args...));
         } catch (...) {
-            spdlog::drop_all();
+            // 单条日志失败不能注销进程日志器。
         }
     }
 
     /**
-     * @brief 输出 error 日志；异常时清理默认 logger。
+     * @brief 输出 error 日志；日志不可用或格式错误时忽略该条消息。
      * @param[in] format 日志格式字符串。
      * @param[in] args 日志格式化参数。
      */
     template <typename... Args>
     static inline void error(const char* format, const Args&... args) noexcept {
         try {
-            spdlog::default_logger()->log(spdlog::level::err, format_message(format, args...));
+            if (auto logger = spdlog::default_logger())
+                logger->log(spdlog::level::err, format_message(format, args...));
         } catch (...) {
-            spdlog::drop_all();
+            // 单条日志失败不能注销进程日志器。
         }
     }
 
     /**
-     * @brief 输出 critical 日志；异常时清理默认 logger。
+     * @brief 输出 critical 日志；日志不可用或格式错误时忽略该条消息。
      * @param[in] format 日志格式字符串。
      * @param[in] args 日志格式化参数。
      */
     template <typename... Args>
     static inline void critical(const char* format, const Args&... args) noexcept {
         try {
-            spdlog::default_logger()->log(spdlog::level::critical, format_message(format, args...));
+            if (auto logger = spdlog::default_logger())
+                logger->log(spdlog::level::critical, format_message(format, args...));
         } catch (...) {
-            spdlog::drop_all();
+            // 单条日志失败不能注销进程日志器。
         }
     }
 };

@@ -491,7 +491,7 @@ class YcPoint(PointBase):
         nullable=False,
     )
     byte_order: Mapped[str | None] = mapped_column(
-        enumeration("ab", "ba", name="ck_cfg_point_yc_byte_order"),
+        enumeration("ab", "ba", "ABCD", "BADC", "CDAB", "DCBA", name="ck_cfg_point_yc_byte_order"),
         nullable=True,
         comment="空=单寄存器",
     )
@@ -583,7 +583,8 @@ class YxPoint(PointBase):
         nullable=False,
     )
     byte_order: Mapped[str | None] = mapped_column(
-        enumeration("ab", "ba", name="ck_cfg_point_yx_byte_order"), nullable=True
+        enumeration("ab", "ba", "ABCD", "BADC", "CDAB", "DCBA", name="ck_cfg_point_yx_byte_order"),
+        nullable=True,
     )
     value_type: Mapped[str] = mapped_column(
         enumeration("bool", "int64", "string", name="ck_cfg_point_yx_value_type"),
@@ -675,7 +676,8 @@ class YkPoint(PointBase):
         nullable=False,
     )
     byte_order: Mapped[str | None] = mapped_column(
-        enumeration("ab", "ba", name="ck_cfg_point_yk_byte_order"), nullable=True
+        enumeration("ab", "ba", "ABCD", "BADC", "CDAB", "DCBA", name="ck_cfg_point_yk_byte_order"),
+        nullable=True,
     )
     value_type: Mapped[str] = mapped_column(
         enumeration("bool", "int64", name="ck_cfg_point_yk_value_type"),
@@ -786,7 +788,8 @@ class YtPoint(PointBase):
         nullable=False,
     )
     byte_order: Mapped[str | None] = mapped_column(
-        enumeration("ab", "ba", name="ck_cfg_point_yt_byte_order"), nullable=True
+        enumeration("ab", "ba", "ABCD", "BADC", "CDAB", "DCBA", name="ck_cfg_point_yt_byte_order"),
+        nullable=True,
     )
     value_type: Mapped[str] = mapped_column(
         enumeration("double", "int64", name="ck_cfg_point_yt_value_type"),

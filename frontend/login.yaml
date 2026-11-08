@@ -1,0 +1,44 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e8]: EMS
+      - generic [ref=e9]: 能源管理系统
+    - generic [ref=e10]: 华东示范储能站
+  - main [ref=e15]:
+    - complementary [ref=e16]:
+      - paragraph [ref=e17]: 站端工作台
+      - heading "华东示范储能站 能源管理系统" [level=1] [ref=e24]: 华东示范储能站能源管理系统
+      - paragraph [ref=e25]: 登录后，按账号角色与设备授权范围访问运行数据和管理功能。
+      - generic [ref=e26]:
+        - generic [ref=e31]:
+          - heading "运行监视" [level=2] [ref=e32]
+          - paragraph [ref=e33]: 实时四遥、告警与历史曲线
+        - generic [ref=e37]:
+          - heading "运行操作" [level=2] [ref=e38]
+          - paragraph [ref=e39]: 按权限提交遥控、遥调与告警处置
+        - generic [ref=e45]:
+          - heading "账号安全" [level=2] [ref=e46]
+          - paragraph [ref=e47]: 账号访问受控，关键操作保留审计记录
+      - paragraph [ref=e48]: 仅限授权人员使用 · 请勿共享个人账号
+    - generic [ref=e51]:
+      - paragraph [ref=e52]: 用户名与密码登录
+      - heading "欢迎登录" [level=2] [ref=e56]
+      - paragraph [ref=e57]: 请输入管理员为你分配的站内账号。
+      - generic [ref=e58]:
+        - generic [ref=e59]: 用户名
+        - textbox "用户名" [active] [ref=e66]:
+          - /placeholder: 请输入用户名
+      - generic [ref=e67]:
+        - generic [ref=e68]: 密码
+        - textbox "密码" [ref=e76]:
+          - /placeholder: 请输入密码
+      - button "登录" [ref=e77] [cursor=pointer]
+      - button "忘记密码？请联系系统管理员" [ref=e78] [cursor=pointer]
+      - status [ref=e79]:
+        - generic [ref=e82]:
+          - paragraph [ref=e83]: 站内通知
+          - paragraph [ref=e84]: 仅限授权人员使用。请妥善保管个人账号，离开终端前及时退出。
+      - paragraph [ref=e85]: 请在可信终端登录，使用完毕及时退出。
+  - contentinfo [ref=e90]:
+    - generic [ref=e91]: EMS · 华东示范储能站
+    - generic [ref=e92]: 访问异常请联系站内运维人员

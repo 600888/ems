@@ -180,7 +180,7 @@ struct CfgPointYcRowWrite {
     std::string semantic_code;
     std::string vendor_key;
     std::string origin;
-    std::string address_space;
+    std::optional<std::string> address_space;
     int address_offset;
     int bit_offset;
     int register_count;
@@ -229,7 +229,7 @@ inline CfgPointYcRowWrite sql_row(const CfgPointYcRow& row) {
     value.semantic_code = row.semantic_code;
     value.vendor_key = row.vendor_key;
     value.origin = row.origin;
-    value.address_space = row.address_space;
+    if (!row.address_space.empty()) value.address_space = row.address_space;
     value.address_offset = row.address_offset;
     value.bit_offset = row.bit_offset;
     value.register_count = row.register_count;

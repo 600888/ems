@@ -149,6 +149,12 @@ class ChannelThread {
      */
     void set_devices(std::vector<DeviceContext> devices);
 
+    /**
+     * @brief 从共享连接中移除逻辑通道的设备，后续周期不再调度；在途采集可能完成。
+     * @param[in] channel_id 要停止的逻辑通道 ID。
+     */
+    void remove_devices(int64_t channel_id);
+
     // ============================================================
     // 命令下发
     // ============================================================

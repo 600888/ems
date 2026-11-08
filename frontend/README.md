@@ -1,6 +1,6 @@
 # EMS Web 前端
 
-Vue、TypeScript、Pinia 与 Element Plus 实现的站端管理和设备监视界面。页面使用真实 C++ Web API，重复的页面标题栏已移除。
+Vue、TypeScript、Pinia 与 Element Plus 实现的站端管理和设备监视界面。页面使用真实 C++ Web API，后台各页面共享统一标题栏。
 
 ## 开发与验证
 
@@ -31,6 +31,10 @@ npm test
 
 后台与设备监视统一使用 `src/styles/layout.css`：顶部栏和后台导航保持固定，右侧 `workspace-scroll` 是页面纵向滚动容器。正文随内容自然撑开，表格仅保留横向滚动。设备页使用 `device-workspace` / `workspace-content`，左侧 `workspace-sidebar` 设备树吸附在可视区内，超长树节点单独滚动；抽屉与选择器保留自身的滚动行为。
 
+后台工作区顶部使用 `AdminPageHeader` 展示当前路由 `meta.title` 与 `meta.description`，统一呈现页面名称、用途说明和模块图标。标题栏保持可见，正文在下方滚动；设备树可用高度会扣除标题栏高度。
+
+页面级刷新、新建、保存授权等操作通过 `AdminPageActions` 放在标题栏右侧，窄屏下排列在标题下方；查询、重置、行操作和表单提交保留在对应内容区域。`AdminPageActions` 使用 Teleport 保留页面自身的事件处理与权限控制，路由卸载时同步移除按钮。
+
 ## 后端配置
 
 从 `backend` 目录启动已构建的 `ems-web --config conf/web.json`。需要先按仓库数据库和身份文档初始化 MySQL 表、身份密钥及管理员；Web 启动不自动建表。数据库连接配置使用 `database_config` 或现有 `EMS_MYSQL_*` 环境变量，身份密钥使用 `identity_key_file` 或 `EMS_WEB_EDIT_KEY_FILE`。
@@ -56,3 +60,8 @@ npm test
 实时接口为 `POST /api/monitor/points`；历史接口为 `POST /api/history/query`，支持最多 6 个遥测点、24 小时时间窗口和 10000 行上限。历史按实际时间绘图，超过上限提示截断。无样本显示空值，过期和质量异常不会显示为正常值。实时服务不可用时仍可读取配置点位用于历史查询。
 
 当前验证包含前端构建、API 合约测试、C++ Web 回归测试，以及隔离 SQLite 数据下的真实浏览器保存和刷新回读。实际 MySQL、TDengine、实时库和设备采集链路需在对应服务运行的部署环境联调。
+## 清空整站配置
+
+在设备管理工具栏点击“清空整站”，输入当前站编码确认，可同时填写新站名称和编码。清空成功后直接使用“整站导入”加载新配置。该入口仅向拥有全部设备范围及全部工程写权限的用户显示。
+
+操作会删除站内全部下级节点、通道、绑定、四遥点、导入记录及通信统计和状态记录，保留空站入口、账号权限、审计日志、设备类型和型号模板。清空不可撤销；后台在同一事务中检查权限、确认编码和编辑修订号并执行删除，失败时整体回滚。

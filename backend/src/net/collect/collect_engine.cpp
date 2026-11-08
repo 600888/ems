@@ -7,7 +7,11 @@
 #include <spdlog/fmt/bundled/format.h>
 
 #include <algorithm>
+#include <cctype>
+#include <iterator>
+#include <map>
 #include <nlohmann/json.hpp>
+#include <set>
 #include <sstream>
 
 #include "net/para_loader/cfg_loader.h"
@@ -20,6 +24,69 @@ namespace collect {
 
 using namespace ems::net::device;
 using json = nlohmann::json;
+
+namespace {
+json settings_of(const ems::rtdb::ChannelConfig& channel) {
+    auto settings = channel.settings_.empty() ? json::object() : json::parse(channel.settings_);
+    if (!settings.is_object()) throw std::invalid_argument("channel settings must be an object");
+    return settings;
+}
+
+ems::rtdb::ChannelConfig connection_config(ems::rtdb::ChannelConfig channel,
+                                           const std::vector<ConfiguredDevice>& devices) {
+    auto settings = settings_of(channel);
+    if (channel.protocol_ == ems::model::ProtocolType::IEC104 &&
+        settings.value("local_role", settings.value("role", std::string("client"))) == "client") {
+        std::set<int> addresses;
+        if (settings.contains("common_addresses") || settings.contains("slaves")) {
+            const auto configured = settings.contains("common_addresses")
+                                        ? settings.at("common_addresses")
+                                        : settings.at("slaves");
+            for (const auto& address : configured) addresses.insert(address.get<int>());
+        } else if (settings.contains("common_address")) {
+            addresses.insert(settings.at("common_address").get<int>());
+        }
+        for (const auto& device : devices)
+            for (const auto* points :
+                 {&device.ycPoints_, &device.yxPoints_, &device.ykPoints_, &device.ytPoints_})
+                for (const auto& point : *points)
+                    addresses.insert(
+                        std::stoi(point.protocol_code.substr(0, point.protocol_code.find(':'))));
+        if (addresses.empty()) addresses.insert(1);
+        settings.erase("common_address");
+        settings.erase("slaves");
+        settings["common_addresses"] = addresses;
+    }
+    channel.settings_ = settings.dump();
+    return channel;
+}
+
+std::string connection_key(const ems::rtdb::ChannelConfig& channel, const std::string& scope) {
+    using P = ems::model::ProtocolType;
+    if (scope.empty()) return {};
+    if (channel.protocol_ != P::ModbusTCP && channel.protocol_ != P::IEC104) return {};
+    auto settings = settings_of(channel);
+    if (settings.value("local_role", settings.value("role", std::string("client"))) != "client")
+        return {};
+    settings.erase("poll_interval_ms");
+    if (channel.protocol_ == P::IEC104) settings.erase("common_addresses");
+    auto endpoint = channel.connection_;
+    std::transform(endpoint.begin(), endpoint.end(), endpoint.begin(),
+                   [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+    return json::array({scope, static_cast<int>(channel.protocol_), endpoint, settings}).dump();
+}
+
+void merge_addresses(ems::rtdb::ChannelConfig& target, const ems::rtdb::ChannelConfig& source) {
+    if (target.protocol_ != ems::model::ProtocolType::IEC104) return;
+    auto settings = settings_of(target);
+    auto addresses = settings.at("common_addresses").get<std::set<int>>();
+    const auto source_settings = settings_of(source);
+    for (const auto& address : source_settings.at("common_addresses"))
+        addresses.insert(address.get<int>());
+    settings["common_addresses"] = addresses;
+    target.settings_ = settings.dump();
+}
+}  // namespace
 
 // ============================================================
 // 构造 / 析构
@@ -105,47 +172,80 @@ int CollectEngine::start_all(CfgLoader& loader) {
 
     LOG_INFO(fmt::format("从数据库加载了{}个通道配置", channels.size()).c_str());
 
-    auto channelConfigs = std::move(channels);
+    struct Connection {
+        ems::rtdb::ChannelConfig config;
+        std::vector<ems::rtdb::ChannelConfig> members;
+        std::vector<ConfiguredDevice> devices;
+        int interval;
+        std::string scope;
+    };
 
-    // 4. 启动每个通道
-    int started = 0;
-    for (auto& chConfig : channelConfigs) {
-        if (chConfig.status_ == 0) {
-            LOG_INFO(fmt::format("通道[{}] {} 已禁用, 跳过", chConfig.id_, chConfig.name_).c_str());
-            continue;
+    std::vector<Connection> connections;
+    std::map<std::string, std::size_t> shared;
+    for (const auto& logical : channels) {
+        if (logical.status_ == 0) continue;
+        auto devices = loader.devices(logical.id_);
+        const int interval = std::max(
+            enum_value(CollectDefaults::MinPollIntervalMs),
+            settings_of(logical).value("poll_interval_ms", config_.defaultPollIntervalMs_));
+        for (auto& device : devices) {
+            device.channelId_ = logical.id_;
+            device.pollIntervalMs_ = interval;
         }
+        auto config = connection_config(logical, devices);
+        const auto scope = loader.connection_scope(logical.id_);
+        const auto key = connection_key(config, scope);
+        const auto found = shared.find(key);
+        if (!key.empty() && found != shared.end()) {
+            auto& connection = connections[found->second];
+            merge_addresses(connection.config, config);
+            connection.interval = std::min(connection.interval, interval);
+            connection.members.push_back(logical);
+            connection.devices.insert(connection.devices.end(),
+                                      std::make_move_iterator(devices.begin()),
+                                      std::make_move_iterator(devices.end()));
+        } else {
+            if (!key.empty()) shared[key] = connections.size();
+            connections.push_back(
+                {std::move(config), {logical}, std::move(devices), interval, scope});
+        }
+    }
 
-        LOG_INFO(fmt::format("启动通道[{}] {}, 协议={}, 连接={}", chConfig.id_, chConfig.name_,
-                             ems::rtdb::protocolTypeToString(chConfig.protocol_),
-                             chConfig.connection_)
+    // 每个物理连接只启动一个线程；原逻辑通道 ID 继续用于查询、控制和独立停止。
+    int started = 0;
+    for (auto& connection : connections) {
+        auto& chConfig = connection.config;
+        LOG_INFO(fmt::format("启动连接[{}] {}, 协议={}, 连接={}, 复用逻辑通道数={}", chConfig.id_,
+                             chConfig.name_, ems::rtdb::protocolTypeToString(chConfig.protocol_),
+                             chConfig.connection_, connection.members.size())
                      .c_str());
-
-        // 构建设备上下文
-        auto devices = loader.devices(chConfig.id_);
-
-        // 创建通道线程
         auto channelThread = std::make_shared<ChannelThread>(chConfig, dispatcher_);
-        channelThread->set_devices(std::move(devices));
-        channelThread->set_poll_interval(
-            json::parse(chConfig.settings_)
-                .value("poll_interval_ms", config_.defaultPollIntervalMs_));
+        channelThread->set_devices(std::move(connection.devices));
+        channelThread->set_poll_interval(connection.interval);
 
         // 设置错误回调
         channelThread->set_error_callback(
             [this](int64_t chId, const std::string& err) { on_channel_error(chId, err); });
 
         if (!channelThread->start(plugin_manager_)) {
-            on_channel_error(chConfig.id_, channelThread->last_error());
+            for (const auto& member : connection.members)
+                on_channel_error(member.id_, channelThread->last_error());
             continue;
         }
 
         // 注册到通道映射
         {
             std::lock_guard lock(channels_mutex_);
-            channels_[chConfig.id_] = channelThread;
+            for (const auto& member : connection.members) {
+                channels_[member.id_] = channelThread;
+                connection_scopes_[member.id_] = connection.scope;
+                if (member.id_ != chConfig.id_)
+                    LOG_INFO("通道[{}] {} 复用连接[{}] {}", member.id_, member.name_, chConfig.id_,
+                             chConfig.connection_);
+            }
         }
 
-        started++;
+        started += static_cast<int>(connection.members.size());
     }
 
     for (auto& output : outputs) {
@@ -161,7 +261,7 @@ int CollectEngine::start_all(CfgLoader& loader) {
         ++started;
     }
     state_.store(EngineState::Running);
-    LOG_INFO(fmt::format("采集引擎启动完成, 成功启动{}个通道", started).c_str());
+    LOG_INFO("采集引擎启动完成, 逻辑通道数={}, 独立连接数={}", started, connection_count());
     return started;
 }
 
@@ -169,7 +269,8 @@ int CollectEngine::start_all(CfgLoader& loader) {
 // 启动/停止单个通道
 // ============================================================
 
-bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig) {
+bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig,
+                                  const std::string& connection_scope) {
     if (channelConfig.status_ == 0) return false;
     std::lock_guard lock(channels_mutex_);
 
@@ -186,22 +287,52 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig)
         return false;
     }
 
+    const auto config = connection_config(channelConfig, {});
+    const auto key = connection_key(config, connection_scope);
+    if (!key.empty()) {
+        for (const auto& [id, worker] : channels_) {
+            if (connection_key(worker->channel_config(), connection_scopes_.at(id)) != key)
+                continue;
+            if (config.protocol_ == ems::model::ProtocolType::IEC104) {
+                const auto current = settings_of(worker->channel_config())
+                                         .at("common_addresses")
+                                         .get<std::set<int>>();
+                const auto requested =
+                    settings_of(config).at("common_addresses").get<std::set<int>>();
+                if (!std::includes(current.begin(), current.end(), requested.begin(),
+                                   requested.end())) {
+                    LOG_ERROR("通道[{}] 新增公共地址，需要重载配置以重建共享连接",
+                              channelConfig.id_);
+                    return false;
+                }
+            }
+            channels_[channelConfig.id_] = worker;
+            connection_scopes_[channelConfig.id_] = connection_scope;
+            LOG_INFO("通道[{}] {} 复用连接[{}] {}", channelConfig.id_, channelConfig.name_,
+                     worker->channel_id(), channelConfig.connection_);
+            return true;
+        }
+    }
+
     LOG_INFO(fmt::format("启动单个通道[{}] {}, 协议={}, 连接={}", channelConfig.id_,
                          channelConfig.name_,
                          ems::rtdb::protocolTypeToString(channelConfig.protocol_),
                          channelConfig.connection_)
                  .c_str());
 
-    auto channelThread = std::make_shared<ChannelThread>(channelConfig, dispatcher_);
-    channelThread->set_poll_interval(config_.defaultPollIntervalMs_);
+    auto channelThread = std::make_shared<ChannelThread>(config, dispatcher_);
+    channelThread->set_poll_interval(
+        settings_of(config).value("poll_interval_ms", config_.defaultPollIntervalMs_));
 
     channels_[channelConfig.id_] = channelThread;
+    connection_scopes_[channelConfig.id_] = connection_scope;
 
     if (!channelThread->start(plugin_manager_)) {
         LOG_ERROR(fmt::format("通道[{}] 处理器初始化失败: {}", channelConfig.id_,
                               channelThread->last_error())
                       .c_str());
         channels_.erase(channelConfig.id_);
+        connection_scopes_.erase(channelConfig.id_);
         return false;
     }
     return true;
@@ -230,6 +361,15 @@ bool CollectEngine::stop_channel(int64_t channel_id) {
             return false;
         }
         channel = it->second;
+        channel->remove_devices(channel_id);
+        channels_.erase(it);
+        connection_scopes_.erase(channel_id);
+        const bool shared = std::any_of(channels_.begin(), channels_.end(),
+                                        [&](const auto& entry) { return entry.second == channel; });
+        if (shared) {
+            LOG_INFO("逻辑通道[{}] 已停止，共享连接继续供其他通道使用", channel_id);
+            return true;
+        }
     }
 
     channel->stop();
@@ -237,7 +377,7 @@ bool CollectEngine::stop_channel(int64_t channel_id) {
 
     {
         std::lock_guard lock(channels_mutex_);
-        channels_.erase(channel_id);
+        if (channels_.empty() && forwarding_.empty()) state_.store(EngineState::Stopped);
     }
 
     LOG_INFO(fmt::format("通道[{}] 已停止并从管理中移除", channel_id).c_str());
@@ -254,8 +394,9 @@ void CollectEngine::stop_all() {
     std::vector<std::shared_ptr<ForwardingChannel>> outputs;
     {
         std::lock_guard lock(channels_mutex_);
+        std::set<ChannelThread*> seen;
         for (auto& [_, ch] : channels_) {
-            allChannels.push_back(ch);
+            if (seen.insert(ch.get()).second) allChannels.push_back(ch);
         }
         for (auto& [_, output] : forwarding_) outputs.push_back(output);
     }
@@ -278,6 +419,7 @@ void CollectEngine::stop_all() {
     {
         std::lock_guard lock(channels_mutex_);
         channels_.clear();
+        connection_scopes_.clear();
         forwarding_.clear();
     }
 
@@ -305,6 +447,13 @@ size_t CollectEngine::channel_count() const {
     return channels_.size() + forwarding_.size();
 }
 
+size_t CollectEngine::connection_count() const {
+    std::lock_guard lock(channels_mutex_);
+    std::set<ChannelThread*> workers;
+    for (const auto& [_, channel] : channels_) workers.insert(channel.get());
+    return workers.size() + forwarding_.size();
+}
+
 size_t CollectEngine::running_count() const {
     std::lock_guard lock(channels_mutex_);
     return std::count_if(channels_.begin(), channels_.end(),
@@ -317,8 +466,9 @@ std::vector<std::shared_ptr<ChannelThread>> CollectEngine::channels() const {
     std::lock_guard lock(channels_mutex_);
     std::vector<std::shared_ptr<ChannelThread>> result;
     result.reserve(channels_.size());
+    std::set<ChannelThread*> seen;
     for (const auto& [_, ch] : channels_) {
-        result.push_back(ch);
+        if (seen.insert(ch.get()).second) result.push_back(ch);
     }
     return result;
 }

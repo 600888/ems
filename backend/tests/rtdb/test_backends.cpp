@@ -2,6 +2,7 @@
 #include <rtdb/backend/redis_store.h>
 #include <rtdb/client/realtime_client.h>
 #ifdef EMS_REALTIME_TEST_SHM
+#include <boost/interprocess/shared_memory_object.hpp>
 #include <boost/interprocess/sync/named_mutex.hpp>
 #endif
 #include <rtdb/backend/shared_memory_store.h>
@@ -306,6 +307,25 @@ TEST_F(ShmTest, AbandonedBoostLockTimesOutUntilManagedRebuild) {
         ::testing::ExitedWithCode(42), "");
     expect_error(owner->read(key(), ctx(50)), ErrorCode::DeadlineExceeded,
                  WriteEffect::NotApplicable);
+    owner.reset();
+    const auto path = std::filesystem::temp_directory_path() / (options.segment_name + ".json");
+    {
+        std::ofstream config(path);
+        config << "{\"realtime\":{\"backend\":{\"type\":\"shm\",\"options\":{\"segment_name\":\""
+               << options.segment_name << "\"}}}}";
+    }
+    EXPECT_TRUE(take(RealtimeClient::cleanup(path.u8string(), ctx(50))));
+    EXPECT_FALSE(take(RealtimeClient::cleanup(path.u8string(), ctx(50))));
+    EXPECT_THROW(
+        {
+            boost::interprocess::named_mutex lock(
+                boost::interprocess::open_only,
+                ("ems_rtdb_boost_" + options.segment_name + "_mutex").c_str());
+        },
+        boost::interprocess::interprocess_exception);
+    owner = take(SharedMemoryStore::open(options, ctx()));
+    EXPECT_TRUE(core::is_ok(owner->compareExchange({key(), {{"v", "recovered"}}, {}}, ctx())));
+    std::filesystem::remove(path);
 }
 
 TEST_F(ShmTest, IndependentProcessPublishesThroughSharedLibrary) {
@@ -355,12 +375,26 @@ TEST(SharedClient, ConfigDrivesLibraryAndClientsCannotCreateSegments) {
     EXPECT_EQ(take(peer->read(key(), ctx())).revision, receipt.revision);
     peer.reset();
     owner.reset();
+    // 普通客户端关闭保留后端；只有部署管理者的显式清理删除共享段及锁。
+    auto reopened = take(RealtimeClient::open(path.u8string(), ctx()));
+    EXPECT_EQ(take(reopened->read(key(), ctx())).revision, receipt.revision);
+    reopened.reset();
+    EXPECT_TRUE(take(RealtimeClient::cleanup(path.u8string(), ctx())));
+    expect_error(RealtimeClient::open(path.u8string(), ctx()), ErrorCode::NotFound,
+                 WriteEffect::NotApplied);
+    EXPECT_FALSE(take(RealtimeClient::cleanup(path.u8string(), ctx())));
     write_config("shm", ",\"create_if_missing\":true");
     expect_error(RealtimeClient::open(path.u8string(), ctx()), ErrorCode::InvalidArgument,
                  WriteEffect::NotApplied);
     write_config("not_compiled", "");
     expect_error(RealtimeClient::open(path.u8string(), ctx()), ErrorCode::Unsupported,
                  WriteEffect::NotApplicable);
+    expect_error(RealtimeClient::cleanup(path.u8string(), ctx()), ErrorCode::Unsupported,
+                 WriteEffect::NotApplied);
+#ifdef EMS_REALTIME_TEST_REDIS
+    write_config("redis", "");
+    EXPECT_FALSE(take(RealtimeClient::cleanup(path.u8string(), ctx())));
+#endif
 }
 
 #endif
@@ -368,6 +402,46 @@ TEST(SharedClient, ConfigDrivesLibraryAndClientsCannotCreateSegments) {
 }  // namespace ems::rtdb
 
 int main(int argc, char** argv) {
+    if (argc == 3 && std::string(argv[1]) == "--check-managed-absent") {
+#ifdef EMS_REALTIME_TEST_SHM
+        if (std::string(argv[2]).rfind("daemon_test_", 0) != 0) return 2;
+        const auto name = std::string("ems_rtdb_boost_") + argv[2];
+        try {
+            boost::interprocess::shared_memory_object segment(
+                boost::interprocess::open_only, name.c_str(), boost::interprocess::read_only);
+            return 1;
+        } catch (const boost::interprocess::interprocess_exception& error) {
+            if (error.get_error_code() != boost::interprocess::not_found_error) return 2;
+        }
+        try {
+            boost::interprocess::named_mutex lock(boost::interprocess::open_only,
+                                                  (name + "_mutex").c_str());
+            return 1;
+        } catch (const boost::interprocess::interprocess_exception& error) {
+            return error.get_error_code() == boost::interprocess::not_found_error ? 0 : 2;
+        }
+#else
+        return 2;
+#endif
+    }
+    if (argc == 3 && std::string(argv[1]) == "--probe-managed-config") {
+        return ems::core::is_ok(ems::rtdb::RealtimeClient::open(
+                   argv[2], ems::core::make_call_context(std::chrono::milliseconds(100))))
+                   ? 0
+                   : 1;
+    }
+    if (argc == 3 && std::string(argv[1]) == "--abandon-managed-lock") {
+#ifdef EMS_REALTIME_TEST_SHM
+        if (std::string(argv[2]).rfind("daemon_test_", 0) != 0) return 2;
+        boost::interprocess::named_mutex lock(
+            boost::interprocess::open_only,
+            (std::string("ems_rtdb_boost_") + argv[2] + "_mutex").c_str());
+        lock.lock();
+        ems::rtdb::crash_exit(42);
+#else
+        return 2;
+#endif
+    }
     if (argc == 3 && std::string(argv[1]) == "--cleanup-package-smoke") {
 #ifdef EMS_REALTIME_TEST_SHM
         const std::string name = argv[2];

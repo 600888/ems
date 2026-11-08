@@ -110,6 +110,20 @@ bool parse_process(const Json& node, std::size_t position, Process& proc, std::s
         }
     }
 
+    if (node.contains("cleanupArgs")) {
+        if (!node["cleanupArgs"].is_array()) {
+            error = fmt::format("{} 的 cleanupArgs 必须是字符串数组", where);
+            return false;
+        }
+        for (const auto& item : node["cleanupArgs"]) {
+            if (!item.is_string()) {
+                error = fmt::format("{} 的 cleanupArgs 元素必须是字符串", where);
+                return false;
+            }
+            proc.cleanup_args.push_back(item.get<std::string>());
+        }
+    }
+
     if (!read_string("runDir", proc.run_dir)) {
         return false;
     }
@@ -368,7 +382,7 @@ void ProcessManager::log_plan() const {
     }
 }
 
-void ProcessManager::run() {
+bool ProcessManager::run() {
     LOG_INFO("ems-daemon 进入主循环");
     while (!stop_requested()) {
         reap_children();
@@ -380,8 +394,9 @@ void ProcessManager::run() {
     }
 
     LOG_INFO("收到退出请求，开始停止全部子进程");
-    shutdown();
-    LOG_INFO("全部子进程已停止");
+    const bool stopped = shutdown();
+    if (stopped) LOG_INFO("全部子进程已停止，资源清理完成");
+    return stopped;
 }
 
 void ProcessManager::finish_exit(Process& proc, ProcessId pid, int exit_code, int term_signal) {
@@ -438,7 +453,7 @@ bool ProcessManager::dependencies_running(const Process& proc) const {
     return true;
 }
 
-void ProcessManager::shutdown() {
+bool ProcessManager::shutdown() {
     // 进程集合按依赖层级排好序，反向遍历即先停依赖方
     for (auto iter = processes_.rbegin(); iter != processes_.rend(); ++iter) {
         Process& proc = **iter;
@@ -475,6 +490,56 @@ void ProcessManager::shutdown() {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
     }
+    if (running_count() != 0) {
+        LOG_ERROR("仍有托管进程未退出，禁止清理共享资源");
+        return false;
+    }
+    return cleanup_resources();
+}
+
+bool ProcessManager::cleanup_resources() {
+    bool success = true;
+    for (auto iter = processes_.rbegin(); iter != processes_.rend(); ++iter) {
+        auto& proc = **iter;
+        if (proc.cleanup_args.empty() || proc.last_start_wall.time_since_epoch().count() == 0)
+            continue;
+
+        // 仅在全部使用者退出后重新使用同一进程槽，平台回收和单实例保护保持一致。
+        proc.args.swap(proc.cleanup_args);
+        std::string error;
+        proc.stop_requested = false;
+        LOG_INFO("清理进程 {} 的共享资源", proc.name);
+        const bool started = proc.spawn(error);
+        proc.stop_requested = true;
+        if (!started) {
+            LOG_ERROR("进程 {} 的资源清理启动失败: {}", proc.name, error);
+            proc.args.swap(proc.cleanup_args);
+            success = false;
+            continue;
+        }
+        const auto deadline =
+            std::chrono::steady_clock::now() + std::max(stop_timeout_, std::chrono::seconds(1));
+        while (proc.pid > 0 && std::chrono::steady_clock::now() < deadline) {
+            reap_children();
+            if (proc.pid > 0) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+        if (proc.pid > 0) {
+            LOG_ERROR("进程 {} 的资源清理超时", proc.name);
+            proc.kill_force();
+            for (int attempt = 0; attempt < 200 && proc.pid > 0; ++attempt) {
+                reap_children();
+                if (proc.pid > 0) std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            success = false;
+        }
+        if (proc.pid > 0 || proc.exit_code != 0 || proc.term_signal != 0) {
+            LOG_ERROR("进程 {} 的资源清理失败，退出码 {}", proc.name, proc.exit_code);
+            success = false;
+        }
+        proc.args.swap(proc.cleanup_args);
+        if (proc.pid > 0) return false;
+    }
+    return success;
 }
 
 Process* ProcessManager::find_by_pid(ProcessId pid) {

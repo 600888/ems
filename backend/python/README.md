@@ -188,6 +188,16 @@ SQLite 自动生成迁移采用 Alembic batch 模式以支持表重建。初始�
 不增加 `004_*.sql` / `*_v2.*`。当前初始迁移已从 ORM 模型重新生成，包含全部业务表的 `id`。
 `upgrade head` 不会重放同一 revision；后续模型变更仍需先生成新的 Alembic 迁移。
 
+四遥点表的 `byte_order` 同时支持 `ab/ba` 和 `ABCD/BADC/CDAB/DCBA`。已有 MySQL 库若
+仍只有前两项，需原地扩充枚举后导入四字节点位；此操作保留现有取值及点位数据：
+
+```sql
+ALTER TABLE cfg_point_yc MODIFY COLUMN byte_order ENUM('ab','ba','ABCD','BADC','CDAB','DCBA') NULL COMMENT '空=单寄存器';
+ALTER TABLE cfg_point_yx MODIFY COLUMN byte_order ENUM('ab','ba','ABCD','BADC','CDAB','DCBA') NULL;
+ALTER TABLE cfg_point_yk MODIFY COLUMN byte_order ENUM('ab','ba','ABCD','BADC','CDAB','DCBA') NULL;
+ALTER TABLE cfg_point_yt MODIFY COLUMN byte_order ENUM('ab','ba','ABCD','BADC','CDAB','DCBA') NULL;
+```
+
 迁移工具对 SQLite 显式开启 DDL 事务。重建表时在事务外暂停外键约束，避免删除旧表触发级联；
 提交前执行外键检查，失败则回滚，最后恢复外键约束。包含函数索引的表在 batch 重建时仍需在
 迁移脚本中显式保留或重建这些索引，不能依赖 SQLite 反射自动恢复。

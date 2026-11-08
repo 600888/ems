@@ -14,6 +14,7 @@ export class ApiError extends Error {
 
 let csrfToken = ''
 const reasonMessages: Record<string, string> = {
+  string_required: '请求缺少字符串字段或字段类型不正确',
   origin_not_allowed: '请求来源与后端配置不一致，请检查 Web 的 allowed_origins。',
   config_revision_mismatch: '配置已被其他操作修改，请重新加载后再保存。',
   realtime_service_unavailable: '实时库尚未就绪，请检查实时库及采集服务。',
@@ -23,6 +24,10 @@ const reasonMessages: Record<string, string> = {
   device_is_referenced: '设备仍被引用，无法删除。',
   import_confirmation_required: '请先修正并确认导入行，再应用点表。',
   configuration_invalid: '配置校验未通过，请检查通道、点位和依赖关系。',
+  unscoped_station_clear: '清空整站配置需要全部设备的管理权限。',
+  station_clear_root_required: '清空对象必须是当前站，请刷新后重试。',
+  station_clear_confirmation_mismatch: '确认编码与当前站编码不一致，请重新输入。',
+  invalid_device_code: '编码仅支持字母、数字、下划线和连字符。',
 }
 export function setCsrfToken(value: string) {
   csrfToken = value
@@ -118,6 +123,13 @@ export function errorMessage(error: unknown) {
   if (error instanceof ApiError && Array.isArray(error.details)) {
     const reasons = error.details.flatMap((detail: unknown) => {
       if (detail && typeof detail === 'object' && 'reason' in detail) return [String(detail.reason)]
+      if (
+        error.reason === 'string_required' &&
+        detail &&
+        typeof detail === 'object' &&
+        'field' in detail
+      )
+        return [String(detail.field)]
       return []
     })
     if (reasons.length) return `${error.message}：${reasons.slice(0, 5).join('；')}`

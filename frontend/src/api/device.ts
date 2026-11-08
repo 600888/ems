@@ -11,16 +11,21 @@ import type {
   ImportJob,
   ImportEntry,
   Finding,
+  StationImportInspection,
 } from '@/types/engineering'
 
 let revision = '',
   sessionEpoch = 0
 const revisions = new WeakMap<object, string>()
+const warnings = new WeakMap<object, Finding[]>()
 export const revisionOf = (value: object) => revisions.get(toRaw(value)) ?? ''
+export const warningsOf = (value: object) => warnings.get(toRaw(value)) ?? []
 async function call<T>(path: string, body?: object | FormData): Promise<T> {
   const owner = sessionEpoch
   const result = await requestResponse<T>(path, body)
   if (owner !== sessionEpoch) throw new Error('账号已切换，请重新加载')
+  if (result.data && typeof result.data === 'object' && Array.isArray(result.meta.warnings))
+    warnings.set(result.data, result.meta.warnings as Finding[])
   if (result.meta.config_revision !== undefined) {
     revision = result.meta.config_revision
     const data = result.data
@@ -124,6 +129,18 @@ export const deviceApi = {
     write<EngineeringRecord>('/api/devices/update', { device_id, fields }, expected),
   remove: (device_id: string, expected?: string) =>
     write('/api/devices/delete', { device_id }, expected),
+  clearStation: (
+    device_id: string,
+    confirmation_code: string,
+    station_code: string,
+    station_name: string,
+    expected: string,
+  ) =>
+    write<{ station_device_id: string; station_code: string; station_name: string }>(
+      '/api/device-management/clear',
+      { device_id, confirmation_code, station_code, station_name },
+      expected,
+    ),
   allDevices: () => allPages<EngineeringRecord>('/api/devices/list'),
   types: () => allPages<Record<string, unknown>>('/api/device-types/list'),
   templates: () => allPages<Record<string, unknown>>('/api/device-templates/list'),
@@ -179,6 +196,12 @@ export const deviceApi = {
       station ? '/api/station-imports/create' : '/api/point-imports/create',
       body,
     )
+  },
+  inspectStationPackage: (file: File) => {
+    const body = new FormData()
+    body.append('file', file)
+    body.append('metadata', '{}')
+    return call<StationImportInspection>('/api/station-imports/inspect', body)
   },
   updateImportRow: (body: object) => call<ImportJob>('/api/point-imports/update-row', body),
   validateImport: (import_job_id: string, expected_preview_hash: string) =>

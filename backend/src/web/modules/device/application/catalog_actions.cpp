@@ -10,14 +10,15 @@ DeviceResult catalog_action(DeviceRequest& request, const std::string& path, con
     if (action == "capabilities") {
         fields(body, {});
         // 只声明已接通解析与持久化的交集，不按协议插件目录猜测能力。
-        return {{{"protocols", Json::array({"modbus", "iec104", "dlt645"})},
-                 {"import_formats", Json::array({"vendor_csv", "vendor_xlsx"})},
-                 {"supported_point_types", Json::array({"yc", "yx", "yk", "yt"})},
-                 {"supported_wire_layouts", Json::array({"ab", "ba"})},
-                 {"supported_wire_types", Json::array({"bool", "i16", "u16"})},
-                 {"shared_write_groups", false},
-                 {"max_upload_bytes", 2 * 1024 * 1024},
-                 {"max_rows", 10000}}};
+        return {
+            {{"protocols", Json::array({"modbus", "iec104", "dlt645"})},
+             {"import_formats", Json::array({"vendor_csv", "vendor_xlsx", "telemetry_xlsx"})},
+             {"supported_point_types", Json::array({"yc", "yx", "yk", "yt"})},
+             {"supported_wire_layouts", Json::array({"ab", "ba", "ABCD", "BADC", "CDAB", "DCBA"})},
+             {"supported_wire_types", Json::array({"bool", "i16", "u16", "i32", "u32", "f32"})},
+             {"shared_write_groups", false},
+             {"max_upload_bytes", 2 * 1024 * 1024},
+             {"max_rows", 10000}}};
     }
     const bool types = path.rfind("/api/device-types/", 0) == 0;
     const auto table = types ? DeviceTable::Type : DeviceTable::Template;

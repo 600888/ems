@@ -3,6 +3,7 @@ import { computed, reactive, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import ActionBtn from '@/components/common/ActionBtn.vue'
+import AdminPageActions from '@/components/layout/AdminPageActions.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import AsyncContent from '@/components/common/AsyncContent.vue'
 import FormField from '@/components/common/FormField.vue'
@@ -174,15 +175,15 @@ function revoke(session?: SessionSummary) {
   <div class="identity-page">
     <div class="flex min-h-10 shrink-0 flex-wrap items-center justify-between gap-4">
       <div class="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2">
-        <h1 class="text-section font-semibold text-ink">
+        <h2 class="text-section font-semibold text-ink">
           {{ user ? `${user.display_name} · ${user.username}` : '用户详情' }}
-        </h1>
+        </h2>
         <p v-if="user && active !== 'security'" class="text-small text-muted">
           {{ user.status === 'enabled' ? '账号已启用' : '账号已停用' }} ·
           {{ roleLabel(user.role_code) }} · 最近登录 {{ formatTime(user.last_login_at, true) }}
         </p>
       </div>
-      <div class="ml-auto flex shrink-0 items-center gap-3">
+      <AdminPageActions>
         <ActionBtn icon="chevron-left" @click="router.push({ name: 'users' })"
           >返回用户列表</ActionBtn
         ><ActionBtn
@@ -193,7 +194,7 @@ function revoke(session?: SessionSummary) {
           @click="saveAccess"
           >保存授权</ActionBtn
         >
-      </div>
+      </AdminPageActions>
     </div>
     <UnderlineTabs
       :items="tabs"

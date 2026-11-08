@@ -7,11 +7,13 @@
 
 namespace ems::web {
 
-/// 整站点表导入包：manifest.json（层级 + 通讯参数 + 文件映射）+ 每设备一个 xlsx。
+/// 整站点表导入包：manifest.json（层级、通信、归属）与可跨部件复用的 XLSX。
 struct StationPackage {
     Json manifest;                                   ///< 已通过结构校验的清单
-    std::map<std::string, std::string> point_files;  ///< 设备 code → 点表 xlsx 字节
-    std::string package_sha256;                      ///< 整包字节摘要（幂等键）
+    std::map<std::string, std::string> point_files;  ///< 文件名 → 点表字节，允许跨簇复用
+    std::map<std::pair<std::string, std::string>, Json>
+        parsed_point_files;      ///< 文件名、协议 → 解析行
+    std::string package_sha256;  ///< 整包字节摘要（幂等键）
 };
 
 /**
@@ -25,5 +27,12 @@ struct StationPackage {
  * @return 解包结果；manifest 与文件集合。
  */
 StationPackage parse_station_package(const Upload& upload);
+
+/**
+ * @brief 在工程事务之前按文件及协议解析可复用点表，每种组合只解析一次。
+ * @param[in,out] package 结构已校验的包，填充 parsed_point_files。
+ * @param[in] workspace 临时文件工作目录。
+ */
+void prepare_station_point_files(StationPackage& package, const std::string& workspace);
 
 }  // namespace ems::web

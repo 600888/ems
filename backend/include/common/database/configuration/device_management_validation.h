@@ -6,13 +6,15 @@ struct DeviceFinding {
     std::string reason;
     std::string device_id;
     std::string point_id;
+    std::string severity = "error";
+    std::string message;
 };
 
 /**
  * @brief 校验当前候选工程的树、引用、四遥、能力完整性和物理地址占用。
  * @param[in] records 同事务读取的完整工程。
  * @param[in] confirmed_import_points 已核对当前地址与导入确认一致的稳定点 ID。
- * @return 阻断性问题集合；不访问网络或数据库。
+ * @return 问题集合；error 阻断保存，warning 仅提示能力不完整；不访问网络或数据库。
  */
 std::vector<DeviceFinding> validate_device_management(
     const DeviceConfigRecords& records,

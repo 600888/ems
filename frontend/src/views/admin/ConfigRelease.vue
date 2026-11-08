@@ -31,7 +31,7 @@ watch(id, load, { immediate: true })
 <template>
   <section class="panel flex flex-col gap-5 p-6">
     <div class="flex items-center justify-between">
-      <h3 class="text-section font-semibold">配置检查</h3>
+      <h3 class="text-section font-semibold">检查结果</h3>
       <ActionBtn :loading="busy" @click="load">重新检查</ActionBtn>
     </div>
     <InfoBar v-if="error" :text="error" tone="danger" /><InfoBar
@@ -41,9 +41,10 @@ watch(id, load, { immediate: true })
     />
     <p class="text-body text-muted">
       设备、通道和点位保存后立即生效；采集服务检测配置修订变化后自动重载。
+      必需固有点未配置仅作提示，不阻止启用设备；相关控制能力需补齐所需点位后才可用。
     </p>
     <div v-for="(f, i) in findings" :key="i" class="border-b border-line py-3">
-      <p class="text-warn">{{ f.reason }}</p>
+      <p class="text-warn">{{ f.message || f.reason }}</p>
       <p class="mt-2 text-small text-muted">{{ f.device_id }} {{ f.point_id }}</p>
     </div>
   </section>

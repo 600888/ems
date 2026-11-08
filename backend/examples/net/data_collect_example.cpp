@@ -8,6 +8,7 @@
 #include <iostream>
 #include <thread>
 
+#include "log/process_logger.hpp"
 #include "net/collect/collect_engine.h"
 #include "net/para_loader/cfg_loader.h"
 
@@ -18,6 +19,7 @@ void stop(int) { stopping = 1; }
 }  // namespace
 
 int main(int argc, char** argv) {
+    const ProcessLogger logger("data_collect_example");
     if (argc != 5) {
         std::cerr
             << "Usage: data_collect_example database.json realtime.json plugin_dir scope_code\n";

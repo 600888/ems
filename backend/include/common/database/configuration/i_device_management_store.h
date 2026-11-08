@@ -72,5 +72,42 @@ class IDeviceManagementStore {
      */
     virtual core::Status put(ITransaction& tx, const DeviceManagementRecord& row,
                              const core::CallContext& ctx) = 0;
+    /**
+     * @brief 在调用方事务内批量新增导入行，复用预编译语句，不查询或覆盖已有行。
+     * @param[in,out] tx 同上下文事务，不在此接口提交。
+     * @param[in] rows 新任务的行；id 必须为零，任务及行号必须满足数据库唯一约束。
+     * @param[in] ctx 调用期限，分批检查期限。
+     * @return 暂存结果；重复行或数据库失败使事务失效，调用方应整包回滚。
+     */
+    virtual core::Status append_import_rows(ITransaction& tx, const std::vector<CfgImportRow>& rows,
+                                            const core::CallContext& ctx) = 0;
+    /**
+     * @brief 批量更新已读取的导入行，保持数据库身份与任务归属。
+     * @param[in,out] tx 调用方事务，不在此提交。
+     * @param[in] rows 含非零数据库 id 的已存在导入行。
+     * @param[in] ctx 分批检查的调用期限。
+     * @return 暂存状态；驱动错误使事务失效。
+     */
+    virtual core::Status update_import_rows(ITransaction& tx, const std::vector<CfgImportRow>& rows,
+                                            const core::CallContext& ctx) = 0;
+    /**
+     * @brief 分批新增或更新已经过服务校验的四遥点，不查询或提交。
+     * @param[in,out] tx 调用方事务。
+     * @param[in] points 仅含四遥记录；id 为零时新增，否则按已读取的 id 更新。
+     * @param[in] ctx 分批检查的调用期限。
+     * @return 暂存状态；非法类型或数据库错误使事务失效，调用方应整包回滚。
+     */
+    virtual core::Status put_import_points(ITransaction& tx,
+                                           const std::vector<DeviceManagementRecord>& points,
+                                           const core::CallContext& ctx) = 0;
+    /**
+     * @brief 清空整站工程、导入记录及通信统计和状态，保留站根、类型目录及模板。
+     * @param[in,out] tx 已锁定站根的调用方事务；不在此提交或递增配置修订号。
+     * @param[in] station_id 必须与唯一站根的稳定 ID 一致。
+     * @param[in] ctx 调用期限。
+     * @return 暂存状态；站根不匹配或数据库失败时禁止提交，调用方应整事务回滚。
+     */
+    virtual core::Status clear_station(ITransaction& tx, const std::string& station_id,
+                                       const core::CallContext& ctx) = 0;
 };
 }  // namespace ems::database

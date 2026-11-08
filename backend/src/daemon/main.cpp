@@ -110,9 +110,9 @@ int main(int argc, char** argv) {
 
     LOG_INFO("ems-daemon 启动成功, pid={}, 配置文件={}",
              ems::daemon::platform::current_process_id(), config_file);
-    g_manager.run();
+    const bool stopped = g_manager.run();
 
     ems::daemon::platform::release_instance_lock(instance_guard);
     LOG_INFO("ems-daemon 退出");
-    return 0;
+    return stopped ? 0 : 1;
 }

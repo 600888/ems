@@ -44,6 +44,12 @@
 build/
 .cache/
 
+# Local workspace and generated output directories
+/.pen/
+/.workbuddy/
+/tmp/
+/outputs/
+
 # Rspress documentation
 /website/node_modules/
 /website/doc_build/

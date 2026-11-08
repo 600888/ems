@@ -40,9 +40,10 @@ class ProcessManager {
     bool validate(std::string& error);
 
     /**
-     * @brief 主循环：回收子进程、按策略启动，收到退出请求后停止全部子进程。
+     * @brief 主循环：回收子进程、按策略启动，退出时停止全部子进程并执行资源清理。
+     * @return 全部子进程退出且资源清理成功时返回 true。
      */
-    void run();
+    bool run();
 
     /**
      * @brief 请求退出。可在信号处理函数中调用，只写 sig_atomic_t 标志。
@@ -82,8 +83,17 @@ class ProcessManager {
     /// @return 依赖全部运行返回 true。
     bool dependencies_running(const Process& proc) const;
 
-    /// @brief 停止全部子进程：先请求优雅退出，超时后强杀并回收。
-    void shutdown();
+    /**
+     * @brief 停止全部子进程，确认全部退出后执行资源清理；仍有进程存活时禁止清理。
+     * @return 全部子进程退出且资源清理成功时返回 true。
+     */
+    bool shutdown();
+
+    /**
+     * @brief 按依赖的逆序执行已启动进程的 cleanupArgs，复用原单实例保护和退出超时。
+     * @return 所有清理命令正常退出时返回 true。
+     */
+    bool cleanup_resources();
 
     /// @brief 按 pid 查找托管的进程。
     /// @param[in] pid 子进程号。

@@ -30,16 +30,13 @@ watch(
   <div class="device-workspace">
     <AdminDeviceTree />
     <section class="workspace-content">
-      <DeviceToolbar
-        ><span class="text-muted">{{ device.current?.path ?? id }}</span></DeviceToolbar
-      >
+      <DeviceToolbar>
+        <h2 class="text-title font-semibold">{{ device.current?.name ?? id }}</h2>
+        <span class="text-small text-muted"
+          >{{ device.current?.code }} · {{ device.current?.device_type_code }}</span
+        >
+      </DeviceToolbar>
       <section class="panel shrink-0 overflow-hidden">
-        <div class="flex items-center gap-4 p-5">
-          <h2 class="text-title font-semibold">{{ device.current?.name ?? id }}</h2>
-          <span class="text-small text-muted"
-            >{{ device.current?.code }} · {{ device.current?.device_type_code }}</span
-          >
-        </div>
         <UnderlineTabs
           :items="tabs"
           :model-value="active"

@@ -122,18 +122,20 @@ class CollectEngine {
     bool initialize(const EngineConfig& config);
 
     /**
-     * @brief 从新设备配置加载器启动所有通道。
+     * @brief 启动逻辑通道，同一实体设备子树内兼容的 ModbusTCP/IEC104 客户端共用连接。
      * @param[in] loader 已编译 cfg_* 运行目录的加载器。
-     * @return 成功启动的通道数，未初始化时返回负数。
+     * @return 成功启动的逻辑通道数（共享连接仍逐个计数），未初始化时返回负数。
      */
     int start_all(device::CfgLoader& loader);
 
     /**
-     * @brief 启动单个通道
+     * @brief 启动单个逻辑通道；仅在明确的同一实体设备子树内复用兼容连接。
      * @param[in] channelConfig 通道配置
+     * @param[in] connection_scope 加载器解析的实体设备子树根 device_id；空串表示独立连接。
      * @return true 成功
      */
-    bool start_channel(const ems::rtdb::ChannelConfig& channelConfig);
+    bool start_channel(const ems::rtdb::ChannelConfig& channelConfig,
+                       const std::string& connection_scope = {});
 
     /**
      * @brief 停止所有通道
@@ -141,7 +143,7 @@ class CollectEngine {
     void stop_all();
 
     /**
-     * @brief 停止单个通道
+     * @brief 停止单个逻辑通道；共享连接保留到最后一个使用者停止。
      * @param[in] channel_id 通道 ID
      * @return true 成功
      */
@@ -169,14 +171,20 @@ class CollectEngine {
     size_t channel_count() const;
 
     /**
+     * @brief 返回独立采集连接工作线程与上送通道的数量。
+     * @return 兼容逻辑通道共享的连接只计一次。
+     */
+    size_t connection_count() const;
+
+    /**
      * @brief 获取运行中的通道数量
      * @return 处理或统计得到的数据项数量。
      */
     size_t running_count() const;
 
     /**
-     * @brief 获取所有通道线程列表
-     * @return 对应对象的指针。
+     * @brief 获取独立采集连接的线程列表，共享连接仅返回一次。
+     * @return 连接工作线程的共享指针集合。
      */
     std::vector<std::shared_ptr<ChannelThread>> channels() const;
 
@@ -248,6 +256,7 @@ class CollectEngine {
     // 通道管理
     mutable std::mutex channels_mutex_;
     std::unordered_map<int64_t, std::shared_ptr<ChannelThread>> channels_;
+    std::unordered_map<int64_t, std::string> connection_scopes_;
     std::unordered_map<int64_t, std::shared_ptr<ForwardingChannel>> forwarding_;
 
     // 数据分发器（所有通道线程共享）

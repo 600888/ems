@@ -1,9 +1,12 @@
 #pragma once
+
+#include <mutex>
+
 #include "log/log_base.h"
 
 static constexpr const char* LOGGER_NAME = "net";
 
-// 通道报文日志
+/** @brief 通道报文日志；进程入口须先创建 ProcessLogger，初始化默认日志器及异步线程池。 */
 class ChannelMsgLogger {
     /** @brief 禁止复制或移动该对象。 */
     ChannelMsgLogger() = delete;
@@ -12,6 +15,45 @@ class ChannelMsgLogger {
      * @param[in] other 待复制或移动的源对象。
      */
     ChannelMsgLogger(const ChannelMsgLogger& other) = delete;
+
+    /**
+     * @brief 将通道名称编码为不依赖系统代码页的单个日志路径分量。
+     * @param[in] channelCode UTF-8 通道名称。
+     * @return ASCII 路径分量；非 ASCII 字节及特殊字符使用百分号编码。
+     */
+    static inline std::string fileComponent(const std::string& channelCode) {
+        static constexpr char hex[] = "0123456789ABCDEF";
+        std::string result;
+        for (const unsigned char byte : channelCode) {
+            if ((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+                (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == ' ') {
+                result += static_cast<char>(byte);
+            } else {
+                result += '%';
+                result += hex[byte >> 4];
+                result += hex[byte & 15];
+            }
+        }
+        return result.empty() ? "%00" : result;
+    }
+
+    /**
+     * @brief 写入通道日志；日志不可用或格式错误时保留进程及其他通道的日志器。
+     * @param[in] channelCode 通道名称。
+     * @param[in] level 消息等级。
+     * @param[in] format 运行时格式字符串。
+     * @param[in] args 格式化参数。
+     */
+    template <typename... Args>
+    static inline void logChannel(const std::string& channelCode, LV level, const char* format,
+                                  const Args&... args) noexcept {
+        try {
+            if (auto logger = getChannelMsgLogger(channelCode))
+                logger->log(level, fmt::vformat(format, fmt::make_format_args(args...)));
+        } catch (...) {
+            // 日志失败不能影响采集线程或注销其他日志器。
+        }
+    }
 
    public:
     /**
@@ -27,13 +69,18 @@ class ChannelMsgLogger {
      * @brief 创建并注册通道报文日志器。
      * @param[in] channelCode 通道编码。
      * @param[in] log_level 日志级别。
-     * @return 对应对象的指针。
+     * @return 通道日志器；创建失败时回退到进程默认日志器，默认日志器缺失时为空。
      */
     static inline std::shared_ptr<spdlog::logger> addChannelLogger(const std::string& channelCode,
                                                                    LV log_level) noexcept {
         try {
+            static std::mutex creation_mutex;
+            std::lock_guard<std::mutex> lock(creation_mutex);
+            const auto name = channelMsgLoggerName(channelCode);
+            if (auto existing = spdlog::get(name)) return existing;
+            const auto component = fileComponent(channelCode);
             std::string logFilePath =
-                logPath() + LOGGER_NAME + "/channels/" + channelCode + "/" + channelCode;
+                logPath() + LOGGER_NAME + "/channels/" + component + "/" + component;
 #ifdef DEBUG
             logFilePath += "-debug";
 #endif
@@ -46,29 +93,30 @@ class ChannelMsgLogger {
             std::shared_ptr<spdlog::logger> logger = std::make_shared<spdlog::async_logger>(
                 channelMsgLoggerName(channelCode), sinks.begin(), sinks.end(),
                 spdlog::thread_pool(), spdlog::async_overflow_policy::block);
-            spdlog::register_logger(logger);
             logger->set_level(log_level);
             // 设置日志格式[年-月-日 时:分:秒.毫秒][进程号:线程号][调试级别](宏定义中添加: [文件名:行号]<函数名> - 具体内容)
             logger->set_pattern("[%Y-%m-%d %H:%M:%S.%e]%v");
 
             // 设置当出发debug或更严重的错误时立刻刷新日志到disk
             logger->flush_on(spdlog::level::debug);
+            spdlog::register_logger(logger);
 
             return logger;
+        } catch (const std::exception& error) {
+            DefaultLogger::warn("Channel log unavailable for '{}': {}", channelCode, error.what());
         } catch (...) {
-            spdlog::drop_all();
         }
 
-        return nullptr;
+        return spdlog::default_logger();
     }
 
     /**
      * @brief 获取通道报文日志器，必要时创建。
      * @param[in] channelCode 通道编码。
-     * @return 匹配的对象指针；未找到时为空。
+     * @return 通道日志器；创建失败时回退到进程默认日志器，默认日志器缺失时为空。
      */
     static inline std::shared_ptr<spdlog::logger> getChannelMsgLogger(
-        const std::string channelCode) noexcept {
+        const std::string& channelCode) noexcept {
         try {
             auto logger = spdlog::get(channelMsgLoggerName(channelCode));
             if (logger == nullptr) {
@@ -77,10 +125,9 @@ class ChannelMsgLogger {
 
             return logger;
         } catch (...) {
-            spdlog::drop_all();
         }
 
-        return nullptr;
+        return spdlog::default_logger();
     }
 
     /**
@@ -92,12 +139,7 @@ class ChannelMsgLogger {
     template <typename... Args>
     static inline void logChannelMsg(const std::string& channelCode, const char* format,
                                      const Args&... args) noexcept {
-        try {
-            auto logger = getChannelMsgLogger(channelCode);
-            logger->info(format, args...);
-        } catch (...) {
-            spdlog::drop_all();
-        }
+        logChannel(channelCode, LV::info, format, args...);
     }
 
     /**
@@ -109,12 +151,7 @@ class ChannelMsgLogger {
     template <typename... Args>
     static inline void logChannelTrace(const std::string& channelCode, const char* format,
                                        const Args&... args) noexcept {
-        try {
-            auto logger = getChannelMsgLogger(channelCode);
-            logger->trace(format, args...);
-        } catch (...) {
-            spdlog::drop_all();
-        }
+        logChannel(channelCode, LV::trace, format, args...);
     }
 
     /**
@@ -126,12 +163,7 @@ class ChannelMsgLogger {
     template <typename... Args>
     static inline void logChannelDebug(const std::string& channelCode, const char* format,
                                        const Args&... args) noexcept {
-        try {
-            auto logger = getChannelMsgLogger(channelCode);
-            logger->debug(format, args...);
-        } catch (...) {
-            spdlog::drop_all();
-        }
+        logChannel(channelCode, LV::debug, format, args...);
     }
 
     /**
@@ -143,12 +175,7 @@ class ChannelMsgLogger {
     template <typename... Args>
     static inline void logChannelInfo(const std::string& channelCode, const char* format,
                                       const Args&... args) noexcept {
-        try {
-            auto logger = getChannelMsgLogger(channelCode);
-            logger->info(format, args...);
-        } catch (...) {
-            spdlog::drop_all();
-        }
+        logChannel(channelCode, LV::info, format, args...);
     }
 
     /**
@@ -160,12 +187,7 @@ class ChannelMsgLogger {
     template <typename... Args>
     static inline void logChannelWarn(const std::string& channelCode, const char* format,
                                       const Args&... args) noexcept {
-        try {
-            auto logger = getChannelMsgLogger(channelCode);
-            logger->warn(format, args...);
-        } catch (...) {
-            spdlog::drop_all();
-        }
+        logChannel(channelCode, LV::warn, format, args...);
     }
 
     /**
@@ -177,12 +199,7 @@ class ChannelMsgLogger {
     template <typename... Args>
     static inline void logChannelError(const std::string& channelCode, const char* format,
                                        const Args&... args) noexcept {
-        try {
-            auto logger = getChannelMsgLogger(channelCode);
-            logger->error(format, args...);
-        } catch (...) {
-            spdlog::drop_all();
-        }
+        logChannel(channelCode, LV::err, format, args...);
     }
 
     /**
@@ -194,12 +211,7 @@ class ChannelMsgLogger {
     template <typename... Args>
     static inline void logChannelCritical(const std::string& channelCode, const char* format,
                                           const Args&... args) noexcept {
-        try {
-            auto logger = getChannelMsgLogger(channelCode);
-            logger->critical(format, args...);
-        } catch (...) {
-            spdlog::drop_all();
-        }
+        logChannel(channelCode, LV::critical, format, args...);
     }
 };
 
@@ -230,5 +242,3 @@ class ChannelMsgLogger {
     (ChannelMsgLogger::logChannelError(code, FORMATTED(format), ##__VA_ARGS__))
 #define CHANNEL_LOG_CRITICAL_CODE(code, format, ...) \
     (ChannelMsgLogger::logChannelCritical(code, FORMATTED(format), ##__VA_ARGS__))
-
-inline LogInitializer logInitializer(LOGGER_NAME, LV::debug, false, 4);  // 改为 CPU 核心个数

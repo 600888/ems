@@ -5,13 +5,16 @@ import { ElMessage } from 'element-plus'
 import ActionBtn from '@/components/common/ActionBtn.vue'
 import FormField from '@/components/common/FormField.vue'
 import AsyncContent from '@/components/common/AsyncContent.vue'
-import { deviceApi, engineeringRevision, revisionOf } from '@/api/device'
+import InfoBar from '@/components/common/InfoBar.vue'
+import { deviceApi, engineeringRevision, revisionOf, warningsOf } from '@/api/device'
+import type { Finding } from '@/types/engineering'
 import { errorMessage } from '@/api/http'
 import { useDeviceStore } from '@/stores/device'
 const route = useRoute(),
   device = useDeviceStore(),
   busy = ref(false),
   error = ref('')
+const warnings = ref<Finding[]>([])
 const form = reactive({
   name: '',
   vendor: '',
@@ -23,6 +26,7 @@ const form = reactive({
 async function load() {
   busy.value = true
   error.value = ''
+  warnings.value = []
   try {
     const row = await deviceApi.detail(String(route.params.id))
     Object.assign(
@@ -42,11 +46,12 @@ async function save() {
   busy.value = true
   error.value = ''
   try {
-    await deviceApi.update(
+    const saved = await deviceApi.update(
       String(route.params.id),
       device.current?.node_kind === 'station' ? { name: form.name } : { ...form },
       editRevision,
     )
+    warnings.value = warningsOf(saved)
     await device.selectNode(String(route.params.id))
     editRevision = engineeringRevision()
     ElMessage.success('设备资料已保存并生效')
@@ -63,6 +68,11 @@ let editRevision = ''
 <template>
   <AsyncContent :error="error" @retry="load"
     ><form class="panel flex flex-col gap-6 p-6" @submit.prevent="save">
+      <InfoBar
+        v-if="warnings.length"
+        tone="warn"
+        :text="`设备资料已保存并生效，存在 ${warnings.length} 项配置提示：${[...new Set(warnings.map((item) => item.message || item.reason))].join('；')}`"
+      />
       <div class="grid gap-6 md:grid-cols-2">
         <FormField
           v-for="field in [

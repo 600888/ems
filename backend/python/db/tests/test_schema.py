@@ -4,6 +4,15 @@ import pytest
 import sqlalchemy as sa
 
 from db.schema import compare_numeric_defaults
+from db.models import YcPoint, YxPoint, YkPoint, YtPoint
+
+
+@pytest.mark.parametrize("point", [YcPoint, YxPoint, YkPoint, YtPoint])
+def test_point_protocol_layout_supports_nonregister_and_wide_registers(point):
+    columns = point.__table__.c
+    assert columns.address_space.nullable
+    assert columns.byte_order.nullable
+    assert set(columns.byte_order.type.enums) == {"ab", "ba", "ABCD", "BADC", "CDAB", "DCBA"}
 
 
 @pytest.mark.parametrize(

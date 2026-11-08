@@ -14,9 +14,7 @@
 
 namespace ems::rtdb {
 namespace {
-Result<std::unique_ptr<IRealtimeStore>> open_configuration(const std::string& path,
-                                                           bool initializer,
-                                                           const CallContext& ctx) {
+Result<BackendSpec> read_configuration(const std::string& path, const CallContext& ctx) {
     using namespace detail;
     constexpr auto effect = WriteEffect::NotApplied;
     if (core::has_expired(ctx))
@@ -59,18 +57,7 @@ Result<std::unique_ptr<IRealtimeStore>> open_configuration(const std::string& pa
         if (spec.options.count("create_if_missing"))
             return error(ErrorCode::InvalidArgument, effect,
                          "creation privilege is not configurable");
-        if (spec.type == "shm") spec.options["create_if_missing"] = initializer ? "true" : "false";
-        BackendFactory factory;
-#ifdef EMS_REALTIME_WITH_SHM
-        auto shm = register_shared_memory_backend(factory);
-        if (!core::is_ok(shm)) return core::error_of(shm);
-#endif
-#ifdef EMS_REALTIME_WITH_REDIS
-        auto redis = register_redis_backend(factory);
-        if (!core::is_ok(redis)) return core::error_of(redis);
-#endif
-        factory.freeze();
-        return factory.create(spec, ctx);
+        return spec;
     } catch (const nlohmann::json::exception&) {
         return error(ErrorCode::InvalidArgument, effect, "invalid realtime JSON configuration");
     } catch (const std::filesystem::filesystem_error&) {
@@ -78,6 +65,26 @@ Result<std::unique_ptr<IRealtimeStore>> open_configuration(const std::string& pa
     } catch (const std::bad_alloc&) {
         return error(ErrorCode::ResourceExhausted, effect, "configuration allocation failed");
     }
+}
+
+Result<std::unique_ptr<IRealtimeStore>> open_configuration(const std::string& path,
+                                                           bool initializer,
+                                                           const CallContext& ctx) {
+    auto configuration = read_configuration(path, ctx);
+    if (!core::is_ok(configuration)) return core::error_of(configuration);
+    auto spec = core::value_of(configuration);
+    if (spec.type == "shm") spec.options["create_if_missing"] = initializer ? "true" : "false";
+    BackendFactory factory;
+#ifdef EMS_REALTIME_WITH_SHM
+    auto shm = register_shared_memory_backend(factory);
+    if (!core::is_ok(shm)) return core::error_of(shm);
+#endif
+#ifdef EMS_REALTIME_WITH_REDIS
+    auto redis = register_redis_backend(factory);
+    if (!core::is_ok(redis)) return core::error_of(redis);
+#endif
+    factory.freeze();
+    return factory.create(spec, ctx);
 }
 }  // namespace
 
@@ -105,6 +112,28 @@ Result<std::unique_ptr<RealtimeClient>> RealtimeClient::initialize(const std::st
     auto impl = std::make_unique<Impl>();
     impl->store = std::get<0>(std::move(store));
     return std::unique_ptr<RealtimeClient>(new RealtimeClient(std::move(impl)));
+}
+
+Result<bool> RealtimeClient::cleanup(const std::string& path, const CallContext& ctx) {
+    auto configuration = read_configuration(path, ctx);
+    if (!core::is_ok(configuration)) return core::error_of(configuration);
+    const auto& spec = core::value_of(configuration);
+    if (spec.type == "redis") {
+#ifdef EMS_REALTIME_WITH_REDIS
+        return false;
+#endif
+    }
+#ifdef EMS_REALTIME_WITH_SHM
+    if (spec.type == "shm") {
+        const auto name = spec.options.find("segment_name");
+        if (name == spec.options.end())
+            return detail::error(ErrorCode::InvalidArgument, WriteEffect::NotApplied,
+                                 "shared-memory segment name is required for cleanup");
+        return SharedMemoryStore::remove(name->second);
+    }
+#endif
+    return detail::error(ErrorCode::Unsupported, WriteEffect::NotApplied,
+                         "realtime cleanup backend is unavailable");
 }
 
 Result<Record> RealtimeClient::read(const RecordKey& key, const CallContext& ctx) {

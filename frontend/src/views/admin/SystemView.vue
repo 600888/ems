@@ -4,6 +4,7 @@ import { useRoute } from 'vue-router'
 import { request } from '@/api/http'
 import { errorMessage } from '@/api/http'
 import ActionBtn from '@/components/common/ActionBtn.vue'
+import AdminPageActions from '@/components/layout/AdminPageActions.vue'
 import AsyncContent from '@/components/common/AsyncContent.vue'
 const route = useRoute(),
   audit = computed(() => route.name === 'audit'),
@@ -35,9 +36,9 @@ onMounted(load)
 </script>
 <template>
   <div class="identity-page">
-    <div class="flex shrink-0 items-center justify-end">
-      <ActionBtn :loading="busy" @click="load">刷新</ActionBtn>
-    </div>
+    <AdminPageActions>
+      <ActionBtn icon="refresh-cw" :loading="busy" @click="load">刷新</ActionBtn>
+    </AdminPageActions>
     <AsyncContent :loading="busy" :error="error" @retry="load"
       ><section v-if="audit" class="panel flex min-h-0 flex-1 flex-col">
         <div class="min-h-0 flex-1 overflow-x-auto">

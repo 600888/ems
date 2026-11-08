@@ -16,15 +16,35 @@ void stop(int) { stopping = 1; }
 int main(int argc, char** argv) {
     const ProcessLogger logger("ems-rtdb");
     if (argc != 3 && argc != 4) {
-        LOG_ERROR("ems-rtdb: expected --config <json-file> [--init-only]");
-        std::cerr << "Usage: ems-rtdb --config <json-file> [--init-only]\n";
+        LOG_ERROR("ems-rtdb: expected --config <json-file> [--init-only|--cleanup]");
+        std::cerr << "Usage: ems-rtdb --config <json-file> [--init-only|--cleanup]\n";
         return 2;
     }
-    if (std::string(argv[1]) != "--config" ||
-        (argc == 4 && std::string(argv[3]) != "--init-only")) {
+    if (std::string(argv[1]) != "--config" || (argc == 4 && std::string(argv[3]) != "--init-only" &&
+                                               std::string(argv[3]) != "--cleanup")) {
         LOG_ERROR("ems-rtdb: invalid command line arguments");
         return 2;
     }
+    if (argc == 4 && std::string(argv[3]) == "--cleanup") {
+        const auto result = ems::rtdb::RealtimeClient::cleanup(
+            argv[2], ems::core::make_call_context(std::chrono::seconds(5)));
+        if (!ems::core::is_ok(result)) {
+            const auto& error = ems::core::error_of(result);
+            LOG_ERROR("ems-rtdb cleanup failed: {}: {}", ems::core::to_string(error.code),
+                      error.message);
+            std::cerr << ems::core::to_string(error.code) << ": " << error.message << '\n';
+            return 1;
+        }
+        LOG_INFO("ems-rtdb cleanup complete, removed={}", ems::core::value_of(result));
+        std::cout << "ems-rtdb cleanup complete, removed=" << ems::core::value_of(result)
+                  << std::endl;
+        return 0;
+    }
+    std::signal(SIGINT, stop);
+    std::signal(SIGTERM, stop);
+#ifdef _WIN32
+    std::signal(SIGBREAK, stop);
+#endif
     LOG_INFO("ems-rtdb starting, config={}", argv[2]);
     auto result = ems::rtdb::RealtimeClient::initialize(
         argv[2], ems::core::make_call_context(std::chrono::seconds(5)));
@@ -45,8 +65,6 @@ int main(int argc, char** argv) {
         LOG_INFO("ems-rtdb initialization complete, exiting");
         return 0;
     }
-    std::signal(SIGINT, stop);
-    std::signal(SIGTERM, stop);
     while (!stopping) std::this_thread::sleep_for(std::chrono::milliseconds(100));
     LOG_INFO("ems-rtdb stopping");
     client->close();

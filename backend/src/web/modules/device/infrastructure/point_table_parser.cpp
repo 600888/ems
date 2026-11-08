@@ -7,10 +7,12 @@
 #include <fstream>
 #include <util/excel.hpp>
 
+#include "telemetry_xlsx_parser.h"
 #include "web/platform/crypto.h"
 
 namespace ems::web {
-Json parse_vendor_xlsx(const std::string& bytes, const std::string& workspace) {
+Json parse_vendor_xlsx(const std::string& bytes, const std::string& workspace,
+                       const std::string& protocol) {
     // 在交给 Excel 库之前核对 ZIP 目录的总解压预算，阻止压缩炸弹。
     mz_zip_archive zip{};
     if (!mz_zip_reader_init_mem(&zip, bytes.data(), bytes.size(), 0))
@@ -50,6 +52,17 @@ Json parse_vendor_xlsx(const std::string& bytes, const std::string& workspace) {
         util::Excel excel;
         excel.open(path);
         const auto names = excel.sheetNames();
+        if (excel.hasSheet("遥测") || excel.hasSheet("遥信") || excel.hasSheet("遥控") ||
+            excel.hasSheet("遥调")) {
+            try {
+                return parse_telemetry_xlsx(excel, protocol);
+            } catch (const std::invalid_argument& error) {
+                throw ApiError(422, "InvalidArgument", "telemetry_workbook_invalid", "NotApplied",
+                               Json::array({{{"field", "workbook"}, {"message", error.what()}}}));
+            }
+        }
+        if (protocol != "modbus")
+            throw ApiError(422, "Unsupported", "register_table_requires_modbus");
         const auto sheet = excel.hasSheet("点表")
                                ? std::string("点表")
                                : (names.size() == 1 ? names.front() : std::string{});
@@ -91,7 +104,8 @@ Json parse_vendor_xlsx(const std::string& bytes, const std::string& workspace) {
     return result;
 }
 
-Json parse_upload(const Json& metadata, const Upload& upload, const std::string& workspace) {
+Json parse_upload(const Json& metadata, const Upload& upload, const std::string& workspace,
+                  const std::string& protocol) {
     fields(metadata, {"device_id", "binding_id", "source_kind"});
     const auto device = text(metadata, "device_id");
     const auto binding = text(metadata, "binding_id");
@@ -102,6 +116,8 @@ Json parse_upload(const Json& metadata, const Upload& upload, const std::string&
     config::PointTableImportResult parsed;
 
     if (source == "vendor_csv") {
+        if (protocol != "modbus")
+            throw ApiError(422, "Unsupported", "register_table_requires_modbus");
         // 不忽略专有扩展列，防止文件看似导入成功却遗失写入规则。
         auto first = upload.bytes.substr(0, upload.bytes.find_first_of("\r\n"));
         if (first.compare(0, 3, "\xEF\xBB\xBF") == 0) first.erase(0, 3);
@@ -122,9 +138,12 @@ Json parse_upload(const Json& metadata, const Upload& upload, const std::string&
             start = end + 1;
         }
         parsed = config::parse_point_table_csv(upload.bytes, core::DeviceId(device), binding);
-    } else if (source == "vendor_xlsx") {
+    } else if (source == "vendor_xlsx" || source == "telemetry_xlsx") {
         parsed.rows.clear();
-        Json preview = parse_vendor_xlsx(upload.bytes, workspace);
+        Json preview = parse_vendor_xlsx(upload.bytes, workspace, protocol);
+        if (preview.value("source_kind", "") == "telemetry_xlsx") return preview;
+        if (source == "telemetry_xlsx")
+            throw ApiError(422, "Unsupported", "telemetry_workbook_required");
         for (const auto& row : preview.at("rows")) {
             config::PointTableRow restored;
             restored.line = row.at("line_no").get<int>();

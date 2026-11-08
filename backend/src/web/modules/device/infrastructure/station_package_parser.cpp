@@ -113,6 +113,7 @@ void validate_connections(const Json& manifest, const std::map<std::string, cons
 /// 校验点表文件：目标为设备、绑定归属一致、文件存在。
 void validate_point_files(const Json& manifest, const std::map<std::string, const Json*>& devices,
                           const std::map<std::string, const Json*>& channels) {
+    std::set<std::string> targets;
     for (const auto& entry : array_field(manifest, "point_files")) {
         if (!entry.is_object()) reject("manifest_object_required");
         const auto device_code = require_code(entry, "device_code");
@@ -127,6 +128,15 @@ void validate_point_files(const Json& manifest, const std::map<std::string, cons
         const auto binding =
             has_binding ? entry.at("binding_code").get<std::string>() : std::string{};
         if (!binding.empty() && !channels.count(binding)) reject("manifest_channel_invalid");
+        const auto target = entry.value("target_device_code", device_code);
+        auto owner = devices.find(target);
+        if (owner == devices.end() ||
+            (target != device_code &&
+             (owner->second->at("node_kind") != "component" ||
+              owner->second->value("source_device_code", "") != device_code)))
+            reject("manifest_point_target_invalid");
+        if (!targets.insert(device_code + "|" + binding + "|" + target).second)
+            reject("manifest_point_target_duplicate");
     }
 }
 
@@ -195,9 +205,7 @@ StationPackage parse_station_package(const Upload& upload) {
         if (found == entries.end() || !valid_code(file.substr(0, file.size() - 5)) ||
             file.size() <= 5 || file.substr(file.size() - 5) != ".xlsx")
             reject("manifest_file_missing");
-        if (!package.point_files.emplace(entry.at("device_code").get<std::string>(), found->second)
-                 .second)
-            reject("manifest_file_duplicate");
+        package.point_files.emplace(file, found->second);
     }
     package.package_sha256 = sha256(upload.bytes);
     return package;

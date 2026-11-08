@@ -2,6 +2,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import ActionBtn from '@/components/common/ActionBtn.vue'
+import AdminPageActions from '@/components/layout/AdminPageActions.vue'
 import AsyncContent from '@/components/common/AsyncContent.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import FormField from '@/components/common/FormField.vue'
@@ -76,17 +77,12 @@ onMounted(load)
 </script>
 <template>
   <div class="identity-page">
-    <UserNavigation
-      ><template #actions
-        ><ActionBtn
-          variant="primary"
-          icon="check"
-          :disabled="!ready || task.busy.value"
-          @click="save"
-          >保存设置</ActionBtn
-        ></template
-      ></UserNavigation
-    >
+    <AdminPageActions>
+      <ActionBtn variant="primary" icon="check" :disabled="!ready || task.busy.value" @click="save"
+        >保存设置</ActionBtn
+      >
+    </AdminPageActions>
+    <UserNavigation />
     <AsyncContent :loading="task.busy.value" :error="task.error.value" @retry="load">
       <div
         v-if="ready"

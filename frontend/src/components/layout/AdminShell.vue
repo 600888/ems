@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import AppHeader from '@/components/layout/AppHeader.vue'
+import AdminPageHeader from '@/components/layout/AdminPageHeader.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import NewDeviceDrawer from '@/components/admin/NewDeviceDrawer.vue'
@@ -25,6 +26,13 @@ const activeKey = computed(() =>
             ? 'system'
             : 'devices',
 )
+const activeNav = computed(() => adminNav.find((item) => item.key === activeKey.value))
+const pageTitle = computed(() =>
+  typeof route.meta.title === 'string' ? route.meta.title : (activeNav.value?.label ?? '后台管理'),
+)
+const pageDescription = computed(() =>
+  typeof route.meta.description === 'string' ? route.meta.description : '管理站端设备与运行配置。',
+)
 const visibleNav = computed(() =>
   adminNav.filter((item) =>
     item.key === 'users'
@@ -43,7 +51,7 @@ function go(item: (typeof adminNav)[number]) {
 </script>
 
 <template>
-  <div class="app-shell">
+  <div class="app-shell admin-shell">
     <AppHeader admin />
 
     <div class="flex min-h-0 flex-1">
@@ -86,9 +94,16 @@ function go(item: (typeof adminNav)[number]) {
       </aside>
 
       <!-- 工作区 -->
-      <main class="workspace-scroll">
-        <router-view :key="String(route.params.userId || route.name)" />
-      </main>
+      <section class="flex min-h-0 min-w-0 flex-1 flex-col" aria-label="后台工作区">
+        <AdminPageHeader
+          :title="pageTitle"
+          :description="pageDescription"
+          :icon="activeNav?.icon ?? 'settings'"
+        />
+        <main class="workspace-scroll">
+          <router-view :key="String(route.params.userId || route.name)" />
+        </main>
+      </section>
     </div>
 
     <NewDeviceDrawer v-if="auth.can('device.write')" />

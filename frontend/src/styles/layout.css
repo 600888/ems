@@ -24,6 +24,47 @@
     height: var(--app-header-height);
   }
 
+  .admin-shell {
+    --workspace-heading-height: 96px;
+  }
+
+  .admin-page-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 16px;
+    height: var(--workspace-heading-height);
+    padding: 0 var(--workspace-padding);
+  }
+
+  .admin-page-actions {
+    min-width: 0;
+    overflow-x: auto;
+    text-align: right;
+    white-space: nowrap;
+  }
+
+  .admin-page-actions:empty {
+    display: none;
+  }
+
+  @media (max-width: 1023px) {
+    .admin-shell {
+      --workspace-heading-height: 136px;
+    }
+
+    .admin-page-header {
+      grid-template-columns: minmax(0, 1fr);
+      align-content: center;
+      gap: 12px;
+      padding-block: 12px;
+    }
+
+    .admin-page-actions {
+      text-align: left;
+    }
+  }
+
   /* 右侧工作区负责页面纵向滚动，内容面板按实际内容撑开。 */
   .workspace-scroll {
     min-width: 0;
@@ -43,9 +84,17 @@
 
   .device-workspace > .workspace-sidebar {
     position: sticky;
-    top: var(--workspace-padding);
-    height: calc(100vh - var(--app-header-height) - 2 * var(--workspace-padding));
-    height: calc(100dvh - var(--app-header-height) - 2 * var(--workspace-padding));
+    /* top 相对滚动容器可视口；padding 已由 .workspace-scroll 提供，这里必须为 0，
+       否则约束位置比自然位置低一个 padding，页面可滚动时侧边栏会被推下去。 */
+    top: 0;
+    height: calc(
+      100vh - var(--app-header-height) - var(--workspace-heading-height, 0px) - 2 *
+        var(--workspace-padding)
+    );
+    height: calc(
+      100dvh - var(--app-header-height) - var(--workspace-heading-height, 0px) - 2 *
+        var(--workspace-padding)
+    );
   }
 
   .workspace-content {

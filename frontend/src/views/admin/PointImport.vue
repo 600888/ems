@@ -310,7 +310,7 @@ async function saveCorrection() {
       ><form id="import-correction" class="grid grid-cols-2 gap-5" @submit.prevent="saveCorrection">
         <InfoBar v-if="error" class="col-span-2" :text="error" tone="danger" /><FormField
           v-for="f in [
-            { key: 'vendor_name', label: '厂家名称' },
+            { key: 'vendor_name', label: '测点名称' },
             { key: 'semantic_code', label: '固有语义编码' },
             { key: 'target_device_path', label: '目标设备路径' },
             { key: 'address_space', label: '地址空间' },
@@ -342,7 +342,7 @@ async function saveCorrection() {
         ><FormField label="传输类型" v-slot="field"
           ><el-select :id="field.id" v-model="correction.wire_type"
             ><el-option
-              v-for="v in ['bool', 'i16', 'u16']"
+              v-for="v in ['bool', 'i16', 'u16', 'i32', 'u32', 'f32']"
               :key="v"
               :value="v"
               :label="v" /></el-select></FormField
@@ -355,7 +355,11 @@ async function saveCorrection() {
               :label="v" /></el-select></FormField
         ><FormField label="字节序" v-slot="field"
           ><el-select :id="field.id" v-model="correction.byte_order"
-            ><el-option label="AB" value="ab" /><el-option label="BA" value="ba" /></el-select
+            ><el-option label="默认" value="" /><el-option
+              v-for="v in ['ab', 'ba', 'ABCD', 'BADC', 'CDAB', 'DCBA']"
+              :key="v"
+              :label="v.toUpperCase()"
+              :value="v" /></el-select
         ></FormField>
       </form>
       <template #footer

@@ -171,6 +171,29 @@ TEST(CfgLoader, SupportsSharedChannelsWithPerBindingAddresses) {
     EXPECT_EQ(loader.channels().size(), 1u);
     ASSERT_EQ(loader.devices(7).size(), 2u);
     EXPECT_EQ(loader.devices(7)[1].ycPoints_[0].protocol_code, "43:3:12:4:2");
+    EXPECT_TRUE(loader.connection_scope(7).empty());  // 显式跨设备共享通道不再参与自动归并。
+}
+
+TEST(CfgLoader, ConnectionScopeUsesPhysicalDeviceAndComponentSource) {
+    auto rows = configuration();
+    CfgLoader loader;
+    ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
+    EXPECT_EQ(loader.connection_scope(7), "source");
+    EXPECT_TRUE(loader.connection_scope(999).empty());
+    // rack 是 component，点的归属不应把它或站根变成连接复用边界。
+    EXPECT_EQ(loader.devices(7)[0].deviceKey_, "rack");
+    auto unit = rows.devices[0];
+    unit.id = 10;
+    unit.device_id = "unit";
+    unit.node_kind = "unit";
+    unit.parent_device_id = "station";
+    rows.devices.push_back(unit);
+    rows.devices[1].parent_device_id = "unit";
+    ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
+    EXPECT_EQ(loader.connection_scope(7), "source");
+    rows.points_yc[0].binding_id = "missing";
+    EXPECT_FALSE(loader.configure(rows));
+    EXPECT_EQ(loader.connection_scope(7), "source");
 }
 
 TEST(CfgLoader, DisablingSourceOrBindingOrChannelStopsTheirCollection) {
@@ -235,6 +258,30 @@ TEST(CfgLoader, ReadsIec104AndDlt645ProtocolAddressJson) {
     records.points_yc[0].protocol_address_json = R"({"data_id":"0x02010100"})";
     ASSERT_TRUE(loader.configure(records)) << loader.last_error();
     EXPECT_EQ(loader.devices(7)[0].ycPoints_[0].protocol_code, "123456789012:0x02010100");
+}
+
+TEST(CfgLoader, KeepsImportedModbusWordOrderAndExplicitWriteFunction) {
+    auto records = configuration();
+    CfgLoader loader;
+    const std::vector<std::string> orders = {"ABCD", "CDAB", "BADC", "DCBA"};
+    for (std::size_t i = 0; i < orders.size(); ++i) {
+        records.points_yc[0].byte_order = orders[i];
+        ASSERT_TRUE(loader.configure(records)) << loader.last_error();
+        EXPECT_EQ(loader.devices(7)[0].ycPoints_[0].protocol_code,
+                  "42:3:12:4:" + std::to_string(i));
+    }
+    CfgPointYtRow point;
+    point.point_id = "setpoint";
+    point.owner_device_id = "rack";
+    point.binding_id = "binding";
+    point.code = "setpoint";
+    point.address_space = "holding_register";
+    point.address_offset = 50;
+    point.wire_type = "u16";
+    point.protocol_address_json = R"({"function_code":16})";
+    records.points_yt.push_back(point);
+    ASSERT_TRUE(loader.configure(records)) << loader.last_error();
+    EXPECT_EQ(loader.devices(7)[0].ytPoints_[0].protocol_code, "42:16:50:0:0");
 }
 }  // namespace
 

@@ -9,7 +9,6 @@ const monitor = useMonitorStore()
 <template>
   <div class="flex h-[76px] shrink-0 items-center justify-between">
     <div class="flex min-w-0 flex-col gap-2">
-      <span class="truncate text-small text-muted">{{ monitor.profile.parentPath }}</span>
       <div class="flex items-center gap-[10px]">
         <AppIcon :name="monitor.profile.icon" :size="20" class="text-muted" />
         <h2 class="truncate text-title leading-none font-semibold text-ink">

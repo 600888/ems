@@ -153,6 +153,17 @@ DeviceResult binding_action(DeviceRequest& request, const std::string& path, con
  * @return 业务结果。
  */
 DeviceResult point_action(DeviceRequest& request, const std::string& path, const Json& body);
+/**
+ * @brief 按点编辑规则构建导入点的内部行；不访问数据库，归属由导入服务校验。
+ * @param[in] table 四遥分类。
+ * @param[in] existing 已读取的点，新增时为空对象。
+ * @param[in] id 稳定点 ID。
+ * @param[in] owner 归属设备 ID。
+ * @param[in] patch 导入点字段。
+ * @return 校验后的内部行；字段错误抛 ApiError。
+ */
+Json import_point_fields(database::DeviceTable table, const Json& existing, const std::string& id,
+                         const std::string& owner, const Json& patch);
 /** @brief 处理类型、模板和能力目录。
  * @param[in,out] request 活动事务。
  * @param[in] path 固定路由。
@@ -166,10 +177,12 @@ DeviceResult catalog_action(DeviceRequest& request, const std::string& path, con
  * @param[in] body JSON metadata。
  * @param[in] upload 原文件。
  * @param[in] workspace 受限工作区。
+ * @param[in] station_apply 是否由整站编排直接应用，自动记录无需交互的行确认。
  * @return 业务结果。
  */
 DeviceResult import_action(DeviceRequest& request, const std::string& path, const Json& body,
-                           const Upload& upload, const std::string& workspace);
+                           const Upload& upload, const std::string& workspace,
+                           bool station_apply = false);
 /** @brief 处理整站点表打包导入（manifest.json + 每设备 xlsx）。
  * @param[in,out] request 活动事务。
  * @param[in] path 固定路由（template/create）。

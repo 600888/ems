@@ -307,6 +307,10 @@ bool install_quit_handler(void (*on_quit)(), std::string& error) {
                         if (g_quit_callback != nullptr) {
                             g_quit_callback();
                         }
+                        // CLOSE/LOGOFF/SHUTDOWN 回调返回后系统可直接结束进程；
+                        // 保持回调等待，让主线程完成回收、日志刷盘并正常退出。
+                        if (event != CTRL_C_EVENT && event != CTRL_BREAK_EVENT)
+                            ::WaitForSingleObject(::GetCurrentProcess(), INFINITE);
                         return TRUE;
                     default:
                         return FALSE;

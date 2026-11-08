@@ -139,6 +139,127 @@ class OrmDeviceManagementStore final : public IDeviceManagementStore {
         });
     }
 
+    /**
+     * @brief 分批新增导入行，避免逐行先查后写及反复预编译。
+     * @param[in,out] tx 调用方事务，失败后失效，不在此提交。
+     * @param[in] rows 新任务行，id 必须为零。
+     * @param[in] ctx 每批检查的调用期限。
+     * @return 暂存状态；重复键和驱动错误保留公共错误语义。
+     */
+    core::Status append_import_rows(ITransaction& tx, const std::vector<CfgImportRow>& rows,
+                                    const core::CallContext& ctx) override {
+        return run<core::Unit>(tx, ctx, [&](auto& db) {
+            std::vector<CfgImportRowWrite> batch;
+            batch.reserve(128);
+            for (const auto& row : rows) {
+                if (row.id != 0) throw invalid("new import row required");
+                batch.push_back(sql_row(row));
+                if (batch.size() == 128) {
+                    db.insert_rows(batch);
+                    batch.clear();
+                }
+            }
+            db.insert_rows(batch);
+            return core::Unit{};
+        });
+    }
+
+    /**
+     * @brief 分批更新既有导入行，不逐行查询。
+     * @param[in,out] tx 调用方事务，不在此提交。
+     * @param[in] rows 含非零数据库 id 的导入行。
+     * @param[in] ctx 分批检查的调用期限。
+     * @return 暂存结果；错误使事务失效。
+     */
+    core::Status update_import_rows(ITransaction& tx, const std::vector<CfgImportRow>& rows,
+                                    const core::CallContext& ctx) override {
+        return run<core::Unit>(tx, ctx, [&](auto& db) {
+            std::vector<CfgImportRowWrite> batch;
+            for (const auto& row : rows) {
+                if (row.id <= 0) throw invalid("existing import row required");
+                batch.push_back(sql_row(row));
+                if (batch.size() == 128) {
+                    db.write_rows(batch, RecordWriteMode::Update);
+                    batch.clear();
+                }
+            }
+            db.write_rows(batch, RecordWriteMode::Update);
+            return core::Unit{};
+        });
+    }
+
+    /**
+     * @brief 按四遥分类及新增/更新分批写入已校验点位。
+     * @param[in,out] tx 调用方事务，不在此提交。
+     * @param[in] points 仅含四遥记录，更新记录必须携带已读取的 id。
+     * @param[in] ctx 分批检查的调用期限。
+     * @return 暂存结果；错误使事务失效。
+     */
+    core::Status put_import_points(ITransaction& tx,
+                                   const std::vector<DeviceManagementRecord>& points,
+                                   const core::CallContext& ctx) override {
+        return run<core::Unit>(tx, ctx, [&](auto& db) {
+            for (const auto& record : points)
+                if (!std::holds_alternative<CfgPointYcRow>(record) &&
+                    !std::holds_alternative<CfgPointYxRow>(record) &&
+                    !std::holds_alternative<CfgPointYkRow>(record) &&
+                    !std::holds_alternative<CfgPointYtRow>(record))
+                    throw invalid("import point required");
+            auto write = [&](auto* tag) {
+                using Row = std::remove_pointer_t<decltype(tag)>;
+                using WriteRow = decltype(sql_row(std::declval<Row>()));
+                for (auto mode : {RecordWriteMode::Insert, RecordWriteMode::Update}) {
+                    std::vector<WriteRow> batch;
+                    for (const auto& record : points) {
+                        const auto* row = std::get_if<Row>(&record);
+                        if (!row) continue;
+                        if (row->id < 0) throw invalid("invalid point id");
+                        if ((row->id == 0) != (mode == RecordWriteMode::Insert)) continue;
+                        batch.push_back(sql_row(*row));
+                        if (batch.size() == 128) {
+                            db.write_rows(batch, mode);
+                            batch.clear();
+                        }
+                    }
+                    db.write_rows(batch, mode);
+                }
+            };
+            write(static_cast<CfgPointYcRow*>(nullptr));
+            write(static_cast<CfgPointYxRow*>(nullptr));
+            write(static_cast<CfgPointYkRow*>(nullptr));
+            write(static_cast<CfgPointYtRow*>(nullptr));
+            return core::Unit{};
+        });
+    }
+
+    /**
+     * @brief 按依赖顺序清空整站工程，保留唯一站根及共享目录。
+     * @param[in,out] tx 已锁定站根的调用方事务，不在此提交。
+     * @param[in] station_id 唯一站根稳定 ID。
+     * @param[in] ctx 每次数据库操作检查的调用期限。
+     * @return 暂存状态；根不匹配或删除失败使事务失效，全部删除必须共同回滚。
+     */
+    core::Status clear_station(ITransaction& tx, const std::string& station_id,
+                               const core::CallContext& ctx) override {
+        return run<core::Unit>(tx, ctx, [&](auto& db) {
+            const auto roots = db.template query_s<CfgDeviceRow>("node_kind=?", "station");
+            if (roots.size() != 1 || roots.front().device_id != station_id)
+                throw invalid("unique station root required");
+            db.template delete_records_s<OpsCommStat5mRow>("1=1");
+            db.template delete_records_s<OpsStateLogRow>("1=1");
+            db.template delete_records_s<CfgImportRow>("1=1");
+            db.template delete_records_s<CfgImportJobRow>("1=1");
+            db.template delete_records_s<CfgPointYxRow>("1=1");
+            db.template delete_records_s<CfgPointYkRow>("1=1");
+            db.template delete_records_s<CfgPointYtRow>("1=1");
+            db.template delete_records_s<CfgPointYcRow>("1=1");
+            db.template delete_records_s<CfgBindingRow>("1=1");
+            db.template delete_records_s<CfgChannelRow>("1=1");
+            db.template delete_records_s<CfgDeviceRow>("device_id<>?", station_id);
+            return core::Unit{};
+        });
+    }
+
    private:
     /** @brief 检查列来自行反射，禁止 SQL 标识符注入。
      * @param[in] field 候选列名。

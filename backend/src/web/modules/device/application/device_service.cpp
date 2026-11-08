@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <map>
 #include <set>
 
 #include "web/modules/device/infrastructure/point_table_parser.h"
@@ -167,33 +168,43 @@ Json DeviceRequest::validate(const std::string& device_id) {
     auto records = take(database.device_config->load_configuration(*transaction, context));
     Json issues = Json::array();
     std::vector<std::string> confirmations;
+    std::map<std::string, std::map<std::string, Json>> confirmation_rows;
+    std::map<std::string, Json> confirmation_jobs;
+    std::map<std::string, std::string> owner_paths;
+    for (const auto& owner : records.devices) owner_paths.emplace(owner.device_id, owner.path);
     auto confirmed = [&](const auto& points) {
         for (const auto& point : points) {
             const auto separator = point.source_import_row_id.find_last_of(':');
             if (separator == std::string::npos) continue;
             auto job = point.source_import_row_id.substr(0, separator);
             auto line = point.source_import_row_id.substr(separator + 1);
-            DeviceQuery q;
-            q.table = DeviceTable::ImportRow;
-            q.filters = {{"import_job_id", job}, {"line_no", line}};
-            q.limit = 1;
-            auto entries = rows(q);
-            if (entries.empty()) continue;
-            const auto& row = entries.front();
-            if (row.at("confirm_state") != "accepted" && row.at("confirm_state") != "fixed")
+            if (!confirmation_rows.count(job)) {
+                DeviceQuery q;
+                q.table = DeviceTable::ImportRow;
+                q.filters = {{"import_job_id", job}, {"parse_code", "address_overlap"}};
+                q.limit = 100000;
+                auto& entries = confirmation_rows[job];
+                for (auto row : rows(q))
+                    if (row.at("confirm_state") == "accepted" || row.at("confirm_state") == "fixed")
+                        entries.emplace(std::to_string(row.at("line_no").get<int>()),
+                                        std::move(row));
+            }
+            const auto found = confirmation_rows.at(job).find(line);
+            if (found == confirmation_rows.at(job).end()) continue;
+            const auto& row = found->second;
+            const auto owner = owner_paths.find(point.owner_device_id);
+            if (owner == owner_paths.end() || row.at("target_device_path") != owner->second)
                 continue;
-            if (row.at("parse_code") != "address_overlap") continue;
-            auto owner = std::find_if(
-                records.devices.begin(), records.devices.end(),
-                [&](const auto& value) { return value.device_id == point.owner_device_id; });
-            if (owner == records.devices.end() || row.at("target_device_path") != owner->path)
-                continue;
-            DeviceQuery jobs;
-            jobs.table = DeviceTable::ImportJob;
-            jobs.filters = {{"import_job_id", job}};
-            jobs.limit = 1;
-            auto task = rows(jobs);
-            if (task.empty() || task.front().at("binding_id") != point.binding_id) continue;
+            if (!confirmation_jobs.count(job)) {
+                DeviceQuery jobs;
+                jobs.table = DeviceTable::ImportJob;
+                jobs.filters = {{"import_job_id", job}};
+                jobs.limit = 1;
+                auto task = rows(jobs);
+                confirmation_jobs[job] = task.empty() ? Json::object() : task.front();
+            }
+            const auto& task = confirmation_jobs.at(job);
+            if (task.empty() || task.at("binding_id") != point.binding_id) continue;
             if (row.at("address_space") == point.address_space &&
                 row.at("address_offset") == point.address_offset &&
                 row.at("register_count") == point.register_count &&
@@ -220,8 +231,9 @@ Json DeviceRequest::validate(const std::string& device_id) {
                 visible_point.clear();
             }
         }
-        issues.push_back({{"severity", "error"},
+        issues.push_back({{"severity", finding.severity},
                           {"reason", finding.reason},
+                          {"message", finding.message},
                           {"device_id", visible_device},
                           {"point_id", visible_point}});
     }
@@ -236,6 +248,7 @@ DeviceResult DeviceService::execute(const std::string& path, const Json& body,
                                     const Upload& upload) {
     Upload prepared = upload;
     if (path == "/api/point-imports/create") {
+        std::string protocol;
         // 预授权用短事务完成；真正的文件解析绝不占用连接或站根锁。
         {
             DeviceRequest preflight(database_, actor, ctx, false);
@@ -246,16 +259,32 @@ DeviceResult DeviceService::execute(const std::string& path, const Json& body,
             if (owner.at("node_kind") != "device" ||
                 binding.at("device_id") != owner.at("device_id"))
                 throw ApiError(422, "InvalidArgument", "binding_owner_mismatch");
+            protocol = preflight.one(DeviceTable::Channel, "channel_id", binding.at("channel_id"))
+                           .at("protocol")
+                           .get<std::string>();
             preflight.finish({Json::object()});
         }
-        prepared.parsed = parse_upload(body, upload, workspace_);
-    } else if (path == "/api/station-imports/create") {
+        prepared.parsed = parse_upload(body, upload, workspace_, protocol);
+    } else if (path == "/api/station-imports/create" || path == "/api/station-imports/inspect") {
         // 整站包解析在事务之外完成；结构错误在进入工程事务前整包拒绝。
         prepared.package = std::make_shared<StationPackage>(parse_station_package(prepared));
+        if (path == "/api/station-imports/create") {
+            {
+                DeviceRequest preflight(database_, actor, ctx, false);
+                for (const auto* permission : {"device.write", "channel.write", "binding.write",
+                                               "import.write", "point.write"})
+                    preflight.principal.require(permission);
+                if (!preflight.principal.device_roots.count("*"))
+                    throw ApiError(403, "PermissionDenied", "unscoped_station_import");
+                preflight.finish({Json::object()});
+            }
+            prepare_station_point_files(*prepared.package, workspace_);
+        }
     }
     const auto action = path.substr(path.find_last_of('/') + 1);
     const bool write = action == "create" || action == "update" || action == "delete" ||
-                       action == "batch-change" || action == "apply" || action == "validate";
+                       action == "batch-change" || action == "apply" || action == "validate" ||
+                       action == "clear";
     const bool preview = path.rfind("/api/point-imports/", 0) == 0 && action != "apply";
     auto transaction = take(database_.database->begin(ctx));
     auto current = AuthorizationService::recheck(database_, *transaction, actor, ctx);
@@ -289,8 +318,16 @@ DeviceResult DeviceService::execute(const std::string& path, const Json& body,
     }
     if (request.changed) {
         auto issues = request.validate();
-        if (!issues.empty())
-            throw ApiError(422, "InvalidArgument", "configuration_invalid", "NotApplied", issues);
+        Json errors = Json::array(), warnings = Json::array();
+        for (const auto& issue : issues) {
+            if (issue.at("severity") == "warning")
+                warnings.push_back(issue);
+            else
+                errors.push_back(issue);
+        }
+        if (!errors.empty())
+            throw ApiError(422, "InvalidArgument", "configuration_invalid", "NotApplied", errors);
+        if (!warnings.empty()) result.meta["warnings"] = std::move(warnings);
     }
     if (write && !actor.session_id.empty()) {
         AuditRecord event;
@@ -330,6 +367,18 @@ bool same_record(Json existing, Json candidate) {
         existing.erase(key);
         candidate.erase(key);
     }
+    auto normalize_json = [](Json& record) {
+        for (auto& field : record.items()) {
+            const auto& name = field.key();
+            if (name.size() < 5 || name.substr(name.size() - 5) != "_json" ||
+                !field.value().is_string())
+                continue;
+            const auto value = Json::parse(field.value().get<std::string>(), nullptr, false);
+            if (!value.is_discarded()) field.value() = value;
+        }
+    };
+    normalize_json(existing);
+    normalize_json(candidate);
     return existing == candidate;
 }
 

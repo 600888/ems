@@ -103,8 +103,9 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
     reply->trace = random_token();
     reply->health = state->health;
     const auto path = request->path();
-    const bool upload =
-        path == "/api/point-imports/create" || path == "/api/station-imports/create";
+    const bool station_upload =
+        path == "/api/station-imports/create" || path == "/api/station-imports/inspect";
+    const bool upload = path == "/api/point-imports/create" || station_upload;
     if (!upload && request->body().size() > 1024 * 1024) {
         reply->error(ApiError(413, "ResourceExhausted", "json_size"));
         return;
@@ -113,12 +114,13 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
         upload ? state->options.import_timeout_ms : state->options.request_timeout_ms;
     const auto context = core::make_call_context(std::chrono::milliseconds(budget), reply->trace);
     const auto action = path.substr(path.find_last_of('/') + 1);
-    const bool write = action == "create" || action == "update" || action == "delete" ||
-                       action == "apply" || action == "batch-change" || action == "set-status" ||
-                       action == "set-access" || action == "reset-password" || action == "unlock" ||
-                       action == "revoke" || action == "complete" || action == "change-password" ||
-                       action == "login" || action == "logout" || action == "logout-all" ||
-                       action == "reauthenticate" || action == "activity";
+    const bool write = action == "clear" || action == "create" || action == "update" ||
+                       action == "delete" || action == "apply" || action == "batch-change" ||
+                       action == "set-status" || action == "set-access" ||
+                       action == "reset-password" || action == "unlock" || action == "revoke" ||
+                       action == "complete" || action == "change-password" || action == "login" ||
+                       action == "logout" || action == "logout-all" || action == "reauthenticate" ||
+                       action == "activity";
 
     // 完成与期限竞争只回复一次；开始后的写超时不能宣称确定未保存。
     std::weak_ptr<Reply> weak_reply = reply;
@@ -130,7 +132,7 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
             write && reply->started ? "Unknown" : (write ? "NotApplied" : "NotApplicable")));
     });
 
-    auto task = [state, request, reply, post, path, upload, context] {
+    auto task = [state, request, reply, post, path, upload, station_upload, context] {
         if (reply->finished || core::has_expired(context)) return;
         reply->started = true;
         IdentityCall identity_call{context, request->peerAddr().toIp(),
@@ -169,8 +171,7 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
                     throw ApiError(400, "InvalidArgument", "multipart_file_and_metadata_required");
                 const auto& part = parser.getFiles().front();
                 if (part.getItemName() != "file" ||
-                    part.fileLength() > (path == "/api/station-imports/create" ? 64 * 1024 * 1024
-                                                                               : 20 * 1024 * 1024))
+                    part.fileLength() > (station_upload ? 64 * 1024 * 1024 : 20 * 1024 * 1024))
                     throw ApiError(413, "ResourceExhausted", "upload_size");
                 body = Json::parse(parameters.at("metadata"));
                 file.filename = part.getFileName();

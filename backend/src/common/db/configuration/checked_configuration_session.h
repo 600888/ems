@@ -5,6 +5,7 @@
 #include <functional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace ems::database::detail {
 enum class RecordWriteMode { Insert, Update };
@@ -77,6 +78,31 @@ class CheckedConfigurationSession {
             driver_.orm.insert(row);
         else
             driver_.orm.update(row);
+        check();
+    }
+
+    /**
+     * @brief 在现有事务内复用预编译语句新增一批记录；驱动已禁用自动事务。
+     * @param[in] rows 有界批次，不包含已有记录。
+     */
+    template <class Row>
+    void insert_rows(const std::vector<Row>& rows) {
+        write_rows(rows, RecordWriteMode::Insert);
+    }
+
+    /**
+     * @brief 在现有事务内分批复用预编译语句写入记录。
+     * @param[in] rows 有界批次，更新时含已读取的数据库 id。
+     * @param[in] mode 新增或更新。
+     */
+    template <class Row>
+    void write_rows(const std::vector<Row>& rows, RecordWriteMode mode) {
+        if (rows.empty()) return;
+        prepare();
+        if (mode == RecordWriteMode::Insert)
+            driver_.orm.insert(rows);
+        else
+            driver_.orm.update(rows);
         check();
     }
 

@@ -5,6 +5,7 @@
             "name": "ems_rtdb",
             "cmd": "ems-rtdb",
             "args": ["--config", "conf/realtime.json"],
+            "cleanupArgs": ["--config", "conf/realtime.json", "--cleanup"],
             "runDir": ".",
             "env": {},
             "singleInstance": true,

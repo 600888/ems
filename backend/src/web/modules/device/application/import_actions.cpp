@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <map>
 #include <set>
 
 #include "device_service.h"
@@ -19,6 +20,11 @@ Json import_rows(DeviceRequest& request, const std::string& job) {
 
 std::string preview_hash(const Json& job, Json rows) {
     for (auto& row : rows) {
+        // 数据库会规范化 JSON 列和数字类型，摘要使用公共行结构及规范 JSON。
+        row = encode_record(decode_record(DeviceTable::ImportRow, row));
+        const auto address = row.at("protocol_address_json").get<std::string>();
+        const auto parsed = Json::parse(address, nullptr, false);
+        if (!parsed.is_discarded()) row["protocol_address_json"] = parsed.dump();
         row.erase("id");
         row.erase("confirm_at");
     }
@@ -43,6 +49,7 @@ Json checked_rows(DeviceRequest& request, Json& job, Json rows) {
     job["row_error"] = 0;
     bool complete = true;
     auto binding = request.one(DeviceTable::Binding, "binding_id", job.at("binding_id"));
+    const auto channel = request.one(DeviceTable::Channel, "channel_id", binding.at("channel_id"));
     Json occupancy = Json::array();
     DeviceQuery shared;
     shared.table = DeviceTable::Binding;
@@ -63,6 +70,8 @@ Json checked_rows(DeviceRequest& request, Json& job, Json rows) {
         }
     }
 
+    // 同一任务通常全部指向同一设备；在本次校验内复用已按父链授权的归属。
+    std::map<std::string, Json> targets;
     // 重新解析每条归属及分类，确认操作不能把硬错误变为可接受 warning。
     for (auto& row : rows) {
         row["parse_status"] = "ok";
@@ -70,9 +79,14 @@ Json checked_rows(DeviceRequest& request, Json& job, Json rows) {
         row["parse_message"] = "";
         if (row.at("confirm_state") == "rejected") continue;
         try {
-            auto target =
-                request.one(DeviceTable::Device, "path", text(row, "target_device_path", 512));
-            request.device(target.at("device_id"));
+            const auto target_path = text(row, "target_device_path", 512);
+            auto found = targets.find(target_path);
+            if (found == targets.end()) {
+                auto target = request.one(DeviceTable::Device, "path", target_path);
+                request.device(target.at("device_id"));
+                found = targets.emplace(target_path, std::move(target)).first;
+            }
+            const auto& target = found->second;
             auto source = target.at("node_kind") == "component" ? target.at("source_device_id")
                                                                 : target.at("device_id");
             if (source != job.at("device_id"))
@@ -87,11 +101,23 @@ Json checked_rows(DeviceRequest& request, Json& job, Json rows) {
             // 字节序契约与公共解析器一致（point_table.cpp）：双寄存器点必须给出
             // ABCD/BADC/CDAB/DCBA 之一，单寄存器与线圈点必须为空。
             const auto wire = row.at("wire_type").get<std::string>();
-            const bool wide = wire == "i32" || wire == "u32" || wire == "f32";
+            const bool wide =
+                row.at("address_space") != "" && (wire == "i32" || wire == "u32" || wire == "f32");
             const auto& order = row.at("byte_order");
             if (wide ? (order != "ABCD" && order != "BADC" && order != "CDAB" && order != "DCBA")
-                     : (!order.is_string() || !order.get<std::string>().empty()))
+                     : (!order.is_string() || (order != "" && order != "ab" && order != "ba")))
                 throw ApiError(422, "Unsupported", "wire_layout_unsupported");
+            auto extra = Json::parse(row.at("protocol_address_json").get<std::string>().empty()
+                                         ? "{}"
+                                         : row.at("protocol_address_json").get<std::string>());
+            if (extra.contains("_import")) {
+                const auto& options = extra.at("_import");
+                if (options.at("protocol") != channel.at("protocol"))
+                    throw ApiError(422, "InvalidArgument", "import_protocol_mismatch");
+                if (options.contains("device_address") &&
+                    options.at("device_address") != binding.at("device_address"))
+                    throw ApiError(422, "InvalidArgument", "import_device_address_mismatch");
+            }
             if (!row.at("semantic_code").get<std::string>().empty()) {
                 DeviceQuery q;
                 q.table = DeviceTable::TypePoint;
@@ -106,7 +132,21 @@ Json checked_rows(DeviceRequest& request, Json& job, Json rows) {
             if (row.at("vendor_key") == "")
                 throw ApiError(422, "InvalidArgument", "vendor_key_required");
             auto overlap = [&](const Json& other, bool same_import) {
+                const auto other_kind = other.at("point_type").get<std::string>();
+                const bool write = kind == "yk" || kind == "yt";
+                const bool other_write = other_kind == "yk" || other_kind == "yt";
+                if (!write && !other_write) return;
                 if (other.at("address_space") != row.at("address_space")) return;
+                if (row.at("address_space") == "") {
+                    if (!extra.contains("ioa")) return;
+                    auto peer =
+                        Json::parse(other.value("protocol_address_json", "{}").empty()
+                                        ? "{}"
+                                        : other.at("protocol_address_json").get<std::string>());
+                    if (!peer.contains("ioa") || peer.at("ioa") != extra.at("ioa") ||
+                        peer.value("casdu", 1) != extra.value("casdu", 1))
+                        return;
+                }
                 if (other.value("vendor_key", std::string{}) == row.at("vendor_key") &&
                     (same_import ||
                      other.value("binding_id", std::string{}) == job.at("binding_id")))
@@ -115,9 +155,6 @@ Json checked_rows(DeviceRequest& request, Json& job, Json rows) {
                 const int other_begin = other.at("address_offset").get<int>();
                 const int other_end = other_begin + other.at("register_count").get<int>();
                 if (begin >= other_end || other_begin >= end) return;
-                const auto other_kind = other.at("point_type").get<std::string>();
-                const bool write = kind == "yk" || kind == "yt";
-                const bool other_write = other_kind == "yk" || other_kind == "yt";
                 if (write && other_write)
                     throw ApiError(422, "InvalidArgument", "address_write_conflict");
                 if (write != other_write) {
@@ -135,6 +172,10 @@ Json checked_rows(DeviceRequest& request, Json& job, Json rows) {
             row["parse_status"] = "error";
             row["parse_code"] = error.reason;
             row["parse_message"] = error.reason;
+        } catch (const std::exception& error) {
+            row["parse_status"] = "error";
+            row["parse_code"] = "invalid_import_value";
+            row["parse_message"] = error.what();
         }
         const auto status = row.at("parse_status").get<std::string>();
         const auto counter =
@@ -167,7 +208,7 @@ Json detail(Json job, const Json& rows) {
 }  // namespace
 
 DeviceResult import_action(DeviceRequest& request, const std::string& path, const Json& body,
-                           const Upload& upload, const std::string&) {
+                           const Upload& upload, const std::string&, bool station_apply) {
     request.principal.require("device.read");
     const auto action = path.substr(path.find_last_of('/') + 1);
     if (action == "list") {
@@ -244,11 +285,15 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
                                   "scale_factor", "offset_value", "unit"})
                 row[key_name] = source.at(key_name);
             row["import_job_id"] = id;
-            row["target_device_path"] = owner.at("path");
+            row["target_device_path"] = source.value("target_device_path", owner.at("path"));
             row["confirm_state"] = "none";
             const bool write = source.at("access") == "write";
-            row["point_type"] = write ? "yt" : (source.at("wire_type") == "bool" ? "yx" : "yc");
-            row["value_type"] = source.at("wire_type") == "bool" ? "bool" : "double";
+            row["point_type"] = source.value(
+                "point_type", write ? "yt" : (source.at("wire_type") == "bool" ? "yx" : "yc"));
+            row["value_type"] =
+                source.value("value_type", source.at("wire_type") == "bool" ? "bool" : "double");
+            for (auto field : {"bit_offset", "register_count", "protocol_address_json"})
+                if (source.contains(field)) row[field] = source.at(field);
             for (const auto& definition : definitions)
                 if (definition.at("semantic_code") == source.at("semantic_code") &&
                     source.at("semantic_code") != "") {
@@ -256,7 +301,8 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
                     row["value_type"] = definition.at("value_type");
                 }
             const auto wire = source.at("wire_type").get<std::string>();
-            row["register_count"] = (wire == "i32" || wire == "u32" || wire == "f32") ? 2 : 1;
+            if (!source.contains("register_count"))
+                row["register_count"] = (wire == "i32" || wire == "u32" || wire == "f32") ? 2 : 1;
             rows.push_back(std::move(row));
         }
         if (!upload.parsed.at("issues").empty()) {
@@ -266,8 +312,14 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
             job["error_message"] = upload.parsed.at("issues").dump().substr(0, 1024);
         }
         rows = checked_rows(request, job, std::move(rows));
-        save_preview(request, job, rows);
-        return {detail(job, rows), Json::object(), 201};
+        request.put(DeviceTable::ImportJob, job, false);
+        std::vector<CfgImportRow> pending;
+        pending.reserve(rows.size());
+        for (const auto& row : rows)
+            pending.push_back(std::get<CfgImportRow>(decode_record(DeviceTable::ImportRow, row)));
+        take(request.database.device_management->append_import_rows(*request.transaction, pending,
+                                                                    request.context));
+        return {detail(job, station_apply ? rows : import_rows(request, id)), Json::object(), 201};
     }
 
     auto job_id = text(body, "import_job_id");
@@ -297,12 +349,18 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
         fields(body,
                {"import_job_id", "expected_preview_hash", "expected_config_revision", "mode"});
         DeviceResult result{detail(job, rows)};
+        result.data["created"] = 0;
+        result.data["updated"] = 0;
+        result.data["excluded"] = std::count_if(rows.begin(), rows.end(), [](const Json& row) {
+            return row.at("confirm_state") == "rejected";
+        });
         result.meta["replayed"] = true;
         return result;
     }
     if (job.at("status") == "applied" || job.at("status") == "failed")
         throw ApiError(409, "Conflict", "import_terminal");
-    expect_preview(body, job, rows);
+    // 整站编排在同一事务持有站根写锁，没有跨请求的预览确认窗口。
+    if (!station_apply) expect_preview(body, job, rows);
     if (action == "update-row") {
         fields(body, {"import_job_id", "line_no", "expected_preview_hash", "fields"});
         const int line = body.at("line_no").get<int>();
@@ -333,13 +391,13 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
         job["status"] = "parsed";
         rows = checked_rows(request, job, std::move(rows));
         save_preview(request, job, rows);
-        return {detail(job, rows)};
+        return {detail(job, import_rows(request, job_id))};
     }
     if (action == "validate") {
         fields(body, {"import_job_id", "expected_preview_hash"});
         rows = checked_rows(request, job, std::move(rows));
         save_preview(request, job, rows);
-        return {detail(job, rows)};
+        return {detail(job, import_rows(request, job_id))};
     }
     if (action == "apply") {
         fields(body,
@@ -348,27 +406,50 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
         request.expect_revision(body);
         if (text(body, "mode") != "merge")
             throw ApiError(422, "Unsupported", "import_mode_unsupported");
+        auto stamp = utc_now();
+        stamp[10] = ' ';
+        stamp.pop_back();
+        if (station_apply) {
+            for (auto& row : rows) {
+                if (row.at("confirm_state") == "rejected") continue;
+                row["confirm_state"] = "accepted";
+                row["confirm_note"] = "整站导入直接应用";
+                row["confirm_by"] = request.principal.subject_id;
+                row["confirm_at"] = stamp;
+            }
+        }
         rows = checked_rows(request, job, std::move(rows));
         if (job.at("status") != "confirmed")
             throw ApiError(422, "InvalidArgument", "import_confirmation_required");
         int created = 0, updated = 0, excluded = 0;
+        std::map<std::pair<std::string, std::string>, Json> existing;
+        for (const auto* kind : {"yc", "yx", "yk", "yt"}) {
+            DeviceQuery lookup;
+            lookup.table = point_table(kind);
+            lookup.limit = 100000;
+            lookup.filters = {{"binding_id", job.at("binding_id")}};
+            for (auto point : request.rows(lookup))
+                existing.emplace(std::make_pair(kind, point.at("vendor_key").get<std::string>()),
+                                 std::move(point));
+        }
+        std::map<std::string, Json> targets;
+        std::vector<DeviceManagementRecord> pending;
         for (auto& row : rows) {
             if (row.at("confirm_state") == "rejected") {
                 ++excluded;
                 continue;
             }
-            auto target = request.one(DeviceTable::Device, "path", row.at("target_device_path"));
+            const auto target_path = row.at("target_device_path").get<std::string>();
+            if (!targets.count(target_path))
+                targets.emplace(target_path, request.one(DeviceTable::Device, "path", target_path));
+            const auto& target = targets.at(target_path);
             auto kind = row.at("point_type").get<std::string>();
             auto table = point_table(kind);
-            DeviceQuery lookup;
-            lookup.table = table;
-            lookup.limit = 1;
-            lookup.filters = {{"binding_id", job.at("binding_id")},
-                              {"vendor_key", row.at("vendor_key")}};
-            auto old = request.rows(lookup);
+            const auto found = existing.find({kind, row.at("vendor_key").get<std::string>()});
+            const Json old = found == existing.end() ? Json::object() : found->second;
             auto point_id = old.empty() ? "pt-" + random_token().substr(0, 40)
-                                        : old.front().at("point_id").get<std::string>();
-            if (!old.empty() && old.front().at("owner_device_id") != target.at("device_id"))
+                                        : old.at("point_id").get<std::string>();
+            if (!old.empty() && old.at("owner_device_id") != target.at("device_id"))
                 throw ApiError(409, "Conflict", "import_point_owner_changed");
             auto semantic = row.at("semantic_code").get<std::string>();
             Json patch = {{"binding_id", job.at("binding_id")},
@@ -384,6 +465,27 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
                             {"offset", row.at("address_offset")},
                             {"bit_offset", row.at("bit_offset")},
                             {"register_count", row.at("register_count")}}}};
+            auto extra = Json::parse(row.at("protocol_address_json").get<std::string>().empty()
+                                         ? "{}"
+                                         : row.at("protocol_address_json").get<std::string>());
+            if (extra.contains("_import")) {
+                const auto options = extra.at("_import");
+                extra.erase("_import");
+                if (kind == "yc" || kind == "yt")
+                    for (auto key : {"range_min", "range_max"})
+                        if (options.contains(key)) patch[key] = options.at(key);
+                if (kind == "yx" && options.contains("invert"))
+                    patch["invert"] = options.at("invert").get<int>() != 0;
+                if (options.contains("feedback_key")) {
+                    // 关联编码不能推断命令期望值或容差，保留来源并保持写点停用。
+                    patch["description"] =
+                        "关联反馈编码：" + options.at("feedback_key").get<std::string>();
+                    extra["feedback_key"] = options.at("feedback_key");
+                }
+                if (options.contains("command_type"))
+                    extra["command_type"] = options.at("command_type");
+            }
+            patch["address"]["protocol_address"] = extra;
             if (kind == "yc" || kind == "yt") {
                 patch["scale_factor"] = row.at("scale_factor");
                 patch["offset_value"] = row.at("offset_value");
@@ -397,32 +499,37 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
                     patch["disabled_reason"] = "导入后需补齐写入及反馈规则";
                 patch["origin"] = "vendor";
             }
-            Json input = {{"device_id", target.at("device_id")},
-                          {"point_type", kind},
-                          {"point_id", point_id},
-                          {"expected_config_revision", body.at("expected_config_revision")},
-                          {"fields", patch}};
-            point_action(request, old.empty() ? "/api/points/create" : "/api/points/update", input);
-            auto persisted = request.one(table, "point_id", point_id);
+            auto persisted =
+                import_point_fields(table, old, point_id, target.at("device_id"), patch);
             persisted["source_import_row_id"] =
                 job_id + ":" + std::to_string(row.at("line_no").get<int>());
-            request.put(table, persisted);
+            if (persisted.at("created_at") == "") persisted["created_at"] = stamp;
+            persisted["updated_at"] = stamp;
+            pending.push_back(decode_record(table, persisted));
+            existing[{kind, row.at("vendor_key").get<std::string>()}] = std::move(persisted);
             row["resolved_point_id"] = point_id;
             if (old.empty())
                 ++created;
             else
                 ++updated;
         }
+        take(request.database.device_management->put_import_points(*request.transaction, pending,
+                                                                   request.context));
+        request.changed = request.changed || !pending.empty();
         job["status"] = "applied";
-        auto stamp = utc_now();
-        stamp[10] = ' ';
-        stamp.pop_back();
         job["finished_at"] = stamp;
-        save_preview(request, job, rows);
+        request.put(DeviceTable::ImportJob, job, false);
+        std::vector<CfgImportRow> applied_rows;
+        for (const auto& row : rows)
+            applied_rows.push_back(
+                std::get<CfgImportRow>(decode_record(DeviceTable::ImportRow, row)));
+        take(request.database.device_management->update_import_rows(*request.transaction,
+                                                                    applied_rows, request.context));
         return {{{"import_job_id", job_id},
                  {"status", "applied"},
                  {"created", created},
                  {"updated", updated},
+                 {"preview_hash", preview_hash(job, rows)},
                  {"excluded", excluded}}};
     }
     throw ApiError(404, "NotFound", "route_not_found");

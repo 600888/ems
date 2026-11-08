@@ -27,6 +27,8 @@ struct PointRoute {
 
 /** @brief 通道内的点归属节点；部件点保留部件身份，使用来源设备的绑定通信。 */
 struct ConfiguredDevice {
+    std::int64_t channelId_{0};  ///< 运行时所属逻辑通道，用于共享连接内独立停止调度。
+    int pollIntervalMs_{0};      ///< 独立轮询周期；0 表示沿用连接工作线程的周期。
     std::int64_t deviceId_{0};
     std::string deviceKey_;
     std::string deviceName_;
@@ -83,6 +85,13 @@ class CfgLoader {
      */
     std::vector<ConfiguredDevice> devices(std::int64_t channel_id) const;
 
+    /**
+     * @brief 返回通道绑定所属的实体设备子树根，station/unit 组织节点不作为复用边界。
+     * @param[in] channel_id cfg_channel 数字主键。
+     * @return 同一连续 device 子树的根 device_id；未知通道或跨实体设备绑定返回空串，禁止自动复用。
+     */
+    std::string connection_scope(std::int64_t channel_id) const;
+
     /** @brief 查询初始化状态。 @return 是否已有有效配置。 */
     bool is_initialized() const { return initialized_; }
 
@@ -97,6 +106,7 @@ class CfgLoader {
     std::vector<ems::rtdb::ChannelConfig> channels_;
     std::vector<ForwardingChannelConfig> forwarding_;
     std::map<std::int64_t, std::vector<ConfiguredDevice>> devices_;
+    std::map<std::int64_t, std::string> connection_scopes_;
     std::int64_t revision_{0};
     bool initialized_{false};
     std::string error_;

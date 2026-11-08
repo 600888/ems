@@ -83,6 +83,90 @@ test('编辑保留读取时的修订号，后台查询不能覆盖过期表单',
   assert.equal(sent.fields.enabled, true)
   assert.equal(calls.filter((c) => c[0] === '/api/devices/update').length, 1)
 })
+test('缺少必需点仍可启用，保留保存警告及生效修订号', async () => {
+  api.clearEngineeringSession()
+  const warning = {
+    severity: 'warning',
+    reason: 'required_point_unconfigured',
+    message: '必需固有点未配置，相关控制能力不可用',
+    device_id: 'pcs',
+    point_id: '',
+  }
+  globalThis.fetch = async () =>
+    Response.json({
+      data: { device_id: 'pcs', enabled: true },
+      meta: { config_revision: '8', warnings: [warning] },
+    })
+  const saved = await api.deviceApi.update('pcs', { enabled: true }, '7')
+  assert.equal(saved.enabled, true)
+  assert.equal(api.engineeringRevision(), '8')
+  assert.deepEqual(api.warningsOf(reactive(saved)), [warning])
+  globalThis.fetch = async () => response({ device_id: 'pcs', enabled: false }, '9')
+  const disabled = await api.deviceApi.update('pcs', { enabled: false }, '8')
+  assert.deepEqual(api.warningsOf(disabled), [])
+})
+test('清空整站提交读取时的修订号、确认编码和新站信息', async () => {
+  api.clearEngineeringSession()
+  const calls = []
+  globalThis.fetch = async (path, options) => {
+    calls.push([path, JSON.parse(options.body)])
+    return response(
+      { station_device_id: 'station', station_code: 'new', station_name: '新站' },
+      '8',
+    )
+  }
+  await api.deviceApi.clearStation('station', 'old', 'new', '新站', '7')
+  assert.deepEqual(calls, [
+    [
+      '/api/device-management/clear',
+      {
+        expected_config_revision: '7',
+        device_id: 'station',
+        confirmation_code: 'old',
+        station_code: 'new',
+        station_name: '新站',
+      },
+    ],
+  ])
+  assert.equal(api.engineeringRevision(), '8')
+})
+test('清空后重载站目录，移除旧设备选择、搜索和分页', async () => {
+  const { useDeviceStore } = await server.ssrLoadModule('/src/stores/device.ts')
+  setActivePinia(createPinia())
+  const store = useDeviceStore()
+  store.currentId = 'deleted-device'
+  store.current = { device_id: 'deleted-device' }
+  store.page = 4
+  store.keyword = 'old'
+  store.createDrawerOpen = true
+  globalThis.fetch = async (path, options) => {
+    if (path === '/api/device-management/configuration')
+      return response({ station_device_id: 'station', config_revision: '8' }, '8')
+    if (path === '/api/devices/tree')
+      return response(
+        {
+          items: [
+            { device_id: 'station', name: '新站', node_kind: 'station', has_children: false },
+          ],
+          total: 1,
+        },
+        '8',
+      )
+    if (path === '/api/devices/list') {
+      assert.equal(JSON.parse(options.body).page, 1)
+      assert.deepEqual(JSON.parse(options.body).filters, {})
+      return response({ items: [{ device_id: 'station', name: '新站' }], total: 1 }, '8')
+    }
+    if (path === '/api/devices/detail') return response({ device_id: 'station', name: '新站' }, '8')
+    throw new Error(`Unexpected route ${path}`)
+  }
+  await store.reloadStation()
+  assert.equal(store.currentId, 'station')
+  assert.equal(store.current.name, '新站')
+  assert.equal(store.keyword, '')
+  assert.equal(store.createDrawerOpen, false)
+  assert.equal(store.total, 1)
+})
 test('上传使用 multipart 文件和 metadata，保留返回修订号', async () => {
   api.clearEngineeringSession()
   let sent
@@ -118,6 +202,56 @@ test('HTTP 响应封装保留 meta，账号切换后丢弃旧请求', async () =
   globalThis.fetch = async () => response({ ok: true }, '2')
   const result = await http.requestResponse('/api/example')
   assert.equal(result.meta.config_revision, '2')
+})
+
+test('整站 ZIP 上传发送空 metadata，不附加已移除的 address_base', async () => {
+  api.clearEngineeringSession()
+  let sent
+  globalThis.fetch = async (path, options) => {
+    sent = { path, ...options }
+    return response({ import_jobs: [] }, '5')
+  }
+  await api.deviceApi.upload(new File(['PK'], 'station.zip'), {}, true)
+  assert.equal(sent.path, '/api/station-imports/create')
+  assert.ok(sent.body instanceof FormData)
+  assert.deepEqual(JSON.parse(sent.body.get('metadata')), {})
+  assert.equal(sent.body.get('file').name, 'station.zip')
+})
+
+test('字符串参数错误显示后端指出的字段', async () => {
+  globalThis.fetch = async () =>
+    Response.json(
+      {
+        error: {
+          reason: 'string_required',
+          message: 'string_required',
+          details: [{ field: 'address_base' }],
+        },
+      },
+      { status: 400 },
+    )
+  await assert.rejects(http.request('/api/station-imports/create', {}), (error) => {
+    assert.equal(http.errorMessage(error), '请求缺少字符串字段或字段类型不正确：address_base')
+    return true
+  })
+})
+
+test('整站站编码检查只调用只读检查接口，取消前不会发起导入', async () => {
+  const calls = []
+  globalThis.fetch = async (path, options) => {
+    calls.push([path, options.body])
+    return response(
+      { station_code: 'current', package_station_code: 'source', station_code_match: false },
+      '8',
+    )
+  }
+  const inspection = await api.deviceApi.inspectStationPackage(new File(['PK'], 'station.zip'))
+  assert.equal(inspection.station_code_match, false)
+  assert.equal(inspection.station_code, 'current')
+  assert.equal(inspection.package_station_code, 'source')
+  assert.equal(calls.length, 1)
+  assert.equal(calls[0][0], '/api/station-imports/inspect')
+  assert.deepEqual(JSON.parse(calls[0][1].get('metadata')), {})
 })
 
 test('实时服务故障不伪造样本，历史仍可按配置点位查询', async () => {

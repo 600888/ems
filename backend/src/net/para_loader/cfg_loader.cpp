@@ -119,6 +119,14 @@ std::string address(const Point& point, const CfgBindingRow& binding, const CfgC
             if (function != 1 && function != 3)
                 throw std::invalid_argument("Modbus point is not writable");
             function = function == 1 ? 5 : (point.register_count > 1 ? 16 : 6);
+            if (extra.contains("function_code")) {
+                const int requested = extra.at("function_code").template get<int>();
+                if (found->second == 1 ? (requested != 5 && requested != 15)
+                                       : (requested != 6 && requested != 16))
+                    throw std::invalid_argument(
+                        "Modbus write function does not match address space");
+                function = requested;
+            }
         }
         const std::map<std::string, int> decodes{{"u16", 0}, {"i16", 1}, {"u32", 2}, {"i32", 3},
                                                  {"f32", 4}, {"f64", 5}, {"bool", 8}};
@@ -129,7 +137,9 @@ std::string address(const Point& point, const CfgBindingRow& binding, const CfgC
         if (point.bit_offset > 0 ||
             (point.wire_type == "bool" && (found->second == 3 || found->second == 4)))
             decode = 9;
-        const int endian = extra.value("endian", point.byte_order == "ba" ? 2 : 0);
+        const std::map<std::string, int> orders{{"", 0},     {"ab", 0},   {"ba", 2},  {"ABCD", 0},
+                                                {"BADC", 2}, {"CDAB", 1}, {"DCBA", 3}};
+        const int endian = extra.value("endian", orders.at(point.byte_order));
         if (endian < 0 || endian > 3 || point.address_offset < 0 || point.address_offset > 65535 ||
             point.bit_offset < 0 || point.bit_offset > 15 || point.register_count < 1 ||
             point.register_count > 4)
@@ -226,6 +236,7 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
         std::map<std::int64_t, ForwardingChannelConfig> forwarding;
         std::map<std::int64_t, std::map<std::string, json>> mms_points;
         std::map<std::int64_t, std::map<std::string, ConfiguredDevice>> routes;
+        std::map<std::int64_t, std::set<std::string>> connection_owners;
         std::int64_t revision = 0;
         std::size_t roots = 0;
         for (const auto& node : records.devices) {
@@ -259,6 +270,15 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
             if (channel.channel_id.empty() ||
                 !channels.emplace(channel.channel_id, &channel).second)
                 throw std::invalid_argument("channel identity is invalid or duplicated");
+        auto connection_owner = [&](const std::string& source) {
+            auto current = nodes.at(source);
+            while (!current->parent_device_id.empty()) {
+                const auto parent = nodes.at(current->parent_device_id);
+                if (parent->node_kind != "device") break;
+                current = parent;
+            }
+            return current->device_id;
+        };
         for (const auto& binding : records.bindings) {
             if (binding.binding_id.empty() ||
                 !bindings.emplace(binding.binding_id, &binding).second)
@@ -285,6 +305,7 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
                 if (!binding.can_collect && !binding.can_control) continue;
                 auto [entry, inserted] =
                     compiled.emplace(channel->second->id, compile_channel(*channel->second));
+                connection_owners[row.id].insert(connection_owner(binding.device_id));
                 if (protocol(*channel->second) == ems::model::ProtocolType::DLT698) {
                     const auto& meter = binding.device_address;
                     if (meter.empty() || meter.size() > 32 ||
@@ -482,6 +503,9 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
         }
         std::vector<ems::rtdb::ChannelConfig> new_channels;
         std::map<std::int64_t, std::vector<ConfiguredDevice>> new_devices;
+        std::map<std::int64_t, std::string> new_scopes;
+        for (const auto& [id, owners] : connection_owners)
+            if (owners.size() == 1) new_scopes[id] = *owners.begin();
         for (auto& [_, channel] : compiled) new_channels.push_back(std::move(channel));
         for (auto& [id, devices] : routes)
             for (auto& [_, device] : devices) new_devices[id].push_back(std::move(device));
@@ -490,6 +514,7 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
         channels_ = std::move(new_channels);
         forwarding_ = std::move(outputs);
         devices_ = std::move(new_devices);
+        connection_scopes_ = std::move(new_scopes);
         revision_ = revision;
         initialized_ = true;
         error_.clear();
@@ -503,5 +528,10 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
 std::vector<ConfiguredDevice> CfgLoader::devices(std::int64_t channel_id) const {
     auto found = devices_.find(channel_id);
     return found == devices_.end() ? std::vector<ConfiguredDevice>{} : found->second;
+}
+
+std::string CfgLoader::connection_scope(std::int64_t channel_id) const {
+    const auto found = connection_scopes_.find(channel_id);
+    return found == connection_scopes_.end() ? std::string{} : found->second;
 }
 }  // namespace ems::net::device

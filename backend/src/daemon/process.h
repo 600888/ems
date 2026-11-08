@@ -41,6 +41,8 @@ struct Process {
     std::string cmd;
     /// 命令行参数（不含 argv[0]）
     std::vector<std::string> args;
+    /// 全部托管进程退出后，以同一命令、工作目录和环境执行的清理参数；空表示不清理。
+    std::vector<std::string> cleanup_args;
     /// 子进程工作目录，空表示继承守护进程的目录
     std::string run_dir;
     /// 依赖的进程名，依赖未运行时本进程不启动

@@ -98,7 +98,7 @@ function onNodeClick(
             >
               <AppIcon :name="node.expanded ? 'chevron-down' : 'chevron-right'" :size="12" />
             </button>
-            <AppIcon v-else name="chevron-right" :size="12" class="shrink-0 text-subtle" />
+            <span v-else class="w-3 shrink-0" />
             <AppIcon
               :name="(data as DeviceNode).icon"
               :size="13"

@@ -10,7 +10,7 @@
 namespace ems::database {
 std::vector<DeviceFinding> validate_device_management(
     const DeviceConfigRecords& records, const std::vector<std::string>& confirmed_import_points) {
-    std::vector<DeviceFinding> issues;
+    std::vector<DeviceFinding> issues, warnings;
     std::unordered_map<std::string, const CfgDeviceRow*> nodes;
     std::unordered_map<std::string, const CfgBindingRow*> bindings;
     std::unordered_map<std::string, const CfgChannelRow*> channels;
@@ -159,7 +159,9 @@ std::vector<DeviceFinding> validate_device_management(
                 point.address_offset + point.register_count > 65536 || point.bit_offset < 0 ||
                 point.bit_offset > 63)
                 problem("address_bounds", node->device_id, point.point_id);
-            if (point.byte_order != "" && point.byte_order != "ab" && point.byte_order != "ba")
+            if (point.byte_order != "" && point.byte_order != "ab" && point.byte_order != "ba" &&
+                point.byte_order != "ABCD" && point.byte_order != "BADC" &&
+                point.byte_order != "CDAB" && point.byte_order != "DCBA")
                 problem("wire_layout_unsupported", node->device_id, point.point_id);
 
             auto channel = channels.find(route->channel_id);
@@ -179,7 +181,7 @@ std::vector<DeviceFinding> validate_device_management(
     visit(records.points_yk, "yk");
     visit(records.points_yt, "yt");
 
-    // 能力完整性只阻断当前启用设备；停用设备可按真实配置逐步接入。
+    // 能力完整性仅提示，不能阻止设备启用或已有点位参与采集。
     for (const auto& pair : nodes) {
         const auto& node = *pair.second;
         if (!node.enabled || (node.node_kind != "device" && node.node_kind != "component"))
@@ -187,8 +189,14 @@ std::vector<DeviceFinding> validate_device_management(
         for (const auto& type : records.type_points) {
             if (type.required && type.type_code == node.device_type_code &&
                 type.type_version == node.type_version &&
-                !semantic_keys.count(node.device_id + "\n" + type.semantic_code))
-                problem("required_point_unconfigured", node.device_id);
+                !semantic_keys.count(node.device_id + "\n" + type.semantic_code) &&
+                warnings.size() < 1000)
+                warnings.push_back({"required_point_unconfigured",
+                                    node.device_id,
+                                    {},
+                                    "warning",
+                                    "必需固有点「" + type.name + "」（" + type.semantic_code +
+                                        "）未配置，相关控制能力不可用"});
         }
     }
     for (const auto& point : records.points_yc)
@@ -264,6 +272,9 @@ std::vector<DeviceFinding> validate_device_management(
                     b.device, b.point);
         }
     }
+    // 优先返回阻断错误，避免大量完整性提示占满问题上限后掩盖地址冲突。
+    issues.insert(issues.end(), warnings.begin(),
+                  warnings.begin() + std::min(warnings.size(), 1000 - issues.size()));
     return issues;
 }
 }  // namespace ems::database

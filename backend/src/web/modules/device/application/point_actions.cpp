@@ -56,7 +56,8 @@ Json point_fields(DeviceTable table, Json current, const Json& patch, bool creat
 
     // 分类和值类型一起检查，不能通过通用字段集合混入另一类点的行为。
     const auto wire = current.at("wire_type").get<std::string>();
-    if (wire != "bool" && wire != "i16" && wire != "u16")
+    if (wire != "bool" && wire != "i16" && wire != "u16" && wire != "i32" && wire != "u32" &&
+        wire != "f32")
         throw ApiError(422, "Unsupported", "wire_layout_unsupported");
     const auto value = current.at("value_type").get<std::string>();
     const bool valid =
@@ -155,6 +156,12 @@ void remove_point(DeviceRequest& request, DeviceTable table, const std::string& 
     request.changed = true;
 }
 }  // namespace
+
+Json import_point_fields(DeviceTable table, const Json& existing, const std::string& id,
+                         const std::string& owner, const Json& patch) {
+    return point_fields(table, existing.empty() ? defaults(table, id, owner) : existing, patch,
+                        existing.empty());
+}
 
 DeviceResult point_action(DeviceRequest& request, const std::string& path, const Json& body) {
     request.principal.require("device.read");

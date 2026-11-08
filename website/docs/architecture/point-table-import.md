@@ -2,7 +2,9 @@
 
 本格式用于公共 C++ 模块中的 Modbus 厂家点表草稿。实现入口是 `parse_point_table_csv()`、`import_point_table_file()` 和 `load_point_table()`，示例见 [`point_table_v1_example.csv`](https://github.com/600888/ems/blob/main/backend/data/point_table_v1_example.csv)。导入前由调用方明确选定 `device_id` 与设备通道 `binding_id`；文件不含实际 IP、串口、从站地址或设备 ID。点表使用带列名的格式，按先选定设备、再导入点表的顺序处理。
 
-设备点表的 Excel 格式包含遥测、遥信、遥控、遥调四个工作表，空白模板放在 [`data/point_template.xlsx`](https://github.com/600888/ems/blob/main/data/point_template.xlsx)，各协议示例和数据库导入说明见 [`data/README.md`](https://github.com/600888/ems/blob/main/data/README.md)。四遥中文模板通过 `ems::database::import_configuration_points()` 校验并以事务写入现有配置表，支持 Modbus RTU/TCP、IEC 104 和 DLT645 遥测。
+设备点表的 Excel 格式包含遥测、遥信、遥控、遥调四个工作表，空白模板放在 [`data/point_template.xlsx`](https://github.com/600888/ems/blob/main/data/point_template.xlsx)，协议示例和 Web 导入说明见 [`data/README.md`](https://github.com/600888/ems/blob/main/data/README.md)。Web 单设备及整站 ZIP 入口共用四遥解析器，支持 Modbus RTU/TCP、IEC 104 和 DLT645 遥测。IEC 104 公共地址、信息体地址及 ASDU 类型通过 `protocol_address_json` 保存，四遥分类、数值系数、限值、位偏移、反转及单位沿预览到写入链路保留。写点仍停用，关联编码不足以推断命令期望值与执行授权。
+
+整站清单支持同一设备的多个绑定和共享簇模板：`point_files[].device_code` 指向实际通信设备，`binding_code` 选择通道，`target_device_code` 可指定由它采集的部件。模板从机列留空时取绑定地址。IEC61850 装置使用 ICD/CID，整站点表入口仅建设备档案，不将其配置文件转换成寄存器点表。
 
 本节的 `import_point_table_file()` 也支持 XLSX，但使用下面列出的英文列名，读取单工作表或名为“点表”的工作表，再复用 CSV 字段校验与内存加载逻辑。两种格式均拒绝公式和旧版 `.xls`；读取不修改源文件。
 

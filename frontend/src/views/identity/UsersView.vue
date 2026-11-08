@@ -3,6 +3,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import ActionBtn from '@/components/common/ActionBtn.vue'
+import AdminPageActions from '@/components/layout/AdminPageActions.vue'
 import AsyncContent from '@/components/common/AsyncContent.vue'
 import StatusTag from '@/components/common/StatusTag.vue'
 import AppIcon from '@/components/common/AppIcon.vue'
@@ -102,6 +103,22 @@ onMounted(() => {
 </script>
 <template>
   <div class="identity-page">
+    <AdminPageActions>
+      <ActionBtn
+        icon="refresh-cw"
+        :loading="users.busy"
+        aria-label="刷新用户列表"
+        @click="users.load"
+        >刷新</ActionBtn
+      >
+      <ActionBtn
+        v-if="auth.can('user.write') && auth.can('user.grant')"
+        variant="primary"
+        icon="plus"
+        @click="drawer = true"
+        >新建用户</ActionBtn
+      >
+    </AdminPageActions>
     <UserNavigation />
     <div class="flex flex-wrap items-center gap-x-8 gap-y-3 py-1">
       <div v-for="item in statItems" :key="item.key" class="flex items-center gap-[10px]">
@@ -139,21 +156,7 @@ onMounted(() => {
             label="已启用"
             value="enabled" /><el-option label="已停用" value="disabled" /></el-select
         ><ActionBtn type="submit" variant="primary" :disabled="users.busy">查询</ActionBtn
-        ><ActionBtn @click="users.reset">重置</ActionBtn
-        ><ActionBtn
-          class="ml-auto"
-          icon="refresh-cw"
-          :loading="users.busy"
-          aria-label="刷新用户列表"
-          @click="users.load"
-          >刷新</ActionBtn
-        ><ActionBtn
-          v-if="auth.can('user.write') && auth.can('user.grant')"
-          variant="primary"
-          icon="plus"
-          @click="drawer = true"
-          >新建用户</ActionBtn
-        >
+        ><ActionBtn @click="users.reset">重置</ActionBtn>
       </form>
       <AsyncContent
         :loading="users.busy"

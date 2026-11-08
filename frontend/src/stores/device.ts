@@ -91,6 +91,21 @@ export const useDeviceStore = defineStore('device', () => {
       if (owner === epoch) error.value = errorMessage(cause)
     }
   }
+  async function reloadStation() {
+    epoch++
+    pending = undefined
+    tree.value = []
+    rows.value = []
+    current.value = null
+    currentId.value = ''
+    expandedIds.value = []
+    createDrawerOpen.value = false
+    keyword.value = ''
+    page.value = 1
+    total.value = 0
+    await load()
+    if (!error.value && stationId.value) await selectNode(stationId.value)
+  }
   return {
     tree,
     rows,
@@ -110,5 +125,6 @@ export const useDeviceStore = defineStore('device', () => {
     total,
     load,
     selectNode,
+    reloadStation,
   }
 })

@@ -77,6 +77,11 @@ export interface ImportJob {
   allowed_operations: string[]
   [key: string]: unknown
 }
+export interface StationImportInspection {
+  station_code: string
+  package_station_code: string
+  station_code_match: boolean
+}
 export interface ImportEntry {
   line_no: number
   vendor_name: string
@@ -90,6 +95,7 @@ export interface ImportEntry {
 export interface Finding {
   severity: string
   reason: string
+  message?: string
   device_id: string
   point_id: string
 }

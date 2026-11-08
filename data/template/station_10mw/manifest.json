@@ -1,0 +1,2219 @@
+{
+  "schema": "ems-station-package/1",
+  "station": {
+    "code": "station001",
+    "name": "10MW储能站"
+  },
+  "devices": [
+    {
+      "code": "unit01",
+      "name": "储能单元01",
+      "node_kind": "unit",
+      "parent_code": "",
+      "enabled": true
+    },
+    {
+      "code": "pcs01",
+      "name": "PCS-01 储能变流器",
+      "node_kind": "device",
+      "parent_code": "unit01",
+      "enabled": true,
+      "device_type_code": "pcs",
+      "type_version": "pcs-v1"
+    },
+    {
+      "code": "bms01",
+      "name": "BMS-01 电池管理系统",
+      "node_kind": "device",
+      "parent_code": "unit01",
+      "enabled": true,
+      "device_type_code": "bms",
+      "type_version": "bms-v1"
+    },
+    {
+      "code": "bms01_rack01",
+      "name": "BMS-01 电池簇01",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack02",
+      "name": "BMS-01 电池簇02",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack03",
+      "name": "BMS-01 电池簇03",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack04",
+      "name": "BMS-01 电池簇04",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack05",
+      "name": "BMS-01 电池簇05",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack06",
+      "name": "BMS-01 电池簇06",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack07",
+      "name": "BMS-01 电池簇07",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack08",
+      "name": "BMS-01 电池簇08",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack09",
+      "name": "BMS-01 电池簇09",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack10",
+      "name": "BMS-01 电池簇10",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack11",
+      "name": "BMS-01 电池簇11",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "bms01_rack12",
+      "name": "BMS-01 电池簇12",
+      "node_kind": "component",
+      "parent_code": "bms01",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms01"
+    },
+    {
+      "code": "unit02",
+      "name": "储能单元02",
+      "node_kind": "unit",
+      "parent_code": "",
+      "enabled": true
+    },
+    {
+      "code": "pcs02",
+      "name": "PCS-02 储能变流器",
+      "node_kind": "device",
+      "parent_code": "unit02",
+      "enabled": true,
+      "device_type_code": "pcs",
+      "type_version": "pcs-v1"
+    },
+    {
+      "code": "bms02",
+      "name": "BMS-02 电池管理系统",
+      "node_kind": "device",
+      "parent_code": "unit02",
+      "enabled": true,
+      "device_type_code": "bms",
+      "type_version": "bms-v1"
+    },
+    {
+      "code": "bms02_rack01",
+      "name": "BMS-02 电池簇01",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack02",
+      "name": "BMS-02 电池簇02",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack03",
+      "name": "BMS-02 电池簇03",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack04",
+      "name": "BMS-02 电池簇04",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack05",
+      "name": "BMS-02 电池簇05",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack06",
+      "name": "BMS-02 电池簇06",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack07",
+      "name": "BMS-02 电池簇07",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack08",
+      "name": "BMS-02 电池簇08",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack09",
+      "name": "BMS-02 电池簇09",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack10",
+      "name": "BMS-02 电池簇10",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack11",
+      "name": "BMS-02 电池簇11",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "bms02_rack12",
+      "name": "BMS-02 电池簇12",
+      "node_kind": "component",
+      "parent_code": "bms02",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms02"
+    },
+    {
+      "code": "unit03",
+      "name": "储能单元03",
+      "node_kind": "unit",
+      "parent_code": "",
+      "enabled": true
+    },
+    {
+      "code": "pcs03",
+      "name": "PCS-03 储能变流器",
+      "node_kind": "device",
+      "parent_code": "unit03",
+      "enabled": true,
+      "device_type_code": "pcs",
+      "type_version": "pcs-v1"
+    },
+    {
+      "code": "bms03",
+      "name": "BMS-03 电池管理系统",
+      "node_kind": "device",
+      "parent_code": "unit03",
+      "enabled": true,
+      "device_type_code": "bms",
+      "type_version": "bms-v1"
+    },
+    {
+      "code": "bms03_rack01",
+      "name": "BMS-03 电池簇01",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack02",
+      "name": "BMS-03 电池簇02",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack03",
+      "name": "BMS-03 电池簇03",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack04",
+      "name": "BMS-03 电池簇04",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack05",
+      "name": "BMS-03 电池簇05",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack06",
+      "name": "BMS-03 电池簇06",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack07",
+      "name": "BMS-03 电池簇07",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack08",
+      "name": "BMS-03 电池簇08",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack09",
+      "name": "BMS-03 电池簇09",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack10",
+      "name": "BMS-03 电池簇10",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack11",
+      "name": "BMS-03 电池簇11",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "bms03_rack12",
+      "name": "BMS-03 电池簇12",
+      "node_kind": "component",
+      "parent_code": "bms03",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms03"
+    },
+    {
+      "code": "unit04",
+      "name": "储能单元04",
+      "node_kind": "unit",
+      "parent_code": "",
+      "enabled": true
+    },
+    {
+      "code": "pcs04",
+      "name": "PCS-04 储能变流器",
+      "node_kind": "device",
+      "parent_code": "unit04",
+      "enabled": true,
+      "device_type_code": "pcs",
+      "type_version": "pcs-v1"
+    },
+    {
+      "code": "bms04",
+      "name": "BMS-04 电池管理系统",
+      "node_kind": "device",
+      "parent_code": "unit04",
+      "enabled": true,
+      "device_type_code": "bms",
+      "type_version": "bms-v1"
+    },
+    {
+      "code": "bms04_rack01",
+      "name": "BMS-04 电池簇01",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack02",
+      "name": "BMS-04 电池簇02",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack03",
+      "name": "BMS-04 电池簇03",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack04",
+      "name": "BMS-04 电池簇04",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack05",
+      "name": "BMS-04 电池簇05",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack06",
+      "name": "BMS-04 电池簇06",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack07",
+      "name": "BMS-04 电池簇07",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack08",
+      "name": "BMS-04 电池簇08",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack09",
+      "name": "BMS-04 电池簇09",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack10",
+      "name": "BMS-04 电池簇10",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack11",
+      "name": "BMS-04 电池簇11",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "bms04_rack12",
+      "name": "BMS-04 电池簇12",
+      "node_kind": "component",
+      "parent_code": "bms04",
+      "enabled": true,
+      "device_type_code": "rack",
+      "type_version": "rack-v1",
+      "source_device_code": "bms04"
+    },
+    {
+      "code": "box01",
+      "name": "箱变测控装置",
+      "node_kind": "device",
+      "parent_code": "",
+      "enabled": true,
+      "device_type_code": "relay",
+      "type_version": "relay-v1"
+    },
+    {
+      "code": "dispatch01",
+      "name": "调度转发装置",
+      "node_kind": "device",
+      "parent_code": "",
+      "enabled": true,
+      "device_type_code": "relay",
+      "type_version": "relay-v1"
+    },
+    {
+      "code": "meter01",
+      "name": "站用多功能电表",
+      "node_kind": "device",
+      "parent_code": "",
+      "enabled": true,
+      "device_type_code": "meter",
+      "type_version": "meter-v1"
+    },
+    {
+      "code": "relay01",
+      "name": "线路保护装置",
+      "node_kind": "device",
+      "parent_code": "",
+      "enabled": true,
+      "device_type_code": "relay",
+      "type_version": "relay-v1"
+    }
+  ],
+  "channels": [
+    {
+      "code": "ch_pcs01",
+      "name": "PCS-01 IEC104",
+      "protocol": "iec104",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:2404",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01",
+      "name": "BMS-01 总控",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:502",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack01",
+      "name": "BMS-01 簇01",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:503",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack02",
+      "name": "BMS-01 簇02",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:504",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack03",
+      "name": "BMS-01 簇03",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:505",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack04",
+      "name": "BMS-01 簇04",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:506",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack05",
+      "name": "BMS-01 簇05",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:507",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack06",
+      "name": "BMS-01 簇06",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:508",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack07",
+      "name": "BMS-01 簇07",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:509",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack08",
+      "name": "BMS-01 簇08",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:510",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack09",
+      "name": "BMS-01 簇09",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:511",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack10",
+      "name": "BMS-01 簇10",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:512",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack11",
+      "name": "BMS-01 簇11",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:513",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms01_rack12",
+      "name": "BMS-01 簇12",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:514",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_pcs02",
+      "name": "PCS-02 IEC104",
+      "protocol": "iec104",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:2405",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02",
+      "name": "BMS-02 总控",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:515",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack01",
+      "name": "BMS-02 簇01",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:516",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack02",
+      "name": "BMS-02 簇02",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:517",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack03",
+      "name": "BMS-02 簇03",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:518",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack04",
+      "name": "BMS-02 簇04",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:519",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack05",
+      "name": "BMS-02 簇05",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:520",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack06",
+      "name": "BMS-02 簇06",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:521",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack07",
+      "name": "BMS-02 簇07",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:522",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack08",
+      "name": "BMS-02 簇08",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:523",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack09",
+      "name": "BMS-02 簇09",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:524",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack10",
+      "name": "BMS-02 簇10",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:525",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack11",
+      "name": "BMS-02 簇11",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:526",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms02_rack12",
+      "name": "BMS-02 簇12",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:527",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_pcs03",
+      "name": "PCS-03 IEC104",
+      "protocol": "iec104",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:2406",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03",
+      "name": "BMS-03 总控",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:528",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack01",
+      "name": "BMS-03 簇01",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:529",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack02",
+      "name": "BMS-03 簇02",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:530",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack03",
+      "name": "BMS-03 簇03",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:531",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack04",
+      "name": "BMS-03 簇04",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:532",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack05",
+      "name": "BMS-03 簇05",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:533",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack06",
+      "name": "BMS-03 簇06",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:534",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack07",
+      "name": "BMS-03 簇07",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:535",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack08",
+      "name": "BMS-03 簇08",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:536",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack09",
+      "name": "BMS-03 簇09",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:537",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack10",
+      "name": "BMS-03 簇10",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:538",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack11",
+      "name": "BMS-03 簇11",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:539",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms03_rack12",
+      "name": "BMS-03 簇12",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:540",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_pcs04",
+      "name": "PCS-04 IEC104",
+      "protocol": "iec104",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:2407",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04",
+      "name": "BMS-04 总控",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:541",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack01",
+      "name": "BMS-04 簇01",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:542",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack02",
+      "name": "BMS-04 簇02",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:543",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack03",
+      "name": "BMS-04 簇03",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:544",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack04",
+      "name": "BMS-04 簇04",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:545",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack05",
+      "name": "BMS-04 簇05",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:546",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack06",
+      "name": "BMS-04 簇06",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:547",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack07",
+      "name": "BMS-04 簇07",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:548",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack08",
+      "name": "BMS-04 簇08",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:549",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack09",
+      "name": "BMS-04 簇09",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:550",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack10",
+      "name": "BMS-04 簇10",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:551",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack11",
+      "name": "BMS-04 簇11",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:552",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_bms04_rack12",
+      "name": "BMS-04 簇12",
+      "protocol": "modbus",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:553",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_box01",
+      "name": "箱变测控装置",
+      "protocol": "iec104",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:2408",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_dispatch01",
+      "name": "调度转发装置",
+      "protocol": "iec104",
+      "conn_mode": "tcp_client",
+      "endpoint": "127.0.0.1:2409",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true
+    },
+    {
+      "code": "ch_meter01",
+      "name": "站用多功能电表",
+      "protocol": "modbus",
+      "conn_mode": "serial",
+      "endpoint": "COM1",
+      "poll_interval_ms": 3000,
+      "timeout_ms": 3000,
+      "retry_times": 1,
+      "max_sessions": 1,
+      "enabled": true,
+      "serial": {
+        "baud_rate": 9600,
+        "data_bits": 8,
+        "stop_bits": 1,
+        "parity": "N"
+      }
+    }
+  ],
+  "bindings": [
+    {
+      "device_code": "pcs01",
+      "channel_code": "ch_pcs01",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack01",
+      "device_address": "2",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack02",
+      "device_address": "3",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack03",
+      "device_address": "4",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack04",
+      "device_address": "5",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack05",
+      "device_address": "6",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack06",
+      "device_address": "7",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack07",
+      "device_address": "8",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack08",
+      "device_address": "9",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack09",
+      "device_address": "10",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack10",
+      "device_address": "11",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack11",
+      "device_address": "12",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms01",
+      "channel_code": "ch_bms01_rack12",
+      "device_address": "13",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "pcs02",
+      "channel_code": "ch_pcs02",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack01",
+      "device_address": "2",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack02",
+      "device_address": "3",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack03",
+      "device_address": "4",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack04",
+      "device_address": "5",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack05",
+      "device_address": "6",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack06",
+      "device_address": "7",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack07",
+      "device_address": "8",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack08",
+      "device_address": "9",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack09",
+      "device_address": "10",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack10",
+      "device_address": "11",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack11",
+      "device_address": "12",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms02",
+      "channel_code": "ch_bms02_rack12",
+      "device_address": "13",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "pcs03",
+      "channel_code": "ch_pcs03",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack01",
+      "device_address": "2",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack02",
+      "device_address": "3",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack03",
+      "device_address": "4",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack04",
+      "device_address": "5",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack05",
+      "device_address": "6",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack06",
+      "device_address": "7",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack07",
+      "device_address": "8",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack08",
+      "device_address": "9",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack09",
+      "device_address": "10",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack10",
+      "device_address": "11",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack11",
+      "device_address": "12",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms03",
+      "channel_code": "ch_bms03_rack12",
+      "device_address": "13",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "pcs04",
+      "channel_code": "ch_pcs04",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack01",
+      "device_address": "2",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack02",
+      "device_address": "3",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack03",
+      "device_address": "4",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack04",
+      "device_address": "5",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack05",
+      "device_address": "6",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack06",
+      "device_address": "7",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack07",
+      "device_address": "8",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack08",
+      "device_address": "9",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack09",
+      "device_address": "10",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack10",
+      "device_address": "11",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack11",
+      "device_address": "12",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "bms04",
+      "channel_code": "ch_bms04_rack12",
+      "device_address": "13",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "box01",
+      "channel_code": "ch_box01",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    },
+    {
+      "device_code": "dispatch01",
+      "channel_code": "ch_dispatch01",
+      "device_address": "18",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": true,
+      "enabled": true
+    },
+    {
+      "device_code": "meter01",
+      "channel_code": "ch_meter01",
+      "device_address": "1",
+      "can_collect": true,
+      "can_control": true,
+      "can_forward": false,
+      "enabled": true
+    }
+  ],
+  "point_files": [
+    {
+      "device_code": "pcs01",
+      "binding_code": "ch_pcs01",
+      "file": "pcs.xlsx"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01",
+      "file": "bms.xlsx"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack01",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack01"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack02",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack02"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack03",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack03"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack04",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack04"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack05",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack05"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack06",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack06"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack07",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack07"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack08",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack08"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack09",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack09"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack10",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack10"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack11",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack11"
+    },
+    {
+      "device_code": "bms01",
+      "binding_code": "ch_bms01_rack12",
+      "file": "rack.xlsx",
+      "target_device_code": "bms01_rack12"
+    },
+    {
+      "device_code": "pcs02",
+      "binding_code": "ch_pcs02",
+      "file": "pcs.xlsx"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02",
+      "file": "bms.xlsx"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack01",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack01"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack02",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack02"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack03",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack03"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack04",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack04"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack05",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack05"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack06",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack06"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack07",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack07"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack08",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack08"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack09",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack09"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack10",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack10"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack11",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack11"
+    },
+    {
+      "device_code": "bms02",
+      "binding_code": "ch_bms02_rack12",
+      "file": "rack.xlsx",
+      "target_device_code": "bms02_rack12"
+    },
+    {
+      "device_code": "pcs03",
+      "binding_code": "ch_pcs03",
+      "file": "pcs.xlsx"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03",
+      "file": "bms.xlsx"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack01",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack01"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack02",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack02"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack03",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack03"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack04",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack04"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack05",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack05"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack06",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack06"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack07",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack07"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack08",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack08"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack09",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack09"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack10",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack10"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack11",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack11"
+    },
+    {
+      "device_code": "bms03",
+      "binding_code": "ch_bms03_rack12",
+      "file": "rack.xlsx",
+      "target_device_code": "bms03_rack12"
+    },
+    {
+      "device_code": "pcs04",
+      "binding_code": "ch_pcs04",
+      "file": "pcs.xlsx"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04",
+      "file": "bms.xlsx"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack01",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack01"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack02",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack02"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack03",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack03"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack04",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack04"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack05",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack05"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack06",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack06"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack07",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack07"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack08",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack08"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack09",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack09"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack10",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack10"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack11",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack11"
+    },
+    {
+      "device_code": "bms04",
+      "binding_code": "ch_bms04_rack12",
+      "file": "rack.xlsx",
+      "target_device_code": "bms04_rack12"
+    },
+    {
+      "device_code": "box01",
+      "binding_code": "ch_box01",
+      "file": "box01.xlsx"
+    },
+    {
+      "device_code": "dispatch01",
+      "binding_code": "ch_dispatch01",
+      "file": "dispatch01.xlsx"
+    },
+    {
+      "device_code": "meter01",
+      "binding_code": "ch_meter01",
+      "file": "meter01.xlsx"
+    }
+  ]
+}

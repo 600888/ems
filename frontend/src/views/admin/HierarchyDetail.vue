@@ -36,17 +36,14 @@ watch(id, load, { immediate: true })
   <div class="device-workspace">
     <AdminDeviceTree />
     <section class="workspace-content">
-      <DeviceToolbar
-        ><span>{{ device.current?.path }}</span></DeviceToolbar
-      >
-      <div class="panel flex shrink-0 flex-wrap items-center gap-5 p-4">
+      <DeviceToolbar>
         <h2 class="text-title font-semibold">{{ device.current?.name }}</h2>
         <ActionBtn @click="tab = 'basic'">基本信息</ActionBtn
         ><ActionBtn @click="tab = 'children'">子节点</ActionBtn
         ><ActionBtn v-if="device.current?.node_kind === 'component'" @click="tab = 'points'"
           >四遥点位</ActionBtn
         >
-      </div>
+      </DeviceToolbar>
       <BasicInfo v-if="tab === 'basic'" /><PointMapping v-else-if="tab === 'points'" /><AsyncContent
         v-else
         :loading="busy"

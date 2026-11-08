@@ -1,8 +1,10 @@
 #include <common/core/time.h>
 #include <drogon/drogon.h>
 #include <gtest/gtest.h>
+#include <miniz.h>
 #include <sqlite3.h>
 
+#include <atomic>
 #include <filesystem>
 #include <fstream>
 #include <future>
@@ -26,8 +28,10 @@ namespace {
 class TestConnection final : public detail::Connection {
    public:
     ormpp::sqlite orm;
+    inline static std::atomic<std::size_t> operation_count{0};
 
     core::Status prepare(const core::CallContext& ctx) {
+        ++operation_count;
         return core::has_expired(ctx)
                    ? core::Status{core::make_error(core::ErrorCode::DeadlineExceeded,
                                                    core::WriteEffect::NotApplied)}
@@ -143,7 +147,388 @@ class WebDevice : public ::testing::Test {
                   {"type_version", "hvac-v1"},
                   {"enabled", false}}}};
     }
+
+    void bind_protocol(const std::string& protocol, const std::string& address = "1") {
+        execute("/api/devices/create", create());
+        execute("/api/bindings/create", {{"device_id", "hvac01"},
+                                         {"binding_id", "binding01"},
+                                         {"expected_config_revision", "1"},
+                                         {"fields",
+                                          {{"new_channel",
+                                            {{"channel_id", "channel01"},
+                                             {"code", "channel01"},
+                                             {"name", "Test"},
+                                             {"protocol", protocol},
+                                             {"conn_mode", "tcp_client"},
+                                             {"endpoint", "127.0.0.1:502"}}},
+                                           {"device_address", address},
+                                           {"can_collect", true},
+                                           {"can_control", true}}}});
+    }
+
+    void import_example(const std::string& protocol) {
+        bind_protocol(protocol, protocol == "dlt645" ? "123456789012" : "1");
+        auto path = std::filesystem::path(__FILE__)
+                        .parent_path()
+                        .parent_path()
+                        .parent_path()
+                        .parent_path() /
+                    "data" / "point_csv" / ("point_sample_" + protocol + ".xlsx");
+        std::ifstream input(path, std::ios::binary);
+        ASSERT_TRUE(input.good()) << path;
+        if (protocol == "modbus") {
+            // 仓库示例混有从机 1/2。整站包每设备一文件，按真实绑定拆分，不能改从机号。
+            util::Excel original;
+            original.open(path);
+            util::Excel selected;
+            path = directory / "modbus_selected.xlsx";
+            selected.create(path);
+            for (const auto& sheet : original.sheetNames()) {
+                selected.addSheet(sheet);
+                const auto [rows, columns] = original.usedSize(sheet);
+                unsigned target = 1;
+                for (unsigned row = 1; row <= rows; ++row) {
+                    if (row > 1 &&
+                        original.readCell(sheet, row, 3) != util::ExcelValue(std::int64_t{1}))
+                        continue;
+                    selected.writeRange(sheet, target++, 1,
+                                        original.readRange(sheet, row, 1, 1, columns));
+                }
+            }
+            selected.removeSheet("Sheet1");
+            selected.save();
+            selected.close();
+            input.close();
+            input.open(path, std::ios::binary);
+        }
+        Upload upload;
+        upload.filename = path.filename().u8string();
+        upload.bytes.assign(std::istreambuf_iterator<char>(input), {});
+        const auto preview = service->execute("/api/point-imports/create",
+                                              {{"device_id", "hvac01"},
+                                               {"binding_id", "binding01"},
+                                               {"source_kind", "telemetry_xlsx"}},
+                                              actor, context(), upload);
+        ASSERT_EQ(preview.data.at("status"), "confirmed") << preview.data;
+        auto id = preview.data.at("import_job_id");
+        const auto applied = execute("/api/point-imports/apply",
+                                     {{"import_job_id", id},
+                                      {"expected_preview_hash", preview.data.at("preview_hash")},
+                                      {"expected_config_revision", "2"},
+                                      {"mode", "merge"}});
+        EXPECT_GT(applied.data.at("created").get<int>(), 0);
+        auto yc = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yc"}});
+        ASSERT_GT(yc.data.at("total").get<int>(), 0);
+        const auto& point = yc.data.at("items").front();
+        if (protocol == "iec104") {
+            EXPECT_EQ(point.at("address").at("protocol_address").at("casdu"), 1);
+            EXPECT_EQ(point.at("address").at("protocol_address").at("iec104_type"), "M_ME_NB_1");
+            EXPECT_EQ(point.at("address").at("space"), nullptr);
+        } else if (protocol == "modbus") {
+            EXPECT_EQ(point.at("wire_type"), "i32");
+            EXPECT_EQ(point.at("byte_order"), "ABCD");
+        } else {
+            EXPECT_TRUE(point.at("address").at("protocol_address").contains("data_id"));
+        }
+        if (protocol != "dlt645") {
+            auto yk = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yk"}});
+            auto yt = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yt"}});
+            EXPECT_GT(yk.data.at("total").get<int>(), 0);
+            EXPECT_GT(yt.data.at("total").get<int>(), 0);
+            EXPECT_EQ(yk.data.at("items").front().at("enabled"), false);
+            EXPECT_TRUE(yk.data.at("items")
+                            .front()
+                            .at("address")
+                            .at("protocol_address")
+                            .contains("feedback_key"));
+        }
+    }
 };
+
+TEST_F(WebDevice, TelemetryModbusExampleAppliesAllFourCategories) { import_example("modbus"); }
+
+TEST_F(WebDevice, TelemetryIec104ExamplePreservesProtocolAddressOnApply) {
+    import_example("iec104");
+}
+
+TEST_F(WebDevice, TelemetryDlt645ExampleUsesMeterBindingAndDataIdentifiers) {
+    import_example("dlt645");
+}
+
+TEST_F(WebDevice, TelemetryIec104Keeps24BitIoaAndRejectsFormulaAndWrongAsdu) {
+    bind_protocol("iec104");
+    const auto file = directory / "ioa.xlsx";
+    util::Excel excel;
+    excel.create(file);
+    excel.renameSheet("Sheet1", "遥测");
+    excel.writeRange("遥测", 1, 1,
+                     {{std::string("测点编码"), std::string("测点名称"), std::string("从机地址"),
+                       std::string("寄存器地址"), std::string("104ASDU类型")},
+                      {std::string("power"), std::string("有功功率"), std::int64_t{1},
+                       std::int64_t{0xffffff}, std::string("M_ME_NC_1")}});
+    auto preview = [&] {
+        excel.save();
+        std::ifstream input(file, std::ios::binary);
+        Upload upload;
+        upload.filename = "ioa.xlsx";
+        upload.bytes.assign(std::istreambuf_iterator<char>(input), {});
+        return service->execute("/api/point-imports/create",
+                                {{"device_id", "hvac01"},
+                                 {"binding_id", "binding01"},
+                                 {"source_kind", "telemetry_xlsx"}},
+                                actor, context(), upload);
+    };
+    auto result = preview();
+    ASSERT_EQ(result.data.at("status"), "confirmed");
+    auto applied = execute("/api/point-imports/apply",
+                           {{"import_job_id", result.data.at("import_job_id")},
+                            {"expected_preview_hash", result.data.at("preview_hash")},
+                            {"expected_config_revision", "2"},
+                            {"mode", "merge"}});
+    auto points = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yc"}});
+    ASSERT_EQ(points.data.at("total"), 1);
+    EXPECT_EQ(points.data.at("items").front().at("address").at("protocol_address").at("ioa"),
+              0xffffff);
+    excel.writeCell("遥测", 2, 4, std::int64_t{0x1000000});
+    EXPECT_EQ(preview().data.at("status"), "failed");
+    excel.writeCell("遥测", 2, 4, std::int64_t{1});
+    excel.writeCell("遥测", 2, 5, std::string("M_SP_NA_1"));
+    EXPECT_EQ(preview().data.at("status"), "failed");
+    excel.writeCell("遥测", 2, 5, std::string("M_ME_NC_1"));
+    excel.writeFormula("遥测", "D2", "1+1");
+    EXPECT_EQ(preview().data.at("status"), "failed");
+    EXPECT_EQ(
+        execute("/api/device-management/configuration", Json::object()).meta.at("config_revision"),
+        applied.meta.at("config_revision"));
+}
+
+std::string station_zip(const Json& manifest, const std::string& file, const std::string& bytes) {
+    mz_zip_archive archive{};
+    if (!mz_zip_writer_init_heap(&archive, 0, 0)) throw std::runtime_error("zip init");
+    const auto text = manifest.dump();
+    const bool ok = mz_zip_writer_add_mem(&archive, "manifest.json", text.data(), text.size(), 0) &&
+                    mz_zip_writer_add_mem(&archive, file.c_str(), bytes.data(), bytes.size(), 0);
+    void* memory = nullptr;
+    size_t size = 0;
+    if (!ok || !mz_zip_writer_finalize_heap_archive(&archive, &memory, &size)) {
+        mz_zip_writer_end(&archive);
+        throw std::runtime_error("zip write");
+    }
+    std::string result(static_cast<char*>(memory), size);
+    mz_free(memory);
+    mz_zip_writer_end(&archive);
+    return result;
+}
+
+TEST_F(WebDevice, StationTelemetrySharesRackTemplateWithIndependentSlaveBindings) {
+    const auto file = directory / "rack.xlsx";
+    util::Excel excel;
+    excel.create(file);
+    excel.renameSheet("Sheet1", "遥测");
+    excel.writeRange("遥测", 1, 1,
+                     {{std::string("测点编码"), std::string("测点名称"), std::string("从机地址"),
+                       std::string("寄存器地址"), std::string("功能码"), std::string("解析码")},
+                      {std::string("voltage"), std::string("簇电压"), std::string(""),
+                       std::int64_t{0x200b}, std::int64_t{3}, std::string("UINT16_AB")}});
+    excel.addSheet("遥调");
+    excel.writeRange("遥调", 1, 1,
+                     {{std::string("测点编码"), std::string("测点名称"), std::string("从机地址"),
+                       std::string("寄存器地址"), std::string("功能码"), std::string("解析码")},
+                      {std::string("voltage_set"), std::string("电压设定"), std::string(""),
+                       std::int64_t{0x200b}, std::int64_t{6}, std::string("UINT16_AB")}});
+    excel.save();
+    excel.close();
+    std::ifstream input(file, std::ios::binary);
+    std::string bytes(std::istreambuf_iterator<char>(input), {});
+    Json manifest = {{"schema", "ems-station-package/1"}, {"station", {{"code", "station"}}},
+                     {"devices", Json::array()},          {"channels", Json::array()},
+                     {"bindings", Json::array()},         {"point_files", Json::array()}};
+    manifest["devices"].push_back({{"code", "hvac01"},
+                                   {"name", "BMS"},
+                                   {"node_kind", "device"},
+                                   {"device_type_code", "hvac"},
+                                   {"type_version", "hvac-v1"},
+                                   {"enabled", 0}});
+    for (int rack = 1; rack <= 2; ++rack) {
+        const auto code = "rack0" + std::to_string(rack);
+        const auto channel = "ch0" + std::to_string(rack);
+        manifest["devices"].push_back({{"code", code},
+                                       {"name", code},
+                                       {"node_kind", "component"},
+                                       {"parent_code", "hvac01"},
+                                       {"source_device_code", "hvac01"},
+                                       {"device_type_code", "hvac"},
+                                       {"type_version", "hvac-v1"},
+                                       {"enabled", false}});
+        manifest["channels"].push_back({{"code", channel},
+                                        {"name", channel},
+                                        {"protocol", "modbus"},
+                                        {"conn_mode", "tcp_client"},
+                                        {"endpoint", "192.0.2.1:502"},
+                                        {"enabled", 0}});
+        manifest["bindings"].push_back({{"device_code", "hvac01"},
+                                        {"channel_code", channel},
+                                        {"device_address", std::to_string(rack + 1)},
+                                        {"can_collect", true},
+                                        {"enabled", false}});
+        manifest["point_files"].push_back({{"device_code", "hvac01"},
+                                           {"binding_code", channel},
+                                           {"target_device_code", code},
+                                           {"file", "rack.xlsx"}});
+    }
+    Upload upload;
+    upload.filename = "station.zip";
+    upload.bytes = station_zip(manifest, "rack.xlsx", bytes);
+    auto inspection =
+        service->execute("/api/station-imports/inspect", Json::object(), actor, context(), upload);
+    EXPECT_EQ(inspection.data.at("station_code_match"), true);
+    EXPECT_TRUE(inspection.data.at("warnings").empty());
+    manifest["station"]["code"] = "another-station";
+    upload.bytes = station_zip(manifest, "rack.xlsx", bytes);
+    inspection =
+        service->execute("/api/station-imports/inspect", Json::object(), actor, context(), upload);
+    EXPECT_EQ(inspection.data.at("station_code_match"), false);
+    EXPECT_EQ(inspection.data.at("station_code"), "station");
+    EXPECT_EQ(inspection.data.at("package_station_code"), "another-station");
+    EXPECT_EQ(inspection.meta.at("config_revision"), "0");
+    EXPECT_TRUE(
+        execute("/api/devices/tree", {{"parent_device_id", "station"}}).data.at("items").empty());
+    auto conflicting = manifest;
+    conflicting["point_files"][1]["target_device_code"] = "rack01";
+    Upload invalid = upload;
+    invalid.bytes = station_zip(conflicting, "rack.xlsx", bytes);
+    // 第二个绑定在同一部件生成重复点编码，最终校验失败时连第一个绑定的点也不保留。
+    EXPECT_THROW(
+        service->execute("/api/station-imports/create", Json::object(), actor, context(), invalid),
+        ApiError);
+    EXPECT_TRUE(
+        execute("/api/devices/tree", {{"parent_device_id", "station"}}).data.at("items").empty());
+    EXPECT_EQ(
+        execute("/api/device-management/configuration", Json::object()).meta.at("config_revision"),
+        "0");
+    auto result =
+        service->execute("/api/station-imports/create", Json::object(), actor, context(), upload);
+    EXPECT_EQ(result.data.at("station_code"), "station");
+    EXPECT_EQ(result.data.at("package_station_code"), "another-station");
+    EXPECT_EQ(result.data.at("warnings").front().at("code"), "station_code_mismatch");
+    EXPECT_EQ(execute("/api/devices/detail", {{"device_id", "station"}}).data.at("code"),
+              "station");
+    ASSERT_EQ(result.data.at("import_jobs").size(), 2);
+    std::string revision = result.meta.at("config_revision");
+    for (const auto& job : result.data.at("import_jobs")) {
+        ASSERT_EQ(job.at("status"), "applied") << job;
+        auto points = execute("/api/points/list",
+                              {{"device_id", job.at("target_device_id")}, {"point_type", "yc"}});
+        EXPECT_EQ(points.data.at("total"), 1);
+        auto commands = execute("/api/points/list",
+                                {{"device_id", job.at("target_device_id")}, {"point_type", "yt"}});
+        EXPECT_EQ(commands.data.at("total"), 1);
+        EXPECT_EQ(commands.data.at("items").front().at("enabled"), false);
+        auto preview =
+            execute("/api/point-imports/rows", {{"import_job_id", job.at("import_job_id")}});
+        auto row = preview.data.at("items").front();
+        EXPECT_EQ(row.at("target_device_path"),
+                  "/hvac01/" + job.at("target_device_code").get<std::string>());
+        EXPECT_EQ(row.at("confirm_state"), "accepted");
+        EXPECT_EQ(row.at("parse_status"), "warning");
+    }
+    EXPECT_EQ(result.data.at("points_created"), 4);
+    EXPECT_EQ(revision, "1");
+    auto replay =
+        service->execute("/api/station-imports/create", Json::object(), actor, context(), upload);
+    EXPECT_EQ(replay.data.at("points_created"), 0);
+    EXPECT_EQ(replay.meta.at("config_revision"), revision);
+    // 模拟旧流程留下的设备和待应用任务，重新上传原包即可补齐点位。
+    sql("DELETE FROM cfg_point_yc");
+    sql("DELETE FROM cfg_point_yt");
+    sql("UPDATE cfg_import_job SET status='confirmed'");
+    sql("UPDATE cfg_import_row SET resolved_point_id='',confirm_state='none'");
+    auto repaired =
+        service->execute("/api/station-imports/create", Json::object(), actor, context(), upload);
+    EXPECT_EQ(repaired.data.at("points_created"), 4);
+    revision = repaired.meta.at("config_revision");
+    EXPECT_EQ(revision, "2");
+    manifest["point_files"][0]["target_device_code"] = "missing";
+    upload.bytes = station_zip(manifest, "rack.xlsx", bytes);
+    EXPECT_THROW(
+        service->execute("/api/station-imports/create", Json::object(), actor, context(), upload),
+        ApiError);
+    EXPECT_EQ(
+        execute("/api/device-management/configuration", Json::object()).meta.at("config_revision"),
+        revision);
+
+    auto cleared = execute("/api/device-management/clear", {{"device_id", "station"},
+                                                            {"expected_config_revision", revision},
+                                                            {"confirmation_code", "station"},
+                                                            {"station_code", "another-station"},
+                                                            {"station_name", "New Station"}});
+    EXPECT_EQ(cleared.meta.at("config_revision"), "3");
+    manifest["point_files"][0]["target_device_code"] = "rack01";
+    upload.bytes = station_zip(manifest, "rack.xlsx", bytes);
+    auto reimported =
+        service->execute("/api/station-imports/create", Json::object(), actor, context(), upload);
+    EXPECT_TRUE(reimported.data.at("station_code_match").get<bool>());
+    EXPECT_EQ(reimported.data.at("devices_created"), 3);
+    EXPECT_EQ(reimported.data.at("points_created"), 4);
+    EXPECT_EQ(reimported.meta.at("config_revision"), "4");
+}
+
+TEST_F(WebDevice, FieldStationPackageCreatesFourPcsFourBmsAndFortyEightRacks) {
+    const auto* location = std::getenv("EMS_STATION_IMPORT_TEST_PACKAGE");
+    if (!location)
+        GTEST_SKIP() << "Set EMS_STATION_IMPORT_TEST_PACKAGE to verify a prepared field package";
+    sql("UPDATE cfg_device SET code='station001' WHERE device_id='station'");
+    for (const auto& type : {"pcs", "bms", "meter", "relay", "rack"}) {
+        sql(std::string("INSERT INTO "
+                        "cfg_device_type(type_code,type_version,name,category,status,description,"
+                        "created_at,updated_at) VALUES('") +
+            type + "','" + type + "-v1','" + type + "','" + type + "','active','','','')");
+    }
+    std::ifstream input(location, std::ios::binary);
+    ASSERT_TRUE(input.good());
+    Upload upload;
+    upload.filename = "field_station.zip";
+    upload.bytes.assign(std::istreambuf_iterator<char>(input), {});
+    TestConnection::operation_count = 0;
+    const auto started = std::chrono::steady_clock::now();
+    const auto result = service->execute("/api/station-imports/create", Json::object(), actor,
+                                         core::make_call_context(std::chrono::seconds(30)), upload);
+    std::cout << "Station create: " << TestConnection::operation_count.load()
+              << " database operations, "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::steady_clock::now() - started)
+                     .count()
+              << " ms\n";
+    EXPECT_LT(TestConnection::operation_count.load(), 15000U);
+    EXPECT_EQ(result.data.at("devices_created"), 64);
+    EXPECT_EQ(result.data.at("import_jobs").size(), 59);
+    EXPECT_EQ(result.data.at("points_created"), 15617);
+    EXPECT_EQ(result.meta.at("config_revision"), "1");
+    {
+        auto tx = take(db.database->begin(context()));
+        DeviceQuery query;
+        query.table = DeviceTable::ImportRow;
+        query.limit = 1;
+        EXPECT_EQ(take(db.device_management->query(*tx, query, context())).total, 15617);
+        std::int64_t points = 0;
+        for (auto kind : {DeviceTable::Yc, DeviceTable::Yx, DeviceTable::Yk, DeviceTable::Yt}) {
+            query.table = kind;
+            points += take(db.device_management->query(*tx, query, context())).total;
+        }
+        EXPECT_EQ(points, 15617);
+        take(tx->commit(context()));
+    }
+    int total = 0;
+    for (const auto& job : result.data.at("import_jobs")) {
+        EXPECT_EQ(job.at("status"), "applied")
+            << job << " "
+            << execute("/api/point-imports/detail", {{"import_job_id", job.at("import_job_id")}})
+                   .data.value("error_message", "");
+        EXPECT_EQ(job.at("row_error"), 0) << job;
+        total += job.at("row_total").get<int>();
+    }
+    EXPECT_EQ(total, 15617);
+}
 
 TEST_F(WebDevice, RuntimeSamplesAreAuthorizedFreshAndNeverFabricated) {
     execute("/api/devices/create", create());
@@ -217,6 +602,11 @@ TEST_F(WebDevice, RuntimeSamplesAreAuthorizedFreshAndNeverFabricated) {
 
 TEST_F(WebDevice, StationImportRoutesAreExplicitlyRegistered) {
     const auto routes = device_routes();
+    EXPECT_NE(std::find_if(routes.begin(), routes.end(),
+                           [](const auto& route) {
+                               return route.path == "/api/device-management/clear" && route.post;
+                           }),
+              routes.end());
     EXPECT_NE(std::find_if(routes.begin(), routes.end(),
                            [](const auto& route) {
                                return route.path == "/api/station-imports/create" && route.post;
@@ -407,6 +797,135 @@ TEST_F(WebDevice, ValidationDoesNotCommitCandidateChanges) {
     EXPECT_EQ(result.meta.at("config_revision"), "1");
 }
 
+TEST_F(WebDevice, StationClearDeletesDependenciesAndRejectsUnconfirmedStaleOrScopedRequests) {
+    bind_protocol("modbus");
+    Json clear = {{"device_id", "station"},
+                  {"expected_config_revision", "2"},
+                  {"confirmation_code", "station"},
+                  {"station_code", "new-station"},
+                  {"station_name", "New Station"}};
+    auto invalid = clear;
+    invalid["confirmation_code"] = "wrong";
+    EXPECT_THROW(execute("/api/device-management/clear", invalid), ApiError);
+    invalid = clear;
+    invalid["expected_config_revision"] = "1";
+    EXPECT_THROW(execute("/api/device-management/clear", invalid), ApiError);
+    invalid = clear;
+    invalid["station_code"] = "invalid/code";
+    EXPECT_THROW(execute("/api/device-management/clear", invalid), ApiError);
+    invalid = clear;
+    invalid["device_id"] = "hvac01";
+    EXPECT_THROW(execute("/api/device-management/clear", invalid), ApiError);
+    actor.device_roots = {"station"};
+    EXPECT_THROW(execute("/api/device-management/clear", clear), ApiError);
+    actor.device_roots = {"*"};
+    actor.permissions = {"device.read", "device.write"};
+    EXPECT_THROW(execute("/api/device-management/clear", clear), ApiError);
+    actor.permissions = {"*"};
+    EXPECT_EQ(execute("/api/devices/detail", {{"device_id", "hvac01"}}).data.at("code"), "hvac01");
+    int next_revision = 2;
+    for (auto kind : {"yc", "yx", "yk", "yt"}) {
+        execute("/api/points/create",
+                {{"device_id", "hvac01"},
+                 {"point_type", kind},
+                 {"point_id", kind},
+                 {"expected_config_revision", std::to_string(next_revision++)},
+                 {"fields",
+                  {{"binding_id", "binding01"},
+                   {"code", kind},
+                   {"name", kind},
+                   {"wire_type", "i16"},
+                   {"value_type",
+                    kind == std::string("yc") || kind == std::string("yt") ? "double" : "int64"},
+                   {"enabled", false},
+                   {"disabled_reason", "not commissioned"}}}});
+    }
+    sql("INSERT INTO cfg_import_job(import_job_id,device_id,binding_id,idempotency_key) "
+        "VALUES('job','hvac01','binding01','key'); "
+        "INSERT INTO cfg_import_row(import_job_id,line_no) VALUES('job',1); "
+        "INSERT INTO ops_comm_stat_5m(binding_id) VALUES('binding01'); "
+        "INSERT INTO ops_state_log(object_kind,object_id) VALUES('device','hvac01'); "
+        "INSERT INTO cfg_template(template_id,template_version) VALUES('template','1'); "
+        "INSERT INTO cfg_type_point(type_code,type_version,semantic_code) "
+        "VALUES('hvac','hvac-v1','temperature')");
+    clear["expected_config_revision"] = "6";
+    // 模拟删除中途失败，先删的点位、导入记录和统计也必须恢复。
+    sql("CREATE TRIGGER reject_clear BEFORE DELETE ON cfg_binding BEGIN SELECT "
+        "RAISE(ABORT,'test'); END");
+    EXPECT_THROW(execute("/api/device-management/clear", clear), ApiError);
+    auto count = [&](DeviceTable table) {
+        auto tx = take(db.database->begin(context()));
+        DeviceQuery q;
+        q.table = table;
+        q.limit = 1;
+        return take(db.device_management->query(*tx, q, context())).total;
+    };
+    for (auto table : {DeviceTable::Yc, DeviceTable::Yx, DeviceTable::Yk, DeviceTable::Yt,
+                       DeviceTable::ImportRow, DeviceTable::ImportJob, DeviceTable::CommStat,
+                       DeviceTable::StateLog, DeviceTable::Binding, DeviceTable::Channel})
+        EXPECT_EQ(count(table), 1);
+    EXPECT_EQ(
+        execute("/api/device-management/configuration", Json::object()).meta.at("config_revision"),
+        "6");
+    sql("DROP TRIGGER reject_clear");
+    const auto result = execute("/api/device-management/clear", clear);
+    EXPECT_EQ(result.meta.at("config_revision"), "7");
+    for (auto table : {DeviceTable::Yc, DeviceTable::Yx, DeviceTable::Yk, DeviceTable::Yt,
+                       DeviceTable::ImportRow, DeviceTable::ImportJob, DeviceTable::CommStat,
+                       DeviceTable::StateLog, DeviceTable::Binding, DeviceTable::Channel})
+        EXPECT_EQ(count(table), 0);
+    EXPECT_EQ(count(DeviceTable::Device), 1);
+    EXPECT_EQ(count(DeviceTable::Type), 1);
+    EXPECT_EQ(count(DeviceTable::TypePoint), 1);
+    EXPECT_EQ(count(DeviceTable::Template), 1);
+    const auto station = execute("/api/devices/detail", {{"device_id", "station"}}).data;
+    EXPECT_EQ(station.at("name"), "New Station");
+    EXPECT_EQ(station.at("code"), "new-station");
+    EXPECT_EQ(station.at("path"), "/");
+    EXPECT_THROW(execute("/api/device-management/clear", clear), ApiError);
+}
+
+TEST_F(WebDevice, MissingRequiredPointsWarnWithoutBlockingEnableOrSubsequentWrites) {
+    sql("INSERT INTO cfg_type_point(type_code,type_version,semantic_code,name,point_type,"
+        "value_type,unit,required,capability_codes_json,writable,stale_after_ms,sort_order) "
+        "VALUES('hvac','hvac-v1','temperature','Temperature','yc','double','C',1,'[]',0,0,0)");
+    execute("/api/devices/create", create());
+    auto enabled = execute("/api/devices/update", {{"device_id", "hvac01"},
+                                                   {"expected_config_revision", "1"},
+                                                   {"fields", {{"enabled", true}}}});
+    EXPECT_EQ(enabled.meta.at("config_revision"), "2");
+    ASSERT_EQ(enabled.meta.at("warnings").size(), 1u);
+    const auto& warning = enabled.meta.at("warnings").front();
+    EXPECT_EQ(warning.at("severity"), "warning");
+    EXPECT_EQ(warning.at("reason"), "required_point_unconfigured");
+    EXPECT_EQ(warning.at("device_id"), "hvac01");
+    EXPECT_NE(warning.at("message").get<std::string>().find("temperature"), std::string::npos);
+    auto detail = execute("/api/devices/detail", {{"device_id", "hvac01"}});
+    EXPECT_TRUE(detail.data.at("enabled").get<bool>());
+    auto check = execute("/api/device-management/validate",
+                         {{"device_id", "hvac01"}, {"expected_config_revision", "2"}});
+    EXPECT_FALSE(check.data.at("valid").get<bool>());
+    EXPECT_EQ(check.data.at("counts").at("errors"), 0);
+    EXPECT_EQ(check.data.at("counts").at("warnings"), 1);
+    EXPECT_EQ(check.meta.at("config_revision"), "2");
+    auto saved = execute("/api/devices/update", {{"device_id", "hvac01"},
+                                                 {"expected_config_revision", "2"},
+                                                 {"fields", {{"name", "Updated HVAC"}}}});
+    EXPECT_EQ(saved.meta.at("config_revision"), "3");
+    EXPECT_EQ(saved.meta.at("warnings").size(), 1u);
+
+    auto invalid = create("invalid", "3");
+    invalid["fields"]["device_type_code"] = "missing";
+    EXPECT_THROW(execute("/api/devices/create", invalid), ApiError);
+    EXPECT_EQ(
+        execute("/api/device-management/configuration", Json::object()).meta.at("config_revision"),
+        "3");
+    auto disabled = execute("/api/devices/update", {{"device_id", "hvac01"},
+                                                    {"expected_config_revision", "3"},
+                                                    {"fields", {{"enabled", false}}}});
+    EXPECT_FALSE(disabled.meta.contains("warnings"));
+}
+
 TEST_F(WebDevice, BindingFourRemotePointsAndAtomicRollback) {
     execute("/api/devices/create", create());
     auto binding = execute("/api/bindings/create", {{"device_id", "hvac01"},
@@ -500,6 +1019,51 @@ TEST_F(WebDevice, ChannelAndBindingReplayRejectDifferentContent) {
     EXPECT_EQ(
         execute("/api/device-management/configuration", Json::object()).meta.at("config_revision"),
         "3");
+}
+
+TEST_F(WebDevice, ReplayComparesJsonContentAcrossDatabaseSerialization) {
+    Json saved = {{"channel_id", "serial"},
+                  {"serial_json", "{\"parity\": \"none\", \"baud_rate\": 9600}"}};
+    Json candidate = {{"channel_id", "serial"},
+                      {"serial_json", "{\"baud_rate\":9600,\"parity\":\"none\"}"}};
+    EXPECT_TRUE(same_record(saved, candidate));
+    candidate["serial_json"] = "{\"baud_rate\":19200,\"parity\":\"none\"}";
+    EXPECT_FALSE(same_record(saved, candidate));
+}
+
+TEST_F(WebDevice, BatchedImportRowsRollBackEarlierBatchesOnDuplicate) {
+    std::vector<CfgImportRow> rows(130);
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        rows[i].import_job_id = "batch-job";
+        rows[i].line_no = static_cast<int>(i + 1);
+        rows[i].vendor_key = "point-" + std::to_string(i);
+    }
+    rows.back().line_no = 1;
+    {
+        auto tx = take(db.database->begin(context()));
+        auto status = db.device_management->append_import_rows(*tx, rows, context());
+        ASSERT_FALSE(core::is_ok(status));
+        EXPECT_FALSE(core::is_ok(tx->commit(context())));
+    }
+    DeviceQuery query;
+    query.table = DeviceTable::ImportRow;
+    query.filters = {{"import_job_id", "batch-job"}};
+    {
+        auto tx = take(db.database->begin(context()));
+        EXPECT_EQ(take(db.device_management->query(*tx, query, context())).total, 0);
+        take(tx->commit(context()));
+    }
+    rows.back().line_no = 130;
+    {
+        auto tx = take(db.database->begin(context()));
+        take(db.device_management->append_import_rows(*tx, rows, context()));
+        take(tx->commit(context()));
+    }
+    auto tx = take(db.database->begin(context()));
+    const auto saved = take(db.device_management->query(*tx, query, context()));
+    EXPECT_EQ(saved.total, 130);
+    EXPECT_EQ(std::get<CfgImportRow>(saved.rows.back()).vendor_key, "point-129");
+    take(tx->commit(context()));
 }
 
 TEST_F(WebDevice, CsvPreviewApplyStableIdentityAndReplay) {
@@ -629,6 +1193,59 @@ TEST_F(WebDevice, XlsxPreviewParsesRealWorkbookWithoutChangingRevision) {
 }
 
 TEST_F(WebDevice, HttpLoginCookieCsrfAndFixedJsonRoutes) {
+    std::string station_bytes;
+    int expected_station_devices = 1, expected_station_jobs = 1;
+    if (const auto* package_path = std::getenv("EMS_STATION_IMPORT_TEST_PACKAGE")) {
+        std::ifstream package(package_path, std::ios::binary);
+        ASSERT_TRUE(package.good());
+        station_bytes.assign(std::istreambuf_iterator<char>(package), {});
+        expected_station_devices = 64;
+        expected_station_jobs = 59;
+        sql("UPDATE cfg_device SET code='current-station' WHERE device_id='station'");
+        for (const auto& type : {"pcs", "bms", "meter", "relay", "rack"})
+            sql(std::string("INSERT INTO "
+                            "cfg_device_type(type_code,type_version,name,category,status,"
+                            "description,created_at,updated_at) VALUES('") +
+                type + "','" + type + "-v1','" + type + "','" + type + "','active','','','')");
+    } else {
+        const auto path = directory / "station_points.xlsx";
+        util::Excel excel;
+        excel.create(path);
+        excel.renameSheet("Sheet1", "遥测");
+        excel.writeRange(
+            "遥测", 1, 1,
+            {{std::string("测点编码"), std::string("测点名称"), std::string("从机地址"),
+              std::string("寄存器地址"), std::string("功能码"), std::string("解析码")},
+             {std::string("voltage"), std::string("电压"), std::int64_t{1}, std::int64_t{0},
+              std::int64_t{4}, std::string("UINT16_AB")}});
+        excel.save();
+        excel.close();
+        std::ifstream input(path, std::ios::binary);
+        std::string bytes(std::istreambuf_iterator<char>(input), {});
+        Json manifest = {
+            {"schema", "ems-station-package/1"},
+            {"station", {{"code", "station"}}},
+            {"devices", Json::array({{{"code", "station_http_device"},
+                                      {"name", "Test"},
+                                      {"node_kind", "device"},
+                                      {"device_type_code", "hvac"},
+                                      {"type_version", "hvac-v1"},
+                                      {"enabled", false}}})},
+            {"channels", Json::array({{{"code", "station_http_channel"},
+                                       {"name", "Test"},
+                                       {"protocol", "modbus"},
+                                       {"conn_mode", "tcp_client"},
+                                       {"endpoint", "192.0.2.1:502"},
+                                       {"enabled", false}}})},
+            {"bindings", Json::array({{{"device_code", "station_http_device"},
+                                       {"channel_code", "station_http_channel"},
+                                       {"device_address", "1"},
+                                       {"can_collect", true},
+                                       {"enabled", false}}})},
+            {"point_files",
+             Json::array({{{"device_code", "station_http_device"}, {"file", "points.xlsx"}}})}};
+        station_bytes = station_zip(manifest, "points.xlsx", bytes);
+    }
     WebOptions options;
     options.port = 19763;
     options.allowed_origin = "http://127.0.0.1:19763";
@@ -774,6 +1391,58 @@ TEST_F(WebDevice, HttpLoginCookieCsrfAndFixedJsonRoutes) {
             EXPECT_EQ(
                 Json::parse(apply->body().begin(), apply->body().end()).at("data").at("status"),
                 "applied");
+
+            // 与浏览器整站上传完全相同：ZIP + 空 metadata，不要求 address_base。
+            auto station_upload = drogon::HttpRequest::newHttpRequest();
+            station_upload->setPath("/api/station-imports/inspect");
+            station_upload->setMethod(drogon::Post);
+            station_upload->setContentTypeString("multipart/form-data; boundary=" + boundary);
+            station_upload->addHeader("Origin", options.allowed_origin);
+            station_upload->addHeader("Cookie", cookie);
+            station_upload->addHeader("X-CSRF-Token", csrf);
+            station_upload->setBody(
+                "--" + boundary +
+                "\r\nContent-Disposition: form-data; name=\"metadata\"\r\n\r\n{}\r\n--" + boundary +
+                "\r\nContent-Disposition: form-data; name=\"file\"; "
+                "filename=\"station.zip\"\r\nContent-Type: application/zip\r\n\r\n" +
+                station_bytes + "\r\n--" + boundary + "--\r\n");
+            auto station_inspection = client->sendRequest(station_upload, 60);
+            ASSERT_EQ(station_inspection.first, drogon::ReqResult::Ok);
+            ASSERT_EQ(station_inspection.second->statusCode(), 200)
+                << station_inspection.second->body();
+            const auto inspection = Json::parse(station_inspection.second->body().begin(),
+                                                station_inspection.second->body().end());
+            EXPECT_EQ(inspection.at("meta").at("config_revision"), "3");
+            EXPECT_EQ(inspection.at("data").at("station_code_match"),
+                      expected_station_devices == 1);
+            auto station_children =
+                call("/api/devices/tree", drogon::Post, {{"parent_device_id", "station"}});
+            EXPECT_EQ(Json::parse(station_children->body().begin(), station_children->body().end())
+                          .at("data")
+                          .at("items")
+                          .size(),
+                      1);
+            auto confirmed_upload = drogon::HttpRequest::newHttpRequest();
+            confirmed_upload->setPath("/api/station-imports/create");
+            confirmed_upload->setMethod(drogon::Post);
+            confirmed_upload->setContentTypeString("multipart/form-data; boundary=" + boundary);
+            confirmed_upload->addHeader("Origin", options.allowed_origin);
+            confirmed_upload->addHeader("Cookie", cookie);
+            confirmed_upload->addHeader("X-CSRF-Token", csrf);
+            confirmed_upload->setBody(std::string(station_upload->body()));
+            auto station_result = client->sendRequest(confirmed_upload, 60);
+            ASSERT_EQ(station_result.first, drogon::ReqResult::Ok);
+            ASSERT_EQ(station_result.second->statusCode(), 201) << station_result.second->body();
+            auto station_data = Json::parse(station_result.second->body().begin(),
+                                            station_result.second->body().end())
+                                    .at("data");
+            EXPECT_EQ(station_data.at("station_code_match"), expected_station_devices == 1);
+            EXPECT_EQ(station_data.at("devices_created"), expected_station_devices);
+            EXPECT_EQ(station_data.at("import_jobs").size(), expected_station_jobs);
+            for (const auto& job : station_data.at("import_jobs")) {
+                EXPECT_EQ(job.at("status"), "applied") << job;
+                EXPECT_EQ(job.at("row_error"), 0) << job;
+            }
             call("/api/auth/logout", drogon::Post, Json::object());
             EXPECT_EQ(call("/api/auth/session", drogon::Get, {})->statusCode(), 401);
         } catch (const std::exception& error) {

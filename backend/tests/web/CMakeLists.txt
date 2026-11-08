@@ -7,6 +7,11 @@ file(GLOB_RECURSE web_test_sources CONFIGURE_DEPENDS "test_*.cpp")
 list(REMOVE_ITEM web_test_sources "${CMAKE_CURRENT_SOURCE_DIR}/test_identity_mysql.cpp")
 add_executable(test_web ${web_test_sources})
 target_link_libraries(test_web PRIVATE ems_web_app ems_database_runtime gtest_main SQLite::SQLite3)
+if(TARGET miniz::miniz)
+    target_link_libraries(test_web PRIVATE miniz::miniz)
+else()
+    target_link_libraries(test_web PRIVATE miniz)
+endif()
 target_include_directories(test_web SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party/ormpp")
 target_compile_definitions(
     test_web PRIVATE ORMPP_ENABLE_SQLITE3

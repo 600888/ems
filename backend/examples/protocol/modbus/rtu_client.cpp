@@ -23,6 +23,7 @@
 #include <iostream>
 #include <thread>
 
+#include "log/process_logger.hpp"
 #include "modbus_client.h"
 
 using namespace ems::net::modbus;
@@ -234,6 +235,7 @@ bool demoConfigRegister(ModbusClient& client, int slave_id) {
 }
 
 int main(int argc, char* argv[]) {
+    const ProcessLogger logger("rtu_client");
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 

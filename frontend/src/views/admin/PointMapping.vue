@@ -7,6 +7,7 @@ import FormField from '@/components/common/FormField.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
 import { deviceApi, stableId, engineeringRevision, revisionOf } from '@/api/device'
 import { errorMessage } from '@/api/http'
+import { useDeviceStore } from '@/stores/device'
 import type { Point, PointType, Binding } from '@/types/engineering'
 const route = useRoute(),
   id = computed(() => String(route.params.id)),
@@ -147,7 +148,8 @@ async function remove(row: Point) {
     error.value = errorMessage(e)
   }
 }
-watch([id, kind, page], load, { immediate: true })
+const device = useDeviceStore()
+watch([id, kind, page, () => device.revision], load, { immediate: true })
 
 let editRevision = ''
 let newPointId = ''

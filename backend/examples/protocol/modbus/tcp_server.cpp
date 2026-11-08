@@ -26,6 +26,7 @@
 #include <random>
 #include <thread>
 
+#include "log/process_logger.hpp"
 #include "modbus_server.h"
 
 using namespace ems::net::modbus;
@@ -226,6 +227,7 @@ bool demoManualOperations(ModbusServer& server) {
 }
 
 int main(int argc, char* argv[]) {
+    const ProcessLogger logger("tcp_server");
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 

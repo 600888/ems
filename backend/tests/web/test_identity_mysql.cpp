@@ -2,6 +2,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <future>
 
 #include "web/modules/device/application/device_service.h"
@@ -9,6 +10,62 @@
 #include "web/platform/crypto.h"
 
 namespace ems::web {
+TEST(StationMySql, FieldPackageCreatesAllImportRowsWithinRequestBudget) {
+    const auto config = std::getenv("EMS_STATION_IMPORT_TEST_MYSQL_CONFIG");
+    const auto package = std::getenv("EMS_STATION_IMPORT_TEST_PACKAGE");
+    if (!config || !package)
+        GTEST_SKIP() << "Requires an isolated ems_station_import_perf_test schema and field ZIP";
+    auto loaded = database::load_mysql_options(config);
+    ASSERT_TRUE(core::is_ok(loaded));
+    auto options = core::value_of(loaded);
+    // 始终覆盖库名，绝不向配置文件里的现场库写入测试数据。
+    options.database = "ems_station_import_perf_test";
+    const auto context = core::make_call_context(std::chrono::seconds(30));
+    auto connected = database::connect_mysql_database(options, context);
+    ASSERT_TRUE(core::is_ok(connected));
+    auto db = core::value_of(connected);
+    const auto directory = std::filesystem::temp_directory_path() / random_token();
+    DeviceService service(db, directory.u8string());
+    Principal actor{"operator", {"*"}, {"*"}, {"*"}};
+    std::ifstream input(package, std::ios::binary);
+    ASSERT_TRUE(input.good());
+    Upload upload;
+    upload.filename = "field-station.zip";
+    upload.bytes.assign(std::istreambuf_iterator<char>(input), {});
+    const auto started = std::chrono::steady_clock::now();
+    const auto result =
+        service.execute("/api/station-imports/create", Json::object(), actor, context, upload);
+    std::cout << "MySQL station create: "
+              << std::chrono::duration_cast<std::chrono::milliseconds>(
+                     std::chrono::steady_clock::now() - started)
+                     .count()
+              << " ms\n";
+    EXPECT_EQ(result.data.at("devices_created"), 64);
+    EXPECT_EQ(result.data.at("import_jobs").size(), 59);
+    for (const auto& job : result.data.at("import_jobs"))
+        EXPECT_EQ(job.at("status"), "applied") << job;
+    EXPECT_EQ(result.data.at("points_created"), 15617);
+    auto tx = take(db.database->begin(context));
+    database::DeviceQuery query;
+    query.table = database::DeviceTable::ImportRow;
+    query.limit = 1;
+    EXPECT_EQ(take(db.device_management->query(*tx, query, context)).total, 15617);
+    std::int64_t points = 0;
+    for (auto kind : {database::DeviceTable::Yc, database::DeviceTable::Yx,
+                      database::DeviceTable::Yk, database::DeviceTable::Yt}) {
+        query.table = kind;
+        points += take(db.device_management->query(*tx, query, context)).total;
+    }
+    EXPECT_EQ(points, 15617);
+    take(tx->commit(context));
+    const auto replay = service.execute("/api/station-imports/create", Json::object(), actor,
+                                        core::make_call_context(std::chrono::seconds(30)), upload);
+    EXPECT_EQ(replay.data.at("points_created"), 0);
+    EXPECT_EQ(replay.meta.at("config_revision"), result.meta.at("config_revision"));
+    std::error_code ignored;
+    std::filesystem::remove_all(directory, ignored);
+}
+
 TEST(IdentityMySql, PersistentStoreAndConcurrentRevocation) {
     const auto config = std::getenv("EMS_WEB_TEST_MYSQL_CONFIG");
     if (!config)

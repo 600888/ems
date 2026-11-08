@@ -25,6 +25,7 @@
 #include <random>
 #include <thread>
 
+#include "log/process_logger.hpp"
 #include "modbus_server.h"
 
 using namespace ems::net::modbus;
@@ -256,6 +257,7 @@ bool demoReadOperations(ModbusServer& server, int slave_id) {
 }
 
 int main(int argc, char* argv[]) {
+    const ProcessLogger logger("rtu_server");
     std::signal(SIGINT, signalHandler);
     std::signal(SIGTERM, signalHandler);
 

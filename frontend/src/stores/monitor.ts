@@ -87,8 +87,6 @@ export const useMonitorStore = defineStore('monitor', () => {
     type: selected.value?.device_type_code ?? '',
     vendor: selected.value?.vendor ?? '',
     firmware: selected.value?.firmware_version ?? '',
-    parentPath: selected.value?.path ?? '',
-    pathLabel: selected.value?.path ?? '',
     icon: selected.value?.node_kind === 'component' ? 'battery' : 'cpu',
     dataSource: selected.value?.source_device_id || selected.value?.code || '—',
     status:

@@ -19,6 +19,7 @@
 #include "net/handler/modbus/modbus_proto_handler.h"
 #include "net/protocol/plugin_manager.h"
 #ifdef EMS_CHANNEL_TESTS
+#include "log/process_logger.hpp"
 #include "net/collect/channel_thread.h"
 #endif
 
@@ -350,6 +351,9 @@ void channel_failure() {
 }  // namespace
 
 int main(int argc, char** argv) {
+#ifdef EMS_CHANNEL_TESTS
+    const ProcessLogger logger("test_channel_handlers");
+#endif
     if (argc != 2) return 2;
     try {
         const std::string scenario = argv[1];

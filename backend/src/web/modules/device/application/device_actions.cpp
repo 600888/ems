@@ -191,13 +191,52 @@ DeviceResult device_action(DeviceRequest& request, const std::string& path, cons
                           {"changes", changes}});
         }
         auto issues = request.validate(id);
+        const auto errors = std::count_if(issues.begin(), issues.end(), [](const auto& issue) {
+            return issue.at("severity") == "error";
+        });
         // 预检查可以写事务暂存候选，但必须回滚，不能让候选成为工程配置。
         take(request.transaction->rollback(request.context));
         request.transaction.reset();
         return {{{"valid", issues.empty()},
                  {"issues", issues},
-                 {"counts", {{"errors", issues.size()}}},
+                 {"counts", {{"errors", errors}, {"warnings", issues.size() - errors}}},
                  {"affected_device_ids", Json::array({id})}}};
+    }
+
+    if (path == "/api/device-management/clear") {
+        fields(body, {"device_id", "expected_config_revision", "confirmation_code", "station_code",
+                      "station_name"});
+        for (const auto* permission :
+             {"device.write", "channel.write", "binding.write", "point.write", "import.write"})
+            request.principal.require(permission);
+        if (!request.principal.device_roots.count("*"))
+            throw ApiError(403, "PermissionDenied", "unscoped_station_clear");
+        const auto id = text(body, "device_id");
+        if (id != request.station.at("device_id"))
+            throw ApiError(422, "InvalidArgument", "station_clear_root_required");
+        request.expect_revision(body);
+        if (text(body, "confirmation_code", 64) != request.station.at("code"))
+            throw ApiError(422, "InvalidArgument", "station_clear_confirmation_mismatch");
+        const auto code = text(body, "station_code", 64);
+        const auto name = text(body, "station_name", 128);
+        if (code.find_first_not_of(
+                "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-") !=
+            std::string::npos)
+            throw ApiError(422, "InvalidArgument", "invalid_device_code");
+        take(request.database.device_management->clear_station(*request.transaction, id,
+                                                               request.context));
+        auto root = encode_record(CfgDeviceRow{});
+        root["id"] = request.station.at("id");
+        root["device_id"] = id;
+        root["node_kind"] = "station";
+        root["code"] = code;
+        root["name"] = name;
+        root["path"] = "/";
+        root["timezone"] = "Asia/Shanghai";
+        root["config_revision"] = request.station.at("config_revision");
+        request.station = std::move(root);
+        request.put(DeviceTable::Device, request.station);
+        return {{{"station_device_id", id}, {"station_code", code}, {"station_name", name}}};
     }
 
     request.principal.require("device.write");

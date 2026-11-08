@@ -32,6 +32,15 @@ class EMS_RTDB_API RealtimeClient final {
     static Result<std::unique_ptr<RealtimeClient>> initialize(const std::string& config_path,
                                                               const CallContext& ctx);
 
+    /**
+     * @brief 部署管理者在全部使用者退出后清理共享内存段及命名锁，不连接或清空 Redis。
+     * @param[in] config_path UTF-8 部署配置文件路径，最多读取 1 MiB。
+     * @param[in] ctx 配置读取预算；清理不获取可能已遗弃的共享内存锁。
+     * @return 是否删除了共享资源；非法配置或未编译的后端返回明确错误。
+     * @warning 调用方必须保证部署唯一性并先停止全部使用者；普通客户端不得调用。
+     */
+    static Result<bool> cleanup(const std::string& config_path, const CallContext& ctx);
+
     /** @brief 释放本进程资源；共享内存不随客户端销毁而删除。 */
     ~RealtimeClient();
 

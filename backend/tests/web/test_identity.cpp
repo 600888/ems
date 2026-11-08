@@ -2,6 +2,7 @@
 #include <gtest/gtest.h>
 #include <sqlite3.h>
 
+#include <algorithm>
 #include <filesystem>
 #include <fstream>
 #include <mutex>
@@ -404,6 +405,44 @@ TEST_F(PersistentIdentity, ScopeValidationAndCrossSchemaRollback) {
                                              {"device_root_id", nullptr}}})}});
         },
         422, "invalid_scope");
+}
+
+TEST_F(PersistentIdentity, StationClearRequiresAuditAndPreservesAccounts) {
+    auto user = create();
+    auto actor = sessions->get(admin_token, call()).principal;
+    DeviceService service(db, (dir / "upload").u8string());
+    const Json clear = {{"device_id", "station-main"},
+                        {"expected_config_revision", "1"},
+                        {"confirmation_code", "station-main"},
+                        {"station_code", "new-station"},
+                        {"station_name", "New Station"}};
+    sql("CREATE TRIGGER ems_web.reject_clear_audit BEFORE INSERT ON audit_log BEGIN SELECT "
+        "RAISE(ABORT,'test'); END;");
+    error([&] { service.execute("/api/device-management/clear", clear, actor, call().context); },
+          503, "audit_unavailable");
+    {
+        auto ctx = call().context;
+        auto tx = take(db.database->begin(ctx));
+        DeviceQuery q;
+        EXPECT_EQ(take(db.device_management->query(*tx, q, ctx)).total, 5);
+        q.filters = {{"node_kind", "station"}};
+        const auto root = take(db.device_management->query(*tx, q, ctx));
+        EXPECT_EQ(std::get<CfgDeviceRow>(root.rows.front()).config_revision, 1);
+    }
+    sql("DROP TRIGGER ems_web.reject_clear_audit");
+    const auto result =
+        service.execute("/api/device-management/clear", clear, actor, call().context);
+    EXPECT_EQ(result.meta.at("config_revision"), "2");
+    EXPECT_EQ(detail(user).at("username"), user.at("username"));
+    EXPECT_EQ(sessions->get(admin_token, call()).principal.subject_id, admin_id);
+    auto ctx = call().context;
+    auto tx = take(db.database->begin(ctx));
+    DeviceQuery q;
+    EXPECT_EQ(take(db.device_management->query(*tx, q, ctx)).total, 1);
+    const auto events = take(db.audit->list(*tx, 0, 100, ctx));
+    EXPECT_TRUE(std::any_of(events.begin(), events.end(), [](const auto& event) {
+        return event.action == "device.clear" && event.outcome == "success";
+    }));
 }
 
 TEST_F(PersistentIdentity, SubtreePairingNormalizationAndRevocationBeforeDeviceWrite) {

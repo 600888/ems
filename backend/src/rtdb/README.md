@@ -114,6 +114,10 @@ auto snapshot = client->read(point_key, ctx);
 `open` 只挂接现有共享段；`initialize` 仅供部署保证唯一性的初始化角色调用。
 `create_if_missing` 不允许写入 JSON。普通 close/析构不删除共享资源；
 `SharedMemoryStore::remove` 是维护 API，调用方必须先停止并隔离全部使用者。
+整组服务由 daemon 关闭时，默认配置的 `cleanupArgs` 会在全部托管进程回收后执行
+`ems-rtdb --config conf/realtime.json --cleanup`，删除本部署共享段和命名锁；
+不获取遗弃锁，不清空 Redis，不修改 MySQL 配置或点表。独立部署管理者可使用
+`RealtimeClient::cleanup` 执行同样的配置驱动清理，但必须先隔离全部使用者。
 首批不实现管理者自动选主，唯一常驻实例由部署保证。
 
 共享内存和 Redis 示例分别为 `backend/conf/realtime.json` 与 `realtime-redis.json`。

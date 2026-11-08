@@ -149,7 +149,7 @@ struct CfgPointYcRow {
     int register_count{1};
     std::string protocol_address_json;
     std::string wire_type;
-    std::string byte_order;  ///< ab/ba；空=单寄存器
+    std::string byte_order;  ///< 单寄存器 ab/ba；双寄存器 ABCD/BADC/CDAB/DCBA
     std::string value_type;  ///< double/int64/uint64
     std::string unit;
     int decimals{0};  ///< 0 表示按值类型默认

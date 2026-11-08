@@ -5,6 +5,7 @@ import { deviceApi, stableId, engineeringRevision, revisionOf } from '@/api/devi
 import { errorMessage } from '@/api/http'
 import type { Channel } from '@/types/engineering'
 import ActionBtn from '@/components/common/ActionBtn.vue'
+import AdminPageActions from '@/components/layout/AdminPageActions.vue'
 import FormField from '@/components/common/FormField.vue'
 import InfoBar from '@/components/common/InfoBar.vue'
 const rows = ref<Channel[]>([]),
@@ -104,10 +105,10 @@ onMounted(load)
 <template>
   <div class="identity-page">
     <InfoBar v-if="error" :text="error" tone="danger" />
-    <div class="flex shrink-0 justify-end gap-3">
-      <ActionBtn :loading="busy" @click="load">刷新</ActionBtn
-      ><ActionBtn variant="primary" @click="edit()">新建通道</ActionBtn>
-    </div>
+    <AdminPageActions>
+      <ActionBtn icon="refresh-cw" :loading="busy" @click="load">刷新</ActionBtn>
+      <ActionBtn variant="primary" icon="plus" @click="edit()">新建通道</ActionBtn>
+    </AdminPageActions>
     <section class="panel min-h-0 flex-1 overflow-x-auto">
       <table class="identity-table">
         <thead>

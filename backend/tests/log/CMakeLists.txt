@@ -4,7 +4,8 @@ target_link_libraries(test_process_logger PRIVATE Threads::Threads)
 target_compile_features(test_process_logger PRIVATE cxx_std_17)
 
 # 初始化器每个进程只运行一次，各场景使用独立进程验证。
-foreach(scenario IN ITEMS trace partial off rotation missing malformed)
+foreach(scenario IN ITEMS trace partial off rotation missing malformed channel_failure
+                          channel_concurrent channel_unicode format_failure)
     add_test(NAME process_logger_${scenario} COMMAND test_process_logger ${scenario})
 endforeach()
 

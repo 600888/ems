@@ -11,6 +11,7 @@
 #include <cmath>
 #include <cstring>
 #include <future>
+#include <map>
 #include <nlohmann/json.hpp>
 #include <sstream>
 
@@ -123,6 +124,14 @@ void ChannelThread::set_devices(std::vector<DeviceContext> devices) {
     devices_ = std::move(devices);
 }
 
+void ChannelThread::remove_devices(int64_t channel_id) {
+    std::lock_guard lock(device_mutex_);
+    devices_.erase(
+        std::remove_if(devices_.begin(), devices_.end(),
+                       [&](const auto& device) { return device.channelId_ == channel_id; }),
+        devices_.end());
+}
+
 std::vector<DeviceContext> ChannelThread::devices() const {
     std::lock_guard lock(device_mutex_);
     return devices_;
@@ -189,6 +198,8 @@ void ChannelThread::run() {
     CHANNEL_LOG_INFO(this, "连接成功, 采集线程开始工作");
 
     // 3. 主采集循环
+    using Clock = std::chrono::steady_clock;
+    std::map<std::pair<int64_t, std::string>, Clock::time_point> next_poll;
     while (state_.load() == ChannelState::Running) {
         auto cycleStart = now_ms();
 
@@ -213,7 +224,15 @@ void ChannelThread::run() {
         for (auto& device : currentDevices) {
             // 检查是否仍在运行（可能被外部停止）
             if (state_.load() != ChannelState::Running) break;
-
+            const auto identity = device.deviceKey_.empty()
+                                      ? std::to_string(&device - currentDevices.data())
+                                      : device.deviceKey_;
+            const auto key = std::make_pair(device.channelId_, identity);
+            const auto now = Clock::now();
+            if (next_poll[key] > now) continue;
+            const int interval =
+                device.pollIntervalMs_ > 0 ? device.pollIntervalMs_ : poll_interval_ms_.load();
+            next_poll[key] = now + std::chrono::milliseconds(interval);
             collect_device(device);
         }
 
