@@ -17,14 +17,14 @@ flowchart TB
     HTTP --> Device[device 设备配置]
     HTTP --> Health[health 存活与就绪]
     HTTP -.后续.-> Monitor[monitoring 实时监视]
-    HTTP -.后续.-> History[history 历史查询]
+    HTTP --> History[history 历史查询]
     HTTP -.后续.-> Commands[commands 控制意图]
     Device --> Repo[公共 Repository]
     Identity --> Repo
     Repo --> DB[(MySQL ems 工程配置)]
     Repo --> WebDB[(MySQL ems_web 业务库)]
     Monitor --> RT[公共实时客户端]
-    History --> Storage[存储进程 RPC]
+    History --> Storage[公共时序接口 / TDengine]
     Commands --> Intent[持久意图与 outbox]
     Intent --> Strategy[策略仲裁与采集执行]
 ```
@@ -35,7 +35,8 @@ flowchart TB
 | device | 树、档案、绑定、四遥、模板、导入 | 复用公共模型和数据库层 |
 | health | 进程存活、依赖就绪、指标 | 不探测现场设备 |
 | channels（后续） | 通道连接与通信管理 | 首期由 device 承接，移交时复用规则与事务 |
-| monitoring / history / commands（后续） | 实时、历史、人工意图 | 不通过配置接口执行设备命令 |
+| history | 历史范围查询、流归并与时间桶采样 | 复用配置授权、历史目录和公共时序接口，不依赖实时库 |
+| monitoring / commands | 实时监视、后续人工意图 | 不通过配置接口执行设备命令 |
 
 配置保存即生效，以站根 `config_revision` 触发热加载；不建立配置草稿、发布、历史或回滚。
 
