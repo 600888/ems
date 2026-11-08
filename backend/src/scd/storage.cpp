@@ -1,13 +1,12 @@
 #include "storage.h"
 
+#include <common/codec/digest.h>
 #include <common/codec/event_codec.h>
 
 #include <algorithm>
-#include <array>
 #include <chrono>
 #include <cmath>
 #include <cstdint>
-#include <iomanip>
 #include <limits>
 #include <map>
 #include <nlohmann/json.hpp>
@@ -20,69 +19,6 @@ namespace ems::storage {
 namespace {
 
 using nlohmann::json;
-
-constexpr std::array<std::uint32_t, 64> kRoundConstants{
-    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
-    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
-    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
-    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
-    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
-    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
-    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
-    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2};
-
-std::uint32_t rotate_right(std::uint32_t value, unsigned bits) {
-    return (value >> bits) | (value << (32 - bits));
-}
-
-std::string sha256(const std::string& input) {
-    std::vector<std::uint8_t> bytes(input.begin(), input.end());
-    const auto bit_length = static_cast<std::uint64_t>(bytes.size()) * 8;
-    bytes.push_back(0x80);
-    while (bytes.size() % 64 != 56) bytes.push_back(0);
-    for (int shift = 56; shift >= 0; shift -= 8) {
-        bytes.push_back(static_cast<std::uint8_t>(bit_length >> shift));
-    }
-
-    std::array<std::uint32_t, 8> state{0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
-                                       0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19};
-    for (std::size_t offset = 0; offset < bytes.size(); offset += 64) {
-        std::array<std::uint32_t, 64> words{};
-        for (std::size_t i = 0; i < 16; ++i) {
-            const auto base = offset + i * 4;
-            words[i] = (static_cast<std::uint32_t>(bytes[base]) << 24) |
-                       (static_cast<std::uint32_t>(bytes[base + 1]) << 16) |
-                       (static_cast<std::uint32_t>(bytes[base + 2]) << 8) | bytes[base + 3];
-        }
-        for (std::size_t i = 16; i < 64; ++i) {
-            const auto s0 = rotate_right(words[i - 15], 7) ^ rotate_right(words[i - 15], 18) ^
-                            (words[i - 15] >> 3);
-            const auto s1 = rotate_right(words[i - 2], 17) ^ rotate_right(words[i - 2], 19) ^
-                            (words[i - 2] >> 10);
-            words[i] = words[i - 16] + s0 + words[i - 7] + s1;
-        }
-        auto working = state;
-        for (std::size_t i = 0; i < 64; ++i) {
-            const auto s1 = rotate_right(working[4], 6) ^ rotate_right(working[4], 11) ^
-                            rotate_right(working[4], 25);
-            const auto choose = (working[4] & working[5]) ^ (~working[4] & working[6]);
-            const auto first = working[7] + s1 + choose + kRoundConstants[i] + words[i];
-            const auto s0 = rotate_right(working[0], 2) ^ rotate_right(working[0], 13) ^
-                            rotate_right(working[0], 22);
-            const auto majority =
-                (working[0] & working[1]) ^ (working[0] & working[2]) ^ (working[1] & working[2]);
-            const auto second = s0 + majority;
-            for (std::size_t j = 7; j > 0; --j) working[j] = working[j - 1];
-            working[4] += first;
-            working[0] = first + second;
-        }
-        for (std::size_t i = 0; i < state.size(); ++i) state[i] += working[i];
-    }
-    std::ostringstream output;
-    output << std::hex << std::setfill('0');
-    for (auto word : state) output << std::setw(8) << word;
-    return output.str();
-}
 
 core::Error invalid(const std::string& message) {
     return core::make_error(core::ErrorCode::SchemaMismatch, core::WriteEffect::NotApplicable,
@@ -177,7 +113,7 @@ core::Result<Sample> parse_sample(const messaging::EventEnvelope& event,
     sample.point_id = core::value_of(point_id);
     sample.scope_kind = event.unit_id ? "unit" : "station";
     sample.scope_id = event.unit_id ? event.unit_id->value() : event.station_id->value();
-    sample.config_version = event.config_version;
+    sample.config_revision = event.config_version;
     sample.source_id = core::value_of(source_id);
     sample.source_epoch = core::value_of(source_epoch);
     sample.sequence = core::value_of(sequence);
@@ -186,6 +122,7 @@ core::Result<Sample> parse_sample(const messaging::EventEnvelope& event,
     sample.ingest_time_us = event.ingest_time;
     const bool source_time_missing = event.event_time == core::kInvalidUtcMicros;
     sample.source_time_us = source_time_missing ? event.ingest_time : event.event_time;
+    sample.measurement_time_us = source_time_missing ? 0 : event.event_time;
     sample.time_origin = source_time_missing ? 1 : 0;
     sample.time_reason = source_time_missing ? "source_time_missing" : "";
     if (sample.ingest_time_us <= 0 || sample.source_time_us < options.min_source_time_us ||
@@ -237,7 +174,7 @@ core::Result<Sample> parse_sample(const messaging::EventEnvelope& event,
     }
     auto canonical = codec::encode_event(event);
     if (!core::is_ok(canonical)) return core::error_of(canonical);
-    sample.payload_sha256 = sha256(core::value_of(canonical));
+    sample.payload_sha256 = codec::sha256(core::value_of(canonical));
     return sample;
 }
 
@@ -285,7 +222,7 @@ core::Status HistoryConsumer::process(const messaging::Delivery& delivery,
     if (!core::is_ok(begun)) return core::error_of(begun);
     auto transaction = std::move(std::get<0>(begun));
     auto snapshot = repository_.find_point(*transaction, value.scope_kind, value.scope_id,
-                                           value.config_version, value.point_id, ctx);
+                                           value.config_revision, value.point_id, ctx);
     if (!core::is_ok(snapshot)) {
         const auto& error = core::error_of(snapshot);
         transaction.reset();
@@ -294,7 +231,7 @@ core::Status HistoryConsumer::process(const messaging::Delivery& delivery,
     const auto& point = core::value_of(snapshot);
     if (point.value_type != value.value_type || !point.enabled ||
         point.point_id != value.point_id || point.scope_kind != value.scope_kind ||
-        point.scope_id != value.scope_id || point.config_version != value.config_version ||
+        point.scope_id != value.scope_id || point.config_version != value.config_revision ||
         !valid_series_key(point.series_key)) {
         transaction.reset();
         return quarantine("point snapshot mismatch");
@@ -367,7 +304,7 @@ core::Result<HistoryPage> HistoryQueryService::query(
     std::string fingerprint_input =
         scope_key + "|" + std::to_string(request.start_us) + "|" + std::to_string(request.end_us);
     for (const auto& point_id : point_set) fingerprint_input += "|" + point_id;
-    const auto fingerprint = sha256(fingerprint_input);
+    const auto fingerprint = codec::sha256(fingerprint_input);
     const auto now_us = std::chrono::duration_cast<std::chrono::microseconds>(
                             std::chrono::system_clock::now().time_since_epoch())
                             .count();
@@ -423,18 +360,18 @@ core::Result<HistoryPage> HistoryQueryService::query(
         }
         previous = key;
         if (page.rows.size() == request.max_rows) break;
-        const auto snapshot_key = std::make_pair(sample.config_version, sample.point_id);
+        const auto snapshot_key = std::make_pair(sample.config_revision, sample.point_id);
         auto found = snapshots.find(snapshot_key);
         if (found == snapshots.end()) {
             auto resolved = repository_.find_point(*transaction, sample.scope_kind, sample.scope_id,
-                                                   sample.config_version, sample.point_id, ctx);
+                                                   sample.config_revision, sample.point_id, ctx);
             if (!core::is_ok(resolved)) return core::error_of(resolved);
             found = snapshots.emplace(snapshot_key, core::value_of(resolved)).first;
         }
         if (found->second.value_type != sample.value_type ||
             found->second.scope_kind != sample.scope_kind ||
             found->second.scope_id != sample.scope_id ||
-            found->second.config_version != sample.config_version ||
+            found->second.config_version != sample.config_revision ||
             found->second.point_id != sample.point_id) {
             return core::make_error(core::ErrorCode::CorruptData, core::WriteEffect::NotApplicable,
                                     "history metadata mismatch");

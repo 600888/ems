@@ -42,7 +42,8 @@ function go(to?: string) {
         type="button"
         class="flex h-full items-center gap-2 border-b-2 text-body"
         :class="
-          route.path.startsWith('/monitor') && item.key === 'monitor'
+          (item.key === 'monitor' && route.path.startsWith('/monitor')) ||
+          (item.key === 'history' && route.path.startsWith('/history'))
             ? 'border-accent font-semibold text-accent'
             : 'border-transparent text-muted hover:text-ink'
         "

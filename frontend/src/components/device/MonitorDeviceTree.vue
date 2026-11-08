@@ -28,13 +28,13 @@ function hasChildren(data: DeviceNode) {
 }
 
 function onNodeClick(data: DeviceNode) {
-  if (data.isDevice) monitor.selectDevice(data.id)
+  if (data.isDevice || data.kind === 'component') monitor.selectDevice(data.id)
 }
 </script>
 
 <template>
   <aside
-    class="workspace-sidebar flex w-[288px] shrink-0 flex-col gap-1 overflow-hidden rounded-[6px] border border-line bg-panel p-4"
+    class="flex w-[288px] shrink-0 flex-col gap-1 overflow-hidden border-r border-line bg-panel p-4"
   >
     <div class="flex items-center gap-[10px]">
       <h2 class="text-lead font-semibold text-ink">设备目录</h2>
@@ -80,7 +80,7 @@ function onNodeClick(data: DeviceNode) {
         node-key="id"
         :props="{ label: 'name', children: 'children' }"
         :indent="13"
-        :default-expanded-keys="['ess000001', 'unit01', 'bms01', 'cluster01']"
+        :default-expanded-keys="monitor.expandedKeys"
         :current-node-key="monitor.selectedId"
         highlight-current
         :expand-on-click-node="false"

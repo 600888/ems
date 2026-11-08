@@ -13,7 +13,7 @@ endif()
 
 add_executable(ems-daemon ${EMS_DAEMON_COMMON_SRC} ${EMS_DAEMON_PLATFORM_SRC} main.cpp)
 
-# 头文件来源：公共接口（include/）、进程内公共实现（src/log 等）、
+# 头文件来源：公共接口（include/）、进程内公共实现（src/common/log 等）、
 # 以及 spdlog、nlohmann/json 两个纯头文件第三方库。
 target_include_directories(
     ems-daemon

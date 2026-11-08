@@ -8,11 +8,13 @@
 #include <filesystem>
 #include <fstream>
 #include <future>
+#include <limits>
 #include <ormpp/sqlite.hpp>
 #include <util/excel.hpp>
 
 #include "common/db/configuration/orm_device_management_store.h"
 #include "common/db/runtime/transaction_database.h"
+#include "scd/sampling.h"
 #include "web/app/module_registry.h"
 #include "web/app/web_options.h"
 #include "web/modules/device/application/device_service.h"
@@ -726,6 +728,288 @@ TEST_F(WebDevice, HistoryReadsUnitScopeInBoundedPagesAndChecksOwnership) {
         return core::Result<std::vector<Sample>>{std::vector<Sample>{sample}};
     });
     EXPECT_THROW(corrupt.execute("/api/history/query", body, actor, context()), ApiError);
+}
+
+class HistoryCatalog final : public IHistoryCatalogRepository {
+   public:
+    bool missing{false};
+    int registrations{0};
+
+    core::Status ensure_series(ITransaction&, const SeriesMapping&,
+                               const core::CallContext&) override {
+        ++registrations;
+        return core::ok_status();
+    }
+
+    core::Result<PointSnapshot> find_point(ITransaction&, const std::string&, const std::string&,
+                                           const std::string&, const std::string&,
+                                           const core::CallContext&) override {
+        return core::make_error(core::ErrorCode::NotFound, core::WriteEffect::NotApplicable);
+    }
+
+    core::Result<SeriesMapping> find_series(ITransaction&, const std::string& id,
+                                            const core::CallContext&) override {
+        if (missing)
+            return core::make_error(core::ErrorCode::NotFound, core::WriteEffect::NotApplicable);
+        return SeriesMapping{id, id == "state" ? ValueType::Boolean : ValueType::Numeric, id};
+    }
+};
+
+class WebHistory : public WebDevice {
+   protected:
+    std::shared_ptr<HistoryCatalog> catalog;
+    std::vector<Sample> samples;
+    int reads{0};
+
+    void SetUp() override {
+        WebDevice::SetUp();
+        auto tx = take(db.database->begin(context()));
+        CfgDeviceRow unit;
+        unit.device_id = "unit";
+        unit.node_kind = "unit";
+        unit.parent_device_id = "station";
+        unit.code = "unit";
+        unit.path = "/unit";
+        take(db.device_management->put(*tx, unit, context()));
+        CfgDeviceRow device;
+        device.device_id = "device";
+        device.node_kind = "device";
+        device.parent_device_id = "unit";
+        device.code = "device";
+        device.path = "/unit/device";
+        take(db.device_management->put(*tx, device, context()));
+        CfgPointYcRow yc;
+        yc.point_id = "power";
+        yc.owner_device_id = "device";
+        yc.code = "power";
+        yc.value_type = "double";
+        yc.enabled = 0;  // 停用测点仍允许读取已存储历史。
+        take(db.device_management->put(*tx, yc, context()));
+        CfgPointYxRow yx;
+        yx.point_id = "state";
+        yx.owner_device_id = "device";
+        yx.code = "state";
+        yx.value_type = "bool";
+        take(db.device_management->put(*tx, yx, context()));
+        take(tx->commit(context()));
+        catalog = std::make_shared<HistoryCatalog>();
+        db.history_catalog = catalog;
+    }
+
+    Json body(const std::string& kind = "yc") {
+        return {{"device_id", "device"},
+                {"point_type", kind},
+                {"point_ids", {kind == "yc" ? "power" : "state"}},
+                {"start_ms", 0},
+                {"end_ms", 30LL * 86400000},
+                {"max_rows", 10000}};
+    }
+
+    void add(std::int64_t timestamp, double value, const std::string& scope = "unit") {
+        Sample sample;
+        sample.scope_kind = scope;
+        sample.scope_id = scope == "unit" ? "unit" : "station";
+        sample.point_id = "power";
+        sample.series_key = "power";
+        sample.event_id = std::to_string(timestamp);
+        sample.source_time_us = timestamp * 1000;
+        sample.value = value;
+        samples.push_back(sample);
+    }
+
+    RuntimeService::ReadHistory reader() {
+        return [this](const HistoryQuery& q, const std::vector<SeriesMapping>&, std::uint32_t limit,
+                      const auto&) -> core::Result<std::vector<Sample>> {
+            ++reads;
+            EXPECT_LE(limit, 1001u);
+            std::vector<Sample> result;
+            for (const auto& sample : samples) {
+                if (sample.scope_kind != q.scope_kind || sample.scope_id != q.scope_id ||
+                    sample.source_time_us < q.start_us || sample.source_time_us >= q.end_us)
+                    continue;
+                if (q.cursor &&
+                    std::tie(sample.source_time_us, sample.point_id, sample.event_id) <=
+                        std::tie(q.cursor->source_time_us, q.cursor->point_id, q.cursor->event_id))
+                    continue;
+                result.push_back(sample);
+                if (result.size() == limit) break;
+            }
+            return result;
+        };
+    }
+};
+
+TEST_F(WebHistory, BucketsMergeScopesAndCarryLatestQualityAcrossPages) {
+    for (int i = 1; i <= 1500; ++i) add(i, i, i % 2 ? "unit" : "station");
+    add(60000, 9);
+    add(120000, 10);
+    samples[1499].quality = 4;
+    RuntimeService history(db, {}, {}, reader());
+    auto query = body();
+    query["interval_ms"] = 60000;
+    query["end_ms"] = 120000;
+    auto result = history.execute("/api/history/query", query, actor, context()).data;
+    ASSERT_EQ(result.at("items").size(), 2u);
+    EXPECT_EQ(result.at("items")[0].at("timestamp"), 0);
+    EXPECT_EQ(result.at("items")[0].at("value"), 1500);
+    EXPECT_EQ(result.at("items")[0].at("quality_code"), 4);
+    EXPECT_EQ(result.at("items")[1].at("timestamp"), 60000);
+    EXPECT_FALSE(result.at("truncated"));
+    query["max_rows"] = 1;
+    result = history.execute("/api/history/query", query, actor, context()).data;
+    EXPECT_EQ(result.at("items").size(), 1u);
+    EXPECT_TRUE(result.at("truncated"));
+}
+
+TEST_F(WebHistory, BooleanHistoryUsesYxTableAndSupportsThirtyDays) {
+    add(1000, 1);
+    add(29LL * 86400000, 0);
+    for (auto& sample : samples) {
+        sample.point_id = "state";
+        sample.series_key = "state";
+        sample.value_type = ValueType::Boolean;
+        sample.value = sample.source_time_us == 1000000;
+    }
+    RuntimeService history(db, {}, {}, reader());
+    auto query = body("yx");
+    for (const auto interval : {0, 60000, 300000, 900000, 3600000}) {
+        query["interval_ms"] = interval;
+        const auto result = history.execute("/api/history/query", query, actor, context()).data;
+        ASSERT_EQ(result.at("items").size(), 2u);
+        EXPECT_EQ(result.at("items")[0].at("value"), true);
+        EXPECT_EQ(result.at("items")[1].at("value"), false);
+        EXPECT_FALSE(result.at("truncated"));
+    }
+    query["point_type"] = "yc";
+    const auto before = reads;
+    EXPECT_THROW(history.execute("/api/history/query", query, actor, context()), ApiError);
+    EXPECT_EQ(reads, before);
+}
+
+TEST_F(WebHistory, RejectsMalformedBoundsAndUnauthorizedPointsBeforeScanning) {
+    RuntimeService history(db, {}, {}, reader());
+    const std::vector<Json> patches = {{{"end_ms", 30LL * 86400000 + 1}},
+                                       {{"start_ms", -1}},
+                                       {{"start_ms", 0.5}},
+                                       {{"start_ms", "0"}},
+                                       {{"end_ms", 0}},
+                                       {{"max_rows", 10001}},
+                                       {{"max_rows", 0}},
+                                       {{"interval_ms", 1000}},
+                                       {{"point_ids", Json::array()}},
+                                       {{"point_ids", {false}}},
+                                       {{"point_ids", {"1", "2", "3", "4", "5", "6", "7"}}},
+                                       {{"point_type", "yk"}},
+                                       {{"end_ms", std::numeric_limits<std::uint64_t>::max()}}};
+    for (const auto& patch : patches) {
+        auto query = body();
+        query.update(patch);
+        try {
+            history.execute("/api/history/query", query, actor, context());
+            FAIL() << query.dump();
+        } catch (const ApiError& error) {
+            EXPECT_EQ(error.status, 400) << query.dump();
+        }
+    }
+    auto query = body();
+    query["device_id"] = "station";
+    EXPECT_THROW(history.execute("/api/history/query", query, actor, context()), ApiError);
+    Principal denied{"reader", {"monitor.read"}, {"*"}, {"*"}};
+    EXPECT_THROW(history.execute("/api/history/query", body(), denied, context()), ApiError);
+    EXPECT_EQ(reads, 0);
+}
+
+TEST_F(WebHistory, MissingSeriesReturnsEmptyWithoutOpeningTimeSeries) {
+    catalog->missing = true;
+    RuntimeService history(db, {});
+    const auto result = history.execute("/api/history/query", body(), actor, context()).data;
+    EXPECT_TRUE(result.at("items").empty());
+    EXPECT_FALSE(result.at("truncated"));
+}
+
+TEST_F(WebHistory, ArchiveDirectoryReloadsOnlyAfterStationRevisionChanges) {
+    catalog->missing = true;
+    storage::ArchiveDirectorySource source(db);
+    auto first = source.refresh(context());
+    ASSERT_TRUE(core::is_ok(first));
+    EXPECT_EQ(core::value_of(first).points.size(), 2u);
+    EXPECT_EQ(catalog->registrations, 2);
+    auto unchanged = source.refresh(context());
+    ASSERT_TRUE(core::is_ok(unchanged));
+    EXPECT_EQ(catalog->registrations, 2);
+    sql("UPDATE cfg_point_yc SET enabled=1 WHERE point_id='power'");
+    sql("UPDATE cfg_device SET config_revision=config_revision+1 WHERE device_id='station'");
+    auto changed = source.refresh(context());
+    ASSERT_TRUE(core::is_ok(changed));
+    EXPECT_EQ(catalog->registrations, 4);
+    EXPECT_TRUE(core::value_of(changed).points[0].enabled);
+    EXPECT_EQ(core::value_of(changed).config_revision, 1);
+}
+
+TEST_F(WebHistory, ArchiveDirectoryPreservesMappingsAndRejectsIncompatibleTypeChanges) {
+    storage::ArchiveDirectorySource source(db);
+    auto first = source.refresh(context());
+    ASSERT_TRUE(core::is_ok(first));
+    EXPECT_EQ(core::value_of(first).points[0].series.series_key, "power");
+    EXPECT_EQ(catalog->registrations, 0);
+    sql("UPDATE cfg_point_yc SET value_type='int64' WHERE point_id='power'");
+    sql("UPDATE cfg_device SET config_revision=config_revision+1 WHERE device_id='station'");
+    auto changed = source.refresh(context());
+    ASSERT_FALSE(core::is_ok(changed));
+    EXPECT_EQ(core::error_of(changed).code, core::ErrorCode::Conflict);
+    sql("UPDATE cfg_point_yc SET value_type='double' WHERE point_id='power'");
+    auto restored = source.refresh(context());
+    ASSERT_TRUE(core::is_ok(restored));
+    EXPECT_EQ(core::value_of(restored).config_revision, 1);
+}
+
+TEST_F(WebHistory, DeduplicatesTheSameEventAcrossStationAndUnit) {
+    add(1000, 1, "station");
+    add(1000, 1, "unit");
+    add(2000, 2, "unit");
+    RuntimeService history(db, {}, {}, reader());
+    const auto result = history.execute("/api/history/query", body(), actor, context()).data;
+    ASSERT_EQ(result.at("items").size(), 2u);
+    EXPECT_EQ(result.at("items")[1].at("value"), 2);
+    EXPECT_FALSE(result.at("truncated"));
+}
+
+TEST_F(WebHistory, RechecksPointOwnershipAfterTimeSeriesRead) {
+    add(1000, 1);
+    auto read = reader();
+    bool moved = false;
+    RuntimeService history(
+        db, {}, {}, [&](const auto& q, const auto& mappings, auto limit, const auto& ctx) {
+            if (!moved) {
+                sql("UPDATE cfg_point_yc SET owner_device_id='station' WHERE point_id='power'");
+                moved = true;
+            }
+            return read(q, mappings, limit, ctx);
+        });
+    EXPECT_THROW(history.execute("/api/history/query", body(), actor, context()), ApiError);
+    EXPECT_TRUE(moved);
+}
+
+TEST_F(WebHistory, RejectsNonFiniteValuesAndUnorderedPages) {
+    add(1000, 1);
+    add(2000, 2);
+    RuntimeService history(db, {}, {}, reader());
+    samples[0].value = std::numeric_limits<double>::infinity();
+    EXPECT_THROW(history.execute("/api/history/query", body(), actor, context()), ApiError);
+    samples[0].value = 1.0;
+    std::swap(samples[0], samples[1]);
+    EXPECT_THROW(history.execute("/api/history/query", body(), actor, context()), ApiError);
+}
+
+TEST_F(WebHistory, ScanBudgetNeverReportsIncompleteBucketAsComplete) {
+    for (int i = 0; i <= 200000; ++i) add(i, i);
+    RuntimeService history(db, {}, {}, reader());
+    auto query = body();
+    query["interval_ms"] = 3600000;
+    const auto result = history.execute("/api/history/query", query, actor, context()).data;
+    EXPECT_TRUE(result.at("items").empty());
+    EXPECT_TRUE(result.at("truncated"));
+    EXPECT_LE(reads, 202);
 }
 
 TEST_F(WebDevice, CreateQueryRevisionAndNoOpSave) {
@@ -1455,8 +1739,8 @@ TEST_F(WebDevice, HttpLoginCookieCsrfAndFixedJsonRoutes) {
 
 TEST_F(WebDevice, HttpStartsWithoutAccounts) {
     WebOptions options;
-    options.port = 19763;
-    options.allowed_origin = "http://127.0.0.1:19763";
+    options.port = 19765;
+    options.allowed_origin = "http://127.0.0.1:19765";
     options.workspace = (directory / "http-upload").u8string();
 
     // CTest 为各 HTTP 场景启动独立进程，避免复用 Drogon 的全局事件循环。

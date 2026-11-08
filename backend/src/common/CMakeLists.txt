@@ -1,9 +1,11 @@
-# common/db - EMS 数据库操作动态库
-# 封装 ormpp 数据库操作，编译为平台动态库（Linux .so / Windows .dll）。
+# common - EMS 公共模块
+# 包含共享模型、日志封装、公共契约与数据库实现。
 #
 # 同时定义公共模块 targets（website/docs/common/design.md 第 4 节编译目标与依赖方向）：
 # 公共库自研目标统一 C++17；纯头接口使用 INTERFACE target；普通公共实现
 # 首期静态链接；不提供聚合 ems_common target（避免协议插件被动链接全部能力）。
+
+add_subdirectory(models)
 
 # ---------------------------------------------------------------------------
 # ems_common_core：结果/上下文/身份/时间（纯 C++17 标准库，无第三方依赖）
@@ -94,7 +96,7 @@ endif()
 # ---------------------------------------------------------------------------
 # ems_common_codec：契约编解码与精度检查（JSON 为私有实现，不公开暴露）
 # ---------------------------------------------------------------------------
-add_library(ems_common_codec STATIC codec/model_codec.cpp codec/event_codec.cpp)
+add_library(ems_common_codec STATIC codec/model_codec.cpp codec/event_codec.cpp codec/digest.cpp)
 
 target_include_directories(ems_common_codec PUBLIC ${CMAKE_SOURCE_DIR}/include)
 

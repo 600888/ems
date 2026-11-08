@@ -26,7 +26,7 @@
 #include <unordered_set>
 #include <vector>
 
-#include "models/base.h"
+#include "common/models/base.h"
 #include "net/handler/base_handler.h"
 #include "net/protocol/modbus/modbus_client.h"
 #include "net/protocol/modbus/modbus_limits.h"

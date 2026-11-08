@@ -20,7 +20,7 @@
 #include <stdexcept>
 #include <thread>
 
-#include "log/process_logger.hpp"
+#include "common/log/process_logger.hpp"
 #include "net/collect/collect_engine.h"
 #include "rtdb/backend/shared_memory_store.h"
 #include "rtdb/client/realtime_client.h"

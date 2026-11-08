@@ -79,7 +79,8 @@ struct State {
                              database, load_identity_key(o.identity_key_file)))
                        : std::make_shared<SessionService>(Json::array(), 1000, 3600)),
           device(database, o.workspace),
-          runtime(std::move(database), {o.realtime_config, o.realtime_scope_code}),
+          runtime(std::move(database),
+                  {o.realtime_config, o.realtime_scope_code, o.timeseries_config}),
           business(o.workers, o.queue_size),
           imports(o.import_workers, o.import_queue_size) {
         if (identity->authorization())

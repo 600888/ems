@@ -46,7 +46,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
 </script>
 
 <template>
-  <div class="device-workspace">
+  <div class="device-workspace flush-workspace">
     <MonitorDeviceTree />
 
     <section v-if="monitor.selectedId" class="workspace-content">

@@ -80,8 +80,6 @@ if(BUILD_TESTS)
     enable_testing()
 endif()
 
-add_subdirectory(src/models)
-
 add_subdirectory(src)
 
 if(BUILD_TESTS)

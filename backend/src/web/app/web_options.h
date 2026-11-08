@@ -18,6 +18,7 @@ struct WebOptions {
     std::string identity_key_file;
     std::string document_root;
     std::string realtime_config;
+    std::string timeseries_config;
     std::string realtime_scope_code{"station001"};
     std::string workspace{"web-upload"};
     std::size_t io_threads{2}, workers{4}, queue_size{128}, import_workers{1}, import_queue_size{8};

@@ -3,7 +3,7 @@ import { after, before, test } from 'node:test'
 import { createServer } from 'vite'
 import { createPinia, setActivePinia } from 'pinia'
 import { reactive } from 'vue'
-let server, api, http, originalFetch, originalWindow
+let server, api, http, originalFetch, originalWindow, originalStorage
 before(async () => {
   process.env.EMS_IDENTITY_MOCK = 'false'
   server = await createServer({ server: { middlewareMode: true }, logLevel: 'silent' })
@@ -11,11 +11,19 @@ before(async () => {
   http = await server.ssrLoadModule('/src/api/http.ts')
   originalFetch = globalThis.fetch
   originalWindow = globalThis.window
+  originalStorage = globalThis.sessionStorage
+  const storage = new Map()
+  globalThis.sessionStorage = {
+    getItem: (key) => storage.get(key) ?? null,
+    setItem: (key, value) => storage.set(key, String(value)),
+    removeItem: (key) => storage.delete(key),
+  }
   globalThis.window = { setTimeout, clearTimeout, dispatchEvent() {} }
 })
 after(async () => {
   globalThis.fetch = originalFetch
   globalThis.window = originalWindow
+  globalThis.sessionStorage = originalStorage
   await server.close()
 })
 const response = (data, revision = '1') =>

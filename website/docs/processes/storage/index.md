@@ -1,39 +1,45 @@
 # 存储进程
 
-> 进程：`ems-storage`｜语言：C++17｜状态：历史订阅及公共数据库首批迁移已实现；采集发布端、服务接口和真实数据库联调待完成。
+`ems-storage` 按周期从统一实时库读取当前四遥状态，默认 **每 5 秒存储所有点位**，通过公共时序接口写入 TDengine。设备和测点保留在 `cfg_device` 与四张 `cfg_point_*` 配置表；目录按站根 `config_revision` 热加载，不引入配置版本。详细职责和质量规则见[存储设计](design.md)。
 
-负责接收 ZeroMQ 原始遥测、写入时序数据库、配置与业务事件发布，以及历史查询服务。PUB/SUB 历史采样允许丢样；它不代理其他进程的 MySQL 或实时访问，也不持有现场协议会话。实时后端生命周期由[实时数据库进程](../data/index.md)管理。
+## 配置
 
-## 工作模块
+`backend/conf/storage.json` 的依赖路径以该配置文件所在目录解析：
 
-| 模块 | 输入 | 输出与提交边界 |
-| --- | --- | --- |
-| 历史消费者 | ZeroMQ 原始采样事件 | 通过统一时序接口写入，稳定事件身份去重；处理失败计入丢样 |
-| 审计对账器 | MySQL 已提交的告警、执行回执和状态记录 | 按稳定 ID 对账与归档检索；通知遗漏后仍可从持久事实恢复 |
-| outbox 发布器 | 各业务进程已提交 outbox | 可靠事件通道；领取、重试、对账，允许重复发布 |
-| 配置发布器 | MySQL 不可变配置版本 | 版本目录与 ZeroMQ 变更提示；应用状态独立追踪 |
-| 历史查询服务 | Web/策略带期限查询 | 分页、时间范围与行数受限的 gRPC 结果 |
-| 必要实时投影 | 职责内已持久确认的业务状态 | 经公共实时库更新投影；不从最新值补造历史，不代理 Web 实时读取 |
-
-历史入库使用事件中的原采样与版本，不能收到变化提示后再读最新值代替原数据。遥测使用独立 ZeroMQ 主题，没有消费组或重放游标。
-
-## 连接、事务与配置发布
-
-通过[公共数据库访问层](../../common/database/)装配 ormpp Repository 与时序适配器，连接池/事务实现、实体和 SQL 统一复用；存储只持有本进程实例并编排业务。时序、审计、outbox、配置与查询分别设预算。数据库与 ZeroMQ 无共同事务，命令按业务 ID 重发/对账，遥测 PUB/SUB 允许丢样。
-
-```mermaid
-flowchart TD
-    Tx[业务状态与 outbox 同事务提交] --> Validate[校验 profile、资源、绑定、路由、映射及 peer]
-    Validate --> Catalog[构建就绪版本目录]
-    Catalog --> Active[按作用域版本清单切 active]
-    Active --> Notify[ZeroMQ 提示实例重读]
-    Notify --> Apply[实例应用 / 反馈版本与原因]
+```json
+{
+  "database_config": "db.json",
+  "rtdb_config": "realtime.json",
+  "timeseries_config": "timeseries.json",
+  "scope_code": "station001",
+  "interval_ms": 5000
+}
 ```
 
-跨作用域不承诺原子生效；发布成功、实例应用、listener 就绪与设备在线分别判断。
+省略 `interval_ms` 时同样为 5000；支持 1000–3600000 毫秒整数。`scope_code` 与采集进程使用的实时库作用域一致。四遥点位默认都进入周期计划；遥控、遥调只保存已有实时状态，不发起写命令。没有实时样本、停用或陈旧时保存 null 和对应质量原因。
 
-## 故障与验收
+`timeseries.json` 由 Web 与存储共用，填写实际的 TDengine 主机、原生端口、用户和密码；默认库名 `ems_history`。可用 `EMS_TIMESERIES_CONFIG` 指定公共工厂的配置文件，用 `EMS_TAOS_HOST/PORT/USER/PASSWORD/DATABASE` 覆盖连接值。存储通过 `timeseries_config` 显式选择文件，Web 通过自身同名字段选择文件。配置中不写示例真实密码。
 
-入库失败和接收队列溢出均记录丢样；PUB/SUB 离线期间的缺口需要按采样新鲜度与来源序号监测。验证重复事件、配置部分发布、查询挤占、ZeroMQ 断线及数据库故障。
+## 构建与启动
 
-双库表模型、遥测订阅、查询和丢样边界见[存储进程详细设计](design.md)。公共规则见[系统架构第 7 节](../../architecture/system-design.md#7-数据存储设计)、[实时数据与配置](../../common/realtime/index.md)、[实时查询契约](../../common/realtime/access-design.md)。
+MySQL 客户端用于配置与稳定序列映射；RTDB 用于实时读取。周期存储不要求开启 ZeroMQ。TDengine C SDK 3.4.2.x 通过 `EMS_DATABASE_TAOS_INCLUDE_DIR` 和 `EMS_DATABASE_TAOS_LIBRARY` 指定，运行时需要对应客户端动态库。没有 SDK 时可编译并检查配置，真实连接会明确返回 Unsupported。
+
+服务端部署后，由部署账号执行 `backend/data/tdengine_history.sql`，创建微秒库及四张超级表；工程关系表继续通过现有 Python 初始化入口管理。应用不在启动时建库或建表。
+
+以下命令以 `backend` 为工作目录，先检查配置，再连接服务：
+
+```powershell
+./build/windows-msvc/bin/Release/ems-storage.exe --config conf/storage.json --check-config
+./build/windows-msvc/bin/Release/ems-storage.exe --config conf/storage.json --once
+./build/windows-msvc/bin/Release/ems-storage.exe --config conf/storage.json
+```
+
+`--check-config` 不连接外部服务。`--once` 执行一个实际归档周期，用于部署验收，任意写失败返回非零。持续运行支持 SIGINT / SIGTERM，Windows 另支持 SIGBREAK。
+
+守护配置已带上 `--config conf/storage.json`；默认保持存储项停用，待 TDengine 就绪后再启用该项。启动需要实时库已经可用，配置目录和时序连接全部就绪后才报告 ready。
+
+## 当前验证边界
+
+前端历史页调用真实 Web 查询接口，Web 直接使用公共历史目录与 TDengine 读取端口，见[历史数据查询](../web/history.md)。测试通过注入实时与时序端口覆盖归档和查询，另有启动配置校验、SQLite 热加载回归与原生 SDK 头文件语法编译验证。
+
+当前未部署 TDengine 服务端，按本轮要求只完成代码和本地验证，不启动持续归档进程或声称已实际落库。服务端部署后再验证每个点的 5 秒间隔、采集时间、新鲜度、重连和 Web 查询。

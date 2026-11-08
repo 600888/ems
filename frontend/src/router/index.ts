@@ -241,6 +241,20 @@ const router = createRouter({
       ],
     },
 
+    // 30 前台 · 历史数据（独立页面，测点树勾选查询）
+    {
+      path: '/history',
+      component: () => import('@/components/layout/MonitorShell.vue'),
+      meta: { permission: 'history.read' },
+      children: [
+        {
+          path: '',
+          name: 'history',
+          component: () => import('@/views/history/HistoryView.vue'),
+        },
+      ],
+    },
+
     { path: '/:pathMatch(.*)*', redirect: '/monitor/overview' },
   ],
 })

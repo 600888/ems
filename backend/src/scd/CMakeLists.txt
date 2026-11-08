@@ -1,7 +1,7 @@
-# 存储核心不依赖外部服务；原生进程按 MySQL / ZeroMQ 依赖启用。
+# 周期存储使用配置库、实时库和公共时序接口；ZeroMQ 事件消费为可选能力。
 
 add_library(
-    ems_storage_core STATIC storage.cpp storage.h telemetry_feed.h outbox_publisher.cpp
+    ems_storage_core STATIC storage.cpp storage.h sampling.cpp sampling.h telemetry_feed.h outbox_publisher.cpp
                             outbox_publisher.h
 )
 
@@ -26,22 +26,25 @@ set_target_properties(
                CXX_EXTENSIONS NO
 )
 
-option(EMS_STORAGE_WITH_NATIVE "Build ems-storage with MySQL and ZeroMQ" ON)
+option(EMS_STORAGE_WITH_NATIVE "Build ems-storage with MySQL and RTDB" ON)
 
-if(EMS_STORAGE_WITH_NATIVE AND TARGET ems_zmq_messaging)
+if(EMS_STORAGE_WITH_NATIVE)
     get_target_property(_ems_mysql_available ems_database_mysql EMS_MYSQL_AVAILABLE)
     if(_ems_mysql_available)
 
-        add_library(ems_storage_native STATIC zmq_telemetry.cpp native_adapters.h)
+        add_library(ems_storage_native STATIC storage_options.cpp storage_options.h native_adapters.h)
 
         target_include_directories(ems_storage_native PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
 
         target_link_libraries(
             ems_storage_native
-            PUBLIC ems_storage_core
-            PRIVATE ems_common_codec ems_zmq_messaging ems_database_mysql ems_timeseries
-                    Threads::Threads
+            PUBLIC ems_storage_core ems_database_mysql ems_timeseries ems_rtdb
+            PRIVATE ems_common_codec Threads::Threads
         )
+        if(TARGET ems_zmq_messaging)
+            target_sources(ems_storage_native PRIVATE zmq_telemetry.cpp)
+            target_link_libraries(ems_storage_native PRIVATE ems_zmq_messaging)
+        endif()
 
         if(WIN32)
             target_link_libraries(ems_storage_native PRIVATE ws2_32)
@@ -69,8 +72,6 @@ if(EMS_STORAGE_WITH_NATIVE AND TARGET ems_zmq_messaging)
     else()
         message(STATUS "ems-storage native process disabled: MySQL client missing")
     endif()
-elseif(EMS_STORAGE_WITH_NATIVE)
-    message(STATUS "ems-storage native process disabled: configure with EMS_WITH_ZEROMQ=ON")
 endif()
 
 ems_copy_directory_runtime_dependencies()

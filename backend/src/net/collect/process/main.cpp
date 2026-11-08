@@ -15,8 +15,8 @@
 #include <windows.h>
 #endif
 
-#include "log/default_logger.hpp"
-#include "log/process_logger.hpp"
+#include "common/log/default_logger.hpp"
+#include "common/log/process_logger.hpp"
 #include "net/collect/collect_engine.h"
 #include "net/para_loader/cfg_loader.h"
 

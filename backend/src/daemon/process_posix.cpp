@@ -15,7 +15,7 @@
 #include <string>
 #include <vector>
 
-#include "log/default_logger.hpp"
+#include "common/log/default_logger.hpp"
 #include "pid_file.h"
 #include "platform.h"
 #include "process_manager.h"

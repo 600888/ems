@@ -440,6 +440,50 @@ class HistoryRepositories final : public IHistoryCatalogRepository, public IHist
         return SeriesMapping{point_id, core::value_of(type), rows.front().series_table};
     }
 
+    core::Status ensure_series(ITransaction& tx, const SeriesMapping& mapping,
+                               const core::CallContext& ctx) override {
+        if (!bounded_id(mapping.point_id) || mapping.series_key.size() != 66 ||
+            mapping.series_key.compare(0, 2, "p_") != 0 ||
+            !std::all_of(mapping.series_key.begin() + 2, mapping.series_key.end(), [](char ch) {
+                return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
+            }))
+            return core::make_error(core::ErrorCode::InvalidArgument, core::WriteEffect::NotApplied,
+                                    "invalid series mapping");
+        std::string type;
+        switch (mapping.value_type) {
+            case ValueType::Numeric:
+                type = "numeric";
+                break;
+            case ValueType::Integer:
+                type = "integer";
+                break;
+            case ValueType::Boolean:
+                type = "boolean";
+                break;
+            case ValueType::Text:
+                type = "text";
+                break;
+            default:
+                return core::make_error(core::ErrorCode::InvalidArgument,
+                                        core::WriteEffect::NotApplied, "invalid series type");
+        }
+        auto result = session(tx, ctx);
+        if (!core::is_ok(result)) return core::error_of(result);
+        auto& connection = *core::value_of(result);
+        const mysql_rows::history_point_series row{mapping.point_id, type, mapping.series_key};
+        const auto inserted = connection.orm.insert(row);
+        if (inserted == 1 && !connection.orm.has_error()) return core::ok_status();
+        if (!connection.orm.has_error() || connection.orm.get_last_error_code() != 1062)
+            return failed(tx, connection, "series insert", core::WriteEffect::NotApplied);
+        auto existing = find_series(tx, mapping.point_id, ctx);
+        if (!core::is_ok(existing)) return core::error_of(existing);
+        const auto& saved = core::value_of(existing);
+        if (saved.value_type != mapping.value_type || saved.series_key != mapping.series_key)
+            return core::make_error(core::ErrorCode::Conflict, core::WriteEffect::NotApplied,
+                                    "point series type or identity changed");
+        return core::ok_status();
+    }
+
     core::Status register_event(ITransaction& tx, const Sample& sample,
                                 const core::CallContext& ctx) override {
         if (!bounded_id(sample.event_id) || !bounded_id(sample.point_id) ||

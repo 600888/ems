@@ -40,14 +40,23 @@ function open(data: DeviceNode) {
   }
 }
 
-function onNodeClick(
-  data: DeviceNode,
-  node: { expanded: boolean; expand: () => void; collapse: () => void },
-) {
-  open(data)
-  if (hasChildren(data) && !data.isDevice) {
-    node.expanded ? node.collapse() : node.expand()
+// 自定义箭头直接调用的 node.expand/collapse 是内部模型方法，不触发
+// node-expand/node-collapse 事件，必须手动同步 store，否则换路由重建树后展开状态丢失
+function toggle(data: DeviceNode, node: { expanded: boolean; expand: () => void; collapse: () => void }) {
+  if (node.expanded) {
+    node.collapse()
+    device.collapseNode(data.id)
+  } else {
+    node.expand()
+    device.expandNode(data.id)
   }
+}
+
+function onNodeClick(data: DeviceNode, node: { expanded: boolean; expand: () => void; collapse: () => void }) {
+  // 设备/部件点击选中并跳转详情
+  if (data.isDevice || data.kind === 'component') open(data)
+  // 有子节点的节点，点击名称等价于点箭头（展开/收起）
+  if (hasChildren(data)) toggle(data, node)
 }
 </script>
 
@@ -87,6 +96,8 @@ function onNodeClick(
         :expand-on-click-node="false"
         :filter-node-method="filterNode"
         @node-click="onNodeClick"
+        @node-expand="(data: DeviceNode) => device.expandNode(data.id)"
+        @node-collapse="(data: DeviceNode) => device.collapseNode(data.id)"
       >
         <template #default="{ node, data }">
           <div class="flex w-full min-w-0 items-center gap-[7px]">
@@ -94,7 +105,7 @@ function onNodeClick(
               v-if="hasChildren(data as DeviceNode)"
               type="button"
               class="flex shrink-0 items-center text-muted"
-              @click.stop="node.expanded ? node.collapse() : node.expand()"
+              @click.stop="toggle(data as DeviceNode, node)"
             >
               <AppIcon :name="node.expanded ? 'chevron-down' : 'chevron-right'" :size="12" />
             </button>

@@ -68,6 +68,7 @@ bin/                          ems-rtdb 可执行程序及 Windows 运行依赖 D
 lib/                          导入库或 Linux SO
 include/rtdb/                 公共接口，Boost/Redis 实现头不外露
 include/common/core/          Result、CallContext 等共享类型
+include/common/models/        共享枚举、解码工具与四遥运行时测点
 lib/cmake/ems_rtdb/            find_package 配置与 ems::rtdb 导出目标
 share/ems_rtdb/                配置示例和本文档
 ```

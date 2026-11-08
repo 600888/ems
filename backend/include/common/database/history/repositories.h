@@ -36,6 +36,22 @@ class IHistoryCatalogRepository {
      */
     virtual core::Result<SeriesMapping> find_series(ITransaction& tx, const std::string& point_id,
                                                     const core::CallContext& ctx) = 0;
+
+    /**
+     * @brief 登记稳定序列映射；已存在时要求身份、类型和序列名完全一致。
+     * @param[in,out] tx 调用方事务；本方法不提交、不创建配置版本。
+     * @param[in] mapping 内部生成的点位身份、值类型与受控子表名。
+     * @param[in] ctx 调用期限。
+     * @return 幂等暂存成功；冲突返回 Conflict，仅实现读取的仓储返回 Unsupported。
+     */
+    virtual core::Status ensure_series(ITransaction& tx, const SeriesMapping& mapping,
+                                       const core::CallContext& ctx) {
+        (void)tx;
+        (void)mapping;
+        (void)ctx;
+        return core::make_error(core::ErrorCode::Unsupported, core::WriteEffect::NotApplied,
+                                "series registration unavailable");
+    }
 };
 
 /** @brief 已到达事件的身份与隔离仓储；不自行提交事务。 */

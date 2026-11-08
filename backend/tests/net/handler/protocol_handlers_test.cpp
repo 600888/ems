@@ -19,7 +19,7 @@
 #include "net/handler/modbus/modbus_proto_handler.h"
 #include "net/protocol/plugin_manager.h"
 #ifdef EMS_CHANNEL_TESTS
-#include "log/process_logger.hpp"
+#include "common/log/process_logger.hpp"
 #include "net/collect/channel_thread.h"
 #endif
 

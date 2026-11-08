@@ -25,7 +25,7 @@ struct Sample {
     std::string point_id;
     std::string scope_kind;
     std::string scope_id;
-    std::string config_version;
+    std::string config_revision;  ///< 站根热加载计数，不表示配置版本
     std::string series_key;
     std::string source_id;
     std::string source_epoch;
@@ -35,6 +35,7 @@ struct Sample {
     std::string payload_sha256;
     std::int64_t source_time_us{0};
     std::int64_t ingest_time_us{0};
+    std::int64_t measurement_time_us{0};  ///< 原采集时间；周期归档的 source_time_us 为采样槽时间
     std::int32_t quality{0};
     std::uint8_t time_origin{0};
     ValueType value_type{ValueType::Numeric};

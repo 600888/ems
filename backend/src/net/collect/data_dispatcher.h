@@ -18,7 +18,7 @@
 #include <string>
 #include <vector>
 
-#include "models/point_runtime.hpp"
+#include "common/models/point_runtime.hpp"
 #include "net/collect/collect_defaults.h"
 #include "net/collect/collect_types.h"
 #include "net/handler/protocol_handler.h"

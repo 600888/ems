@@ -1,6 +1,6 @@
 #include "daemon_log.h"
 
-#include "log/process_logger.hpp"
+#include "common/log/process_logger.hpp"
 
 namespace ems::daemon {
 namespace {

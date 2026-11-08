@@ -1,146 +1,136 @@
-#include <atomic>
+#include <common/core/time.h>
+#include <rtdb/client/rtdb.h>
+
 #include <chrono>
 #include <csignal>
-#include <cstdint>
-#include <cstdlib>
-#include <memory>
-#include <string>
+#include <iostream>
 #include <thread>
-#include <utility>
 
-#include "log/default_logger.hpp"
-#include "log/process_logger.hpp"
-#include "native_adapters.h"
-#include "storage.h"
-#include "telemetry_feed.h"
+#include "common/log/default_logger.hpp"
+#include "common/log/process_logger.hpp"
+#include "sampling.h"
+#include "storage_options.h"
 
 namespace {
+volatile std::sig_atomic_t stopping = 0;
 
-std::atomic<bool> running{true};
-
-void on_signal(int) { running.store(false); }
-
-std::string environment(const char* name, std::string fallback = {}) {
-    const auto* value = std::getenv(name);
-    return value ? std::string(value) : std::move(fallback);
-}
-
-std::uint16_t port(const char* name, std::uint16_t fallback) {
-    const auto value = environment(name);
-    if (value.empty()) return fallback;
-    try {
-        const auto parsed = std::stoul(value);
-        if (parsed > 0 && parsed <= 65535) return static_cast<std::uint16_t>(parsed);
-    } catch (...) {
-    }
-    return 0;
-}
-
+void stop(int) { stopping = 1; }
 }  // namespace
 
-int main() {
+int main(int argc, char** argv) {
     const ProcessLogger logger("ems-storage");
-    LOG_INFO("ems-storage starting");
-    std::signal(SIGINT, on_signal);
-    std::signal(SIGTERM, on_signal);
-
-    auto mysql_options = ems::database::load_mysql_options();
-    if (!ems::core::is_ok(mysql_options)) {
-        LOG_ERROR("ems-storage: MySQL configuration: {}",
-                  ems::core::error_of(mysql_options).message);
+    std::string config = "conf/storage.json";
+    bool check = false, once = false;
+    for (int i = 1; i < argc; ++i) {
+        const std::string argument = argv[i];
+        if (argument == "--help" || argument == "-h") {
+            std::cout << "ems-storage [--config path] [--check-config] [--once]\n";
+            return 0;
+        }
+        if (argument == "--config" && i + 1 < argc)
+            config = argv[++i];
+        else if (argument == "--check-config")
+            check = true;
+        else if (argument == "--once")
+            once = true;
+        else {
+            std::cerr << "ems-storage: invalid arguments; use --help\n";
+            return 2;
+        }
+    }
+    auto loaded = ems::storage::load_storage_options(config);
+    if (!ems::core::is_ok(loaded)) {
+        std::cerr << "ems-storage: invalid connection or sampling configuration\n";
         return 2;
     }
-    auto mysql = ems::core::value_of(mysql_options);
-    mysql.require_history_schema = true;
-
-    ems::storage::TimeSeriesConnectionOptions time_series;
-    const auto backend_name = environment("EMS_STORAGE_SERIES_BACKEND", "taos");
-    auto backend = ems::storage::parse_time_series_backend(backend_name);
-    if (!ems::core::is_ok(backend)) {
-        LOG_ERROR("ems-storage: unknown time-series backend");
-        return 2;
+    const auto options = ems::core::value_of(loaded);
+    if (check) {
+        std::cout << "Storage configuration valid; interval_ms=" << options.interval_ms
+                  << " (no external connections opened)\n";
+        return 0;
     }
-    time_series.backend = ems::core::value_of(backend);
-    auto& taos = time_series.taos;
-    taos.host = environment("EMS_TAOS_HOST", taos.host);
-    taos.port = port("EMS_TAOS_PORT", taos.port);
-    taos.user = environment("EMS_TAOS_USER");
-    taos.password = environment("EMS_TAOS_PASSWORD");
-
-    const auto scope_kind = environment("EMS_STORAGE_SCOPE_KIND");
-    const auto scope_id = environment("EMS_STORAGE_SCOPE_ID");
-    ems::storage::ZmqTelemetryOptions telemetry;
-    telemetry.endpoint = environment("EMS_STORAGE_ZMQ_ENDPOINT", telemetry.endpoint);
-    telemetry.topic =
-        environment("EMS_STORAGE_ZMQ_TOPIC", "ems:telemetry:" + scope_kind + ":" + scope_id);
-
-    if (mysql.port == 0 || mysql.user.empty() || mysql.database.empty() || scope_id.empty() ||
-        (scope_kind != "station" && scope_kind != "unit") || telemetry.endpoint.empty() ||
-        telemetry.topic.empty() ||
-        (time_series.backend == ems::storage::TimeSeriesBackend::Tdengine &&
-         (taos.port == 0 || taos.user.empty()))) {
-        LOG_ERROR("ems-storage: required connection or telemetry setting is missing");
-        return 2;
-    }
-
-    auto series_result = ems::storage::connect_time_series(time_series);
-    if (!ems::core::is_ok(series_result)) {
-        LOG_ERROR("ems-storage: time-series backend: {}",
-                  ems::core::error_of(series_result).message);
+    std::signal(SIGINT, stop);
+    std::signal(SIGTERM, stop);
+#ifdef _WIN32
+    std::signal(SIGBREAK, stop);
+#endif
+    auto connected = ems::database::connect_mysql_database(
+        options.database, ems::core::make_call_context(std::chrono::seconds(10)));
+    if (!ems::core::is_ok(connected)) {
+        LOG_ERROR("ems-storage: configuration database unavailable");
         return 1;
     }
-    auto repository_result = ems::database::connect_mysql_database(
-        mysql, ems::core::make_call_context(std::chrono::seconds(10)));
-    if (!ems::core::is_ok(repository_result)) {
-        LOG_ERROR("ems-storage: MySQL history repository: {}",
-                  ems::core::error_of(repository_result).message);
+    ems::storage::ArchiveDirectorySource directory(ems::core::value_of(connected));
+    ems::rtdb::RtDb realtime;
+    ems::rtdb::RtDbConfig realtime_options;
+    realtime_options.config_path = options.realtime_config;
+    realtime_options.scope_code = options.scope_code;
+    if (!realtime.initialize(realtime_options)) {
+        LOG_ERROR("ems-storage: realtime backend unavailable");
         return 1;
     }
-    auto feed_result = ems::storage::connect_zmq_telemetry(telemetry);
-    if (!ems::core::is_ok(feed_result)) {
-        LOG_ERROR("ems-storage: failed to subscribe to ZeroMQ telemetry");
+    auto opened = ems::database::connect_time_series(options.timeseries);
+    if (!ems::core::is_ok(opened)) {
+        LOG_ERROR("ems-storage: TDengine unavailable: {}", ems::core::error_of(opened).message);
         return 1;
     }
-    auto database = std::move(std::get<ems::database::MySqlDatabaseContext>(repository_result));
-    auto series =
-        std::move(std::get<std::unique_ptr<ems::storage::ITimeSeriesDatabase>>(series_result));
-    auto feed = std::move(std::get<std::unique_ptr<ems::storage::IHistoryFeed>>(feed_result));
-
-    ems::storage::ConsumerOptions consumer_options;
-    consumer_options.scope_kind = scope_kind;
-    ems::storage::HistoryConsumer consumer(*feed, *database.database, *database.history_catalog,
-                                           *database.history_events, *series, scope_id,
-                                           consumer_options);
-    std::uint64_t last_local_drop_count = 0;
-    LOG_INFO("ems-storage ready: scope={}:{}, time-series backend={}", scope_kind, scope_id,
-             backend_name);
-    while (running.load()) {
-        auto ctx = ems::core::make_call_context(std::chrono::seconds(10));
-        auto batch = consumer.consume_batch(ctx);
-        if (!ems::core::is_ok(batch)) {
-            LOG_ERROR("ems-storage: telemetry read failed");
-            std::this_thread::sleep_for(std::chrono::seconds(1));
+    auto series = std::move(std::get<0>(opened));
+    const auto reader = [&](const auto& type, const auto& id, const auto& ctx) {
+        return realtime.readPointJson(type, id, ctx);
+    };
+    auto sampler = std::make_unique<ems::storage::PeriodicArchiveSampler>(reader, *series);
+    auto initial = directory.refresh(ems::core::make_call_context(std::chrono::seconds(30)));
+    if (!ems::core::is_ok(initial)) {
+        LOG_ERROR("ems-storage: archive directory unavailable: {}",
+                  ems::core::error_of(initial).message);
+        return 1;
+    }
+    LOG_INFO("ems-storage ready: periodic archive, interval_ms={}", options.interval_ms);
+    const auto interval = std::chrono::milliseconds(options.interval_ms);
+    auto next = std::chrono::steady_clock::now();
+    bool reconnect = false;
+    while (!stopping) {
+        if (std::chrono::steady_clock::now() < next) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(50));
             continue;
         }
-        const auto& report = ems::core::value_of(batch);
-        const auto stats = feed->stats();
-        if (stats.dropped_local != last_local_drop_count) {
-            LOG_WARN("ems-storage: local telemetry queue dropped {} samples",
-                     stats.dropped_local - last_local_drop_count);
-            last_local_drop_count = stats.dropped_local;
+        auto ctx = ems::core::make_call_context(interval);
+        if (reconnect) {
+            auto retry = ems::database::connect_time_series(options.timeseries);
+            if (!ems::core::is_ok(retry)) {
+                LOG_ERROR("ems-storage: TDengine reconnect failed");
+                next = std::chrono::steady_clock::now() + interval;
+                continue;
+            }
+            sampler.reset();
+            series = std::move(std::get<0>(retry));
+            sampler = std::make_unique<ems::storage::PeriodicArchiveSampler>(reader, *series);
+            reconnect = false;
         }
-        if (report.quarantined || report.dropped) {
-            LOG_WARN("ems-storage: received={} written={} quarantined={} dropped={}",
-                     report.received, report.written, report.quarantined, report.dropped);
+        auto current = directory.refresh(ctx);
+        bool failed = false;
+        if (!ems::core::is_ok(current)) {
+            failed = true;
+            LOG_ERROR("ems-storage: directory refresh failed: {}",
+                      ems::core::error_of(current).message);
+        } else {
+            const auto& points = ems::core::value_of(current);
+            const auto span_us = options.interval_ms * 1000;
+            const auto slot = (ems::core::now_utc_micros() / span_us) * span_us;
+            const auto report = sampler->sample(points, slot, ctx);
+            failed = report.failed != 0;
+            reconnect = failed;
+            LOG_INFO("ems-storage cycle: points={} written={} invalid={} failed={} revision={}",
+                     points.points.size(), report.written, report.invalid, report.failed,
+                     points.config_revision);
         }
+        if (once) return failed ? 1 : 0;
+        // 只执行实际发生的采样；慢周期跳过错过的槽，不能用最新值回填过去。
+        do {
+            next += interval;
+        } while (next <= std::chrono::steady_clock::now());
     }
-    LOG_INFO("ems-storage stopping");
-    feed->close();
-    const auto final_stats = feed->stats();
-    if (final_stats.dropped_local != last_local_drop_count) {
-        LOG_WARN("ems-storage: local telemetry queue dropped {} samples on shutdown",
-                 final_stats.dropped_local - last_local_drop_count);
-    }
+    realtime.shutdown();
     LOG_INFO("ems-storage stopped");
     return 0;
 }

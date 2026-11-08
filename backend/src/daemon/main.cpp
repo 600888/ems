@@ -5,8 +5,8 @@
 #include <windows.h>
 #endif
 
+#include "common/log/default_logger.hpp"
 #include "daemon_log.h"
-#include "log/default_logger.hpp"
 #include "pid_file.h"
 #include "platform.h"
 #include "process_manager.h"

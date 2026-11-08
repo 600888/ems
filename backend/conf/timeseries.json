@@ -1,0 +1,8 @@
+{
+  "backend": "taos",
+  "host": "127.0.0.1",
+  "port": 6030,
+  "database": "ems_history",
+  "user": "root",
+  "password": "root"
+}

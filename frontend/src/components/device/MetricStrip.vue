@@ -13,21 +13,25 @@ const toneClass = {
 </script>
 
 <template>
-  <div class="flex h-24 shrink-0 gap-3">
+  <!-- 画板 11 · 核心实时指标：88px，卡片 padding [12,16]、行距 5，全部 leading-none 防溢出 -->
+  <div class="flex h-[88px] shrink-0 gap-3">
     <article
       v-for="metric in monitor.profile.metrics"
       :key="metric.label"
       class="flex min-w-0 flex-1 flex-col justify-center gap-[5px] rounded-[6px] border border-line bg-panel px-4 py-3"
     >
-      <span class="truncate text-small text-muted">{{ metric.label }}</span>
+      <span class="truncate text-small leading-none text-muted">{{ metric.label }}</span>
       <div class="flex items-baseline gap-[6px]">
-        <span class="text-metric leading-none font-semibold" :class="toneClass[metric.tone]">
+        <span
+          class="truncate text-metric leading-none font-semibold"
+          :class="toneClass[metric.tone]"
+        >
           {{ metric.value }}
         </span>
-        <span v-if="metric.unit" class="text-small text-muted">{{ metric.unit }}</span>
+        <span v-if="metric.unit" class="text-small leading-none text-muted">{{ metric.unit }}</span>
       </div>
       <span
-        class="truncate text-caption"
+        class="truncate text-caption leading-none"
         :class="metric.tone === 'warn' ? 'text-warn' : 'text-subtle'"
       >
         {{ metric.note }}

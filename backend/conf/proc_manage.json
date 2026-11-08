@@ -33,7 +33,7 @@
         {
             "name": "ems_storage",
             "cmd": "ems-storage",
-            "args": [],
+            "args": ["--config", "conf/storage.json"],
             "runDir": ".",
             "env": {},
             "singleInstance": true,

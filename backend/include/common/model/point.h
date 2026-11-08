@@ -39,7 +39,7 @@ enum class PointKind : std::uint8_t {
  * 遥调按工程值换算后写入，两者都映射到 PointKind::Command，因此必须单独保存
  * point_type，否则运行侧无法区分“开机=1”与“功率设定 82.5 kW”。
  *
- * 注意：旧模型层 `src/models/base.h` 另有同名枚举（YC/YX/YK/YT），语义一致，
+ * 注意：旧模型层 `src/common/models/base.h` 另有同名枚举（YC/YX/YK/YT），语义一致，
  * 但迁移期不得在同一编译单元同时包含两个头文件。
  */
 enum class PointType : std::uint8_t {

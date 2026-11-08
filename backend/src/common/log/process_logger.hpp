@@ -1,6 +1,6 @@
 #pragma once
 
-#include "log/log_init.hpp"
+#include "common/log/log_init.hpp"
 
 /** @brief 管理进程默认日志器，退出作用域时等待异步日志写完。 */
 class ProcessLogger {

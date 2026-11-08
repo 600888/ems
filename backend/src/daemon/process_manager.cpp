@@ -11,7 +11,7 @@
 #include <string>
 #include <thread>
 
-#include "log/default_logger.hpp"
+#include "common/log/default_logger.hpp"
 #include "pid_file.h"
 #include "spdlog/fmt/fmt.h"
 #include "spdlog/fmt/ranges.h"

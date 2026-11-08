@@ -6,6 +6,7 @@
   "workspace": "web-upload",
   "database_config": "conf/db.json",
   "realtime_config": "conf/realtime.json",
+  "timeseries_config": "conf/timeseries.json",
   "realtime_scope_code": "station001",
   "io_threads": 2,
   "workers": 4,

@@ -7,6 +7,17 @@ import { errorMessage } from '@/api/http'
 import type { DeviceNode, YcPoint, YxSignal, YkCommand, YtPoint, ControlLog } from '@/types/domain'
 import type { EngineeringRecord, PointType } from '@/types/engineering'
 export type MonitorScope = 'all' | 'alarm' | 'offline'
+/** 监视页选中节点在会话内的持久化键，F5 刷新后恢复定位 */
+const SELECTED_KEY = 'ems.monitor.selected-id'
+/** 返回根到目标节点的路径；找不到返回 null */
+function nodeTrail(nodes: DeviceNode[], id: string): DeviceNode[] | null {
+  for (const n of nodes) {
+    if (n.id === id) return [n]
+    const nested = n.children ? nodeTrail(n.children, id) : null
+    if (nested) return [n, ...nested]
+  }
+  return null
+}
 export const useMonitorStore = defineStore('monitor', () => {
   const auth = useAuthStore(),
     tree = ref<DeviceNode[]>([]),
@@ -109,6 +120,11 @@ export const useMonitorStore = defineStore('monitor', () => {
     },
   }))
   const selectedNode = computed(() => selected.value)
+  /** 选中节点的祖先链，供树在刷新后展开定位 */
+  const expandedKeys = computed(() => {
+    const trail = selectedId.value ? nodeTrail(tree.value, selectedId.value) : null
+    return trail ? trail.slice(0, -1).map((n) => n.id) : []
+  })
   const filteredTree = computed(() => {
     const filter = (nodes: DeviceNode[]): DeviceNode[] =>
       nodes.flatMap((n) => {
@@ -215,7 +231,11 @@ export const useMonitorStore = defineStore('monitor', () => {
         }
         return ''
       }
-      if (!selectedId.value) selectedId.value = first(tree.value)
+      if (!selectedId.value) {
+        // F5 刷新后恢复上次选中的节点；节点已不存在时退回第一个可选节点
+        const stored = sessionStorage.getItem(SELECTED_KEY) ?? ''
+        selectedId.value = stored && nodeTrail(tree.value, stored) ? stored : first(tree.value)
+      }
       if (selectedId.value) {
         const detail = await deviceApi.detail(selectedId.value)
         if (owner !== epoch) return
@@ -231,6 +251,7 @@ export const useMonitorStore = defineStore('monitor', () => {
   async function selectDevice(id: string) {
     const owner = ++epoch
     selectedId.value = id
+    sessionStorage.setItem(SELECTED_KEY, id)
     selected.value = null
     activeCommand.value = null
     history.value = []
@@ -354,6 +375,7 @@ export const useMonitorStore = defineStore('monitor', () => {
     () => {
       epoch++
       clearEngineeringSession()
+      sessionStorage.removeItem(SELECTED_KEY)
       tree.value = []
       selectedId.value = ''
       selected.value = null
@@ -392,6 +414,7 @@ export const useMonitorStore = defineStore('monitor', () => {
     controlError,
     profile,
     selectedNode,
+    expandedKeys,
     ycList,
     yxList,
     ykList,

@@ -20,7 +20,7 @@
 #include <variant>
 #include <vector>
 
-#include "models/base.h"
+#include "common/models/base.h"
 #include "net/protocol/modbus/modbus_limits.h"
 #include "net/protocol/serial_types.h"
 #include "net/protocol/time_units.h"

@@ -6,6 +6,16 @@ import { useAuthStore } from './auth'
 import type { DeviceNode } from '@/types/domain'
 import type { EngineeringRecord } from '@/types/engineering'
 
+/** 根到目标节点的路径；找不到返回 null */
+function nodeTrail(nodes: DeviceNode[], id: string): DeviceNode[] | null {
+  for (const n of nodes) {
+    if (n.id === id) return [n]
+    const nested = n.children ? nodeTrail(n.children, id) : null
+    if (nested) return [n, ...nested]
+  }
+  return null
+}
+
 export const useDeviceStore = defineStore('device', () => {
   const auth = useAuthStore()
   const tree = ref<DeviceNode[]>([])
@@ -68,6 +78,12 @@ export const useDeviceStore = defineStore('device', () => {
         revision.value = config.config_revision
         expandedIds.value = nextTree.map((n) => n.id)
         if (!currentId.value) currentId.value = config.station_device_id
+        // 当前选中节点若藏在深层，展开其祖先链以便定位
+        const trail = currentId.value ? nodeTrail(tree.value, currentId.value) : null
+        if (trail?.length)
+          expandedIds.value = [
+            ...new Set([...expandedIds.value, ...trail.slice(0, -1).map((n) => n.id)]),
+          ]
       } catch (cause) {
         if (owner === epoch) error.value = errorMessage(cause)
       } finally {
@@ -83,6 +99,12 @@ export const useDeviceStore = defineStore('device', () => {
   }
   async function selectNode(id: string) {
     currentId.value = id
+    // 选中深层节点时展开祖先链；展开状态存 store，跨路由/组件重建存活
+    const trail = nodeTrail(tree.value, id)
+    if ((trail?.length ?? 0) > 1)
+      expandedIds.value = [
+        ...new Set([...expandedIds.value, ...(trail ?? []).slice(0, -1).map((n) => n.id)]),
+      ]
     const owner = epoch
     try {
       const value = await deviceApi.detail(id)
@@ -90,6 +112,12 @@ export const useDeviceStore = defineStore('device', () => {
     } catch (cause) {
       if (owner === epoch) error.value = errorMessage(cause)
     }
+  }
+  function expandNode(id: string) {
+    if (!expandedIds.value.includes(id)) expandedIds.value = [...expandedIds.value, id]
+  }
+  function collapseNode(id: string) {
+    expandedIds.value = expandedIds.value.filter((k) => k !== id)
   }
   async function reloadStation() {
     epoch++
@@ -125,6 +153,8 @@ export const useDeviceStore = defineStore('device', () => {
     total,
     load,
     selectNode,
+    expandNode,
+    collapseNode,
     reloadStation,
   }
 })

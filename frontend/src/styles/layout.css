@@ -82,6 +82,28 @@
     gap: 20px;
   }
 
+  /* 通栏工作区（历史数据 画板 30 / 设备监视同步）：
+     负外边距抵消 .workspace-scroll 的上/下/左内边距，设备树贴导航与左边缘；
+   右侧保留内边距，避免顶进滚动条槽位。
+   固定为一屏高、页面本身不滚动：设备树与右侧内容列各自内部滚动，
+   树底部始终钉在页面最下方。 */
+  .flush-workspace {
+    display: flex;
+    align-items: stretch;
+    height: calc(100vh - var(--app-header-height));
+    height: calc(100dvh - var(--app-header-height));
+    margin: calc(var(--workspace-padding) * -1) 0 calc(var(--workspace-padding) * -1)
+      calc(var(--workspace-padding) * -1);
+    overflow: hidden;
+  }
+
+  /* 通栏后内容列自行补回少量顶部间距（与画板 30 内容列 pt 14 对齐） */
+  .flush-workspace > .workspace-content {
+    padding-top: 14px;
+    min-height: 0;
+    overflow-y: auto;
+  }
+
   .device-workspace > .workspace-sidebar {
     position: sticky;
     /* top 相对滚动容器可视口；padding 已由 .workspace-scroll 提供，这里必须为 0，
@@ -102,6 +124,6 @@
     min-width: 0;
     flex: 1;
     flex-direction: column;
-    gap: 18px;
+    gap: 14px;
   }
 }

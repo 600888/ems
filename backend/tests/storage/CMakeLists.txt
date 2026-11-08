@@ -64,3 +64,21 @@ foreach(_ems_test test_ems_storage test_ems_telemetry_feed test_ems_time_series_
 endforeach()
 
 ems_copy_directory_runtime_dependencies()
+
+add_executable(test_storage_sampling test_sampling.cpp)
+target_include_directories(test_storage_sampling PRIVATE ${CMAKE_SOURCE_DIR}/src/scd
+    ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include)
+target_link_libraries(test_storage_sampling PRIVATE ems_storage_core ems_common_codec gtest_main)
+set_target_properties(test_storage_sampling PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+include(GoogleTest)
+gtest_discover_tests(test_storage_sampling)
+
+if(TARGET ems_storage_native)
+    add_executable(test_storage_options test_storage_options.cpp)
+    target_include_directories(test_storage_options PRIVATE ${CMAKE_SOURCE_DIR}/src/scd
+        ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include)
+    target_link_libraries(test_storage_options PRIVATE ems_storage_native gtest_main)
+    set_target_properties(test_storage_options PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+    ems_copy_mysql_runtime(test_storage_options)
+    gtest_discover_tests(test_storage_options)
+endif()

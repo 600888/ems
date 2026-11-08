@@ -76,6 +76,8 @@ backend/
       util/
     realtime/                # 沿用实时专题规划的公开路径
   src/common/
+    log/                     # spdlog 日志封装与进程日志初始化
+    models/                  # RTDB/处理器共用枚举、解码工具与四遥运行时测点
     core/
     model/
     codec/
@@ -104,7 +106,7 @@ backend/python/database.yaml # 仅供迁移工具使用的多数据库连接配�
 
 命名空间采用 `ems::core`、`ems::model`、`ems::codec`、`ems::config`、`ems::database`、`ems::messaging`、`ems::observability`；实时保持 `ems::rtdb`。类型用 PascalCase，字段与公开方法用 lower_snake_case；实时专题已定义的 camelCase 方法保留，不为风格统一另造一套接口。
 
-新代码包含 `<common/model/device.h>` 等公共路径。旧 `models/`、`db/`、`rtdb/` 头文件仅可作为阶段性转接；转接不能重新声明不同语义的同名模型。
+新代码包含 `<common/model/device.h>` 等公共路径。`backend/src/common/models/` 仅保留 RTDB 和存量协议处理器仍使用的枚举、解码工具与四遥运行时测点；未使用的旧设备、通道、分组、从站、公式映射模型及总头文件已删除。日志封装位于 `backend/src/common/log/`，未使用的函数作用域日志守卫已删除。引用路径分别为 `common/models/` 与 `common/log/`；转接不能重新声明不同语义的同名模型。
 
 ## 4. 编译目标与依赖方向
 
@@ -416,7 +418,7 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 
 ### 12.1 日志、指标和健康
 
-运行日志继续复用现有 spdlog 及 `backend/src/log/` 封装，公共模块只统一初始化、级别、轮转、异步队列及上下文字段。已有 ILogger 如保留，仅作薄适配，不另建日志框架；运行日志不承担采样补传或控制恢复。
+运行日志继续复用现有 spdlog 及 `backend/src/common/log/` 封装，公共模块只统一初始化、级别、轮转、异步队列及上下文字段。已有 ILogger 如保留，仅作薄适配，不另建日志框架；运行日志不承担采样补传或控制恢复。
 
 结构化日志统一包含 process_name、instance_id、module、trace_id，以及适用的 station/unit/device/point、config_version、event_id/command_id、error_code。密码、令牌、连接串凭据和原始认证载荷不输出。后台异步日志队列有界；业务审计不依赖调试日志保存。
 
@@ -460,11 +462,8 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 
 | 当前路径/内容 | 目标归属 | 迁移重点 |
 | --- | --- | --- |
-| backend/src/models/base.h | common/core + common/model + codec | 拆分身份/枚举与 JSON 基类，保留旧枚举值转换表 |
-| backend/src/models/device.h、device_group.h | common/model/device | 使用设备树归属；设备通过 binding 引用通道 |
-| backend/src/models/channel.h、slave.h | common/model/channel、binding | 从站地址迁到绑定，消除单设备通道假设；运行连接归采集 |
-| backend/src/models/point_runtime.hpp | common/model/point + realtime | 分离配置、实时值、厂家解码；保留值类型/质量/时间 |
-| backend/src/models/point_mapping.h | 对应标准绑定模型或策略派生点配置 | 现有公式映射不等于厂家点绑定，不能直接改名合并 |
+| backend/src/common/models/base.h | common/model 与协议处理器共享类型 | 仅保留仍使用的枚举、JSON 别名与解码工具；无引用的模型基类和混入类已删除 |
+| backend/src/common/models/point_runtime.hpp | common/model/point + realtime | 分离配置、实时值、厂家解码；保留值类型/质量/时间 |
 | 原 backend/include/db/*.h（已删除） | common/database/configuration 公共记录与仓储 + 公共 ORM 实现 | 参数加载、点表导入和测试已直接替换，不保留旧别名 |
 | backend/src/common/db/db_manager.cpp | database_mysql 与各 Repository | 拆开池/事务、业务 CRUD 和旧建表逻辑；历史业务编排留存储，数据库调用统一公共层 |
 | backend/src/scd/mysql_history.cpp | src/common/db/mysql + 公共 history API | 迁移实体、反射、查询与事件/目录持久化，复用公共连接/事务 |
@@ -475,7 +474,7 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | backend/src/net/collect/data_dispatcher.* | collector | 注入实时/事件接口，管理有界内存队列，保留分发编排责任 |
 | backend/src/net/protocol/* | protocol | 保留插件边界，不搬到 common；只复用纯模型/契约 |
 | backend/src/net/protocol/modbus/proto_modbus_util.hpp、modbus_mapping_map.hpp | protocol/modbus | 协议专用工具移出通用工具 |
-| backend/src/log/*、通用 util | observability / util | 按实际复用迁移，不把所有旧工具整体照搬 |
+| backend/src/common/log/*、通用 util | observability / util | 按实际复用迁移，不把所有旧工具整体照搬 |
 
 旧数据中的 ID、时间单位、质量码、设备类型、code 和绑定必须先导出映射报告。旧 YC/YX/YK/YT 保留导入转换：映射为标准 telemetry/status/command，并把反馈独立出来；不能仅改枚举名称。
 
@@ -540,7 +539,7 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 - 新增 `backend/src/common/model/`（validation.cpp、model_view.cpp）、`backend/src/common/codec/`（model_codec.cpp、event_codec.cpp），实现纯校验与 JSON 编解码。
 - CMake targets：ems_common_core（INTERFACE）、ems_common_model（STATIC）、ems_messaging_api（INTERFACE）、ems_common_codec（STATIC）、ems_config_api/ems_database_api/ems_observability（INTERFACE）；公共目标统一 CXX_STANDARD 17。
 - 测试：`backend/tests/common/`（test_core/test_model/test_codec，60 用例）覆盖身份/结果/时间、设备树成环/层级/引用/绑定/反馈校验、多对多与共享总线、64 位整数与事件信封往返；MinGW g++ C++17 全部通过（C01/C02/C03/C04 局部覆盖）。
-- 未完成项：contracts 目录与黄金 fixtures、MySQL 迁移与 Repository 实现（P2）、实时后端（P3）、Streams 实现（P4）、Drogon Web 接入（P5）、Linux/ARM 工具链构建检查。旧 models/、db/、rtdb/ 迁移按第 14 节另行走。
+- 未完成项：contracts 目录与黄金 fixtures、MySQL 迁移与 Repository 实现（P2）、实时后端（P3）、Streams 实现（P4）、Drogon Web 接入（P5）、Linux/ARM 工具链构建检查。旧 common/models/、db/、rtdb/ 的接口语义迁移按第 14 节另行走。
 
 ### 2026-09-19 目录规范化与第二批实现
 

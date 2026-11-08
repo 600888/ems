@@ -1,162 +1,36 @@
-# EMS Data Models 测试
+# 后端测试
 
-## 概述
+测试按模块组织，由 `backend/tests/CMakeLists.txt` 注册到 CTest。
 
-本目录包含EMS数据模型的单元测试代码。
+- `common/`：公共模型、编解码、配置校验和数据库接口。
+- `rtdb/`：实时存储后端、四遥运行时测点、业务门面和 SDK 消费。
+- `log/`：进程日志初始化、级别、轮转、通道日志及 Web 日志适配。
+- `net/`：协议插件、处理器、采集连接复用和转发。
+- `db/`：工程配置加载。
+- `storage/`：历史采样、存储配置和存储流程。
+- `web/`：Web 设备管理、身份认证及 HTTP 接口。
+- `daemon/`：进程生命周期与共享资源清理。
+- `util/`：公共工具。
 
-## 测试内容
+旧 `test_models` 程序已不存在；无引用的设备、通道、分组、从站和公式映射模型已删除。
+四遥运行时测点的序列化、更新和存取测试位于 `rtdb/point_import_test.cpp` 与
+`rtdb/test_business.cpp`。
 
-测试覆盖以下数据模型：
+## 构建与运行
 
-- `DeviceGroup` - 设备组模型测试
-- `device` - 设备模型测试
-- `channel` - 通道模型测试
-- `PointYC` - 遥测点模型测试
-- `PointYX` - 遥信点模型测试
-- `PointYK` - 遥控点模型测试
-- `PointYT` - 遥调点模型测试
-- `Slave` - 从机模型测试
-- `PointMapping` - 测点映射模型测试
+从仓库根目录执行。Windows MSVC 需使用已配置依赖的 x64 开发者终端：
 
-## 构建测试
-
-### 前置条件
-
-- CMake 3.15+
-- C++ 编译器 (支持 C++17)
-- nlohmann/json 3.9.0+
-
-### 构建步骤
-
-```bash
-# 创建构建目录
-mkdir build
-cd build
-
-# 配置项目
-cmake ..
-
-# 编译
-make
-
-# 运行测试
-./test_models
-# 或者使用 ctest
-ctest
+```powershell
+cmake --preset windows-msvc -S backend
+cmake --build backend/build/windows-msvc --config Release --parallel 2
+ctest --test-dir backend/build/windows-msvc -C Release --output-on-failure
 ```
 
-## 运行测试
+仅运行日志和实时数据库测试：
 
-### 方法一：直接运行测试程序
-
-```bash
-cd build/tests
-./test_models
+```powershell
+ctest --test-dir backend/build/windows-msvc -C Release --output-on-failure -R "process_logger_|web_framework_logging|realtime_backends|rtdb_dispatcher"
 ```
 
-### 方法二：使用 CTest
-
-```bash
-cd build
-ctest --output-on-failure
-```
-
-### 方法三：运行特定测试
-
-```bash
-cd build/tests
-./test_models
-```
-
-## 测试输出示例
-
-```
-========================================
-EMS Data Models Unit Tests
-========================================
-
-Testing DeviceGroup...
-DeviceGroup JSON: {
-  "id": 1,
-  "code": "group_001",
-  "name": "测试设备组",
-  ...
-}
-DeviceGroup test passed!
-
-Testing device...
-device JSON: {
-  "id": 1,
-  "code": "device_001",
-  "name": "测试设备",
-  ...
-}
-device test passed!
-
-...
-========================================
-All tests passed!
-========================================
-```
-
-## 添加新测试
-
-在 `test_models.cpp` 中添加新的测试函数：
-
-```cpp
-void test_new_model() {
-    std::cout << "Testing NewModel..." << std::endl;
-    
-    auto model = std::make_shared<NewModel>();
-    // ... 设置模型属性
-    // ... 执行测试断言
-    
-    std::cout << "NewModel test passed!" << std::endl << std::endl;
-}
-
-int main() {
-    // ... 其他测试
-    
-    test_new_model();  // 添加新测试调用
-    
-    // ...
-}
-```
-
-## 调试
-
-### 使用 GDB 调试
-
-```bash
-gdb ./test_models
-(gdb) run
-(gdb) bt  # 查看堆栈
-(gdb) break test_new_model  # 设置断点
-```
-
-### 使用 Valgrind 检测内存泄漏
-
-```bash
-valgrind --leak-check=full ./test_models
-```
-
-## 持续集成
-
-测试可以集成到 CI/CD 流程中：
-
-```yaml
-# .github/workflows/test.yml
-name: Test
-on: [push, pull_request]
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v2
-      - name: Build and Test
-        run: |
-          mkdir build && cd build
-          cmake .. -DCMAKE_BUILD_TYPE=Release
-          make
-          ctest --output-on-failure
-```
+Linux 使用 `backend/CMakePresets.json` 中的 `linux-native` 配置及对应构建目录。
+部分集成测试需要本机共享内存、回环连接或已配置的外部数据库；守护进程测试需要单实例锁可用。

@@ -1,25 +1,23 @@
 #pragma once
 
-#include <common/database/timeseries/factory.h>
-
 #include <functional>
 
 #include "web/modules/device/application/device_service.h"
+#include "web/modules/history/history_service.h"
 
 namespace ems::web {
 
 struct RuntimeOptions {
     std::string realtime_config;
     std::string scope_code{"station001"};
+    std::string timeseries_config;
 };
 
 class RuntimeService {
    public:
     using ReadPoint = std::function<core::Result<std::string>(
         const std::string&, const std::string&, const core::CallContext&)>;
-    using ReadHistory = std::function<core::Result<std::vector<database::Sample>>(
-        const database::HistoryQuery&, const std::vector<database::SeriesMapping>&, std::uint32_t,
-        const core::CallContext&)>;
+    using ReadHistory = HistoryService::Reader;
 
     /**
      * @brief 装配真实实时库和时序查询入口；测试可注入实时读者。

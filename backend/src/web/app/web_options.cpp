@@ -10,11 +10,26 @@ WebOptions load_web_options(const std::string& path) {
     std::ifstream input(std::filesystem::u8path(path));
     Json j;
     input >> j;
-    fields(j, {"host", "port", "allowed_origin", "allowed_origins", "database_config",
-               "identity_key_file", "document_root", "workspace", "io_threads", "workers",
-               "queue_size", "import_workers", "import_queue_size", "request_timeout_ms",
-               "import_timeout_ms", "audit_retention_days", "secure_cookie", "realtime_config",
-               "realtime_scope_code"});
+    fields(j, {"host",
+               "port",
+               "allowed_origin",
+               "allowed_origins",
+               "database_config",
+               "identity_key_file",
+               "document_root",
+               "workspace",
+               "io_threads",
+               "workers",
+               "queue_size",
+               "import_workers",
+               "import_queue_size",
+               "request_timeout_ms",
+               "import_timeout_ms",
+               "audit_retention_days",
+               "secure_cookie",
+               "realtime_config",
+               "realtime_scope_code",
+               "timeseries_config"});
     WebOptions o;
     auto number = [&](const char* key, std::size_t fallback, std::size_t maximum) {
         if (j.count(key) && !j.at(key).is_number_integer())
@@ -44,6 +59,7 @@ WebOptions load_web_options(const std::string& path) {
     o.audit_retention_days = static_cast<int>(number("audit_retention_days", 180, 3650));
     o.secure_cookie = j.value("secure_cookie", false);
     o.realtime_config = j.value("realtime_config", std::string{});
+    o.timeseries_config = j.value("timeseries_config", std::string{});
     o.realtime_scope_code = j.value("realtime_scope_code", o.realtime_scope_code);
     for (const auto& origin : o.allowed_origins) {
         if (origin.empty() || (o.secure_cookie && origin.rfind("https://", 0) != 0))

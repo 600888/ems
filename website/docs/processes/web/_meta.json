@@ -15,6 +15,11 @@
     "label": "构建、运行与验证"
   },
   {
+    "type": "file",
+    "name": "history",
+    "label": "历史数据查询"
+  },
+  {
     "type": "dir",
     "name": "user",
     "label": "用户管理模块",

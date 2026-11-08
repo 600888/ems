@@ -4,8 +4,8 @@
 #include <iostream>
 #include <thread>
 
-#include "log/default_logger.hpp"
-#include "log/process_logger.hpp"
+#include "common/log/default_logger.hpp"
+#include "common/log/process_logger.hpp"
 
 namespace {
 volatile std::sig_atomic_t stopping = 0;

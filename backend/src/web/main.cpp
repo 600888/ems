@@ -1,7 +1,7 @@
 #include <iostream>
 
-#include "log/default_logger.hpp"
-#include "log/process_logger.hpp"
+#include "common/log/default_logger.hpp"
+#include "common/log/process_logger.hpp"
 #include "web/app/web_options.h"
 #include "web/modules/identity/module.h"
 #include "web/platform/crypto.h"

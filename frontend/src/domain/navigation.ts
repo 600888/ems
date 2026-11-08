@@ -25,5 +25,5 @@ export const monitorNav: NavItem[] = [
   { key: 'energy', label: '能量管理', icon: 'workflow' },
   { key: 'power', label: '功率控制', icon: 'sliders-horizontal' },
   { key: 'alarm', label: '告警中心', icon: 'bell-ring' },
-  { key: 'history', label: '历史数据', icon: 'chart-no-axes-combined', to: '/monitor/curves' },
+  { key: 'history', label: '历史数据', icon: 'chart-no-axes-combined', to: '/history' },
 ]

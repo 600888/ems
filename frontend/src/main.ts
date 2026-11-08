@@ -3,6 +3,7 @@ import { createPinia } from 'pinia'
 import {
   ElCheckbox,
   ElConfigProvider,
+  ElDatePicker,
   ElDrawer,
   ElDialog,
   ElDropdown,
@@ -35,6 +36,7 @@ import router from './router'
 const components: Record<string, Component> = {
   ElCheckbox,
   ElConfigProvider,
+  ElDatePicker,
   ElDrawer,
   ElDialog,
   ElDropdown,

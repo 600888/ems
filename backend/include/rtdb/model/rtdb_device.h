@@ -4,7 +4,7 @@
  * @file rtdb_device.h
  * @brief 设备配置 - 引用共享模型定义
  *
- * 设备类型 (DeviceType) 已统一迁移至 src/models/base.h。
+ * 设备类型 (DeviceType) 已统一迁移至 src/common/models/base.h。
  * DeviceConfig 保持本层定义，但集成共享模型的增量。
  */
 
@@ -13,7 +13,7 @@
 #include <string>
 #include <vector>
 
-#include "models/base.h"
+#include "common/models/base.h"
 
 namespace ems {
 namespace rtdb {

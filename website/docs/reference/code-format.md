@@ -109,4 +109,4 @@ clang-format 会调整空白、头文件顺序、命名空间行尾注释，以�
 先只格式化自己改动的文件：`./scripts/format.sh <改动的文件列表>`。全量格式化只在需要时做一次，并单独提交。
 
 **`backend/include/util/` 下的文件看起来是旧代码，也要格式化吗？**
-该目录只保留项目自研通用工具头；第三方 `rapidcsv.h` 位于 `backend/third_party/rapidcsv/`，日志包装头位于 `backend/src/log/`。`date.hpp`、`time.hpp`、`date_time.hpp`、`timer.hpp`、`task.hpp`、`map.hpp`、`crc_check.h` 等旧风格文件仍在格式化范围内。Modbus 专用工具位于 `backend/src/net/protocol/modbus/`。其中 `crc_check.h` 依赖未定义的 `hUChar`、`modbus_mapping_map.hpp` 依赖未定义的 `ushort`，本身已无法编译，属于遗留代码，如需排除请加入 `.clang-format-ignore`。
+该目录只保留项目自研通用工具头；第三方 `rapidcsv.h` 位于 `backend/third_party/rapidcsv/`，日志包装头位于 `backend/src/common/log/`。`date.hpp`、`time.hpp`、`date_time.hpp`、`timer.hpp`、`task.hpp`、`map.hpp`、`crc_check.h` 等旧风格文件仍在格式化范围内。Modbus 专用工具位于 `backend/src/net/protocol/modbus/`。其中 `crc_check.h` 依赖未定义的 `hUChar`、`modbus_mapping_map.hpp` 依赖未定义的 `ushort`，本身已无法编译，属于遗留代码，如需排除请加入 `.clang-format-ignore`。

@@ -12,7 +12,7 @@
 #include <cstdint>
 #include <string>
 
-#include "models/base.h"
+#include "common/models/base.h"
 
 namespace ems {
 namespace rtdb {

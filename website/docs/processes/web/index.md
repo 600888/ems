@@ -1,6 +1,6 @@
 # Web 进程与前端协作
 
-> 日期：2026-10-24｜状态：首期 Web 与设备接口已实现，当前前端数据仍使用 mock。
+> 状态：身份、设备管理、实时监视及历史数据页面已接入 Web 接口。
 
 | 阅读入口 | 内容 |
 | --- | --- |
@@ -12,6 +12,7 @@
 | [EMS Web 数据库与表设计](../../common/database/ems-web.md) | 独立 ems_web 业务库，用户、授权、会话、登录策略和 Web 审计 5 表（待实现） |
 | [设备模块设计](device/index.md) | 设备树、绑定、四遥、保存与导入流程图 |
 | [设备模块 API](device/api.md) | 固定路由、JSON 参数、multipart 导入与响应 |
+| [历史数据查询](history.md) | 遥测 / 遥信、时间桶采样、权限、边界与部署 |
 | [设备管理数据库](../../common/database/device-management.md) | 14 表及持久化字段 |
 
 ```mermaid

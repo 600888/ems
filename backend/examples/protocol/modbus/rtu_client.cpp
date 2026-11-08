@@ -23,7 +23,7 @@
 #include <iostream>
 #include <thread>
 
-#include "log/process_logger.hpp"
+#include "common/log/process_logger.hpp"
 #include "modbus_client.h"
 
 using namespace ems::net::modbus;

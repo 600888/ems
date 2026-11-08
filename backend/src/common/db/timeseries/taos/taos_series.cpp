@@ -64,14 +64,14 @@ std::string read_text(TAOS_ROW row, const int* lengths, int index) {
 
 core::Result<Sample> read_sample(TAOS_ROW row, const int* lengths, const SeriesMapping& mapping) {
     Sample sample;
-    sample.point_id = read_text(row, lengths, 15);
+    sample.point_id = read_text(row, lengths, 16);
     sample.event_id = read_text(row, lengths, 1);
     sample.time_reason = read_text(row, lengths, 6);
     sample.quality_reason = read_text(row, lengths, 7);
     sample.payload_sha256 = read_text(row, lengths, 8);
     sample.scope_kind = read_text(row, lengths, 9);
     sample.scope_id = read_text(row, lengths, 10);
-    sample.config_version = read_text(row, lengths, 11);
+    sample.config_revision = read_text(row, lengths, 11);
     sample.source_id = read_text(row, lengths, 12);
     sample.source_epoch = read_text(row, lengths, 13);
     sample.sequence = read_text(row, lengths, 14);
@@ -82,7 +82,8 @@ core::Result<Sample> read_sample(TAOS_ROW row, const int* lengths, const SeriesM
         !read_scalar(row, lengths, 0, sample.source_time_us) ||
         !read_scalar(row, lengths, 3, sample.quality) ||
         !read_scalar(row, lengths, 4, sample.ingest_time_us) ||
-        !read_scalar(row, lengths, 5, origin)) {
+        !read_scalar(row, lengths, 5, origin) ||
+        !read_scalar(row, lengths, 15, sample.measurement_time_us)) {
         return core::make_error(core::ErrorCode::CorruptData, core::WriteEffect::NotApplicable,
                                 "invalid TDengine history row");
     }
@@ -128,16 +129,16 @@ const char* insert_sql(ValueType type) {
     switch (type) {
         case ValueType::Numeric:
             return "INSERT INTO ? USING ems_history.telemetry_numeric TAGS(?) "
-                   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         case ValueType::Integer:
             return "INSERT INTO ? USING ems_history.telemetry_integer TAGS(?) "
-                   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         case ValueType::Boolean:
             return "INSERT INTO ? USING ems_history.telemetry_boolean TAGS(?) "
-                   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
         case ValueType::Text:
             return "INSERT INTO ? USING ems_history.telemetry_text TAGS(?) "
-                   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
+                   "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)";
     }
     return nullptr;
 }
@@ -196,6 +197,7 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
         char* table_names[] = {table.data()};
         std::int64_t timestamp = sample.source_time_us;
         std::int64_t ingest_timestamp = sample.ingest_time_us;
+        std::int64_t measurement_timestamp = sample.measurement_time_us;
         std::int32_t quality = sample.quality;
         std::int8_t time_origin = static_cast<std::int8_t>(sample.time_origin);
         double numeric_value = 0;
@@ -230,7 +232,7 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
                 value_type = TSDB_DATA_TYPE_BINARY;
                 break;
         }
-        std::array<std::int32_t, 16> lengths{
+        std::array<std::int32_t, 17> lengths{
             static_cast<std::int32_t>(sample.point_id.size()),
             static_cast<std::int32_t>(sizeof(timestamp)),
             static_cast<std::int32_t>(sample.event_id.size()),
@@ -247,10 +249,11 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
             static_cast<std::int32_t>(sample.payload_sha256.size()),
             static_cast<std::int32_t>(sample.scope_kind.size()),
             static_cast<std::int32_t>(sample.scope_id.size()),
-            static_cast<std::int32_t>(sample.config_version.size()),
+            static_cast<std::int32_t>(sample.config_revision.size()),
             static_cast<std::int32_t>(sample.source_id.size()),
             static_cast<std::int32_t>(sample.source_epoch.size()),
-            static_cast<std::int32_t>(sample.sequence.size())};
+            static_cast<std::int32_t>(sample.sequence.size()),
+            static_cast<std::int32_t>(sizeof(measurement_timestamp))};
         char value_is_null = null_value ? 1 : 0;
         TAOS_STMT2_BIND tags[] = {bind_value(
             TSDB_DATA_TYPE_BINARY, const_cast<char*>(sample.point_id.data()), &lengths[0])};
@@ -272,14 +275,15 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
                        &lengths[10]),
             bind_value(TSDB_DATA_TYPE_BINARY, const_cast<char*>(sample.scope_id.data()),
                        &lengths[11]),
-            bind_value(TSDB_DATA_TYPE_BINARY, const_cast<char*>(sample.config_version.data()),
+            bind_value(TSDB_DATA_TYPE_BINARY, const_cast<char*>(sample.config_revision.data()),
                        &lengths[12]),
             bind_value(TSDB_DATA_TYPE_BINARY, const_cast<char*>(sample.source_id.data()),
                        &lengths[13]),
             bind_value(TSDB_DATA_TYPE_BINARY, const_cast<char*>(sample.source_epoch.data()),
                        &lengths[14]),
             bind_value(TSDB_DATA_TYPE_BINARY, const_cast<char*>(sample.sequence.data()),
-                       &lengths[15])};
+                       &lengths[15]),
+            bind_value(TSDB_DATA_TYPE_TIMESTAMP, &measurement_timestamp, &lengths[16])};
         TAOS_STMT2_BIND* tag_bindings[] = {tags};
         TAOS_STMT2_BIND* column_bindings[] = {columns};
         TAOS_STMT2_BINDV bindings{1, table_names, tag_bindings, column_bindings};
@@ -319,8 +323,8 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
             }
             std::string sql =
                 "SELECT ts,event_id,sample_value,quality,ingest_ts,time_origin,time_reason,"
-                "quality_reason,payload_sha256,scope_kind,scope_id,config_version,source_id,"
-                "source_epoch,sequence,point_id FROM ems_history." +
+                "quality_reason,payload_sha256,scope_kind,scope_id,config_revision,source_id,"
+                "source_epoch,sequence,measurement_ts,point_id FROM ems_history." +
                 mapping.series_key + " WHERE ts >= " + std::to_string(query.start_us) +
                 " AND ts < " + std::to_string(query.end_us) + " AND scope_kind = '" +
                 query.scope_kind + "' AND scope_id = ?";
@@ -364,7 +368,7 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
             }
             ResultPtr result(taos_stmt2_result(statement.get()));
             if (!result || taos_errno(result.get()) != 0 ||
-                taos_result_precision(result.get()) != 1 || taos_num_fields(result.get()) != 16) {
+                taos_result_precision(result.get()) != 1 || taos_num_fields(result.get()) != 17) {
                 return taos_error("scan result", core::WriteEffect::NotApplicable);
             }
             while (auto row = taos_fetch_row(result.get())) {
@@ -412,6 +416,20 @@ core::Result<std::unique_ptr<ITimeSeriesDatabase>> connect_taos_series(
     if (server_version.rfind("3.4.2", 0) != 0) {
         return core::make_error(core::ErrorCode::Unsupported, core::WriteEffect::NotApplicable,
                                 "TDengine 3.4.2 server required");
+    }
+    for (const auto* table :
+         {"telemetry_numeric", "telemetry_integer", "telemetry_boolean", "telemetry_text"}) {
+        const std::string sql =
+            "SELECT ts,event_id,sample_value,quality,ingest_ts,time_origin,"
+            "time_reason,quality_reason,payload_sha256,scope_kind,scope_id,config_revision,"
+            "source_id,source_epoch,sequence,measurement_ts,point_id FROM ems_history." +
+            std::string(table) + " LIMIT 0";
+        ResultPtr probe(taos_query(connection.get(), sql.c_str()));
+        if (!probe || taos_errno(probe.get()) != 0 || taos_result_precision(probe.get()) != 1 ||
+            taos_num_fields(probe.get()) != 17)
+            return core::make_error(core::ErrorCode::SchemaMismatch,
+                                    core::WriteEffect::NotApplicable,
+                                    "TDengine history schema or precision mismatch");
     }
     return std::unique_ptr<ITimeSeriesDatabase>(new TaosSeriesStore(std::move(connection)));
 }

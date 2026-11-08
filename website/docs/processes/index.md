@@ -62,6 +62,10 @@ Web 的 Drogon/Trantor 框架日志也写入 `ems-web` 文件，沿用相同等�
 默认先启动 `ems-rtdb`，随后启动依赖它的 `ems-collector` 和 `ems-web`；
 各进程的工作目录设为 `EMS_ROOT`，配置路径从该目录解析，不依赖启动守护进程时的工作目录。
 Windows 控制台输出使用 UTF-8，可直接运行 EXE 查看中文日志。
+Windows 10 及以上通过 Job Object 绑定托管进程树的生命周期，创建子进程时即加入 Job，
+Job 句柄仅由 daemon 持有。正常退出仍先请求子进程退出并等待回收；关闭窗口、崩溃或
+强制结束 daemon 时，系统会终止仍在 Job 内的进程，避免 `ems-web` 等后台进程残留。
+强制结束不会执行 `cleanupArgs`，共享资源仍需在确认使用者全部退出后显式清理。
 
 `ems_rtdb` 配置项的 `cleanupArgs` 默认是
 `["--config", "conf/realtime.json", "--cleanup"]`。全部托管进程退出后，daemon 使用该进程的

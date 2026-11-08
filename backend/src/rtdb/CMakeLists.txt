@@ -164,9 +164,9 @@ install(
     COMPONENT EMSRTDB
 )
 install(
-    FILES "${EMS_RTDB_BACKEND_DIR}/src/models/base.h"
-          "${EMS_RTDB_BACKEND_DIR}/src/models/point_runtime.hpp"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/models"
+    FILES "${EMS_RTDB_BACKEND_DIR}/src/common/models/base.h"
+          "${EMS_RTDB_BACKEND_DIR}/src/common/models/point_runtime.hpp"
+    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/common/models"
     COMPONENT EMSRTDB
 )
 install(
