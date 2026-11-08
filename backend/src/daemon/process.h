@@ -88,7 +88,8 @@ struct Process {
      * @brief 拉起子进程（平台相关实现见 process_posix.cpp / process_win32.cpp）。
      *
      * POSIX：fork + execve，父进程通过 CLOEXEC 管道确认 exec 是否成功；
-     * Windows：CreateProcessW，单实例用可继承命名互斥量保证。
+     * Windows 10 及以上：CreateProcessW 创建时加入 daemon 独占持有句柄的 Job，
+     * daemon 退出时由系统兜底终止子进程树；单实例用可继承命名互斥量保证。
      * 两条路径都保证：子进程内 exec 前只使用异步信号安全接口。
      * @param[out] error 失败原因；单实例被占用时通过 stop_requested 标记。
      * @return 子进程成功启动返回 true。

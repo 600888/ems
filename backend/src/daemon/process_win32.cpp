@@ -1,8 +1,8 @@
 /// @file process_win32.cpp
 /// @brief 守护进程的 Windows 平台实现。
 ///
-/// CreateProcessW/WaitForSingleObject/TerminateProcess 与命名互斥量单实例锁、
-/// 控制台事件退出处理；与 process_posix.cpp 保持同一套接口。
+/// CreateProcessW/WaitForSingleObject/TerminateProcess、Job Object 进程树回收、
+/// 命名互斥量单实例锁与控制台事件退出处理；与 process_posix.cpp 保持同一套接口。
 
 #include <windows.h>
 
@@ -84,6 +84,65 @@ std::string last_error_message(const char* what) {
                        detail.empty() ? "未知错误" : detail);
 }
 
+/// @brief 仅由 daemon 持有 Job 句柄；即使 daemon 被强杀，系统也会终止整棵子进程树。
+class ChildJob {
+   public:
+    ~ChildJob() {
+        if (attributes_ != nullptr) {
+            ::DeleteProcThreadAttributeList(attributes_);
+        }
+        if (handle_ != nullptr) {
+            ::CloseHandle(handle_);
+        }
+    }
+
+    bool prepare(STARTUPINFOEXW& startup, std::string& error) {
+        if (handle_ == nullptr) {
+            // 默认安全属性使句柄不可继承，避免子进程持有句柄导致 Job 无法销毁。
+            handle_ = ::CreateJobObjectW(nullptr, nullptr);
+            if (handle_ == nullptr) {
+                error = last_error_message("CreateJobObjectW");
+                return false;
+            }
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
+            limits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            if (!::SetInformationJobObject(handle_, JobObjectExtendedLimitInformation, &limits,
+                                           sizeof(limits))) {
+                error = last_error_message("SetInformationJobObject");
+                ::CloseHandle(handle_);
+                handle_ = nullptr;
+                return false;
+            }
+        }
+        if (attributes_ == nullptr) {
+            SIZE_T bytes = 0;
+            ::InitializeProcThreadAttributeList(nullptr, 1, 0, &bytes);
+            storage_.resize(bytes);
+            auto* attributes = reinterpret_cast<LPPROC_THREAD_ATTRIBUTE_LIST>(storage_.data());
+            if (!::InitializeProcThreadAttributeList(attributes, 1, 0, &bytes)) {
+                error = last_error_message("InitializeProcThreadAttributeList");
+                return false;
+            }
+            // 创建时原子加入 Job，避免“先创建再绑定”期间 daemon 退出留下孤儿进程。
+            if (!::UpdateProcThreadAttribute(attributes, 0, PROC_THREAD_ATTRIBUTE_JOB_LIST,
+                                             &handle_, sizeof(handle_), nullptr, nullptr)) {
+                error = last_error_message("UpdateProcThreadAttribute(JOB_LIST)");
+                ::DeleteProcThreadAttributeList(attributes);
+                return false;
+            }
+            attributes_ = attributes;
+        }
+        startup.StartupInfo.cb = sizeof(startup);
+        startup.lpAttributeList = attributes_;
+        return true;
+    }
+
+   private:
+    HANDLE handle_ = nullptr;
+    LPPROC_THREAD_ATTRIBUTE_LIST attributes_ = nullptr;
+    std::vector<unsigned char> storage_;
+};
+
 /// @brief 参数含空格、制表符或引号时按 Windows 规则加引号。
 /// @param[in] value 单个参数。
 /// @return 可直接拼入命令行的文本。
@@ -158,6 +217,13 @@ std::wstring build_env_block(const Process& proc) {
 }  // namespace
 
 bool Process::spawn(std::string& error) {
+    // 所有托管进程（包括 cleanupArgs）共用一个 Job，生命周期覆盖主循环及正常清理。
+    static ChildJob job;
+    STARTUPINFOEXW startup{};
+    if (!job.prepare(startup, error)) {
+        ++start_count;
+        return false;
+    }
     std::wstring command_line = build_command_line(*this);
     std::wstring environment = build_env_block(*this);
     const std::wstring work_dir = run_dir.empty() ? std::wstring() : to_wide(run_dir);
@@ -181,20 +247,21 @@ bool Process::spawn(std::string& error) {
         }
     }
 
-    STARTUPINFOW startup{};
-    startup.cb = sizeof(startup);
     PROCESS_INFORMATION info{};
     const BOOL created = ::CreateProcessW(
-        nullptr, command_line.data(), nullptr, nullptr, TRUE, CREATE_NEW_PROCESS_GROUP,
+        nullptr, command_line.data(), nullptr, nullptr, TRUE,
+        CREATE_NEW_PROCESS_GROUP | CREATE_UNICODE_ENVIRONMENT | EXTENDED_STARTUPINFO_PRESENT,
         environment.empty() ? nullptr : static_cast<LPVOID>(environment.data()),
-        work_dir.empty() ? nullptr : work_dir.c_str(), &startup, &info);
+        work_dir.empty() ? nullptr : work_dir.c_str(), &startup.StartupInfo, &info);
+    if (!created) {
+        error = last_error_message("CreateProcessW");
+    }
     if (child_mutex != nullptr) {
         // 父进程只保留自己的副本：CreateProcess 已把句柄复制进子进程。
         ::CloseHandle(child_mutex);
     }
     if (!created) {
         ++start_count;
-        error = last_error_message("CreateProcessW");
         return false;
     }
 

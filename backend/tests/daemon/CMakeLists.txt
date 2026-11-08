@@ -13,3 +13,14 @@ foreach(scenario IN LISTS scenarios)
     )
     set_tests_properties(daemon_cleanup_${scenario} PROPERTIES TIMEOUT 45 RUN_SERIAL TRUE)
 endforeach()
+
+if(WIN32)
+    foreach(scenario killed window_close)
+        add_test(
+            NAME daemon_parent_exit_${scenario}
+            COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/windows_parent_exit_test.py
+                    $<TARGET_FILE:ems-daemon> ${scenario}
+        )
+        set_tests_properties(daemon_parent_exit_${scenario} PROPERTIES TIMEOUT 45 RUN_SERIAL TRUE)
+    endforeach()
+endif()
