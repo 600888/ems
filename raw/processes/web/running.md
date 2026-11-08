@@ -75,7 +75,7 @@ Pop-Location
 
 默认站根由既有种子脚本在缺少站根时建立；已有站根不覆盖。启动验证 14 表可读和唯一站根存在。
 
-生产身份服务已接入独立的 `ems_web` 数据库，与工程库共用 MySQL 实例、公共连接池及事务，不读取账号文件，也不自动创建默认账号。先准备两个数据库和权限，再通过共用的 Python 配置初始化：
+生产身份服务已接入独立的 `ems_web` 数据库，与工程库共用 MySQL 实例、公共连接池及事务，不读取账号文件。SQLAlchemy 初始化命令会补齐默认管理员；Web 服务启动自身不创建账号。先准备两个数据库和权限，再通过共用的 Python 配置初始化：
 
 ```bash
 ems-db --database ems init
@@ -98,11 +98,14 @@ $env:EMS_WEB_EDIT_KEY_FILE = Join-Path (Resolve-Path backend/.local) 'web-edit.k
 $env:EMS_DATABASE_CONFIG = (Resolve-Path backend/conf/db.json).Path
 ./build/web/bin/Release/ems-web.exe --config backend/conf/web.json --create-identity-key
 ./build/web/bin/Release/ems-web.exe --config backend/conf/web.json --check-identity
-./build/web/bin/Release/ems-web.exe --config backend/conf/web.json --init-admin
 ./build/web/bin/Release/ems-web.exe --config backend/conf/web.json
 ```
 
-密钥命令独占创建文件，拒绝覆盖；Linux 使用 0600，Windows 设置不继承的私有 DACL。首管理员命令交互输入用户名、姓名及临时密码，密码不回显、不接受标准输入重定向，也不放入参数或种子。仅从未有过用户记录的库允许初始化。首次登录必须修改临时密码，再重新登录。
+`ems-db --database ems_web init` 创建默认管理员 `admin / 888888`，可直接登录；密码以随机盐哈希保存。
+重复执行保留已有 admin 账号和密码。已有库可执行 `ems-db --database ems_web seed admin` 补建缺失账号。
+密钥命令独占创建文件，拒绝覆盖；Linux 使用 0600，Windows 设置不继承的私有 DACL。
+若只通过 `upgrade head` 建表并未创建任何用户，也可使用交互式 `--init-admin` 创建自定义首管理员；
+该路径的临时密码仍按既有首次改密流程处理，已有默认账号时无需执行该命令。
 
 所有管理员不能登录时，在受控主机终端执行 `--recover-admin`，交互指定现有管理员及新临时密码。恢复启用该账号、清除登录锁定、撤销全部会话并写审计，下一次仍必须改密；不开放 HTTP 恢复入口。
 

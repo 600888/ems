@@ -32,7 +32,7 @@ Web 用例与保存边界见[设备模块设计](../../processes/web/device/inde
 - 设备类型、固有点目录（四遥）、型号模板复用。
 - 通道（连接）与设备-通道绑定，采集/控制/转发角色。
 - 四遥点：协议地址、取值转换、命令写入规则、反馈判据、固有点映射。
-- 点表导入（逐行预览、地址基准、逐项确认、幂等重放）。
+- 点表导入（逐行预览、地址原样保留、逐项确认、幂等重放）。
 - 配置保存后热加载：`config_revision` 单调递增，消费者轮询比对。
 - 与实时库配套的 5 分钟通信统计、设备/通道状态变化历史。
 
@@ -97,7 +97,7 @@ Web 用例与保存边界见[设备模块设计](../../processes/web/device/inde
 | 01 层级总览 | 站→单元→设备/部件；设备与部件同列表；固有点覆盖率、最近通信 | `cfg_device`、`cfg_type_point`、`cfg_point_*`、`ops_comm_stat_5m`、`ops_state_log` |
 | 02 设备详情 | 档案、所属单元、父级节点、设备能力、接入诊断 | `cfg_device`、`cfg_device_type`、`cfg_type_point`、`cfg_point_*` |
 | 03 通道绑定 | 同设备多绑定、采集/控制角色、协议/Profile、Unit ID、5 分钟健康度 | `cfg_channel`、`cfg_binding`、`ops_comm_stat_5m` |
-| 04 点表导入 | 地址基准、逐行预览、目标节点、地址冲突逐项确认 | `cfg_import_job`、`cfg_import_row`、`cfg_point_*`、`cfg_binding` |
+| 04 点表导入 | 原始地址、逐行预览、目标节点、地址冲突逐项确认 | `cfg_import_job`、`cfg_import_row`、`cfg_point_*`、`cfg_binding` |
 | 05 固有点位 | 四遥分页、启用/禁用、厂家来源、转换/写入、反馈规则 | `cfg_type_point`、`cfg_point_*`、`cfg_device_type` |
 | 06 配置校验 | 保存前离线校验、地址冲突、服务热加载状态 | 各配置表 + 站根 `config_revision` |
 | 07 新建设备 | 节点性质（通信设备/层级节点）、父级、类型、模板 | `cfg_device`、`cfg_device_type`、`cfg_template` |
@@ -292,7 +292,7 @@ erDiagram
 
 ### 6.11 `cfg_import_job` / `cfg_import_row`
 
-`cfg_import_job`：自增主键 `id`，唯一业务 ID `import_job_id`，以及 `device_id`、`binding_id`、`source_kind`、`file_name`、`file_sha256`、`address_base(zero/one)`、`idempotency_key`（`SHA-256(device|binding|sha256)`，唯一）、`status(parsed/confirmed/applied/failed)`、行数统计、提交人与时间。
+`cfg_import_job`：自增主键 `id`，唯一业务 ID `import_job_id`，以及 `device_id`、`binding_id`、`source_kind`、`file_name`、`file_sha256`、`address_base`（兼容现有表结构固定写 `zero`，不参与地址换算）、`idempotency_key`（`SHA-256(device|binding|sha256)`，唯一）、`status(parsed/confirmed/applied/failed)`、行数统计、提交人与时间。
 
 `cfg_import_row`：逐行 `vendor_key/vendor_name`、`point_type`（决定写入哪张点表）、`target_device_path`（空即“目标节点缺失”）、`semantic_code`、地址与取值列、`parse_status/parse_code/parse_message`、`confirm_state(none/accepted/fixed/rejected)` 与确认留痕、`resolved_point_id`。
 
@@ -314,7 +314,7 @@ BEGIN;
   -- 1. 先锁站根，检查请求 expected_config_revision，不符则结束事务
   SELECT config_revision FROM cfg_device
    WHERE node_kind = 'station' AND device_id = ? FOR UPDATE;
-  -- 2. 在锁内读取当前记录、授权并校验候选修改；启用设备强制完整性检查
+  -- 2. 在锁内读取当前记录、授权并校验候选修改；能力完整性问题仅提示
   -- 3. 直接写工程表（INSERT/UPDATE/DELETE），不做版本复制
   -- 4. 工程实际变化时递增一次；多行保存也只递增一次
   UPDATE cfg_device SET config_revision = config_revision + 1
@@ -322,9 +322,13 @@ BEGIN;
 COMMIT;
 ```
 
-校验失败整事务回滚，页面展示逐项问题；没有“草稿”中间态。新建通信设备默认停用，可先保存档案再配置真实绑定和点；结构、引用始终强制校验，启用或修改已启用路径时要求必需固有点已映射或明确禁用。无变化保存不增加 revision；全体工程写入者遵循先锁站根、再读校验、再写入的顺序，仅在末尾递增不足以避免并发校验竞态。
+结构、引用和地址冲突等错误导致整事务回滚，页面展示逐项问题；没有“草稿”中间态。新建通信设备默认停用，可先保存档案再配置真实绑定和点。启用或修改已启用设备时，必需固有点未映射返回 `required_point_unconfigured` 警告，不阻断保存、启用或已配置点位的采集；保存成功响应的 `meta.warnings` 与配置检查接口均展示提示，相关控制能力仍按所需点位是否完整、启用判断可用性。配置检查的 `counts` 分别统计 `errors` 与 `warnings`，`valid` 表示没有任何问题。无变化保存不增加 revision；全体工程写入者遵循先锁站根、再读校验、再写入的顺序，仅在末尾递增不足以避免并发校验竞态。
 
 当前四遥表的 `binding_id` 为非空外键，禁用行也必须有真实绑定；未建绑定的固有点只能表示未配置。若要求不接通道就声明某项不支持，需先同步调整既有四表、行结构与 ORM 的来源可空语义，不能插入占位绑定。
+
+设备管理工具栏的“清空整站”用于更换站配置。`POST /api/device-management/clear` 接收 `device_id`（站根 ID）、`expected_config_revision`、`confirmation_code`（当前站编码）、`station_code` 和 `station_name`（清空后的站编码与名称）。仅具有全部设备访问范围及设备、通道、绑定、点位、导入写权限的用户可执行；确认编码或修订号不匹配时不删除数据。
+
+服务先独占锁定站根，再在同一事务内删除通信统计和状态记录、导入行与任务、四遥点、绑定、通道及全部非站根节点；保留站根稳定 ID、账号权限、审计日志、设备类型、固有点目录和型号模板。站根恢复默认配置并写入指定名称与编码（时区默认 `Asia/Shanghai`），修订号保持单调并仅递增一次；清空操作记录 `device.clear` 审计，任何删除、审计或提交失败都不会报告清空成功。界面清除原设备选择与分页筛选，回到空站后可直接整站导入。此操作不清理独立历史样本库或实时库；消费者通过修订变化撤下旧运行目录。
 
 ### 7.2 热加载
 
@@ -341,7 +345,7 @@ COMMIT;
 ### 7.3 重复导入与稳定身份
 
 ```text
-1. 计算 idempotency_key；已存在则核对 source_kind/address_base，相同返回原任务，不同返回 Conflict。
+1. 计算 idempotency_key；已存在则核对 source_kind，相同返回原任务，不同返回 Conflict。
 2. 解析文件写 cfg_import_row，不写点表。
 3. 目标节点按 path 匹配（禁止按重名）；未命中即 parse_status='error'。
 4. 厂家点按 (binding_id, vendor_key) 命中 -> 复用 point_id 并 UPDATE；
@@ -399,7 +403,7 @@ station-package.zip
 | `devices[]` | `code/name/node_kind/parent_code`；device/component 另需 `device_type_code/type_version/vendor/model/firmware_version/rated_power_kw`；component 必填 `source_device_code` | 顺序即创建顺序，`parent_code` 只能引用已定义节点（天然无环）；`unit` 挂站根下（parent_code 为空） |
 | `channels[]` | `code/name/protocol/conn_mode/endpoint/poll_interval_ms/timeout_ms/retry_times/max_sessions` | 协议白名单与界面一致（modbus/iec104/dlt645） |
 | `bindings[]` | `device_code/channel_code/device_address/profile_version/can_collect/can_control/can_forward` | 目标必须是 `device` 节点；同设备同通道唯一 |
-| `point_files[]` | `device_code/file/address_base/binding_code` | `binding_code` 省略时取该设备唯一的采集绑定，多个则必须显式指定 |
+| `point_files[]` | `device_code/file/binding_code` | `binding_code` 省略时取该设备唯一的采集绑定，多个则必须显式指定 |
 
 编排语义（`station_import_action`）：
 

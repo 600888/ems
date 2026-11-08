@@ -222,7 +222,7 @@ stateDiagram-v2
 
 | 约束 | 规则 |
 | --- | --- |
-| 入参 | file 放原文件；metadata 放 device_id/binding_id/source_kind/address_base |
+| 入参 | file 放原文件；metadata 放 device_id/binding_id/source_kind；地址原样使用 |
 | 预览并发 | 动态 preview_hash，不加版本列；编辑/校验/应用都在 JSON 传期望哈希 |
 | 应用并发 | 再核对 expected_config_revision；预览成功不代表可绕过保存校验 |
 | 错误 | 未排除 error、未确认 warning、目标缺失阻止应用；rejected 明确计数 |
