@@ -11,7 +11,7 @@ struct DeviceFinding {
 };
 
 /**
- * @brief 校验当前候选工程的树、引用、四遥、能力完整性和物理地址占用。
+ * @brief 校验当前候选工程的树、编码历史路径、引用、四遥、能力完整性和物理地址占用。
  * @param[in] records 同事务读取的完整工程。
  * @param[in] confirmed_import_points 已核对当前地址与导入确认一致的稳定点 ID。
  * @return 问题集合；error 阻断保存，warning 仅提示能力不完整；不访问网络或数据库。

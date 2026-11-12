@@ -21,15 +21,16 @@ core::Result<TimeSeriesConnectionOptions> load_time_series_options(const std::st
             if (!input || !(input >> json) || !json.is_object())
                 throw std::invalid_argument("configuration");
         }
-        const std::set<std::string> allowed{"backend", "host",     "port",
-                                            "user",    "password", "database"};
+        const std::set<std::string> allowed{
+            "backend", "host", "port", "user", "password", "database", "client_config_dir"};
         for (auto it = json.begin(); it != json.end(); ++it)
             if (!allowed.count(it.key())) throw std::invalid_argument("unknown option");
         for (const auto& [key, env] : {std::pair{"host", "EMS_TAOS_HOST"},
                                        {"user", "EMS_TAOS_USER"},
                                        {"password", "EMS_TAOS_PASSWORD"},
                                        {"database", "EMS_TAOS_DATABASE"},
-                                       {"backend", "EMS_STORAGE_SERIES_BACKEND"}})
+                                       {"backend", "EMS_STORAGE_SERIES_BACKEND"},
+                                       {"client_config_dir", "EMS_TAOS_CONFIG_DIR"}})
             if (const auto* value = std::getenv(env)) json[key] = value;
         if (const auto* value = std::getenv("EMS_TAOS_PORT")) {
             const std::string text(value);
@@ -47,6 +48,16 @@ core::Result<TimeSeriesConnectionOptions> load_time_series_options(const std::st
         taos.user = json.value("user", std::string{});
         taos.password = json.value("password", std::string{});
         taos.database = json.value("database", taos.database);
+        const auto config_dir = json.value("client_config_dir", std::string{});
+        if (!config_dir.empty()) {
+            auto directory = std::filesystem::u8path(config_dir);
+            if (directory.is_relative() && !file.empty())
+                directory = std::filesystem::u8path(file).parent_path() / directory;
+            directory = std::filesystem::absolute(directory).lexically_normal();
+            if (!std::filesystem::is_directory(directory))
+                throw std::invalid_argument("client configuration directory");
+            taos.config_dir = directory.u8string();
+        }
         if (json.contains("port") && !json.at("port").is_number_integer())
             throw std::invalid_argument("port type");
         const auto port = json.value("port", std::int64_t{6030});

@@ -144,7 +144,7 @@ def upgrade() -> None:
     sa.Column('id', sa.BigInteger().with_variant(mysql.BIGINT(unsigned=True), 'mysql').with_variant(sa.Integer(), 'sqlite'), autoincrement=True, nullable=False),
     sa.Column('point_id', sa.String(length=64), nullable=False),
     sa.Column('value_type', sa.String(length=16), nullable=False),
-    sa.Column('series_table', sa.String(length=96), nullable=False),
+    sa.Column('series_table', sa.String(length=192), nullable=False),
     sa.Column('created_at', sa.DateTime().with_variant(mysql.DATETIME(fsp=6), 'mysql'), server_default=TimestampDefault(on_update=False, microseconds=True), nullable=False),
     sa.Column('retired_at', sa.DateTime().with_variant(mysql.DATETIME(fsp=6), 'mysql'), nullable=True),
     sa.CheckConstraint("value_type IN ('numeric', 'integer', 'boolean', 'text')", name='ck_history_series_type'),

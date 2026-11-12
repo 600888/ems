@@ -1,5 +1,6 @@
--- TDengine 3.4.2.x；由部署显式执行，不由应用启动时创建。
+-- TDengine 3.4.3.x；由部署显式执行，不由应用启动时创建。
 -- ts 是周期归档时刻，measurement_ts 保留原采集时刻。
+-- 子表名为站根至测点的 code 冒号路径，如 `station:unit01:bms01:voltage`，最长 192 字节。
 -- config_revision 仅为站根热加载计数，不对应配置版本或配置快照。
 CREATE DATABASE IF NOT EXISTS ems_history PRECISION 'us' KEEP 365;
 

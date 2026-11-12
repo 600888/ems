@@ -68,6 +68,7 @@ find_library(EMS_DATABASE_MYSQL_LIBRARY NAMES mysqlclient mariadb libmariadb
 )
 if(EMS_DATABASE_MYSQL_INCLUDE_DIR AND EMS_DATABASE_MYSQL_LIBRARY)
     if(WIN32)
+        file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/tmp")
         get_filename_component(_ems_mysql_lib_dir "${EMS_DATABASE_MYSQL_LIBRARY}" DIRECTORY)
         find_file(
             EMS_DATABASE_MYSQL_RUNTIME
@@ -149,12 +150,27 @@ set_target_properties(
 find_path(EMS_DATABASE_TAOS_INCLUDE_DIR taos.h)
 find_library(EMS_DATABASE_TAOS_LIBRARY NAMES taos)
 if(EMS_DATABASE_TAOS_INCLUDE_DIR AND EMS_DATABASE_TAOS_LIBRARY)
+    if(WIN32)
+        get_filename_component(_ems_taos_library_dir "${EMS_DATABASE_TAOS_LIBRARY}" DIRECTORY)
+        if(NOT EXISTS "${_ems_taos_library_dir}/taos.dll")
+            message(FATAL_ERROR "taos.dll must accompany the selected TDengine import library")
+        endif()
+        set(EMS_DATABASE_TAOS_RUNTIME "${_ems_taos_library_dir}/taos.dll"
+            CACHE FILEPATH "Runtime matching the selected TDengine client" FORCE)
+        add_library(ems_taos_client SHARED IMPORTED GLOBAL)
+        set_target_properties(ems_taos_client PROPERTIES
+            IMPORTED_IMPLIB "${EMS_DATABASE_TAOS_LIBRARY}"
+            IMPORTED_LOCATION "${EMS_DATABASE_TAOS_RUNTIME}")
+        set(_ems_taos_link ems_taos_client)
+    else()
+        set(_ems_taos_link "${EMS_DATABASE_TAOS_LIBRARY}")
+    endif()
     add_library(ems_timeseries_taos STATIC timeseries/taos/taos_series.cpp)
     target_include_directories(ems_timeseries_taos PRIVATE ${EMS_DATABASE_TAOS_INCLUDE_DIR})
     target_link_libraries(
         ems_timeseries_taos
         PUBLIC ems_timeseries_api
-        PRIVATE ${EMS_DATABASE_TAOS_LIBRARY} Threads::Threads
+        PRIVATE ${_ems_taos_link} Threads::Threads
     )
     set_target_properties(
         ems_timeseries_taos
@@ -166,3 +182,17 @@ if(EMS_DATABASE_TAOS_INCLUDE_DIR AND EMS_DATABASE_TAOS_LIBRARY)
     target_compile_definitions(ems_timeseries PRIVATE EMS_DATABASE_HAVE_TAOS)
     target_link_libraries(ems_timeseries PRIVATE ems_timeseries_taos)
 endif()
+
+# taos.dll 动态加载原生/WS 驱动；这些依赖不在 PE 导入表中，须一同交付。
+function(ems_copy_taos_runtime target)
+    if(WIN32 AND EMS_DATABASE_TAOS_RUNTIME)
+        get_filename_component(driver_dir "${EMS_DATABASE_TAOS_RUNTIME}" DIRECTORY)
+        set(driver_files "${EMS_DATABASE_TAOS_RUNTIME}")
+        foreach(name taosnative.dll taosws.dll pthreadVC3.dll msvcp140d.dll)
+            if(EXISTS "${driver_dir}/${name}")
+                list(APPEND driver_files "${driver_dir}/${name}")
+            endif()
+        endforeach()
+        ems_copy_runtime_files(${target} ${driver_files})
+    endif()
+endfunction()

@@ -1,4 +1,5 @@
 #include <common/database/configuration/device_management_validation.h>
+#include <common/database/timeseries/series_key.h>
 
 #include <algorithm>
 #include <cmath>
@@ -25,6 +26,7 @@ std::vector<DeviceFinding> validate_device_management(
     for (const auto& node : records.devices) {
         if (!nodes.emplace(node.device_id, &node).second || node.device_id.empty())
             problem("device_id_conflict", node.device_id);
+        if (!valid_series_code(node.code)) problem("invalid_device_code", node.device_id);
         if (!paths.insert(node.path).second ||
             !siblings.insert(node.parent_device_id + "\n" + node.code).second)
             problem("device_path_or_code_conflict", node.device_id);
@@ -110,6 +112,7 @@ std::vector<DeviceFinding> validate_device_management(
 
     std::vector<Address> addresses;
     std::unordered_map<std::string, std::pair<std::string, std::string>> point_owners;
+    std::set<std::string> series_paths;
     auto visit = [&](const auto& points, const std::string& kind) {
         for (const auto& point : points) {
             point_owners[point.point_id] = {point.owner_device_id, kind};
@@ -117,6 +120,23 @@ std::vector<DeviceFinding> validate_device_management(
                 problem("point_id_conflict", point.owner_device_id, point.point_id);
             if (!codes.insert(point.owner_device_id + "\n" + point.code).second)
                 problem("point_code_conflict", point.owner_device_id, point.point_id);
+            auto series_path = point.code;
+            auto parent_id = point.owner_device_id;
+            for (int depth = 0; depth < 9; ++depth) {
+                const auto parent = nodes.find(parent_id);
+                if (parent == nodes.end()) break;
+                series_path = parent->second->code + ":" + series_path;
+                if (parent->second->node_kind == "station") break;
+                parent_id = parent->second->parent_device_id;
+            }
+            if (!valid_series_code(point.code) || !valid_series_key(series_path))
+                problem("invalid_history_series_path", point.owner_device_id, point.point_id);
+            std::transform(
+                series_path.begin(), series_path.end(), series_path.begin(), [](char ch) {
+                    return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch + ('a' - 'A')) : ch;
+                });
+            if (!series_paths.insert(series_path).second)
+                problem("history_series_path_conflict", point.owner_device_id, point.point_id);
             if (!point.vendor_key.empty() &&
                 !vendor_keys.insert(point.binding_id + "\n" + point.vendor_key).second)
                 problem("vendor_key_conflict", point.owner_device_id, point.point_id);

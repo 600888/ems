@@ -1,8 +1,9 @@
 {
   "backend": "taos",
-  "host": "127.0.0.1",
+  "host": "192.168.3.23",
   "port": 6030,
   "database": "ems_history",
   "user": "root",
-  "password": "root"
+  "password": "root@123",
+  "client_config_dir": "tdengine"
 }

@@ -44,33 +44,6 @@ target_include_directories(ems-web PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
 target_link_libraries(ems-web PRIVATE ems_web_app Threads::Threads)
 set_target_properties(ems-web PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
 ems_copy_mysql_runtime(ems-web)
+ems_copy_taos_runtime(ems-web)
 
-# 某些 ZLIB 包提供导入库，Windows 构建不能依赖开发终端 PATH 中的其他 zlib.dll。
-function(ems_copy_web_runtime target)
-    if(WIN32)
-        get_filename_component(zlib_prefix "${ZLIB_INCLUDE_DIR}" DIRECTORY)
-        # 优先选择实际 ZLIB 包的 DLL，替换旧缓存中从 PATH 误找到的其他工具链 DLL。
-        set(_ems_zlib_runtime_found OFF)
-        foreach(_ems_zlib_dll IN ITEMS zlib.dll zlib1.dll libzlib.dll)
-            if(EXISTS "${zlib_prefix}/bin/${_ems_zlib_dll}")
-                set(EMS_WEB_ZLIB_RUNTIME
-                    "${zlib_prefix}/bin/${_ems_zlib_dll}"
-                    CACHE FILEPATH "ZLIB runtime DLL deployed with Web targets" FORCE
-                )
-                set(_ems_zlib_runtime_found ON)
-                break()
-            endif()
-        endforeach()
-        if(NOT _ems_zlib_runtime_found AND (NOT EMS_WEB_ZLIB_RUNTIME OR NOT EXISTS
-                                                                        "${EMS_WEB_ZLIB_RUNTIME}")
-        )
-            unset(EMS_WEB_ZLIB_RUNTIME CACHE)
-            unset(EMS_WEB_ZLIB_RUNTIME)
-        endif()
-        if(EMS_WEB_ZLIB_RUNTIME)
-            ems_copy_runtime_files(${target} "${EMS_WEB_ZLIB_RUNTIME}")
-        endif()
-    endif()
-endfunction()
-ems_copy_web_runtime(ems-web)
 ems_copy_directory_runtime_dependencies()

@@ -1,3 +1,5 @@
+#include <common/database/timeseries/series_key.h>
+
 #include <algorithm>
 #include <map>
 #include <set>
@@ -131,6 +133,10 @@ Json checked_rows(DeviceRequest& request, Json& job, Json rows) {
             }
             if (row.at("vendor_key") == "")
                 throw ApiError(422, "InvalidArgument", "vendor_key_required");
+            const auto semantic = row.at("semantic_code").get<std::string>();
+            const auto code = semantic.empty() ? row.at("vendor_key").get<std::string>() : semantic;
+            if (!valid_series_code(code))
+                throw ApiError(422, "InvalidArgument", "point_code_invalid");
             auto overlap = [&](const Json& other, bool same_import) {
                 const auto other_kind = other.at("point_type").get<std::string>();
                 const bool write = kind == "yk" || kind == "yt";
@@ -491,9 +497,8 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
                 patch["offset_value"] = row.at("offset_value");
             }
             if (old.empty()) {
-                patch["code"] = semantic.empty()
-                                    ? "vendor_" + sha256(row.at("vendor_key")).substr(0, 24)
-                                    : semantic;
+                patch["code"] =
+                    semantic.empty() ? row.at("vendor_key").get<std::string>() : semantic;
                 patch["enabled"] = kind == "yc" || kind == "yx";
                 if (kind == "yk" || kind == "yt")
                     patch["disabled_reason"] = "导入后需补齐写入及反馈规则";

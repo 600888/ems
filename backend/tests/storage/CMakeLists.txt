@@ -4,6 +4,23 @@ if(NOT BUILD_TESTS)
     return()
 endif()
 
+if(TARGET ems_timeseries_taos)
+    add_executable(test_taos_live test_taos_live.cpp)
+    target_include_directories(test_taos_live PRIVATE ${EMS_DATABASE_TAOS_INCLUDE_DIR})
+    target_link_libraries(test_taos_live PRIVATE ems_timeseries ems_common_codec gtest_main)
+    set_target_properties(test_taos_live PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+    ems_copy_taos_runtime(test_taos_live)
+    if(TARGET ems_web_history)
+        target_compile_definitions(test_taos_live PRIVATE EMS_TAOS_WEB_LIVE)
+        target_link_libraries(test_taos_live PRIVATE ems_web_history)
+        ems_copy_mysql_runtime(test_taos_live)
+    endif()
+    ems_copy_runtime_files(test_taos_live "$<TARGET_RUNTIME_DLLS:test_taos_live>")
+    include(GoogleTest)
+    gtest_discover_tests(test_taos_live WORKING_DIRECTORY "${CMAKE_SOURCE_DIR}"
+        PROPERTIES LABELS integration)
+endif()
+
 add_executable(test_ems_storage test_storage.cpp)
 
 target_include_directories(test_ems_storage PRIVATE ${CMAKE_SOURCE_DIR}/src/scd)

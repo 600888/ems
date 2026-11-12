@@ -1,4 +1,5 @@
 #include <common/core/time.h>
+#include <common/database/configuration/device_management_validation.h>
 #include <drogon/drogon.h>
 #include <gtest/gtest.h>
 #include <miniz.h>
@@ -222,6 +223,8 @@ class WebDevice : public ::testing::Test {
         auto yc = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yc"}});
         ASSERT_GT(yc.data.at("total").get<int>(), 0);
         const auto& point = yc.data.at("items").front();
+        for (const auto& item : yc.data.at("items"))
+            EXPECT_EQ(item.at("code"), item.at("vendor_key"));
         if (protocol == "iec104") {
             EXPECT_EQ(point.at("address").at("protocol_address").at("casdu"), 1);
             EXPECT_EQ(point.at("address").at("protocol_address").at("iec104_type"), "M_ME_NB_1");
@@ -233,10 +236,17 @@ class WebDevice : public ::testing::Test {
             EXPECT_TRUE(point.at("address").at("protocol_address").contains("data_id"));
         }
         if (protocol != "dlt645") {
+            auto yx = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yx"}});
             auto yk = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yk"}});
             auto yt = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yt"}});
             EXPECT_GT(yk.data.at("total").get<int>(), 0);
             EXPECT_GT(yt.data.at("total").get<int>(), 0);
+            for (const auto& item : yx.data.at("items"))
+                EXPECT_EQ(item.at("code"), item.at("vendor_key"));
+            for (const auto& item : yk.data.at("items"))
+                EXPECT_EQ(item.at("code"), item.at("vendor_key"));
+            for (const auto& item : yt.data.at("items"))
+                EXPECT_EQ(item.at("code"), item.at("vendor_key"));
             EXPECT_EQ(yk.data.at("items").front().at("enabled"), false);
             EXPECT_TRUE(yk.data.at("items")
                             .front()
@@ -733,6 +743,7 @@ TEST_F(WebDevice, HistoryReadsUnitScopeInBoundedPagesAndChecksOwnership) {
 class HistoryCatalog final : public IHistoryCatalogRepository {
    public:
     bool missing{false};
+    std::string prefix;
     int registrations{0};
 
     core::Status ensure_series(ITransaction&, const SeriesMapping&,
@@ -751,7 +762,8 @@ class HistoryCatalog final : public IHistoryCatalogRepository {
                                             const core::CallContext&) override {
         if (missing)
             return core::make_error(core::ErrorCode::NotFound, core::WriteEffect::NotApplicable);
-        return SeriesMapping{id, id == "state" ? ValueType::Boolean : ValueType::Numeric, id};
+        return SeriesMapping{id, id == "state" ? ValueType::Boolean : ValueType::Numeric,
+                             prefix + id};
     }
 };
 
@@ -947,10 +959,11 @@ TEST_F(WebHistory, ArchiveDirectoryReloadsOnlyAfterStationRevisionChanges) {
 }
 
 TEST_F(WebHistory, ArchiveDirectoryPreservesMappingsAndRejectsIncompatibleTypeChanges) {
+    catalog->prefix = "station:unit:device:";
     storage::ArchiveDirectorySource source(db);
     auto first = source.refresh(context());
     ASSERT_TRUE(core::is_ok(first));
-    EXPECT_EQ(core::value_of(first).points[0].series.series_key, "power");
+    EXPECT_EQ(core::value_of(first).points[0].series.series_key, "station:unit:device:power");
     EXPECT_EQ(catalog->registrations, 0);
     sql("UPDATE cfg_point_yc SET value_type='int64' WHERE point_id='power'");
     sql("UPDATE cfg_device SET config_revision=config_revision+1 WHERE device_id='station'");
@@ -961,6 +974,43 @@ TEST_F(WebHistory, ArchiveDirectoryPreservesMappingsAndRejectsIncompatibleTypeCh
     auto restored = source.refresh(context());
     ASSERT_TRUE(core::is_ok(restored));
     EXPECT_EQ(core::value_of(restored).config_revision, 1);
+}
+
+TEST_F(WebHistory, ArchiveDirectoryRejectsLegacyMappingsAndChangedCodePaths) {
+    storage::ArchiveDirectorySource source(db);
+    EXPECT_FALSE(core::is_ok(source.refresh(context())));
+    catalog->prefix = "station:unit:device:";
+    ASSERT_TRUE(core::is_ok(source.refresh(context())));
+    sql("UPDATE cfg_device SET code='renamed' WHERE device_id='device'");
+    sql("UPDATE cfg_device SET config_revision=config_revision+1 WHERE device_id='station'");
+    auto changed = source.refresh(context());
+    ASSERT_FALSE(core::is_ok(changed));
+    EXPECT_EQ(core::error_of(changed).code, core::ErrorCode::Conflict);
+}
+
+TEST_F(WebHistory, ConfigurationValidationRejectsInvalidOrCollidingHistoryPaths) {
+    auto tx = take(db.database->begin(context()));
+    const auto config = take(db.device_config->load_configuration(*tx, context()));
+    const auto has_reason = [](const auto& records, const std::string& reason) {
+        const auto issues = validate_device_management(records);
+        return std::any_of(issues.begin(), issues.end(), [&](const auto& issue) {
+            return issue.reason == reason && issue.severity == "error";
+        });
+    };
+    EXPECT_FALSE(has_reason(config, "invalid_history_series_path"));
+    EXPECT_FALSE(has_reason(config, "history_series_path_conflict"));
+    auto candidate = config;
+    candidate.points_yc[0].code = "power:phase1";
+    EXPECT_TRUE(has_reason(candidate, "invalid_history_series_path"));
+    candidate = config;
+    candidate.points_yx[0].code = "Power";
+    EXPECT_TRUE(has_reason(candidate, "history_series_path_conflict"));
+    candidate = config;
+    for (auto& device : candidate.devices) device.code = std::string(64, 'd');
+    EXPECT_TRUE(has_reason(candidate, "invalid_history_series_path"));
+    candidate = config;
+    candidate.devices[0].code = "bad:code";
+    EXPECT_TRUE(has_reason(candidate, "invalid_device_code"));
 }
 
 TEST_F(WebHistory, DeduplicatesTheSameEventAcrossStationAndUnit) {
@@ -1407,9 +1457,35 @@ TEST_F(WebDevice, CsvPreviewApplyStableIdentityAndReplay) {
     auto list = execute("/api/points/list", {{"device_id", "hvac01"}, {"point_type", "yc"}});
     EXPECT_EQ(list.data.at("total"), 4);
     std::set<int> saved_addresses;
-    for (const auto& point : list.data.at("items"))
+    std::set<std::string> saved_codes;
+    for (const auto& point : list.data.at("items")) {
         saved_addresses.insert(point.at("address").at("offset").get<int>());
+        saved_codes.insert(point.at("code").get<std::string>());
+    }
     EXPECT_EQ(saved_addresses, (std::set<int>{0, 1, 40001, 65535}));
+    EXPECT_EQ(saved_codes, (std::set<std::string>{"reg0", "reg1", "reg40001", "reg65535"}));
+}
+
+TEST_F(WebDevice, ImportRejectsInvalidPointCodesWithoutHashFallback) {
+    bind_protocol("modbus");
+    for (const auto& code :
+         {std::string("BOX:YX:003A"), std::string("bad code"), std::string(65, 'x')}) {
+        Upload upload;
+        upload.filename = "invalid-code.csv";
+        upload.bytes =
+            "template_key,standard_code,vendor_name,address_space,address_offset,access,wire_type,"
+            "byte_order,scale,offset,unit\n" +
+            code + ",,Status,holding_register,1,read,i16,,1,0,\n";
+        const auto preview = service->execute(
+            "/api/point-imports/create",
+            {{"device_id", "hvac01"}, {"binding_id", "binding01"}, {"source_kind", "vendor_csv"}},
+            actor, context(), upload);
+        EXPECT_EQ(preview.data.at("status"), "parsed");
+        const auto rows = execute("/api/point-imports/rows",
+                                  {{"import_job_id", preview.data.at("import_job_id")}});
+        ASSERT_EQ(rows.data.at("items").size(), 1u);
+        EXPECT_EQ(rows.data.at("items")[0].at("parse_code"), "point_code_invalid");
+    }
 }
 
 TEST_F(WebDevice, XlsxPreviewParsesRealWorkbookWithoutChangingRevision) {

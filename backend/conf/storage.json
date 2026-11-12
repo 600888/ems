@@ -2,6 +2,6 @@
   "database_config": "db.json",
   "rtdb_config": "realtime.json",
   "timeseries_config": "timeseries.json",
-  "scope_code": "station001",
+  "scope_code": "station",
   "interval_ms": 5000
 }

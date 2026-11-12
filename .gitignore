@@ -49,6 +49,8 @@ build/
 /.workbuddy/
 /tmp/
 /outputs/
+/backend/log/
+/backend/tmp/
 
 # Rspress documentation
 /website/node_modules/

@@ -2,6 +2,7 @@
 
 #include <common/codec/digest.h>
 #include <common/core/time.h>
+#include <common/database/timeseries/series_key.h>
 #include <common/model/point.h>
 
 #include <algorithm>
@@ -154,26 +155,33 @@ database::Sample capture(const ArchivePoint& point, const ArchiveDirectory& dire
 core::Result<ArchiveDirectory> build_archive_directory(
     const database::DeviceConfigRecords& records) {
     std::map<std::string, const database::CfgDeviceRow*> devices;
+    std::set<std::string> siblings;
     const database::CfgDeviceRow* station = nullptr;
     for (const auto& device : records.devices) {
         if (device.device_id.empty() || !devices.emplace(device.device_id, &device).second)
             return invalid("duplicate device identity");
+        if (!database::valid_series_code(device.code) ||
+            !siblings.insert(device.parent_device_id + "\n" + device.code).second)
+            return invalid("invalid or duplicate device code");
         if (device.node_kind == "station") {
-            if (station) return invalid("unique station required");
+            if (station || !device.parent_device_id.empty())
+                return invalid("unique station required");
             station = &device;
         }
     }
     if (!station || station->config_revision < 0) return invalid("station configuration missing");
     ArchiveDirectory directory{station->device_id, station->config_revision, {}};
     std::set<std::string> identities;
+    std::set<std::string> series_keys;
     const auto append = [&](const auto& points, const char* kind) {
         for (const auto& point : points) {
             if (point.point_id.empty() || point.point_id.size() > 64 ||
                 !identities.insert(point.point_id).second)
                 throw std::invalid_argument("duplicate point identity");
             ArchivePoint item;
-            item.series = {point.point_id, value_type(point.value_type),
-                           "p_" + codec::sha256(point.point_id)};
+            if (!database::valid_series_code(point.code))
+                throw std::invalid_argument("invalid point code");
+            item.series = {point.point_id, value_type(point.value_type), point.code};
             item.point_type = kind;
             item.unsigned_integer = point.value_type == "uint64";
             item.scope_kind = "station";
@@ -188,6 +196,7 @@ core::Result<ArchiveDirectory> build_archive_directory(
                 if (found == devices.end() || !seen.insert(id).second || seen.size() > 9)
                     throw std::invalid_argument("invalid device hierarchy");
                 const auto& device = *found->second;
+                item.series.series_key = device.code + ":" + item.series.series_key;
                 item.enabled = item.enabled && device.enabled != 0;
                 if (device.node_kind == "unit" && item.scope_kind == "station") {
                     item.scope_kind = "unit";
@@ -200,6 +209,14 @@ core::Result<ArchiveDirectory> build_archive_directory(
                 }
                 id = device.parent_device_id;
             }
+            auto key = item.series.series_key;
+            // MySQL 映射的唯一索引不区分 ASCII 大小写，提前拒绝这类路径碰撞。
+            std::transform(key.begin(), key.end(), key.begin(), [](char ch) {
+                return ch >= 'A' && ch <= 'Z' ? static_cast<char>(ch + ('a' - 'A')) : ch;
+            });
+            if (!database::valid_series_key(item.series.series_key) ||
+                !series_keys.insert(key).second)
+                throw std::invalid_argument("invalid or duplicate series path");
             directory.points.push_back(std::move(item));
         }
     };
@@ -208,8 +225,8 @@ core::Result<ArchiveDirectory> build_archive_directory(
         append(records.points_yx, "yx");
         append(records.points_yk, "yk");
         append(records.points_yt, "yt");
-    } catch (const std::exception&) {
-        return invalid("invalid archive directory");
+    } catch (const std::exception& error) {
+        return invalid(error.what());
     }
     return directory;
 }
@@ -250,9 +267,11 @@ core::Result<ArchiveDirectory> ArchiveDirectorySource::refresh(const core::CallC
         if (core::is_ok(existing)) {
             const auto& saved = core::value_of(existing);
             if (saved.point_id != point.series.point_id ||
-                saved.value_type != point.series.value_type)
-                return core::make_error(core::ErrorCode::Conflict, core::WriteEffect::NotApplied,
-                                        "point series type or identity changed");
+                saved.value_type != point.series.value_type ||
+                saved.series_key != point.series.series_key)
+                return core::make_error(
+                    core::ErrorCode::Conflict, core::WriteEffect::NotApplied,
+                    "point series type or code path changed; rebuild history mapping");
             point.series = saved;
             continue;
         }
@@ -278,8 +297,25 @@ ArchiveReport PeriodicArchiveSampler::sample(const ArchiveDirectory& directory,
         return report;
     }
     last_slot_us_ = slot_us;
+    std::vector<database::Sample> pending;
+    pending.reserve(256);
+    const auto flush = [&] {
+        if (pending.empty()) return;
+        const auto statuses = series_.write_batch(pending, ctx);
+        if (statuses.size() != pending.size())
+            report.failed += pending.size();
+        else
+            for (const auto& status : statuses) {
+                if (core::is_ok(status))
+                    ++report.written;
+                else
+                    ++report.failed;
+            }
+        pending.clear();
+    };
     for (const auto& point : directory.points) {
         if (core::has_expired(ctx)) {
+            flush();
             report.failed = directory.points.size() - report.written;
             break;
         }
@@ -299,12 +335,10 @@ ArchiveReport PeriodicArchiveSampler::sample(const ArchiveDirectory& directory,
             {"quality", sample.quality},
             {"revision", sample.config_revision}}.dump());
         if (sample.quality != 0) ++report.invalid;
-        auto written = series_.write(sample, ctx);
-        if (core::is_ok(written))
-            ++report.written;
-        else
-            ++report.failed;
+        pending.push_back(std::move(sample));
+        if (pending.size() == 256) flush();
     }
+    flush();
     return report;
 }
 }  // namespace ems::storage

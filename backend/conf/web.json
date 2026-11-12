@@ -2,12 +2,15 @@
   "host": "127.0.0.1",
   "port": 8080,
   "allowed_origin": "http://127.0.0.1:8080",
-  "allowed_origins": ["http://127.0.0.1:5173", "http://localhost:5173"],
+  "allowed_origins": [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173"
+  ],
   "workspace": "web-upload",
   "database_config": "conf/db.json",
   "realtime_config": "conf/realtime.json",
   "timeseries_config": "conf/timeseries.json",
-  "realtime_scope_code": "station001",
+  "realtime_scope_code": "station",
   "io_threads": 2,
   "workers": 4,
   "queue_size": 128,

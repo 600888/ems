@@ -6,8 +6,8 @@
 
 ```mermaid
 flowchart LR
-    Drogon[用户提供的 third_party/drogon 1.9.14] --> Build[CMake EMS_BUILD_WEB=ON]
-    Deps[Trantor / JsonCpp / zlib] --> Build
+    Drogon[third_party/drogon 1.9.14] --> Build[CMake EMS_BUILD_WEB=ON]
+    Deps[third_party 中的 Trantor / JsonCpp / zlib 源码] --> Build
     Common[公共 MySQL、模型与 Excel 库] --> Build
     Build --> Web[ems-web]
     Build --> Tests[test_web]
@@ -24,7 +24,6 @@ Windows 在 x64 MSVC 开发终端运行：
 
 ```powershell
 chcp 65001
-./scripts/setup_web_dependencies.ps1 -Toolchain msvc
 cmake -S backend -B build/web -G "Ninja Multi-Config" `
   -DEMS_BUILD_WEB=ON -DBUILD_TESTS=ON -DBUILD_EXAMPLES=OFF `
   -DEMS_BUILD_LEGACY_MODBUS=OFF `
@@ -33,14 +32,32 @@ cmake --build build/web --config Release --target ems-web test_web test_web_mysq
 ctest --test-dir build/web -C Release -R "WebDevice|WebIdentity|WebExecutor|PersistentIdentity|IdentityCodec|IdentityHost" --output-on-failure
 ```
 
-平台依赖沿用仓库现有构建配置：MySQL/MariaDB 客户端、SQLite 测试库、libmodbus、hiredis、Boost、OpenXLSX 依赖。`setup_web_dependencies.ps1` 不下载或替换用户提供的 Drogon。Trantor 锁定与 Drogon 1.9.14 配套的提交；Linux 可使用同版本依赖和现有平台脚本构建。
+平台依赖沿用仓库现有构建配置：MySQL/MariaDB 客户端、SQLite 测试库、libmodbus、hiredis、Boost、OpenXLSX 依赖。
+Web 框架直接使用以下目录的源码，不再需要单独的 Web 依赖安装脚本或安装前缀：
 
-Windows 依赖脚本默认使用 MSVC，安装到 `backend/build/web-deps-msvc/install`；
-MinGW 在 GCC/G++ 环境中执行 `./scripts/setup_web_dependencies.ps1 -Toolchain mingw`，
-安装到 `backend/build/web-deps-mingw/install`。CMake 根据当前工具链自动补充对应前缀，
-因此普通预设配置和 VSCode CMake Tools 无需额外填写 Trantor 路径。
-自定义 `-BuildDirectory` 时，通过 `-DEMS_WEB_DEPENDENCY_PREFIX=<该目录>/install` 指定位置；
-显式设置的 `CMAKE_PREFIX_PATH` 仍然有效。
+```text
+backend/third_party/
+├── drogon/             # Drogon 1.9.14
+│   └── trantor/        # Trantor 1.5.29
+├── jsoncpp/            # JsonCpp 1.9.8
+└── zlib/               # zlib 1.4
+```
+
+CMake 先创建 JsonCpp、zlib 静态目标，再由 Drogon 构建其 Trantor 子目录；
+包查找适配由 `backend/cmake/WebDependencies.cmake` 和 `backend/cmake/web/jsoncppConfig.cmake` 管理，
+不修改上游源码。三个依赖均随主工程使用相同工具链及 Debug/Release 配置，关闭上游测试、示例和 c-ares。
+MSVC、MinGW、Linux 共用这一入口；普通预设和 VSCode CMake Tools 无需填写 Trantor 路径。
+源码只保留在 `third_party`，构建产物保留在各自的构建目录。
+
+从仓库根目录使用 MSVC 预设：
+
+```powershell
+cmake --preset windows-msvc -S backend
+cmake --build backend/build/windows-msvc --config Release --target ems-web --parallel 4
+```
+
+MinGW 使用 `windows-mingw` 预设及 `backend/build/windows-mingw` 构建目录。
+`CMAKE_PREFIX_PATH` 继续用于 MySQL、hiredis 等平台依赖，不再用于替换 Web 框架源码。
 
 Windows 启用 Web 测试时，缺少 SQLite 安装库会自动准备固定的 3.50.2 amalgamation，
 并使用当前工具链编译为 `tests/archive/` 下的静态库；正式 Web 进程仍使用公共 MySQL 驱动。
@@ -142,7 +159,7 @@ $env:EMS_DATABASE_CONFIG = (Resolve-Path backend/conf/db.json).Path
 | 身份与设备写入审计 | 成功变更与审计同事务；拒绝事件单独提交；后台有界保留清理 |
 | 监视/历史/告警/控制模块 | 业务能力仍按对应模块进度接入，权限名称不代表现场命令已执行 |
 
-当前入口提供 HTTP；默认依赖脚本使用 Trantor 无 TLS 构建。本机开发直接监听，远程部署由 Nginx 终止 TLS，并配置 HTTPS allowed_origin 和 secure_cookie。脚本的 openssl 选项仅控制依赖编译，进程原生 TLS 配置尚未开放。
+当前入口提供 HTTP；Trantor 默认使用 `TRANTOR_USE_TLS=none` 构建。本机开发直接监听，远程部署由 Nginx 终止 TLS，并配置 HTTPS allowed_origin 和 secure_cookie。`-DTRANTOR_USE_TLS=openssl` 可使用当前工具链的 OpenSSL 编译依赖，但进程原生 TLS 配置尚未开放。
 
 Windows 测试应在正常开发终端运行：受限沙箱的虚拟临时目录可能使 XLSX 库的原生文件接口报告文件不存在。
 

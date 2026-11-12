@@ -67,6 +67,6 @@
 
 ## 部署与验证
 
-构建时需要公共时序模块检测到 `taos.h` 和 `taos` 库（可指定 `EMS_DATABASE_TAOS_INCLUDE_DIR`、`EMS_DATABASE_TAOS_LIBRARY`），现有适配器要求 TDengine 3.4.2 客户端及 `ems_history` 数据库。运行环境配置 `EMS_TAOS_HOST`（默认 `127.0.0.1`）、`EMS_TAOS_PORT`（默认 `6030`）、`EMS_TAOS_USER`、`EMS_TAOS_PASSWORD`、`EMS_TAOS_DATABASE`（默认 `ems_history`）。Web 与存储通过 `timeseries_config` 共用 `backend/conf/timeseries.json`，环境变量可覆盖凭据。周期归档默认每 5 秒写入所有四遥状态，部署入口及建库脚本见[存储进程](../storage/index.md)；未配置时页面显示明确服务错误。
+构建时需要公共时序模块检测到 `taos.h` 和 `taos` 库（可指定 `EMS_DATABASE_TAOS_INCLUDE_DIR`、`EMS_DATABASE_TAOS_LIBRARY`），现有适配器要求 TDengine 3.4.3 客户端及 `ems_history` 数据库。运行环境配置 `EMS_TAOS_HOST`（默认 `127.0.0.1`）、`EMS_TAOS_PORT`（默认 `6030`）、`EMS_TAOS_USER`、`EMS_TAOS_PASSWORD`、`EMS_TAOS_DATABASE`（默认 `ems_history`）。Web 与存储通过 `timeseries_config` 共用 `backend/conf/timeseries.json`，环境变量可覆盖凭据。周期归档默认每 5 秒写入所有四遥状态，部署入口及建库脚本见[存储进程](../storage/index.md)；未配置时页面显示明确服务错误。
 
 前端关闭 `EMS_IDENTITY_MOCK`，通过现有同源 Vite / HTTPS 代理访问 Web。运行 `npm test`、`npm run build`；后端构建 `test_web`、`ems-web`，运行 `WebHistory.*` 和 `WebDevice.History*`，覆盖遥信、30 天范围、质量码、跨作用域采样、分页、越权、参数校验及扫描预算。前端测试还覆盖目录完整分页、子设备保留、请求竞态、账号退出、部分失败、时间更新和 CSV 转义。真实 TDengine 连接、存储数据及现场链路需在部署环境联调。

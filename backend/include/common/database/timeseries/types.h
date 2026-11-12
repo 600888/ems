@@ -17,7 +17,7 @@ using SampleValue = std::variant<std::monostate, double, std::int64_t, bool, std
 struct SeriesMapping {
     std::string point_id;
     ValueType value_type{ValueType::Numeric};
-    std::string series_key;
+    std::string series_key;  ///< 站编码:各级设备编码:测点编码，最长 192 字节
 };
 
 struct Sample {

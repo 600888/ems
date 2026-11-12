@@ -1,5 +1,6 @@
 #include <common/codec/digest.h>
 #include <common/core/time.h>
+#include <common/database/timeseries/series_key.h>
 #include <gtest/gtest.h>
 
 #include <map>
@@ -18,34 +19,41 @@ DeviceConfigRecords records() {
     CfgDeviceRow station;
     station.device_id = "station";
     station.node_kind = "station";
+    station.code = "station01";
     station.config_revision = 7;
     station.default_stale_after_ms = 60000;
     CfgDeviceRow unit;
     unit.device_id = "unit";
     unit.parent_device_id = "station";
     unit.node_kind = "unit";
+    unit.code = "unit01";
     CfgDeviceRow device;
     device.device_id = "device";
     device.parent_device_id = "unit";
     device.node_kind = "device";
+    device.code = "bms01";
     result.devices = {station, unit, device};
     CfgPointYcRow yc;
     yc.point_id = "power";
+    yc.code = "power";
     yc.owner_device_id = "device";
     yc.value_type = "double";
     result.points_yc.push_back(yc);
     CfgPointYxRow yx;
     yx.point_id = "state";
+    yx.code = "state";
     yx.owner_device_id = "device";
     yx.value_type = "bool";
     result.points_yx.push_back(yx);
     CfgPointYkRow yk;
     yk.point_id = "command";
+    yk.code = "command";
     yk.owner_device_id = "device";
     yk.value_type = "bool";
     result.points_yk.push_back(yk);
     CfgPointYtRow yt;
     yt.point_id = "setpoint";
+    yt.code = "setpoint";
     yt.owner_device_id = "device";
     yt.value_type = "double";
     result.points_yt.push_back(yt);
@@ -81,7 +89,7 @@ TEST(StorageSampling, DirectoryCoversFourTablesAndUsesStableMappings) {
     EXPECT_EQ(directory.config_revision, 7);
     EXPECT_EQ(directory.points[0].scope_kind, "unit");
     EXPECT_EQ(directory.points[0].scope_id, "unit");
-    EXPECT_EQ(directory.points[0].series.series_key, "p_" + codec::sha256("power"));
+    EXPECT_EQ(directory.points[0].series.series_key, "station01:unit01:bms01:power");
     EXPECT_EQ(directory.points[2].point_type, "yk");
     EXPECT_EQ(directory.points[3].point_type, "yt");
     config.devices[2].name = "renamed";
@@ -89,6 +97,91 @@ TEST(StorageSampling, DirectoryCoversFourTablesAndUsesStableMappings) {
     EXPECT_EQ(core::value_of(build_archive_directory(config)).points[0].series.series_key,
               directory.points[0].series.series_key);
     EXPECT_EQ(kDefaultArchiveIntervalMs, 5000);
+}
+
+TEST(StorageSampling, CodePathsFollowActualParentsAndIncludeComponents) {
+    auto config = records();
+    CfgDeviceRow rack;
+    rack.device_id = "rack";
+    rack.parent_device_id = "device";
+    rack.node_kind = "component";
+    rack.code = "rack-01";
+    rack.source_device_id = "device";
+    config.devices.push_back(rack);
+    config.points_yc[0].owner_device_id = "rack";
+    config.points_yc[0].code = "DC.Voltage";
+    auto built = build_archive_directory(config);
+    ASSERT_TRUE(core::is_ok(built));
+    EXPECT_EQ(core::value_of(built).points[0].series.series_key,
+              "station01:unit01:bms01:rack-01:DC.Voltage");
+    config.devices[2].parent_device_id = "station";
+    built = build_archive_directory(config);
+    ASSERT_TRUE(core::is_ok(built));
+    EXPECT_EQ(core::value_of(built).points[0].series.series_key,
+              "station01:bms01:rack-01:DC.Voltage");
+    config.devices[2].code = "bms02";
+    built = build_archive_directory(config);
+    ASSERT_TRUE(core::is_ok(built));
+    EXPECT_EQ(core::value_of(built).points[0].series.series_key,
+              "station01:bms02:rack-01:DC.Voltage");
+}
+
+TEST(StorageSampling, SamePointCodeOnDifferentBranchesRemainsUnique) {
+    auto config = records();
+    auto other = config.devices[2];
+    other.device_id = "other";
+    other.code = "bms02";
+    config.devices.push_back(other);
+    auto point = config.points_yc[0];
+    point.point_id = "other-power";
+    point.owner_device_id = "other";
+    config.points_yc.push_back(point);
+    auto built = build_archive_directory(config);
+    ASSERT_TRUE(core::is_ok(built));
+    const auto& points = core::value_of(built).points;
+    EXPECT_EQ(points[0].series.series_key, "station01:unit01:bms01:power");
+    EXPECT_EQ(points[1].series.series_key, "station01:unit01:bms02:power");
+}
+
+TEST(StorageSampling, RejectsAmbiguousCodesDuplicatePathsAndOverlongPaths) {
+    for (const auto& code : {"", "unit:01", "unit`01", "unit/01", "unit 01"}) {
+        auto config = records();
+        config.devices[1].code = code;
+        EXPECT_FALSE(core::is_ok(build_archive_directory(config))) << code;
+        config = records();
+        config.points_yc[0].code = code;
+        EXPECT_FALSE(core::is_ok(build_archive_directory(config))) << code;
+    }
+    auto config = records();
+    config.points_yx[0].code = "power";
+    EXPECT_FALSE(core::is_ok(build_archive_directory(config)));
+    config.points_yx[0].code = "Power";
+    EXPECT_FALSE(core::is_ok(build_archive_directory(config)));
+    config = records();
+    auto duplicate = config.devices[2];
+    duplicate.device_id = "other";
+    config.devices.push_back(duplicate);
+    EXPECT_FALSE(core::is_ok(build_archive_directory(config)));
+    config = records();
+    config.devices[0].code = std::string(64, 's');
+    config.devices[1].code = std::string(64, 'u');
+    config.devices[2].code = std::string(59, 'd');
+    config.points_yc[0].code = "pp";
+    config.points_yx.clear();
+    config.points_yk.clear();
+    config.points_yt.clear();
+    auto built = build_archive_directory(config);
+    ASSERT_TRUE(core::is_ok(built));
+    EXPECT_EQ(core::value_of(built).points[0].series.series_key.size(), 192u);
+    config.points_yc[0].code += 'p';
+    EXPECT_FALSE(core::is_ok(build_archive_directory(config)));
+}
+
+TEST(StorageSampling, SeriesKeyValidationRejectsLegacyNamesAndSqlSyntax) {
+    EXPECT_TRUE(valid_series_key("Station:unit-01:bms_01:DC.Voltage"));
+    for (const auto& key : {"p_123", "station::point", ":point", "station:", "station:point`",
+                            "station:point;DROP", "station:point/other"})
+        EXPECT_FALSE(valid_series_key(key)) << key;
 }
 
 TEST(StorageSampling, RejectsCyclesOrphansDuplicateIdentitiesAndUnknownValueTypes) {

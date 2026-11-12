@@ -59,6 +59,7 @@ if(EMS_STORAGE_WITH_NATIVE)
 
         add_executable(ems-storage main.cpp)
         ems_copy_mysql_runtime(ems-storage)
+        ems_copy_taos_runtime(ems-storage)
 
         target_include_directories(ems-storage PRIVATE ${CMAKE_SOURCE_DIR}/third_party)
         target_link_libraries(ems-storage PRIVATE ems_storage_native Threads::Threads)

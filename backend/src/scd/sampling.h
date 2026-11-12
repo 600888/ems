@@ -33,9 +33,9 @@ struct ArchiveReport {
 };
 
 /**
- * @brief 从当前四遥配置构造归档目录；不生成配置版本或历史快照。
+ * @brief 从当前四遥配置构造归档目录；子表名按站根至测点的编码以冒号连接。
  * @param[in] records 同一配置事务读取的全量记录。
- * @return 四遥归档目录；重复身份、孤立节点、环及未知值类型返回明确错误。
+ * @return 四遥归档目录；编码非法、路径重复或超长、重复身份、孤立节点、环及未知值类型返回错误。
  */
 core::Result<ArchiveDirectory> build_archive_directory(
     const database::DeviceConfigRecords& records);

@@ -246,6 +246,8 @@ erDiagram
 | `stale_after_ms` | 0 表示继承站默认 |
 | `source_import_row_id/legacy_ref` | 导入行追溯与旧表映射 |
 
+导入新测点时，`code` 优先使用非空 `semantic_code`；厂家扩展点直接使用来源测点编码 `vendor_key`，禁止转换为 `vendor_` 加摘要。四遥工作簿的“测点编码”列和规范点表的 `template_key` 列均按此规则落库。来源编码非法或超长时应明确报错，不散列、不截断；历史表名末段直接使用此 `code`。
+
 协议取自 `cfg_binding → cfg_channel.protocol`，点表不重复存 `protocol`。
 
 **空值语义**：`semantic_code`、`vendor_key` 用空串而非 NULL，唯一性靠函数索引 `NULLIF(col,'')`——“空”不参与唯一，同一设备可以有多条扩展点。这是为适配 ormpp 行映射（它只对算术类型清 NULL 值）而做的显式取舍。

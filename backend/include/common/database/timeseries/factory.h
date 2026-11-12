@@ -12,6 +12,7 @@ struct TaosConnectionOptions {
     std::string user;
     std::string password;
     std::string database{"ems_history"};
+    std::string config_dir;
 };
 
 enum class TimeSeriesBackend { Tdengine, InfluxDb };
@@ -29,7 +30,7 @@ struct TimeSeriesConnectionOptions {
 core::Result<TimeSeriesConnectionOptions> load_time_series_options(const std::string& path = {});
 
 /**
- * @brief 建立目标 TDengine 3.4.2 时序写入连接；不自动执行迁移。
+ * @brief 建立目标 TDengine 3.4.3 时序写入连接；不自动执行迁移。
  * @param[in] options TDengine 原生 C/C++ 客户端连接选项。
  * @return 成功返回时序存储所有权；失败返回脱敏连接错误。
  */

@@ -37,7 +37,7 @@ class HistoryPointSeries(Base):
     __tablename__ = "history_point_series"
     point_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
     value_type: Mapped[str] = mapped_column(sa.String(16), nullable=False)
-    series_table: Mapped[str] = mapped_column(sa.String(96), nullable=False)
+    series_table: Mapped[str] = mapped_column(sa.String(192), nullable=False)
     created_at: Mapped[datetime] = mapped_column(
         timestamp(microseconds=True),
         nullable=False,

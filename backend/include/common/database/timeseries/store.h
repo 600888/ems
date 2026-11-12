@@ -16,6 +16,26 @@ class ITimeSeriesStore {
      * @return 同身份同载荷重投须幂等；确认提交后成功，未知结果返回错误。
      */
     virtual core::Status write(const Sample& sample, const core::CallContext& ctx) = 0;
+
+    /**
+     * @brief 有界批量写入，按输入顺序报告每条样本的确定结果。
+     * @param[in] samples 同一次实际采样产生的记录，原生后端每批最多 256 条。
+     * @param[in] ctx 整批调用期限；未执行项返回 DeadlineExceeded，不伪装成成功。
+     * @return 与输入等长的状态数组，部分失败和 Unknown 保留到对应记录。
+     */
+    virtual std::vector<core::Status> write_batch(const std::vector<Sample>& samples,
+                                                  const core::CallContext& ctx) {
+        std::vector<core::Status> result;
+        result.reserve(samples.size());
+        for (const auto& sample : samples) {
+            if (core::has_expired(ctx))
+                result.emplace_back(core::make_error(core::ErrorCode::DeadlineExceeded,
+                                                     core::WriteEffect::NotApplied));
+            else
+                result.push_back(write(sample, ctx));
+        }
+        return result;
+    }
 };
 
 class ITimeSeriesReader {

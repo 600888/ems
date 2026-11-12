@@ -4,7 +4,7 @@
       "type": "shm",
       "options": {
         "segment_name": "station001_realtime_v2",
-        "capacity": 1024,
+        "capacity": 32768,
         "shard_count": 16,
         "segment_bytes": 268435456,
         "max_record_bytes": 65536,

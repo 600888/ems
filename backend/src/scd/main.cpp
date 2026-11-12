@@ -94,6 +94,7 @@ int main(int argc, char** argv) {
             std::this_thread::sleep_for(std::chrono::milliseconds(50));
             continue;
         }
+        const auto cycle_started = std::chrono::steady_clock::now();
         auto ctx = ems::core::make_call_context(interval);
         if (reconnect) {
             auto retry = ems::database::connect_time_series(options.timeseries);
@@ -120,9 +121,14 @@ int main(int argc, char** argv) {
             const auto report = sampler->sample(points, slot, ctx);
             failed = report.failed != 0;
             reconnect = failed;
-            LOG_INFO("ems-storage cycle: points={} written={} invalid={} failed={} revision={}",
-                     points.points.size(), report.written, report.invalid, report.failed,
-                     points.config_revision);
+            LOG_INFO(
+                "ems-storage cycle: points={} written={} invalid={} failed={} revision={} "
+                "elapsed_ms={}",
+                points.points.size(), report.written, report.invalid, report.failed,
+                points.config_revision,
+                std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::steady_clock::now() - cycle_started)
+                    .count());
         }
         if (once) return failed ? 1 : 0;
         // 只执行实际发生的采样；慢周期跳过错过的槽，不能用最新值回填过去。

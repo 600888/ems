@@ -22,7 +22,7 @@
 
 ## 构建与启动
 
-MySQL 客户端用于配置与稳定序列映射；RTDB 用于实时读取。周期存储不要求开启 ZeroMQ。TDengine C SDK 3.4.2.x 通过 `EMS_DATABASE_TAOS_INCLUDE_DIR` 和 `EMS_DATABASE_TAOS_LIBRARY` 指定，运行时需要对应客户端动态库。没有 SDK 时可编译并检查配置，真实连接会明确返回 Unsupported。
+MySQL 客户端用于配置与稳定序列映射；RTDB 用于实时读取。周期存储不要求开启 ZeroMQ。TDengine C SDK 3.4.3.x 通过 `EMS_DATABASE_TAOS_INCLUDE_DIR` 和 `EMS_DATABASE_TAOS_LIBRARY` 指定，运行时需要对应客户端动态库。没有 SDK 时可编译并检查配置，真实连接会明确返回 Unsupported。
 
 服务端部署后，由部署账号执行 `backend/data/tdengine_history.sql`，创建微秒库及四张超级表；工程关系表继续通过现有 Python 初始化入口管理。应用不在启动时建库或建表。
 
@@ -36,10 +36,14 @@ MySQL 客户端用于配置与稳定序列映射；RTDB 用于实时读取。周
 
 `--check-config` 不连接外部服务。`--once` 执行一个实际归档周期，用于部署验收，任意写失败返回非零。持续运行支持 SIGINT / SIGTERM，Windows 另支持 SIGBREAK。
 
-守护配置已带上 `--config conf/storage.json`；默认保持存储项停用，待 TDengine 就绪后再启用该项。启动需要实时库已经可用，配置目录和时序连接全部就绪后才报告 ready。
+守护配置已带上 `--config conf/storage.json`，存储项已启用。启动需要实时库已经可用，配置目录和时序连接全部就绪后才报告 ready。
 
 ## 当前验证边界
 
 前端历史页调用真实 Web 查询接口，Web 直接使用公共历史目录与 TDengine 读取端口，见[历史数据查询](../web/history.md)。测试通过注入实时与时序端口覆盖归档和查询，另有启动配置校验、SQLite 热加载回归与原生 SDK 头文件语法编译验证。
 
-当前未部署 TDengine 服务端，按本轮要求只完成代码和本地验证，不启动持续归档进程或声称已实际落库。服务端部署后再验证每个点的 5 秒间隔、采集时间、新鲜度、重连和 Web 查询。
+2026-11-08 已完成 TDengine 3.4.3.9 社区版接入，原生数值 / 精确整数 / 布尔 / 中文文本 / null、复合主键、批量写入、游标分页与实际点表的历史查询均已联调。15,617 个配置点位以 5 秒周期完整归档，周期计数可通过 `elapsed_ms`、`written`、`failed` 核对。采集通道尚无有效样本时仍保存 null 与质量原因，不能把这些记录视为有效测量。
+
+Windows 可执行 `scripts/setup_tdengine_dependencies.ps1` 安全解压匹配的官方 SDK。`timeseries.json` 的 `client_config_dir` 指向客户端配置目录；相对路径以连接文件所在目录为基准，`EMS_TAOS_CONFIG_DIR` 可覆盖。中文账户下将进程 TEMP / TMP 指向存在的 ASCII 路径（例如 `backend/tmp`），避免原生 SDK 的默认临时目录编码问题。守护配置已为 Web 和存储设置 `TEMP=tmp` / `TMP=tmp`。
+
+真实集成用例 `TaosLive.*` 仅在显式设置 `EMS_TAOS_LIVE_CONFIG` 时连接服务；工程历史查询还需 `EMS_MYSQL_LIVE_CONFIG`。这两个变量只放配置文件路径，不在命令行传密码。

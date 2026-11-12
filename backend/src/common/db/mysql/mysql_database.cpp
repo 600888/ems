@@ -1,4 +1,5 @@
 #include <common/database/mysql_database.h>
+#include <common/database/timeseries/series_key.h>
 #include <mysql.h>
 
 #include <algorithm>
@@ -26,6 +27,10 @@ struct history_point_version {
     std::optional<std::string> ready_at;
 };
 
+constexpr std::string_view get_alias_struct_name(history_point_version*) {
+    return "history_point_version";
+}
+
 YLT_REFL(history_point_version, scope_kind, scope_id, config_version, ready_at);
 
 struct history_point_snapshot {
@@ -41,6 +46,10 @@ struct history_point_snapshot {
     bool enabled{false};
 };
 
+constexpr std::string_view get_alias_struct_name(history_point_snapshot*) {
+    return "history_point_snapshot";
+}
+
 YLT_REFL(history_point_snapshot, scope_kind, scope_id, config_version, point_id, owner_device_id,
          point_code, display_name, unit, value_type, enabled);
 
@@ -49,6 +58,10 @@ struct history_point_series {
     std::string value_type;
     std::string series_table;
 };
+
+constexpr std::string_view get_alias_struct_name(history_point_series*) {
+    return "history_point_series";
+}
 
 YLT_REFL(history_point_series, point_id, value_type, series_table);
 
@@ -59,6 +72,10 @@ struct history_event_identity {
     std::string payload_sha256;
 };
 
+constexpr std::string_view get_alias_struct_name(history_event_identity*) {
+    return "history_event_identity";
+}
+
 YLT_REFL(history_event_identity, event_id, point_id, source_time_us, payload_sha256);
 
 struct history_quarantine {
@@ -68,6 +85,10 @@ struct history_quarantine {
     std::string reason;
     std::string raw_payload;
 };
+
+constexpr std::string_view get_alias_struct_name(history_quarantine*) {
+    return "history_quarantine";
+}
 
 YLT_REFL(history_quarantine, stream_scope, stream_id, event_id, reason, raw_payload);
 
@@ -442,11 +463,7 @@ class HistoryRepositories final : public IHistoryCatalogRepository, public IHist
 
     core::Status ensure_series(ITransaction& tx, const SeriesMapping& mapping,
                                const core::CallContext& ctx) override {
-        if (!bounded_id(mapping.point_id) || mapping.series_key.size() != 66 ||
-            mapping.series_key.compare(0, 2, "p_") != 0 ||
-            !std::all_of(mapping.series_key.begin() + 2, mapping.series_key.end(), [](char ch) {
-                return (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f');
-            }))
+        if (!bounded_id(mapping.point_id) || !valid_series_key(mapping.series_key))
             return core::make_error(core::ErrorCode::InvalidArgument, core::WriteEffect::NotApplied,
                                     "invalid series mapping");
         std::string type;

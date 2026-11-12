@@ -151,10 +151,10 @@ Linux 默认开启，Windows 默认关闭；这些旧目标仍依赖上游的 pk
 `BUILD_TESTS=OFF` 可关闭测试，`BUILD_EXAMPLES=OFF` 可关闭示例。
 `EMS_BUILD_WEB`、`EMS_BUILD_COLLECTOR` 默认开启，分别生成 `ems-web` 和 `ems-collector`；
 两者独立于示例开关，可用 `-DEMS_BUILD_WEB=OFF`、`-DEMS_BUILD_COLLECTOR=OFF` 分别关闭。
-Web 还需要同工具链的 Trantor、JsonCpp 和 zlib；Windows 可先在对应编译器终端执行
-`./scripts/setup_web_dependencies.ps1 -Toolchain msvc`。CMake 会自动查找
-`backend/build/web-deps-msvc/install`；MinGW 使用 `-Toolchain mingw` 和对应的独立依赖目录。
-自定义依赖位置可通过 `EMS_WEB_DEPENDENCY_PREFIX` 或 `CMAKE_PREFIX_PATH` 指定。
+Web 的 Drogon、Trantor、JsonCpp 和 zlib 使用 `backend/third_party` 中的源码，
+随主工程按当前工具链和 Debug/Release 配置编译，无需单独运行 Web 依赖安装脚本。
+Trantor 位于 `drogon/trantor`，JsonCpp 和 zlib 分别位于 `jsoncpp`、`zlib`；
+三个框架依赖均静态链接，默认 `TRANTOR_USE_TLS=none`，远程部署由 Nginx 终止 TLS。
 Web 和采集进程还必须链接 MySQL/MariaDB 客户端；缺少头文件或库时 CMake 会拒绝配置。
 Windows 可执行 `./scripts/setup_database_dependencies.ps1 -Toolchain mingw`（MSVC 使用 `msvc`），
 将固定的 MariaDB Connector/C 3.4.8 编译并安装到
