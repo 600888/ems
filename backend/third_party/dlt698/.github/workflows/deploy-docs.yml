@@ -1,0 +1,76 @@
+name: Deploy Rspress Docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-docs.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'website/**'
+      - '.github/workflows/deploy-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlt698-pages-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: website
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: website/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Check types
+        run: npm run typecheck
+      - name: Check sidebar links
+        run: npm run check:sidebar
+      - name: Test sidebar checks
+        run: npm run test:sidebar
+      - name: Build Rspress
+        run: npm run build
+      - name: Upload site
+        uses: actions/upload-artifact@v4
+        with:
+          name: dlt698-site
+          path: website/doc_build
+          include-hidden-files: true
+          retention-days: 7
+
+  deploy:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download site
+        uses: actions/download-artifact@v4
+        with:
+          name: dlt698-site
+          path: website/doc_build
+      - name: Publish to gh-pages
+        uses: peaceiris/actions-gh-pages@v4
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: ./website/doc_build
+          publish_branch: gh-pages
+          commit_message: 'Deploy docs for ${{ github.sha }}'

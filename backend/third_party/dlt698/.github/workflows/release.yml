@@ -1,0 +1,285 @@
+name: Release
+
+on:
+  push:
+    branches: [main]
+    paths: [VERSION]
+    tags: ['v*']
+  pull_request:
+    paths:
+      - VERSION
+      - .github/workflows/release.yml
+      - CMakeLists.txt
+      - cmake/**
+      - LICENSE
+      - .clang-format
+      - pyproject.toml
+      - python/**
+      - cpp/**
+      - tests/vectors/**
+      - third/asio/**
+      - third/Catch2/**
+      - third/pybind11/**
+  # 手动运行只构建和上传 Actions 产物，便于正式发布前验证。
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dlt698-release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    runs-on: ubuntu-22.04
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      tag: ${{ steps.version.outputs.tag }}
+      commit: ${{ steps.version.outputs.commit }}
+      wheel_matrix: ${{ steps.matrix.outputs.wheel_matrix }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Read frozen wheel matrix
+        id: matrix
+        shell: bash
+        run: |
+          echo "wheel_matrix=$(python python/tools/release_matrix.py wheel)" >> "$GITHUB_OUTPUT"
+      - name: Validate release version
+        id: version
+        shell: bash
+        env:
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version="$(tr -d '\r' < VERSION)"
+          if [[ ! "$version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo '::error::VERSION must contain a single X.Y.Z version.'
+            exit 1
+          fi
+          tag="v$version"
+          if [[ "$REF_TYPE" == tag && "$REF_NAME" != "$tag" ]]; then
+            echo '::error::Release tag must match VERSION.'
+            exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+  cpp-packages:
+    name: C++ SDK (${{ matrix.platform }}, ${{ matrix.linkage }})
+    needs: version
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux-x64-gcc, linux-arm64-gcc, windows-x64-msvc, macos-x64-appleclang, macos-arm64-appleclang]
+        linkage: [static, shared]
+        include:
+          - platform: linux-x64-gcc
+            os: ubuntu-22.04
+            cmake_args: ''
+          - platform: linux-arm64-gcc
+            os: ubuntu-22.04-arm
+            cmake_args: ''
+          - platform: windows-x64-msvc
+            os: windows-2022
+            cmake_args: '-G "Visual Studio 17 2022" -A x64 -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL'
+          - platform: macos-x64-appleclang
+            os: macos-15-intel
+            cmake_args: '-DCMAKE_OSX_ARCHITECTURES=x86_64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'
+          - platform: macos-arm64-appleclang
+            os: macos-15
+            cmake_args: '-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_OSX_DEPLOYMENT_TARGET=11.0'
+          - linkage: static
+            shared: 'OFF'
+          - linkage: shared
+            shared: 'ON'
+    steps:
+      - uses: actions/checkout@v6
+      - name: Configure C++ Release library
+        shell: bash
+        run: >-
+          cmake -S . -B build/release
+          -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=${{ matrix.shared }}
+          -DBUILD_TESTING=ON -DDLT698_BUILD_TRANSPORT=ON -DDLT698_BUILD_EXAMPLES=OFF
+          -DCMAKE_INSTALL_LIBDIR=lib ${{ matrix.cmake_args }}
+      - name: Build
+        run: cmake --build build/release --config Release --parallel 2
+      - name: Test C++ library and relocated installed consumer
+        run: ctest --test-dir build/release -C Release --output-on-failure
+      - name: Package public headers and native library
+        run: >-
+          cmake -DBUILD_DIR=build/release -DOUTPUT_DIR=release-assets
+          -DPLATFORM=${{ matrix.platform }} -DLINKAGE=${{ matrix.linkage }}
+          -P cmake/release-package.cmake
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dlt698-${{ needs.version.outputs.version }}-cpp-${{ matrix.platform }}-${{ matrix.linkage }}
+          path: release-assets/*
+          if-no-files-found: error
+          compression-level: 0
+
+  python-sdist:
+    needs: version
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install build==1.5.0
+      - name: Freeze one source archive for every wheel
+        env:
+          DLT698_RELEASE_COMMIT: ${{ needs.version.outputs.commit }}
+        run: python -m build --sdist
+      - run: python python/tools/artifact_check.py dist/*.tar.gz
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dlt698-${{ needs.version.outputs.version }}-sdist
+          path: dist/*.tar.gz
+          if-no-files-found: error
+          compression-level: 0
+
+  python-wheels:
+    needs: [version, python-sdist]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.version.outputs.wheel_matrix) }}
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: dlt698-${{ needs.version.outputs.version }}-sdist
+          path: source
+      - name: Build, repair and test wheels from the frozen sdist
+        uses: pypa/cibuildwheel@v3.4.0
+        with:
+          package-dir: source/dlt698-${{ needs.version.outputs.version }}.tar.gz
+          output-dir: wheelhouse
+        env:
+          CIBW_ARCHS: ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dlt698-${{ needs.version.outputs.version }}-wheels-${{ matrix.platform }}
+          path: wheelhouse/*.whl
+          if-no-files-found: error
+          compression-level: 0
+
+  publish:
+    if: github.event_name == 'push'
+    needs: [version, cpp-packages]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+    # main 的 VERSION 变更和同版本标签可能同时触发，按版本串行发布。
+    concurrency:
+      group: dlt698-publish-${{ needs.version.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dlt698-${{ needs.version.outputs.version }}-cpp-*
+          path: release-assets
+          merge-multiple: true
+      - name: Verify complete C++ SDK matrix and collect checksums
+        shell: bash
+        run: |
+          cmake -DASSET_DIR=release-assets \
+            -DRELEASE_VERSION='${{ needs.version.outputs.version }}' \
+            -DRELEASE_COMMIT='${{ needs.version.outputs.commit }}' \
+            -P cmake/release-manifest.cmake
+          cd release-assets
+          sha256sum --check SHA256SUMS
+      - name: Publish GitHub Release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.version.outputs.tag }}
+          RELEASE_COMMIT: ${{ needs.version.outputs.commit }}
+        run: |
+          # 禁止将其他提交生成的产物挂到已有版本标签。
+          if git show-ref --verify --quiet "refs/tags/$RELEASE_TAG"; then
+            if [[ "$(git rev-parse "$RELEASE_TAG^{commit}")" != "$RELEASE_COMMIT" ]]; then
+              echo '::error::Existing release tag points to a different commit. Bump VERSION.'
+              exit 1
+            fi
+          fi
+          if state="$(gh release view "$RELEASE_TAG" --json isDraft,targetCommitish \
+            --jq '[.isDraft, .targetCommitish] | @tsv' 2>/dev/null)"; then
+            read -r draft target <<< "$state"
+            if [[ "$draft" == false ]]; then
+              echo 'Release already published; keeping its assets unchanged.'
+              exit 0
+            fi
+            if ! git show-ref --verify --quiet "refs/tags/$RELEASE_TAG" && [[ "$target" != "$RELEASE_COMMIT" ]]; then
+              echo '::error::Existing draft targets a different commit. Bump VERSION.'
+              exit 1
+            fi
+          else
+            gh release create "$RELEASE_TAG" --target "$RELEASE_COMMIT" \
+              --title "dlt698 $RELEASE_TAG" --generate-notes --draft
+          fi
+          # 先上传至草稿，全部成功后再公开；失败后重跑可继续上传。
+          gh release upload "$RELEASE_TAG" release-assets/*.tar.gz \
+            release-assets/*.zip release-assets/*.sha256 \
+            release-assets/release-manifest.json release-assets/SHA256SUMS --clobber
+          gh release edit "$RELEASE_TAG" --draft=false
+
+  publish-pypi:
+    name: Publish Python distributions to PyPI
+    if: github.event_name == 'push'
+    needs: [version, python-sdist, python-wheels, publish]
+    runs-on: ubuntu-22.04
+    environment:
+      name: pypi
+      url: https://pypi.org/p/dlt698
+    permissions:
+      contents: read
+      id-token: write
+    # 同版本的 main 与标签运行可能先后完成，避免并发上传到 PyPI。
+    concurrency:
+      group: dlt698-pypi-${{ needs.version.outputs.tag }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      # Python 发行包直接复用本次 Actions 构建，不作为 GitHub Release 附件。
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: dlt698-${{ needs.version.outputs.version }}-wheels-*
+          path: python-assets
+          merge-multiple: true
+      - uses: actions/download-artifact@v8
+        with:
+          name: dlt698-${{ needs.version.outputs.version }}-sdist
+          path: python-assets
+      - name: Verify and stage Python distributions
+        shell: bash
+        run: |
+          python python/tools/joint_manifest.py python-assets --python-only \
+            --version '${{ needs.version.outputs.version }}' \
+            --commit '${{ needs.version.outputs.commit }}'
+          (cd python-assets && sha256sum --check SHA256SUMS)
+          # PyPI 仅接收 Python 发行包，不能混入 C++ SDK 压缩包。
+          mkdir dist
+          cp python-assets/*.whl python-assets/*.tar.gz dist/
+      - name: Publish to PyPI with Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/
+          # 部分上传失败后可重跑，也允许同一提交的 main/标签重复触发。
+          skip-existing: true

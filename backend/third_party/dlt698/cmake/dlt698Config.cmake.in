@@ -1,0 +1,18 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+include("${CMAKE_CURRENT_LIST_DIR}/dlt698Targets.cmake")
+# 旧组件名称仅作为同一个安装目标的别名，不再导出组件库。
+foreach(component core session service)
+    if(NOT TARGET dlt698::${component})
+        add_library(dlt698::${component} ALIAS dlt698::dlt698)
+    endif()
+endforeach()
+if(@DLT698_BUILD_TRANSPORT@)
+    foreach(component transport app)
+        if(NOT TARGET dlt698::${component})
+            add_library(dlt698::${component} ALIAS dlt698::dlt698)
+        endif()
+    endforeach()
+endif()
+check_required_components(dlt698)

@@ -1,0 +1,21 @@
+# 所有 CMake 构建树统一放在build/ 下（build/ 及任意深度的子目录均忽略）
+/build/
+/build-*/
+/out/
+/tmp/
+/website/node_modules/
+/website/doc_build/
+/website/.rspress/
+/website/.qa/
+/website/.npm/
+/.vs/
+/.cache/
+__pycache__/
+*.pyc
+/.venv/
+/dist/
+/.ruff_cache/
+/.mypy_cache/
+/.pytest_cache/
+CMakeUserPresets.json
+.clangd

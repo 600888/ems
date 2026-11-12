@@ -1,0 +1,5 @@
+cmake_minimum_required(VERSION 3.20)
+project(dlt698_python_interop LANGUAGES CXX)
+find_package(dlt698 CONFIG REQUIRED)
+add_executable(dlt698_interop main.cpp)
+target_link_libraries(dlt698_interop PRIVATE dlt698::dlt698)

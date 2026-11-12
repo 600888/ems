@@ -1,0 +1,62 @@
+name: Python bindings
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+jobs:
+  installed:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-22.04, windows-2022, macos-15]
+        python: ['3.11', '3.12', '3.13', '3.14']
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python }}
+      - run: python -m pip install '.[dev]'
+      - run: python -m pytest python/tests --ignore=python/tests/interop/test_interop.py
+      - run: python python/tools/api_contract.py --runtime
+      - run: python python/tools/generate_stubs.py --check
+      - run: python -m mypy python/src python/examples
+      - run: python -m ruff check python
+      - run: python -m ruff format --check python
+  contracts-and-interop:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - run: python -m pip install '.[dev]' clang-format==23.1.1
+      - name: Check all project C++ formatting
+        run: find cpp python/bindings python/tests/interop -type f \( -name '*.cpp' -o -name '*.hpp' \) -print0 | xargs -0 clang-format --style=file --dry-run --Werror
+      - name: Standalone C++ build, tests and SDK
+        run: |
+          cmake -S cpp -B build/cpp-independent -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF
+          cmake --build build/cpp-independent --parallel 2
+          ctest --test-dir build/cpp-independent --output-on-failure
+          cmake --install build/cpp-independent --prefix "$PWD/build/independent-sdk"
+      - name: Check the full public C++ AST
+        run: python python/tools/ast_inventory.py --include build/cpp-independent/include
+      - name: Build and test the independent C++ consumer
+        run: |
+          cmake -S python/tests/interop -B build/interop -DCMAKE_PREFIX_PATH="$PWD/build/independent-sdk"
+          cmake --build build/interop --parallel 2
+          DLT698_INTEROP_EXE="$PWD/build/interop/dlt698_interop" python -m pytest python/tests/interop/test_interop.py
+      - name: Build sdist and rebuild without Git
+        run: |
+          python -m build --sdist
+          python python/tools/artifact_check.py dist/*.tar.gz
+          mkdir build/no-git
+          tar -xf dist/*.tar.gz -C build/no-git
+          python -m pip wheel build/no-git/dlt698-* --no-deps -w build/rebuilt
+          python python/tools/artifact_check.py build/rebuilt/*.whl
+          python -m pip install --force-reinstall --no-deps build/rebuilt/*.whl
+          cd build/no-git/dlt698-*
+          python -m pytest python/tests --ignore=python/tests/interop/test_interop.py

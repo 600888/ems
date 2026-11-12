@@ -1,0 +1,66 @@
+##############################################################################
+# EMS Backend C++ 代码格式化规则
+#
+# 基础风格：Google C++ Style Guide
+#           https://google.github.io/styleguide/cppguide.html
+#
+##############################################################################
+Language: Cpp
+BasedOnStyle: Google
+
+# ---------------------------------------------------------------------------
+# 与 Google 官方默认值的差异（有意为之，见文末说明）
+# ---------------------------------------------------------------------------
+
+# Google 官方为 2 空格；本项目既有代码统一使用 4 空格，保持一致。
+IndentWidth: 4
+
+# Google 官方为 80 列；本项目放宽到 100 列，减少无意义的折行。
+ColumnLimit: 100
+
+# Google 默认会重排行尾注释与块注释。项目内大量中文 Doxygen 注释，
+# CJK 字符的显示宽度在不同 clang-format 版本下计算不一致，重排结果不可控，
+# 因此关闭注释重排，只保留格式化的其他能力。
+ReflowComments: false
+
+# ---------------------------------------------------------------------------
+# 以下为 Google 规则的显式固化（避免不同版本默认值漂移）
+# ---------------------------------------------------------------------------
+
+# 固定语言标准，保证不同机器/不同版本下格式化结果稳定。
+Standard: c++20
+
+# 强制 LF。仓库根目录 .gitattributes 已声明 eol=lf，保证 checkout 出来的
+# 工作区文件也是 LF，否则 Windows 上 core.autocrlf=true 会反复把文件转回
+# CRLF，导致格式化 diff 与 format-check 结果不稳定。
+LineEnding: LF
+
+# 指针/引用符号贴左：int* p、const std::string& s。
+PointerAlignment: Left
+
+# 头文件排序：主头文件 → C 系统头 → C++ 标准头 → 其他，分组间空行。
+IncludeBlocks: Regroup
+SortIncludes: CaseSensitive
+
+# 命名空间内容不缩进，并统一补全 "}  // namespace xxx" 行尾注释。
+NamespaceIndentation: None
+FixNamespaceComments: true
+
+# switch 的 case 标签缩进一级。
+IndentCaseLabels: true
+
+# 访问修饰符（public/protected/private）相对类体左移一格。
+AccessModifierOffset: -1
+
+# 大括号一律同行（函数、类、控制语句）。
+BreakBeforeBraces: Attach
+
+# 行尾注释前至少保留 2 个空格。
+SpacesBeforeTrailingComments: 2
+
+# 连续空行折叠为最多 1 行。
+MaxEmptyLinesToKeep: 1
+
+# 函数、类、结构体等定义块之间自动保留空行。
+SeparateDefinitionBlocks: Always
+...

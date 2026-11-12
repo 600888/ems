@@ -1,0 +1,59 @@
+set(install_stage "@CMAKE_CURRENT_BINARY_DIR@/stage-install-${CONFIG}")
+set(stage "@CMAKE_CURRENT_BINARY_DIR@/stage-relocated-${CONFIG}")
+set(consumer_build "@CMAKE_CURRENT_BINARY_DIR@/consumer-build-${CONFIG}")
+set(consumer_rc "@CMAKE_RC_COMPILER@")
+if("@MSVC@" AND NOT "@CMAKE_GENERATOR@" MATCHES "Visual Studio")
+    get_filename_component(sdk_bin "@CMAKE_MT@" DIRECTORY)
+    find_program(consumer_rc_path NAMES rc.exe HINTS "${sdk_bin}" NO_DEFAULT_PATH REQUIRED)
+    set(consumer_rc "${consumer_rc_path}")
+endif()
+function(run)
+    execute_process(COMMAND ${ARGV} RESULT_VARIABLE result OUTPUT_VARIABLE output ERROR_VARIABLE error)
+    if(NOT result EQUAL 0)
+        message(FATAL_ERROR "${ARGV}\n${output}\n${error}")
+    endif()
+endfunction()
+run("@CMAKE_COMMAND@" --install "@CMAKE_BINARY_DIR@" --config "${CONFIG}" --prefix "${install_stage}")
+# 安装包只能包含一个实际 dlt698 目标，且不得残留原组件库。
+file(READ "${install_stage}/@CMAKE_INSTALL_LIBDIR@/cmake/dlt698/dlt698Targets.cmake" installed_targets)
+string(REGEX MATCHALL "add_library\\(dlt698::[^ ]+" exported_libraries "${installed_targets}")
+list(LENGTH exported_libraries exported_library_count)
+if(NOT exported_library_count EQUAL 1)
+    message(FATAL_ERROR "Expected one exported library, found: ${exported_libraries}")
+endif()
+file(GLOB legacy_libraries
+    "${install_stage}/@CMAKE_INSTALL_BINDIR@/dlt698_*.dll"
+    "${install_stage}/@CMAKE_INSTALL_LIBDIR@/dlt698_*.lib"
+    "${install_stage}/@CMAKE_INSTALL_LIBDIR@/libdlt698_*.*")
+if(legacy_libraries)
+    message(FATAL_ERROR "Unexpected component libraries: ${legacy_libraries}")
+endif()
+if("@WIN32@" AND "@BUILD_SHARED_LIBS@")
+    file(GLOB runtime_libraries "${install_stage}/@CMAKE_INSTALL_BINDIR@/*.dll")
+    list(LENGTH runtime_libraries runtime_library_count)
+    if(NOT runtime_library_count EQUAL 1 OR
+       NOT EXISTS "${install_stage}/@CMAKE_INSTALL_BINDIR@/dlt698.dll")
+        message(FATAL_ERROR "Expected only dlt698.dll, found: ${runtime_libraries}")
+    endif()
+endif()
+# 先移动安装目录，再构建并运行调用方，验证导出目标与共享库的运行时路径可迁移。
+file(REMOVE_RECURSE "${stage}")
+file(RENAME "${install_stage}" "${stage}")
+# 清除上次配置缓存的包路径，确保消费方只使用本次移动后的安装目录。
+run("@CMAKE_COMMAND@" -S "@CMAKE_CURRENT_SOURCE_DIR@/package_consumer" -B "${consumer_build}"
+    -G "@CMAKE_GENERATOR@" -Udlt698_DIR "-DCMAKE_PREFIX_PATH=${stage}" "-DCMAKE_CXX_COMPILER=@CMAKE_CXX_COMPILER@"
+    "-DCMAKE_MAKE_PROGRAM=@CMAKE_MAKE_PROGRAM@" "-DCMAKE_MT=@CMAKE_MT@"
+    "-DCMAKE_RC_COMPILER=${consumer_rc}" "-DCMAKE_RC_COMPILER_INIT=${consumer_rc}"
+    "-DCMAKE_BUILD_TYPE=@CMAKE_BUILD_TYPE@")
+# 每次用本次安装的公开头文件完整重建，避免调用方缓存掩盖头文件/导出变化。
+run("@CMAKE_COMMAND@" --build "${consumer_build}" --config "${CONFIG}" --clean-first)
+if(EXISTS "${consumer_build}/${CONFIG}/consumer@CMAKE_EXECUTABLE_SUFFIX@")
+    run("${consumer_build}/${CONFIG}/consumer@CMAKE_EXECUTABLE_SUFFIX@")
+else()
+    run("${consumer_build}/consumer@CMAKE_EXECUTABLE_SUFFIX@")
+endif()
+if(EXISTS "${consumer_build}/${CONFIG}/app_consumer@CMAKE_EXECUTABLE_SUFFIX@")
+    run("${consumer_build}/${CONFIG}/app_consumer@CMAKE_EXECUTABLE_SUFFIX@")
+elseif(EXISTS "${consumer_build}/app_consumer@CMAKE_EXECUTABLE_SUFFIX@")
+    run("${consumer_build}/app_consumer@CMAKE_EXECUTABLE_SUFFIX@")
+endif()
