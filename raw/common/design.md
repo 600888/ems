@@ -473,7 +473,6 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | backend/src/net/para_loader/* | collector 配置适配 + common/config | 读取和校验复用公共库；通道准备/应用留采集 |
 | backend/src/net/collect/data_dispatcher.* | collector | 注入实时/事件接口，管理有界内存队列，保留分发编排责任 |
 | backend/src/net/protocol/* | protocol | 保留插件边界，不搬到 common；只复用纯模型/契约 |
-| backend/src/net/protocol/modbus/proto_modbus_util.hpp、modbus_mapping_map.hpp | protocol/modbus | 协议专用工具移出通用工具 |
 | backend/src/common/log/*、通用 util | observability / util | 按实际复用迁移，不把所有旧工具整体照搬 |
 
 旧数据中的 ID、时间单位、质量码、设备类型、code 和绑定必须先导出映射报告。旧 YC/YX/YK/YT 保留导入转换：映射为标准 telemetry/status/command，并把反馈独立出来；不能仅改枚举名称。

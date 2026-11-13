@@ -1,6 +1,6 @@
 # libmodbuspp 使用指南
 
-> 类型：第三方库开发参考。API 和构建示例需要在选定依赖版本上验证，不代表 EMS 已实现全部能力。业务角色、设备绑定和控制闭环以 [设备、通道与协议](../../architecture/channel-protocol.md) 为准。
+> 类型：第三方库开发参考。EMS 已移除旧 libmodbuspp 处理器及示例，当前 Modbus 使用直接依赖 libmodbus 的动态插件，接入方式见 [协议处理器接入](handlers.md)。本页仅保留第三方 API 参考，不作为当前 EMS 的构建或调用指南。业务角色、设备绑定和控制闭环以 [设备、通道与协议](../../architecture/channel-protocol.md) 为准。
 
 ## 目录
 

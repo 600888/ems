@@ -9,11 +9,10 @@ backend/src/net/
 │   ├── plugin_handler.h/.cpp    # 公共 ABI 适配器
 │   ├── handler_factory.cpp     # 按协议创建处理器
 │   ├── modbus/
-│   │   ├── modbus_proto_handler.h/.cpp
-│   │   └── modbus_handler.h/.cpp  # 存量 libmodbuspp 设备接口
+│   │   └── modbus_proto_handler.h/.cpp
 │   ├── iec104/iec104_handler.h/.cpp
 │   ├── dlt645/dlt645_handler.h/.cpp
-│   └── base_handler.h/.cpp      # 存量 Modbus 基类
+│   └── dlt698/dlt698_handler.h/.cpp
 ├── protocol/                    # 协议栈、插件和平台加载器
 └── collect/                     # 采集引擎、通道线程、数据分发
 ```
@@ -62,4 +61,5 @@ ctest --test-dir build/handlers --output-on-failure
 
 启用 Modbus 或 DLT645 时，分别提供同工具链 libmodbus 或 Boost 1.83+ 头文件；依赖参数见 [Windows 构建](https://github.com/600888/ems/blob/main/README.md#windows-构建) 和 [DLT645 文档](dlt645.md)。多配置生成器编译、测试需指定相同配置，例如 `--config Release` / `-C Release`。
 
-存量 `ems::net::device` Modbus 接口也已移到 handler 目录，保持原调用语义，由 `EMS_BUILD_LEGACY_MODBUS` 控制。其基类带有 Modbus 地址字段，新协议使用上述协议无关接口。
+Modbus 统一通过 `ModbusProtoHandler` 调用 `proto_modbus`，插件直接依赖 libmodbus。
+旧的 `ems::net::device` 处理器、C++ 包装器及其专用测试和示例已移除，应用调用统一使用上述协议无关接口。

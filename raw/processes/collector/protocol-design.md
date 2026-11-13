@@ -476,7 +476,7 @@ flowchart LR
 | 缓冲重试 | ABI v1 增加兼容错误码 `-2`；同编码扩容重取本次缓存结果，不重复协议读取；采集缓冲上限 8 MiB |
 | 独立构建 | 协议子工程与主进程解耦，产出动态库、静态 runtime、公开头、包清单；显式部署运行依赖 |
 
-首期 API 操作由插件桥串行执行；原有设备级 handler 保留给存量调用。新动态插件直接依赖 libmodbus，不加载 libmodbuspp。清单已随包生成，首期运行入口仍使用默认映射 / `register_mapping`；完整清单解析、能力协商、版本化异步请求及停止截止时间留待 ABI v2。
+首期 API 操作由插件桥串行执行，Modbus 应用调用统一经过 `ModbusProtoHandler`。动态插件直接依赖 libmodbus，不加载 libmodbuspp。清单已随包生成，首期运行入口仍使用默认映射 / `register_mapping`；完整清单解析、能力协商、版本化异步请求及停止截止时间留待 ABI v2。
 
 | 配置 | 首期约定 |
 | --- | --- |
