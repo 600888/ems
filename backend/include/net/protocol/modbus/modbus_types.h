@@ -64,29 +64,4 @@ enum class EndianCode : int {
     LittleEndianByteSwap = 3  // DC BA — 字交换 + 字节交换
 };
 
-/** @brief Modbus 传输类型。 */
-enum class NetType : int {
-    RTU = 0,
-    TCP = 1,
-};
-/** @brief 存量 Modbus 客户端操作错误码。 */
-enum class ClientError : int {
-    Success = 0,
-    ConnectionFailed = -1,
-    Timeout = -2,
-    InvalidAddress = -3,
-    InvalidData = -4,
-    SlaveError = -5,
-    Unknown = -99,
-};
-
-/** @brief 存量 Modbus 服务端操作错误码。 */
-enum class ServerError : int {
-    Success = 0,
-    BindFailed = -1,
-    StartFailed = -2,
-    AlreadyRunning = -3,
-    Unknown = -99,
-};
-
 }  // namespace ems::net::modbus

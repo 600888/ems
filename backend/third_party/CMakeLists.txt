@@ -2,10 +2,6 @@
 include(OpenXLSX)
 ems_add_openxlsx()
 
-if(EMS_BUILD_LEGACY_MODBUS)
-    add_subdirectory(libmodbuspp)
-endif()
-
 # 与 MSVC 默认动态 CRT 保持一致，避免测试目标出现运行库冲突。
 if(BUILD_TESTS)
     set(gtest_force_shared_crt

@@ -26,7 +26,6 @@ Windows 在 x64 MSVC 开发终端运行：
 chcp 65001
 cmake -S backend -B build/web -G "Ninja Multi-Config" `
   -DEMS_BUILD_WEB=ON -DBUILD_TESTS=ON -DBUILD_EXAMPLES=OFF `
-  -DEMS_BUILD_LEGACY_MODBUS=OFF `
   -DCMAKE_PREFIX_PATH="已有平台依赖前缀"
 cmake --build build/web --config Release --target ems-web test_web test_web_mysql --parallel 4
 ctest --test-dir build/web -C Release -R "WebDevice|WebIdentity|WebExecutor|PersistentIdentity|IdentityCodec|IdentityHost" --output-on-failure

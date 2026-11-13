@@ -4,7 +4,7 @@
  */
 #include "channel_thread.h"
 
-#include <spdlog/fmt/bundled/format.h>
+#include <spdlog/fmt/fmt.h>
 
 #include <algorithm>
 #include <chrono>

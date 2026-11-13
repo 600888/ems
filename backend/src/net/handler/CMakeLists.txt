@@ -39,29 +39,6 @@ if(MSVC)
     target_compile_options(net_handler PRIVATE /utf-8)
 endif()
 
-# 存量 Modbus 设备处理器保留原接口；仅在 libmodbuspp 已启用时构建。
-if(TARGET modbus_protocol)
-    add_library(net_proto_handler STATIC base_handler.cpp modbus/modbus_handler.cpp)
-
-    target_include_directories(
-        net_proto_handler PRIVATE "${EMS_BACKEND_ROOT}/src" "${EMS_BACKEND_ROOT}/include"
-    )
-
-    target_include_directories(
-        net_proto_handler SYSTEM
-        PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
-    )
-
-    target_link_libraries(net_proto_handler PUBLIC modbus_protocol Threads::Threads)
-
-    set_target_properties(
-        net_proto_handler
-        PROPERTIES CXX_STANDARD 20
-                   CXX_STANDARD_REQUIRED YES
-                   POSITION_INDEPENDENT_CODE ON
-    )
-endif()
-
 if(BUILD_TESTS)
     if(TARGET test_iec61850_runtime)
         target_link_libraries(test_iec61850_runtime PRIVATE net_handler)

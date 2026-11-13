@@ -146,8 +146,7 @@ DLT645 的配置、测点编码和模拟器互通说明见 [DLT645 动态库接�
 DLT698 默认启用，复用统一插件 ABI、Handler 和采集通道，支持 TCP/串口采集及只读上送。
 配置和 OAD 测点编码见 [DLT698 动态库接入](website/docs/reference/protocol/dlt698.md)，
 可通过 `-DEMS_BUILD_DLT698=OFF` 关闭。协议栈及 Asio 均使用仓库源码，无需额外安装。
-旧版 libmodbuspp 处理器、对应的四个示例和设备处理器测试由 `EMS_BUILD_LEGACY_MODBUS` 控制：
-Linux 默认开启，Windows 默认关闭；这些旧目标仍依赖上游的 pkg-config 构建入口。
+Modbus 在各平台统一使用 `ModbusProtoHandler` 和 `proto_modbus` 动态插件，直接链接 libmodbus。
 `BUILD_TESTS=OFF` 可关闭测试，`BUILD_EXAMPLES=OFF` 可关闭示例。
 `EMS_BUILD_WEB`、`EMS_BUILD_COLLECTOR` 默认开启，分别生成 `ems-web` 和 `ems-collector`；
 两者独立于示例开关，可用 `-DEMS_BUILD_WEB=OFF`、`-DEMS_BUILD_COLLECTOR=OFF` 分别关闭。

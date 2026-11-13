@@ -5,7 +5,7 @@
 #include "data_dispatcher.h"
 
 #include <common/messaging/zmq_change_channel.h>
-#include <spdlog/fmt/bundled/format.h>
+#include <spdlog/fmt/fmt.h>
 
 #include <algorithm>
 #include <chrono>

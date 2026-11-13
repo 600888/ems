@@ -4,8 +4,6 @@
 
 ems_set_output_directories("${CMAKE_BINARY_DIR}/examples")
 
-add_subdirectory(protocol)
-
 add_subdirectory(net)
 
 foreach(example IN ITEMS rtdb_usage rtdb_ems_usage rtdb_manager_usage multi_process_sharing)

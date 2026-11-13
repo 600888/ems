@@ -1,20 +1,3 @@
-# 原有设备处理器保留给存量调用；动态插件不再依赖其 C++ 接口或 libmodbuspp。
-if(TARGET modbuspp-shared)
-    add_library(modbus_protocol STATIC modbus_client.cpp modbus_server.cpp)
-
-    target_include_directories(
-        modbus_protocol
-        PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}" "${EMS_BACKEND_ROOT}/third_party"
-               "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/include" "${EMS_BACKEND_ROOT}/include"
-    )
-
-    target_link_libraries(
-        modbus_protocol PUBLIC ${LIBMODBUS_LIBRARIES} modbuspp-shared Threads::Threads
-    )
-
-    set_target_properties(modbus_protocol PROPERTIES POSITION_INDEPENDENT_CODE ON)
-endif()
-
 # 支持包管理器或显式指定同平台/同工具链 libmodbus 安装路径。
 option(EMS_FETCH_LIBMODBUS "Build pinned libmodbus on Windows when no installation is found"
        ${WIN32}
