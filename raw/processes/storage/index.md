@@ -1,6 +1,6 @@
 # 存储进程
 
-`ems-storage` 按周期从统一实时库读取当前四遥状态，默认 **每 5 秒存储所有点位**，通过公共时序接口写入 TDengine。设备和测点保留在 `cfg_device` 与四张 `cfg_point_*` 配置表；目录按站根 `config_revision` 热加载，不引入配置版本。详细职责和质量规则见[存储设计](design.md)。
+`ems-storage` 按周期从统一实时库读取当前四遥状态，默认 **每 5 秒存储所有点位**，通过公共时序接口写入 TDengine 或 InfluxDB 2.9。设备和测点保留在 `cfg_device` 与四张 `cfg_point_*` 配置表；目录按站根 `config_revision` 热加载，不引入配置版本。详细职责和质量规则见[存储设计](design.md)。
 
 ## 配置
 
@@ -20,9 +20,35 @@
 
 `timeseries.json` 由 Web 与存储共用，填写实际的 TDengine 主机、原生端口、用户和密码；默认库名 `ems_history`。可用 `EMS_TIMESERIES_CONFIG` 指定公共工厂的配置文件，用 `EMS_TAOS_HOST/PORT/USER/PASSWORD/DATABASE` 覆盖连接值。存储通过 `timeseries_config` 显式选择文件，Web 通过自身同名字段选择文件。配置中不写示例真实密码。
 
+### 切换 InfluxDB 2.9
+
+将共享连接文件的 `backend` 改为 `influxdb`，填写 `url`、`database`、`token`，然后重启 Web 和存储进程。`backend=taos`（或 `tdengine`）继续使用现有原生客户端。切换只选择读写目标，不迁移另一后端的历史数据。
+
+```json
+{
+  "backend": "influxdb",
+  "url": "http://127.0.0.1:8086",
+  "database": "ems_history",
+  "token": "",
+  "timeout_ms": 10000
+}
+```
+
+`token` 必须填写可读取和写入目标 bucket 的 API token，也可通过 `EMS_INFLUXDB_TOKEN` 注入。`EMS_INFLUXDB_URL`、`EMS_INFLUXDB_DATABASE` 覆盖对应参数；`EMS_STORAGE_SERIES_BACKEND` 可覆盖后端选择。仅所选后端的环境变量参与校验，InfluxDB 不要求 TAOS 用户或客户端目录。`timeout_ms` 为 1–300000 毫秒整数，并受每次调用剩余期限限制。
+
+适配器使用仓库内 `influxdb-cxx` 的 `InfluxDBBuilder`、`Point`、批量 `write()` 和 `execute()`。该库通过 `/write`、`/query` 兼容接口访问 InfluxDB 2.9，部署时须创建 bucket，并将 `database` 映射到该 bucket 的默认 DBRP；组织只在创建映射时指定，应用不自动创建 bucket、DBRP 或用户。示例命令：
+
+```bash
+influx v1 dbrp create --org YOUR_ORG --bucket-id YOUR_BUCKET_ID --db ems_history --rp autogen --default
+```
+
+映射和 API token 的要求见 [InfluxDB 兼容接口](https://docs.influxdata.com/influxdb/v2/reference/api/influxdb-1x/) 与 [DBRP 管理](https://docs.influxdata.com/influxdb/v2/query-data/influxql/dbrp/)。`--check-config` 只校验文件；真正连接时执行只读查询验证访问。`influxdb-cxx` 的 `query()` 会将数值转换为 double，EMS 使用 `execute()` 的原始 JSON 保留精确整数。存储字段和分页边界见[详细设计](design.md#influxdb-29-存储)。
+
 ## 构建与启动
 
 MySQL 客户端用于配置与稳定序列映射；RTDB 用于实时读取。周期存储不要求开启 ZeroMQ。TDengine C SDK 3.4.3.x 通过 `EMS_DATABASE_TAOS_INCLUDE_DIR` 和 `EMS_DATABASE_TAOS_LIBRARY` 指定，运行时需要对应客户端动态库。没有 SDK 时可编译并检查配置，真实连接会明确返回 Unsupported。
+
+InfluxDB 使用 `backend/third_party/influxdb-cxx`，不修改第三方源码。CMake 优先查找 `cpr::cpr`；未安装时默认从固定摘要的官方源码构建 cpr 和 curl（`EMS_FETCH_CPR=ON`），首次配置需要网络。离线构建可预先设置 `cpr_DIR` / `CMAKE_PREFIX_PATH`，或提供 `FETCHCONTENT_SOURCE_DIR_EMS_CPR` 和 `FETCHCONTENT_SOURCE_DIR_CURL`。Windows 使用系统 Schannel 验证 HTTPS 证书；Linux 构建 curl 需要 OpenSSL 开发包。InfluxDB 无需 TAOS SDK。
 
 服务端部署后，由部署账号执行 `backend/data/tdengine_history.sql`，创建微秒库及四张超级表；工程关系表继续通过现有 Python 初始化入口管理。应用不在启动时建库或建表。
 
