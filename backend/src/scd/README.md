@@ -8,7 +8,7 @@
 - 公共 MySQL 仓储拥有稳定序列映射；公共 TDengine 适配器拥有参数绑定及游标扫描。配置保存即生效，不创建配置版本或配置快照。
 - 历史子表名取站根至测点的各级 `code`，以 `:` 连接，例如 `station:unit01:bms01:rack01:voltage`；最长 192 字节。编码或父级改变时需显式重建历史映射，不能复用旧哈希表名。
 
-启动配置为 `backend/conf/storage.json`，默认 `interval_ms=5000`，连接参数共用 `timeseries.json`。MySQL 仍使用公共 `db.json`，RTDB 与采集进程保持相同配置和作用域。周期入口不依赖 ZeroMQ；既有事件消费和 outbox 核心保留为独立能力，不参与定时归档。
+启动配置为 `backend/conf/storage.json`，默认 `interval_ms=5000`，连接参数共用 `timeseries.json`。`backend=taos` 使用 TDengine；`backend=influxdb` 使用仓库内 `influxdb-cxx` 接入 InfluxDB 2.9 的兼容接口，填写 `url`、`database`（默认 DBRP 映射名）、`token` 和可选 `timeout_ms`，切换后重启 Web 与存储。InfluxDB bucket 与 DBRP 由部署创建，操作示例见[存储进程文档](../../../website/docs/processes/storage/index.md#切换-influxdb-29)。MySQL 仍使用公共 `db.json`，RTDB 与采集进程保持相同配置和作用域。周期入口不依赖 ZeroMQ；既有事件消费和 outbox 核心保留为独立能力，不参与定时归档。
 
 构建目标为 `ems-storage`。MySQL 客户端和 RTDB 为必要依赖；真正连接 TDengine 需要 3.4.3.x C SDK 及匹配动态库。建库脚本为 `backend/data/tdengine_history.sql`，应用不执行 DDL。
 

@@ -26,8 +26,7 @@ core::Result<std::unique_ptr<ITimeSeriesDatabase>> connect_time_series(
         case TimeSeriesBackend::Tdengine:
             return connect_taos_series(options.taos);
         case TimeSeriesBackend::InfluxDb:
-            return core::make_error(core::ErrorCode::Unsupported, core::WriteEffect::NotApplicable,
-                                    "InfluxDB backend is not implemented");
+            return connect_influxdb_series(options.influxdb);
     }
     return core::make_error(core::ErrorCode::InvalidArgument, core::WriteEffect::NotApplicable,
                             "unknown time-series backend");

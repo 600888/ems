@@ -135,7 +135,16 @@ endfunction()
 
 add_library(ems_timeseries_api INTERFACE)
 target_link_libraries(ems_timeseries_api INTERFACE ems_database_api)
+add_library(ems_timeseries_influxdb STATIC timeseries/influxdb/influxdb_series.cpp)
+target_link_libraries(ems_timeseries_influxdb PUBLIC ems_timeseries_api
+    PRIVATE InfluxData::InfluxDB date::date)
+target_include_directories(ems_timeseries_influxdb PRIVATE
+    ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include)
+set_target_properties(ems_timeseries_influxdb PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES
+    CXX_EXTENSIONS NO POSITION_INDEPENDENT_CODE ON)
+
 add_library(ems_timeseries STATIC timeseries/factory.cpp timeseries/options.cpp)
+target_link_libraries(ems_timeseries PRIVATE ems_timeseries_influxdb)
 target_include_directories(ems_timeseries PRIVATE
     ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include)
 target_link_libraries(ems_timeseries PUBLIC ems_timeseries_api)

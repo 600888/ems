@@ -1,6 +1,6 @@
 # 历史数据存储设计
 
-`ems-storage` 按固定周期从统一实时库采样并写入 TDengine；默认周期为 **5000 毫秒**，涵盖配置中的 YC、YX、YK、YT 四类点位。归档不执行遥控或遥调，保存其已有实时状态；没有状态时保存缺失质量。
+`ems-storage` 按固定周期从统一实时库采样，通过共享配置选择 TDengine 或 InfluxDB 2.9；默认周期为 **5000 毫秒**，涵盖配置中的 YC、YX、YK、YT 四类点位。归档不执行遥控或遥调，保存其已有实时状态；没有状态时保存缺失质量。
 
 ## 数据流与职责
 
@@ -75,6 +75,22 @@ MySQL、实时库和时序库均复用公共接口。存储模块不另建 ORM�
 `event_id` 为第二复合主键，使用点位身份与采样槽生成稳定摘要。单实例内重复或倒退的槽不再写入，重新执行同槽记录保持同一主键。部署同一站时应只运行一个周期归档实例。复合主键及超级表语法参见 [TDengine 官方文档](https://docs.tdengine.com/tdengine-sql/ddl/stable/)。
 
 原生适配器要求 3.4.3.x 客户端，使用 stmt2 绑定标签、值和条件；查询验证微秒精度及返回列数，再校验映射、作用域与游标。`measurement_ts` 和 `config_revision` 与本脚本一致，不能套用旧表结构。
+
+## InfluxDB 2.9 存储
+
+公共适配器通过仓库内 `influxdb-cxx` 的 HTTP 兼容接口读写，不实现自有 HTTP 客户端或行协议编码器。InfluxDB 的 bucket、保留期、API token 和默认 DBRP 映射由部署管理，应用只验证连接。两种后端均实现 `ITimeSeriesDatabase`，由 `timeseries.json.backend` 选择，Web 与存储使用同一选择；配置切换需要重启进程。
+
+measurement 名为 `telemetry_numeric`、`telemetry_integer`、`telemetry_boolean`、`telemetry_text`。标签为 `series_key`、`point_id`、`event_id`、`scope_kind`、`scope_id`；其中三个 ID 按 UTF-8 字节转十六进制，保留身份并避免标签转义和查询注入问题。`series_key` 使用已校验的完整逻辑路径。写入时间使用原始微秒时间及库的 `MicroSeconds` 精度，时间范围受 InfluxDB 的有符号 64 位纳秒时间边界约束。
+
+同一标签集合和时间重复写入会覆盖同身份记录；`event_id` 标签保留同一点同一微秒的不同事件。事件标签会提高序列基数，部署需按采样量、bucket 保留期和内存容量评估；不能直接将 TAOS 的容量验收结果视为 InfluxDB 的容量保证。调用方仍负责身份及载荷核验，不用重复写覆盖业务冲突。
+
+字段包括原生类型的 `sample_value`、`value_present`、`quality`、三个微秒时间字段和 `record`。`record` 为完整样本的 JSON 字符串，保留所有来源、质量、摘要、修订号和类型信息，是 EMS 查询还原的依据。这样可保留精确 int64、极小浮点、空字符串、中文与控制字符，不依赖库 `query()` 的 double 转换或固定小数位格式。文本 `sample_value` 同样使用 JSON 字符串编码；`value_present=false` 表示 null，原生值列的占位值不能视为有效测量。`config_revision` 仍只是站根热加载计数。
+
+每批最多 256 条，先完整校验再调用库的批量 `write()`；不保留跨调用的待发送批次。请求超时取配置与调用剩余期限的较小值。连接或发送异常采用脱敏错误，无法确认是否部分写入时整批返回 `Unknown`，不伪装为未写入或成功。并发调用各自创建客户端，避免共享库中非线程安全的会话。
+
+查询以作用域、逻辑路径、点位和半开时间区间过滤，每次读取受行数、点数和调用期限限制。使用 `execute()` 原始 JSON，验证响应结构、类型、标签与样本身份；任一异常不返回局部成功页。InfluxQL 只支持时间排序，适配器补取分页边界上完整的同时间记录，再按 `(source_time_us, point_id, event_id)` 排序并应用游标。同一点同一微秒超过 1001 个事件返回 `ResourceExhausted`，不静默截断；常规周期归档每槽只生成一个事件。参见 [InfluxQL 排序能力](https://docs.influxdata.com/influxdb/v2/reference/flux/flux-vs-influxql/)。
+
+`ems_influxdb` 通过本地 HTTP fixture 调用真实 `influxdb-cxx`，覆盖类型与 null、幂等重投、同时间多事件、跨点游标、半开区间、部分写入、断连、超时、损坏响应和失败批次清理。这不替代实际 InfluxDB 2.9 的服务端兼容性、性能与长时间运行验收。
 
 ## 运行与验证
 

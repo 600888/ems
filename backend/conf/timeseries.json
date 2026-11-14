@@ -5,5 +5,8 @@
   "database": "ems_history",
   "user": "root",
   "password": "root@123",
-  "client_config_dir": "tdengine"
+  "client_config_dir": "tdengine",
+  "url": "http://127.0.0.1:8086",
+  "token": "",
+  "timeout_ms": 10000
 }

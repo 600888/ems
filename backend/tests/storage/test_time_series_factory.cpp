@@ -13,7 +13,7 @@ int main() {
     options.backend = ems::core::value_of(influx);
     const auto unavailable = ems::storage::connect_time_series(options);
     assert(!ems::core::is_ok(unavailable));
-    assert(ems::core::error_of(unavailable).code == ems::core::ErrorCode::Unsupported);
+    assert(ems::core::error_of(unavailable).code == ems::core::ErrorCode::InvalidArgument);
 
     const auto unknown = ems::storage::parse_time_series_backend("unknown");
     assert(!ems::core::is_ok(unknown));

@@ -1,0 +1,49 @@
+name: system test
+
+on: [push, pull_request]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  build_linux:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        influx_version:
+          - 1.8
+        auth_enabled:
+          - true
+          - false
+    container:
+      image: "registry.gitlab.com/offa/docker-images/gcc:15"
+    services:
+      influxdb:
+        image: influxdb:${{ matrix.influx_version }}
+        env:
+          INFLUXDB_HTTP_AUTH_ENABLED: ${{ matrix.auth_enabled }}
+          INFLUXDB_ADMIN_USER: st_admin
+          INFLUXDB_ADMIN_PASSWORD: st_admin_pw
+    env:
+      INFLUXDBCXX_SYSTEMTEST_HOST: influxdb
+      INFLUXDBCXX_SYSTEMTEST_USER: st_admin
+      INFLUXDBCXX_SYSTEMTEST_PASSWORD: st_admin_pw
+    name: "influxdb-${{ matrix.influx_version }} (auth tests: ${{ matrix.auth_enabled }})"
+    steps:
+      - uses: actions/checkout@main
+      - name: Cache Conan Packages
+        uses: actions/cache@main
+        with:
+          path: ~/.conan2/p/
+          key: conan-${{ runner.os }}-systemtest-db${{ matrix.influx_version }}-${{ hashFiles('conanfile.py') }}
+      - name: Setup
+        run: |
+          script/ci_setup.sh
+          add-apt-repository ppa:mhier/libboost-latest
+          apt-get update
+          apt-get install -y boost1.83
+      - name: Build
+        run: |
+          cmake --preset conan-release
+          cmake --build build --target ${{ matrix.auth_enabled == true && 'systemtest-auth' || 'systemtest' }}

@@ -4,6 +4,14 @@ if(NOT BUILD_TESTS)
     return()
 endif()
 
+find_package(Python3 COMPONENTS Interpreter REQUIRED)
+add_executable(test_influxdb test_influxdb.cpp)
+target_link_libraries(test_influxdb PRIVATE ems_timeseries gtest_main)
+set_target_properties(test_influxdb PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+add_test(NAME ems_influxdb COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_CURRENT_SOURCE_DIR}/influxdb_mock_test.py $<TARGET_FILE:test_influxdb>)
+set_tests_properties(ems_influxdb PROPERTIES TIMEOUT 60)
+
 if(TARGET ems_timeseries_taos)
     add_executable(test_taos_live test_taos_live.cpp)
     target_include_directories(test_taos_live PRIVATE ${EMS_DATABASE_TAOS_INCLUDE_DIR})

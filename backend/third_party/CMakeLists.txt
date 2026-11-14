@@ -2,6 +2,9 @@
 include(OpenXLSX)
 ems_add_openxlsx()
 
+include(InfluxDB)
+ems_add_influxdb()
+
 # 与 MSVC 默认动态 CRT 保持一致，避免测试目标出现运行库冲突。
 if(BUILD_TESTS)
     set(gtest_force_shared_crt

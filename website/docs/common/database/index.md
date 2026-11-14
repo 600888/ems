@@ -162,7 +162,7 @@ backend/src/common/db/
   runtime/                       配置、池、事务与错误转换
   mysql/                         ormpp 实体、Repository 与受控查询
   timeseries/taos/                官方客户端、映射与读写适配
-  timeseries/influxdb/            后续实现，当前不支持
+  timeseries/influxdb/            influxdb-cxx、InfluxDB 2.9 兼容接口读写与游标扫描
 backend/src/scd/                  订阅、归档/聚合/发布/查询编排
 backend/python/db/               关系表 ORM、Alembic 与显式种子
 backend/python/database.yaml     迁移专用连接配置
