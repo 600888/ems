@@ -1,4 +1,9 @@
 # 第三方库入口：仅调整集成选项，不修改第三方源码及其格式。
+if(EMS_WITH_ZEROMQ)
+    include(ZeroMQ)
+    ems_add_zeromq()
+endif()
+
 include(OpenXLSX)
 ems_add_openxlsx()
 

@@ -79,7 +79,8 @@
         "BUILD_TESTS": "ON",
         "EMS_ENABLE_ARCH_TUNING": "OFF",
         "EMS_BUILD_WEB": "ON",
-        "EMS_BUILD_COLLECTOR": "ON"
+        "EMS_BUILD_COLLECTOR": "ON",
+        "EMS_WITH_ZEROMQ": "ON"
       }
     },
     {
@@ -99,7 +100,8 @@
         "BUILD_TESTS": "ON",
         "EMS_ENABLE_ARCH_TUNING": "OFF",
         "EMS_BUILD_WEB": "ON",
-        "EMS_BUILD_COLLECTOR": "ON"
+        "EMS_BUILD_COLLECTOR": "ON",
+        "EMS_WITH_ZEROMQ": "ON"
       }
     }
   ],
