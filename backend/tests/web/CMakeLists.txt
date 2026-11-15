@@ -18,6 +18,9 @@ target_compile_definitions(
                      EMS_WEB_SCHEMA_FILE="${CMAKE_CURRENT_SOURCE_DIR}/schema.sql"
                      EMS_IDENTITY_SCHEMA_FILE="${CMAKE_CURRENT_SOURCE_DIR}/identity_schema.sql"
 )
+if(EMS_WITH_ZEROMQ)
+    target_compile_definitions(test_web PRIVATE EMS_TEST_ZEROMQ)
+endif()
 set_target_properties(test_web PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
 if(MSVC)
     target_compile_options(test_web PRIVATE /Z7)

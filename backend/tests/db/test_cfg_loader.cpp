@@ -279,9 +279,13 @@ TEST(CfgLoader, KeepsImportedModbusWordOrderAndExplicitWriteFunction) {
     point.address_offset = 50;
     point.wire_type = "u16";
     point.protocol_address_json = R"({"function_code":16})";
+    point.feedback_json = " [] ";
+    point.feedback_timeout_ms = 5000;
     records.points_yt.push_back(point);
     ASSERT_TRUE(loader.configure(records)) << loader.last_error();
     EXPECT_EQ(loader.devices(7)[0].ytPoints_[0].protocol_code, "42:16:50:0:0");
+    EXPECT_TRUE(loader.devices(7)[0].ytPoints_[0].feedback_json.empty());
+    EXPECT_EQ(loader.devices(7)[0].ytPoints_[0].feedback_timeout_ms, 3000);
 }
 }  // namespace
 

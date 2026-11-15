@@ -31,7 +31,7 @@ beforeEach(() => {
     kind: 'full',
     user: { user_id: 'operator' },
     csrf_token: 'test',
-    permissions: ['monitor.read', 'command.yt'],
+    permissions: ['monitor.read', 'command.yt', 'command.yk'],
   })
 })
 
@@ -65,9 +65,74 @@ test('未修改的无样本遥调点不阻断有效改值，同名点只下发�
   assert.equal(submissions.length, 1)
   assert.equal(submissions[0].point_id, 'power')
   assert.equal(submissions[0].value, 42)
+  assert.ok(submissions[0].expires_at_ms <= Date.now() + 3000)
   store.resetYtValue('power')
   assert.equal(store.ytRows[0].modified, '—')
   assert.equal(store.changedSetpoints.length, 0)
+})
+
+test('无反馈的协议确认立即显示已确认，未知结果保留具体原因', async () => {
+  const store = useMonitorStore()
+  store.selectedId = 'device'
+  store.activeCommand = { pointId: 'switch', name: '启动', action: '1', current: '—', desc: '' }
+  store.controlReason = '测试控制'
+  let status = 'Acked'
+  let reason = 'protocol_acknowledged'
+  globalThis.fetch = async (path) =>
+    response(path === '/api/commands/submit' ? { status: 'accepted' } : { status, reason })
+  await store.executeCommand()
+  assert.equal(store.controlResult, 'acknowledged')
+  assert.match(store.controlError, /未配置反馈/)
+  status = 'Unknown'
+  reason = 'Command timeout/disconnection; outcome unknown, session closed; do not auto retry'
+  await store.executeCommand()
+  assert.equal(store.controlResult, 'unknown')
+  assert.match(store.controlError, /3 秒内未返回有效协议确认/)
+})
+
+test('批量遥调共用3秒期限，未完成查询不按点位串行延长等待', { timeout: 6000 }, async () => {
+  const store = useMonitorStore()
+  store.selectedId = 'device'
+  store.ytRows = [row('power'), row('other')]
+  store.setYtValue('power', '42')
+  store.setYtValue('other', '43')
+  const submissions = []
+  globalThis.fetch = async (path, options) => {
+    if (path === '/api/commands/submit') {
+      submissions.push(JSON.parse(options.body))
+      return response({ status: 'accepted' })
+    }
+    return response({ status: 'Queued', reason: '' })
+  }
+  const started = Date.now()
+  await assert.rejects(store.submitSetpoints('测试控制'), /3 秒内未确认/)
+  assert.ok(Date.now() - started < 4500)
+  assert.equal(submissions.length, 2)
+  assert.equal(submissions[0].expires_at_ms, submissions[1].expires_at_ms)
+  assert.ok(submissions[0].expires_at_ms >= started + 3000)
+  assert.ok(submissions[0].expires_at_ms <= started + 3010)
+})
+
+test('遥控提交本身阻塞时也在3秒结束，保留结果未知且不自动重发', { timeout: 6000 }, async () => {
+  const store = useMonitorStore()
+  store.selectedId = 'device'
+  store.activeCommand = { pointId: 'switch', name: '启动', action: '1', current: '—', desc: '' }
+  store.controlReason = '测试控制'
+  let submissions = 0
+  globalThis.fetch = async (path, options) => {
+    assert.equal(path, '/api/commands/submit')
+    submissions++
+    return new Promise((_, reject) => {
+      options.signal.addEventListener('abort', () => reject(new Error('aborted')), { once: true })
+    })
+  }
+  const started = Date.now()
+  await store.executeCommand()
+  assert.ok(Date.now() - started < 4500)
+  assert.equal(submissions, 1)
+  assert.equal(store.controlResult, 'unknown')
+  assert.equal(store.controlRunning, false)
+  assert.match(store.controlError, /3 秒内未确认/)
 })
 
 test('空值、非法值和越界值在请求前被拒绝，其他未修改点不参与校验', async () => {

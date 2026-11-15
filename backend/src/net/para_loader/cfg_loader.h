@@ -31,7 +31,7 @@ struct PointRoute {
     int min_interval_ms{0};
     std::string write_group_key;
     std::string feedback_json;
-    int feedback_timeout_ms{5000};
+    int feedback_timeout_ms{3000};
 };
 
 /** @brief 通道内的点归属节点；部件点保留部件身份，使用来源设备的绑定通信。 */

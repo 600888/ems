@@ -11,6 +11,11 @@
 
 namespace ems::web {
 namespace {
+std::string command_reason(const messaging::ZmqCommandReply& reply) {
+    const auto result = Json::parse(reply.reason, nullptr, false);
+    return result.is_object() ? result.value("reason", reply.reason) : reply.reason;
+}
+
 Json point_sample(const Json& point, const std::string& kind,
                   const RuntimeService::ReadPoint& reader, const core::CallContext& ctx,
                   bool device_enabled, int default_stale_ms) {
@@ -130,10 +135,10 @@ DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
         }
         if (reply.code == Code::Rejected)
             throw ApiError(409, "Conflict", "command_rejected", "NotApplied",
-                           Json::array({{{"reason", reply.reason}}}));
+                           Json::array({{{"reason", command_reason(reply)}}}));
         if (reply.code == Code::Invalid)
             throw ApiError(422, "InvalidArgument", "command_invalid", "NotApplied",
-                           Json::array({{{"reason", reply.reason}}}));
+                           Json::array({{{"reason", command_reason(reply)}}}));
         throw ApiError(503, "NotReady", "collector_not_ready", "NotApplied");
     }
     if (path == "/api/commands/query") {

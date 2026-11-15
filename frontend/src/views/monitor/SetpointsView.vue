@@ -31,8 +31,7 @@ async function submit() {
   busy.value = true
   try {
     const result = await monitor.submitSetpoints(reason.value)
-    if (result.acknowledged)
-      ElMessage.warning('设备已返回协议确认，未配置反馈，实际状态尚未核验')
+    if (result.acknowledged) ElMessage.warning('设备已返回协议确认，未配置反馈，实际状态尚未核验')
     else ElMessage.success('遥调下发成功，设备已执行')
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '提交失败')

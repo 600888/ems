@@ -2,7 +2,13 @@ import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useAuthStore } from './auth'
 import { deviceApi, stableId, clearEngineeringSession } from '@/api/device'
-import { monitorApi, commandReason, COMMAND_TIMEOUT_MS, type LivePoint, type HistorySample } from '@/api/monitor'
+import {
+  monitorApi,
+  commandReason,
+  COMMAND_TIMEOUT_MS,
+  type LivePoint,
+  type HistorySample,
+} from '@/api/monitor'
 import { ApiError, errorMessage } from '@/api/http'
 import type { DeviceNode, YcPoint, YxSignal, YkCommand, YtPoint, ControlLog } from '@/types/domain'
 import type { EngineeringRecord, PointType } from '@/types/engineering'
@@ -45,7 +51,9 @@ export const useMonitorStore = defineStore('monitor', () => {
     controlStep = ref<1 | 2 | 3>(1),
     controlReason = ref(''),
     controlRunning = ref(false),
-    controlResult = ref<'idle' | 'success' | 'acknowledged' | 'unknown' | 'failed' | 'timeout'>('idle'),
+    controlResult = ref<'idle' | 'success' | 'acknowledged' | 'unknown' | 'failed' | 'timeout'>(
+      'idle',
+    ),
     controlError = ref('')
   let epoch = 0,
     refreshing = false
@@ -347,7 +355,10 @@ export const useMonitorStore = defineStore('monitor', () => {
       if (remaining > 0)
         await new Promise((resolve) => setTimeout(resolve, Math.min(100, remaining)))
     }
-    return { state: 'timeout', reason: lastReason || '3 秒内未确认执行结果，请核对设备状态，勿重复下发' }
+    return {
+      state: 'timeout',
+      reason: lastReason || '3 秒内未确认执行结果，请核对设备状态，勿重复下发',
+    }
   }
   async function executeCommand() {
     if (!activeCommand.value || !controlReason.value.trim() || controlRunning.value) return
@@ -359,15 +370,18 @@ export const useMonitorStore = defineStore('monitor', () => {
     controlStep.value = 3
     controlError.value = ''
     try {
-      await monitorApi.submit({
-        device_id: deviceId,
-        point_id: activeCommand.value.pointId!,
-        point_type: 'yk',
-        value: Number(activeCommand.value.action),
-        reason: controlReason.value.trim(),
-        intent_id: intent,
-        expires_at_ms: deadline,
-      }, Math.max(1, deadline - Date.now()))
+      await monitorApi.submit(
+        {
+          device_id: deviceId,
+          point_id: activeCommand.value.pointId!,
+          point_type: 'yk',
+          value: Number(activeCommand.value.action),
+          reason: controlReason.value.trim(),
+          intent_id: intent,
+          expires_at_ms: deadline,
+        },
+        Math.max(1, deadline - Date.now()),
+      )
       const outcome = await awaitIntent(deviceId, intent, owner, deadline)
       if (owner !== epoch) return
       if (outcome.state === 'success') controlResult.value = 'success'
@@ -377,7 +391,9 @@ export const useMonitorStore = defineStore('monitor', () => {
       }
     } catch (e) {
       if (owner === epoch) {
-        controlError.value = errorMessage(e)
+        controlError.value = commandReason(
+          e instanceof ApiError && e.reason === 'request_timeout' ? e.reason : errorMessage(e),
+        )
         controlResult.value = e instanceof ApiError && e.effect === 'Unknown' ? 'unknown' : 'failed'
       }
     } finally {
@@ -391,28 +407,43 @@ export const useMonitorStore = defineStore('monitor', () => {
     const owner = epoch
     const deviceId = selectedId.value
     const deadline = Date.now() + COMMAND_TIMEOUT_MS
-    const outcomes = await Promise.all(changed.map(async (row) => {
-      const intent = stableId('intent')
-      try {
-        await monitorApi.submit({
-          device_id: deviceId,
-          point_id: row.pointId!,
-          point_type: 'yt',
-          value: Number(row.modified),
-          reason,
-          intent_id: intent,
-          expires_at_ms: deadline,
-        }, Math.max(1, deadline - Date.now()))
-        return { name: row.name, outcome: await awaitIntent(deviceId, intent, owner, deadline) }
-      } catch (error) {
-        return { name: row.name, outcome: {
-          state: 'unknown' as const,
-          reason: errorMessage(error),
-        } }
-      }
-    }))
+    const outcomes = await Promise.all(
+      changed.map(async (row) => {
+        const intent = stableId('intent')
+        try {
+          await monitorApi.submit(
+            {
+              device_id: deviceId,
+              point_id: row.pointId!,
+              point_type: 'yt',
+              value: Number(row.modified),
+              reason,
+              intent_id: intent,
+              expires_at_ms: deadline,
+            },
+            Math.max(1, deadline - Date.now()),
+          )
+          return { name: row.name, outcome: await awaitIntent(deviceId, intent, owner, deadline) }
+        } catch (error) {
+          return {
+            name: row.name,
+            outcome: {
+              state:
+                error instanceof ApiError && error.effect === 'NotApplied'
+                  ? ('failed' as const)
+                  : ('unknown' as const),
+              reason: commandReason(
+                error instanceof ApiError && error.reason === 'request_timeout'
+                  ? error.reason
+                  : errorMessage(error),
+              ),
+            },
+          }
+        }
+      }),
+    )
     const failures: string[] = []
-    for (const {name, outcome} of outcomes) {
+    for (const { name, outcome } of outcomes) {
       if (outcome.state === 'success' || outcome.state === 'acknowledged') continue
       const detail =
         outcome.reason ??
@@ -420,7 +451,7 @@ export const useMonitorStore = defineStore('monitor', () => {
       failures.push(`${name}：${detail}`)
     }
     if (failures.length) throw new Error(failures.join('；'))
-    return { acknowledged: outcomes.some(({outcome}) => outcome.state === 'acknowledged') }
+    return { acknowledged: outcomes.some(({ outcome }) => outcome.state === 'acknowledged') }
   }
   function setYtValue(pointId: string | undefined, value: string) {
     if (!pointId) return

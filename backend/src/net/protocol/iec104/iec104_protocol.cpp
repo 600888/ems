@@ -446,7 +446,7 @@ class Iec104Protocol::Impl {
     CS104_Connection connection{nullptr};
     CS104_Slave server{nullptr};
     bool configured{false}, server_role{false}, ready{false}, opened{false}, closed{true};
-    bool initial_gi{true}, select_execute{false}, require_termination{true};
+    bool initial_gi{true}, select_execute{false}, require_termination{false};
     std::string host, error;
     int port{enum_value(Defaults::Port)}, timeout_ms{enum_value(Defaults::TimeoutMs)},
         command_timeout_ms{enum_value(Defaults::CommandTimeoutMs)},
@@ -823,7 +823,8 @@ int Iec104Protocol::initialize(const std::string& text) {
             option_int(config, "command_qualifier", 0, 0, enum_value(Limits::MaxQualifier));
         const bool initial_gi = config.value("general_interrogation_on_connect", true);
         const bool select_execute = config.value("select_execute", false);
-        const bool termination = config.value("command_require_termination", true);
+        // ACTCON 是协议受理确认；实际状态由采集侧反馈核验，ACTTERM 只在显式配置时等待。
+        const bool termination = config.value("command_require_termination", false);
         std::lock_guard<std::mutex> lock(impl_->mutex);
         impl_->server_role = server_role;
         impl_->host = std::move(host);
@@ -1076,17 +1077,23 @@ int Iec104Protocol::write(const std::string& code, double value) {
                                  [&] { return impl_->pending.done || impl_->closed; });
             const bool done = impl_->pending.done;
             const bool rejected = impl_->pending.rejected;
+            const bool confirmed = impl_->pending.confirmed;
             impl_->pending.active = false;
             if (!done) {
                 lock.unlock();
                 impl_->stop();
+                if (confirmed)
+                    throw std::runtime_error(
+                        "IEC104 activation confirmed; termination timeout/disconnection; outcome "
+                        "unknown, session closed; do not auto retry");
                 throw std::runtime_error(
                     "Command timeout/disconnection; outcome unknown, session closed; do not auto "
                     "retry");
             }
             if (rejected) {
                 if (!impl_->pending.rejection.empty())
-                    throw std::runtime_error("IEC104 command rejected: " + impl_->pending.rejection);
+                    throw std::runtime_error("IEC104 command rejected: " +
+                                             impl_->pending.rejection);
                 throw std::runtime_error("IEC104 command negatively confirmed");
             }
         }

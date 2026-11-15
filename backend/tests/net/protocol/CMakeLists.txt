@@ -167,6 +167,7 @@ if(TARGET proto_iec104)
               client_cache
               time_and_window
               commands
+              commands_activation_confirmation
               command_timeout
               server
               buffer_retry

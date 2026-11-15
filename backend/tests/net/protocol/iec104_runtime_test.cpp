@@ -305,7 +305,7 @@ struct Simulator {
         const int mode = self->mode;
         if (mode >= 6 && mode <= 9) {
             CS101_ASDU_setCOT(request, static_cast<CS101_CauseOfTransmission>(
-                                          CS101_COT_UNKNOWN_TYPE_ID + mode - 6));
+                                           CS101_COT_UNKNOWN_TYPE_ID + mode - 6));
             IMasterConnection_sendASDU(peer, request);
             return true;
         }
@@ -557,6 +557,27 @@ void commands() {
     CHECK(simulator.executions == before);  // 选择被拒绝后不得执行。
 }
 
+void commands_activation_confirmation() {
+    Simulator simulator;
+    simulator.mode = 4;  // 与 c104 直接执行一致：只发 ACTCON，不发 ACTTERM。
+    PluginManager manager;
+    configure_manager(manager);
+    Plugin client(manager);
+    auto config = client_config(simulator.port);
+    config["command_timeout_ms"] = 500;
+    client.init(config);
+    client.connect();
+    const auto result = client.write("1:100:50", 42.5);
+    CHECK(simulator.last_command == 42.5);
+    CHECK(result == 0);
+    CHECK(client.functions.is_connected_fn(client.instance) == 1);
+    CHECK(client.write("1:101:45", 1) == 0);
+    CHECK(client.write("1:100:50", -7.25) == 0);
+    CHECK(simulator.last_command == -7.25);
+    CHECK(simulator.executions == 3);
+    CHECK(client.functions.is_connected_fn(client.instance) == 1);
+}
+
 void command_timeout() {
     Simulator simulator;
     PluginManager manager;
@@ -564,6 +585,7 @@ void command_timeout() {
     Plugin client(manager);
     auto config = client_config(simulator.port);
     config["command_timeout_ms"] = 120;
+    config["command_require_termination"] = true;
     for (const int mode : {2, 3, 4, 5}) {
         simulator.mode = mode;
         client.init(config);
@@ -578,11 +600,14 @@ void command_timeout() {
     client.init(config);
     client.connect();
     CHECK(client.write("1:100:45", 1) == 0);
-    for (const auto& [mode, reason] : std::vector<std::pair<int, std::string>>{
-             {6, "unsupported_asdu_type"}, {7, "unsupported_cause_of_transmission"},
-             {8, "unknown_common_address"}, {9, "unknown_information_object_address"}}) {
+    for (const auto& [mode, reason] :
+         std::vector<std::pair<int, std::string>>{{6, "unsupported_asdu_type"},
+                                                  {7, "unsupported_cause_of_transmission"},
+                                                  {8, "unknown_common_address"},
+                                                  {9, "unknown_information_object_address"}}) {
         simulator.mode = mode;
         config["command_timeout_ms"] = 2000;
+        CHECK(client.functions.disconnect_fn(client.instance) == 0);
         client.init(config);
         client.connect();
         const auto started = std::chrono::steady_clock::now();
@@ -715,6 +740,7 @@ int main(int argc, char** argv) {
             {"client_cache", client_cache},
             {"time_and_window", time_and_window},
             {"commands", commands},
+            {"commands_activation_confirmation", commands_activation_confirmation},
             {"command_timeout", command_timeout},
             {"server", server},
             {"buffer_retry", buffer_retry},

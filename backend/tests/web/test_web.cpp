@@ -1,5 +1,8 @@
 #include <common/core/time.h>
 #include <common/database/configuration/device_management_validation.h>
+#ifdef EMS_TEST_ZEROMQ
+#include <common/messaging/zmq_command_channel.h>
+#endif
 #include <drogon/drogon.h>
 #include <gtest/gtest.h>
 #include <miniz.h>
@@ -10,6 +13,7 @@
 #include <fstream>
 #include <future>
 #include <limits>
+#include <mutex>
 #include <ormpp/sqlite.hpp>
 #include <util/excel.hpp>
 
@@ -543,6 +547,57 @@ TEST_F(WebDevice, FieldStationPackageCreatesFourPcsFourBmsAndFortyEightRacks) {
     }
     EXPECT_EQ(total, 15617);
 }
+
+#ifdef EMS_TEST_ZEROMQ
+TEST_F(WebDevice, CommandsUseThreeSecondDeadlineAndKeepClientDeadline) {
+    bind_protocol("modbus");
+    execute(
+        "/api/points/create",
+        {{"device_id", "hvac01"},
+         {"point_type", "yt"},
+         {"point_id", "setpoint"},
+         {"expected_config_revision", "2"},
+         {"fields",
+          {{"binding_id", "binding01"},
+           {"code", "setpoint"},
+           {"name", "Setpoint"},
+           {"wire_type", "f32"},
+           {"value_type", "double"},
+           {"enabled", true},
+           {"address", {{"space", "holding_register"}, {"offset", 50}, {"register_count", 2}}}}}});
+    sql("UPDATE cfg_device SET enabled=1 WHERE device_id='hvac01'");
+    messaging::ZmqCommandConfig config;
+    config.endpoint = "tcp://127.0.0.1:*";
+    messaging::ZmqCommandServer server;
+    std::mutex mutex;
+    std::vector<Json> payloads;
+    ASSERT_TRUE(server.start(config, [&](const auto& request) {
+        std::lock_guard lock(mutex);
+        payloads.push_back(Json::parse(request.payload_json));
+        return messaging::ZmqCommandReply{messaging::ZmqCommandReplyCode::Accepted, ""};
+    }));
+    RuntimeOptions options;
+    options.command_endpoint = server.bound_endpoint();
+    RuntimeService control(db, options);
+    Json body = {{"device_id", "hvac01"}, {"point_type", "yt"}, {"point_id", "setpoint"},
+                 {"value", 42},           {"reason", "test"},   {"intent_id", "deadline-a"}};
+    const auto before = core::now_utc_micros() / 1000;
+    control.execute("/api/commands/submit", body, actor, context());
+    const auto after = core::now_utc_micros() / 1000;
+    const auto deadline = after + 2000;
+    body["intent_id"] = "deadline-b";
+    body["expires_at_ms"] = deadline;
+    control.execute("/api/commands/submit", body, actor, context());
+    body["expires_at_ms"] = after + 60000;
+    EXPECT_THROW(control.execute("/api/commands/submit", body, actor, context()), ApiError);
+    server.stop();
+    ASSERT_EQ(payloads.size(), 2u);
+    const auto default_deadline = payloads[0].at("expires_at_ms").get<std::int64_t>();
+    EXPECT_GE(default_deadline, before + 3000);
+    EXPECT_LE(default_deadline, after + 3000);
+    EXPECT_EQ(payloads[1].at("expires_at_ms"), deadline);
+}
+#endif
 
 TEST_F(WebDevice, RuntimeSamplesAreAuthorizedFreshAndNeverFabricated) {
     execute("/api/devices/create", create());

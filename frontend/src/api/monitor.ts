@@ -15,12 +15,27 @@ export function commandReason(reason: string): string {
     protocol_acknowledged: '设备已返回协议确认，未配置反馈，实际状态尚未核验',
     collector_unreachable: '无法连接采集服务，请检查采集进程及命令端点',
     command_database_unavailable: '命令记录暂时不可用，请检查数据库连接',
+    collector_not_ready: '采集服务尚未就绪，请检查采集进程和设备连接',
+    control_service_unavailable: '遥控、遥调服务尚未接通，请检查命令端点',
+    command_disabled: '目标设备或控制点已停用',
+    intent_not_found: '尚未查到命令记录，无法确认采集服务是否受理',
+    request_timeout: '3 秒内未确认执行结果，请核对设备状态，勿重复下发',
+    'IEC104 command rejected: unknown_information_object_address':
+      '设备拒绝命令：信息体地址（IOA）不存在，请核对测点映射',
+    'IEC104 command rejected: unknown_common_address':
+      '设备拒绝命令：公共地址（CA）不存在，请核对通信绑定',
+    'IEC104 command rejected: unsupported_asdu_type':
+      '设备拒绝命令：不支持该 ASDU 类型，请核对遥控遥调类型',
+    'IEC104 command rejected: unsupported_cause_of_transmission': '设备拒绝命令：不支持该传送原因',
+    'IEC104 command negatively confirmed': '设备明确拒绝了该控制命令，请核对控制模式和设备状态',
     engineering_value_out_of_range: '下发值超出测点允许范围',
     raw_value_out_of_range: '下发值不能转换为该测点的协议数值，请检查类型和系数',
     minimum_control_interval: '操作过于频繁，请等待测点最小控制间隔后再操作',
   }
   if (reason.startsWith('Command timeout/disconnection'))
     return '设备在 3 秒内未返回有效协议确认，执行结果未确认，请核对设备状态，勿重复下发'
+  if (reason.startsWith('IEC104 activation confirmed; termination'))
+    return '设备已返回激活确认，但未收到配置要求的结束确认，请检查 command_require_termination 设置'
   return messages[reason] ?? reason
 }
 export interface LivePoint {
@@ -45,15 +60,18 @@ export const monitorApi = {
       end_ms,
       interval_ms: 0,
     }),
-  submit: (body: {
-    device_id: string
-    point_id: string
-    point_type: 'yk' | 'yt'
-    value: number | boolean
-    reason: string
-    intent_id: string
-    expires_at_ms?: number
-  }, timeoutMs = COMMAND_TIMEOUT_MS) => request<{ intent_id: string; status: string }>('/api/commands/submit', body, { timeoutMs }),
+  submit: (
+    body: {
+      device_id: string
+      point_id: string
+      point_type: 'yk' | 'yt'
+      value: number | boolean
+      reason: string
+      intent_id: string
+      expires_at_ms?: number
+    },
+    timeoutMs = COMMAND_TIMEOUT_MS,
+  ) => request<{ intent_id: string; status: string }>('/api/commands/submit', body, { timeoutMs }),
   query: (device_id: string, intent_id: string, timeoutMs = COMMAND_TIMEOUT_MS) =>
     request<{ intent_id: string; status: string; reason: string; updated_at_ms: number }>(
       '/api/commands/query',

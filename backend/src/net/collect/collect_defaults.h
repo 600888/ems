@@ -8,7 +8,7 @@ namespace ems::net::collect {
 enum class CollectDefaults : int {
     PollIntervalMs = 1000,
     MinPollIntervalMs = 100,
-    CommandTimeoutMs = 5000,
+    CommandTimeoutMs = 3000,
     MaxChannels = 128,
     MaxRetries = 5,
     ReconnectBaseDelayMs = 1000,
