@@ -71,6 +71,7 @@ CMake 从客户端库附近自动查找认证插件，也可用 `EMS_DATABASE_MY
 以及 IEC61850 只读服务端从 RTDB 自动上送。配置须使用启用的 `can_forward` 绑定与
 `cfg_channel.serial_json.forwarding` 映射，详见 [IEC61850 RTDB 自动上送](../../reference/protocol/iec61850.md#81-采集进程自动从-rtdb-上送)。
 配置和映射修改后递增站根 `cfg_device.config_revision`，进程重建相关运行目录和会话。
-可靠命令消费和历史遥测发布仍需后续接入。
+Modbus/IEC104 命令入口、持久去重、插队、过期及结果查询见 [遥控与遥调](commands.md)。
+历史遥测发布仍需后续接入。
 可选的旁路变更通知默认关闭，启动不依赖通知 Redis 或 ZeroMQ。
 真实 MySQL schema、实时库作用域与现场协议连接仍需按部署环境验证，构建成功不代表现场已就绪。

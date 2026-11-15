@@ -4,6 +4,7 @@
 
 #include "web/modules/device/application/device_service.h"
 #include "web/modules/history/history_service.h"
+#include "web/modules/runtime/command_submitter.h"
 
 namespace ems::web {
 
@@ -11,6 +12,8 @@ struct RuntimeOptions {
     std::string realtime_config;
     std::string scope_code{"station001"};
     std::string timeseries_config;
+    /// 采集侧命令通道端点（如 tcp://127.0.0.1:5558）；为空时遥控遥调提交不可用。
+    std::string command_endpoint;
 };
 
 class RuntimeService {
@@ -44,5 +47,6 @@ class RuntimeService {
     RuntimeOptions options_;
     ReadPoint reader_;
     ReadHistory history_reader_;
+    CommandSubmitter command_submitter_;
 };
 }  // namespace ems::web

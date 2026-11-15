@@ -2,8 +2,8 @@ import { computed, ref, watch } from 'vue'
 import { defineStore } from 'pinia'
 import { useAuthStore } from './auth'
 import { deviceApi, stableId, clearEngineeringSession } from '@/api/device'
-import { monitorApi, type LivePoint, type HistorySample } from '@/api/monitor'
-import { errorMessage } from '@/api/http'
+import { monitorApi, commandReason, COMMAND_TIMEOUT_MS, type LivePoint, type HistorySample } from '@/api/monitor'
+import { ApiError, errorMessage } from '@/api/http'
 import type { DeviceNode, YcPoint, YxSignal, YkCommand, YtPoint, ControlLog } from '@/types/domain'
 import type { EngineeringRecord, PointType } from '@/types/engineering'
 export type MonitorScope = 'all' | 'alarm' | 'offline'
@@ -45,7 +45,7 @@ export const useMonitorStore = defineStore('monitor', () => {
     controlStep = ref<1 | 2 | 3>(1),
     controlReason = ref(''),
     controlRunning = ref(false),
-    controlResult = ref<'idle' | 'success' | 'failed' | 'timeout'>('idle'),
+    controlResult = ref<'idle' | 'success' | 'acknowledged' | 'unknown' | 'failed' | 'timeout'>('idle'),
     controlError = ref('')
   let epoch = 0,
     refreshing = false
@@ -86,11 +86,29 @@ export const useMonitorStore = defineStore('monitor', () => {
           desc: r.definition.description ? String(r.definition.description) : r.definition.code,
           current: display(r),
           action: String(r.definition.fixed_raw_value ?? '0'),
-          disabledReason: '遥控执行服务暂未接通',
+          disabledReason: r.quality === 'disabled' ? '点位已停用' : '',
         }))
       : [],
   )
   const ytList = computed(() => (auth.can('command.yt') ? ytRows.value : []))
+  const changedSetpoints = computed(() =>
+    ytRows.value.filter((row) => row.modified !== row.current),
+  )
+  const setpointValidationError = computed(() => {
+    for (const row of changedSetpoints.value) {
+      const value = Number(row.modified)
+      if (!row.modified.trim() || !Number.isFinite(value)) return `${row.name}：请输入有效的设定值`
+      if (value < row.min || value > row.max)
+        return `${row.name}：设定值超出允许范围（${row.min} ~ ${row.max}）`
+    }
+    return ''
+  })
+  const setpointSubmitDisabledReason = computed(() => {
+    if (!auth.can('command.yt')) return '当前账号没有遥调权限'
+    if (!ytRows.value.length) return '该设备暂无遥调测点'
+    if (!changedSetpoints.value.length) return '请先修改要下发的设定值'
+    return setpointValidationError.value
+  })
   const profile = computed(() => ({
     id: selectedId.value,
     name: selected.value?.name ?? '请选择设备',
@@ -193,15 +211,22 @@ export const useMonitorStore = defineStore('monitor', () => {
       })
       error.value = [...new Set(failures)].join('；')
       const previous = new Map(ytRows.value.map((r) => [r.pointId, r]))
-      ytRows.value = live.value.yt.map((r) => ({
-        pointId: r.definition.point_id,
-        name: r.definition.name,
-        current: display(r),
-        modified: previous.get(r.definition.point_id)?.modified ?? display(r),
-        unit: r.definition.unit,
-        min: Number(r.definition.range_min ?? -Number.MAX_VALUE),
-        max: Number(r.definition.range_max ?? Number.MAX_VALUE),
-      }))
+      ytRows.value = live.value.yt.map((r) => {
+        const current = display(r)
+        const previousRow = previous.get(r.definition.point_id)
+        return {
+          pointId: r.definition.point_id,
+          name: r.definition.name,
+          current,
+          modified:
+            previousRow && previousRow.modified !== previousRow.current
+              ? previousRow.modified
+              : current,
+          unit: r.definition.unit,
+          min: Number(r.definition.range_min ?? -Number.MAX_VALUE),
+          max: Number(r.definition.range_max ?? Number.MAX_VALUE),
+        }
+      })
       lastUpdated.value = failures.length
         ? '—'
         : new Date().toLocaleTimeString('zh-CN', { hour12: false })
@@ -291,26 +316,69 @@ export const useMonitorStore = defineStore('monitor', () => {
     controlStep.value = 1
     controlResult.value = 'idle'
   }
+  const TERMINAL_FAILED = ['Failed', 'Rejected', 'Expired']
+  type IntentOutcome = {
+    state: 'success' | 'acknowledged' | 'unknown' | 'failed' | 'timeout'
+    reason?: string
+  }
+  /** 轮询命令执行状态直到终态或期限；会话切换时提前结束。 */
+  async function awaitIntent(
+    deviceId: string,
+    intent: string,
+    owner: number,
+    deadline: number,
+  ): Promise<IntentOutcome> {
+    let lastReason = ''
+    while (Date.now() < deadline) {
+      if (owner !== epoch) return { state: 'timeout' }
+      try {
+        const reply = await monitorApi.query(deviceId, intent, Math.max(1, deadline - Date.now()))
+        if (reply.status === 'Succeeded') return { state: 'success' }
+        if (reply.status === 'Acked' && reply.reason === 'protocol_acknowledged')
+          return { state: 'acknowledged', reason: commandReason(reply.reason) }
+        if (reply.status === 'Unknown')
+          return { state: 'unknown', reason: commandReason(reply.reason) }
+        if (TERMINAL_FAILED.includes(reply.status))
+          return { state: 'failed', reason: commandReason(reply.reason) || undefined }
+      } catch (error) {
+        lastReason = error instanceof ApiError ? commandReason(error.reason) : errorMessage(error)
+      }
+      const remaining = deadline - Date.now()
+      if (remaining > 0)
+        await new Promise((resolve) => setTimeout(resolve, Math.min(100, remaining)))
+    }
+    return { state: 'timeout', reason: lastReason || '3 秒内未确认执行结果，请核对设备状态，勿重复下发' }
+  }
   async function executeCommand() {
     if (!activeCommand.value || !controlReason.value.trim() || controlRunning.value) return
+    const owner = epoch
+    const deviceId = selectedId.value
+    const intent = stableId('intent')
+    const deadline = Date.now() + COMMAND_TIMEOUT_MS
     controlRunning.value = true
     controlStep.value = 3
     controlError.value = ''
-    const owner = epoch
     try {
       await monitorApi.submit({
-        device_id: selectedId.value,
+        device_id: deviceId,
         point_id: activeCommand.value.pointId!,
         point_type: 'yk',
         value: Number(activeCommand.value.action),
         reason: controlReason.value.trim(),
-        intent_id: stableId('intent'),
-      })
-      if (owner === epoch) controlError.value = '意图已受理，执行结果尚未确认'
+        intent_id: intent,
+        expires_at_ms: deadline,
+      }, Math.max(1, deadline - Date.now()))
+      const outcome = await awaitIntent(deviceId, intent, owner, deadline)
+      if (owner !== epoch) return
+      if (outcome.state === 'success') controlResult.value = 'success'
+      else {
+        controlResult.value = outcome.state
+        controlError.value = outcome.reason || '执行结果未确认，请检查设备状态'
+      }
     } catch (e) {
       if (owner === epoch) {
         controlError.value = errorMessage(e)
-        controlResult.value = 'failed'
+        controlResult.value = e instanceof ApiError && e.effect === 'Unknown' ? 'unknown' : 'failed'
       }
     } finally {
       controlRunning.value = false
@@ -318,26 +386,51 @@ export const useMonitorStore = defineStore('monitor', () => {
   }
   async function submitSetpoints(reason: string) {
     if (!reason.trim()) throw new Error('请填写操作原因')
-    const changed = ytRows.value.filter((r) => r.modified !== r.current)
-    for (const row of changed) {
-      const value = Number(row.modified)
-      if (!Number.isFinite(value) || value < row.min || value > row.max)
-        throw new Error('设定值超出允许范围')
-      await monitorApi.submit({
-        device_id: selectedId.value,
-        point_id: row.pointId!,
-        point_type: 'yt',
-        value,
-        reason,
-        intent_id: stableId('intent'),
-      })
+    if (setpointSubmitDisabledReason.value) throw new Error(setpointSubmitDisabledReason.value)
+    const changed = changedSetpoints.value
+    const owner = epoch
+    const deviceId = selectedId.value
+    const deadline = Date.now() + COMMAND_TIMEOUT_MS
+    const outcomes = await Promise.all(changed.map(async (row) => {
+      const intent = stableId('intent')
+      try {
+        await monitorApi.submit({
+          device_id: deviceId,
+          point_id: row.pointId!,
+          point_type: 'yt',
+          value: Number(row.modified),
+          reason,
+          intent_id: intent,
+          expires_at_ms: deadline,
+        }, Math.max(1, deadline - Date.now()))
+        return { name: row.name, outcome: await awaitIntent(deviceId, intent, owner, deadline) }
+      } catch (error) {
+        return { name: row.name, outcome: {
+          state: 'unknown' as const,
+          reason: errorMessage(error),
+        } }
+      }
+    }))
+    const failures: string[] = []
+    for (const {name, outcome} of outcomes) {
+      if (outcome.state === 'success' || outcome.state === 'acknowledged') continue
+      const detail =
+        outcome.reason ??
+        (outcome.state === 'failed' ? '设备未能执行该命令' : '执行结果未在期限内确认')
+      failures.push(`${name}：${detail}`)
     }
+    if (failures.length) throw new Error(failures.join('；'))
+    return { acknowledged: outcomes.some(({outcome}) => outcome.state === 'acknowledged') }
   }
-  function setYtValue(name: string, value: string) {
-    ytRows.value = ytRows.value.map((r) => (r.name === name ? { ...r, modified: value } : r))
+  function setYtValue(pointId: string | undefined, value: string) {
+    if (!pointId) return
+    ytRows.value = ytRows.value.map((r) => (r.pointId === pointId ? { ...r, modified: value } : r))
   }
-  function resetYtValue(name: string) {
-    ytRows.value = ytRows.value.map((r) => (r.name === name ? { ...r, modified: r.current } : r))
+  function resetYtValue(pointId: string | undefined) {
+    if (!pointId) return
+    ytRows.value = ytRows.value.map((r) =>
+      r.pointId === pointId ? { ...r, modified: r.current } : r,
+    )
   }
   async function queryHistory() {
     historyBusy.value = true
@@ -419,6 +512,9 @@ export const useMonitorStore = defineStore('monitor', () => {
     yxList,
     ykList,
     ytList,
+    changedSetpoints,
+    setpointValidationError,
+    setpointSubmitDisabledReason,
     filteredTree,
     counts,
     curveSeries,

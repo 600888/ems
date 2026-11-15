@@ -351,6 +351,20 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
                 PointRoute route;
                 route.point_id = point.point_id;
                 route.protocol_code = address(point, binding, channel, write);
+                route.point_code = point.code;
+                route.wire_type = point.wire_type;
+                if constexpr (write) {
+                    route.min_interval_ms = point.min_interval_ms;
+                    route.write_group_key = point.write_group_key;
+                    route.feedback_json = point.feedback_json;
+                    if (!route.feedback_json.empty()) {
+                        const auto feedback = json::parse(route.feedback_json);
+                        if (!feedback.is_array())
+                            throw std::invalid_argument("command feedback must be an array");
+                        if (feedback.empty()) route.feedback_json.clear();
+                    }
+                    route.feedback_timeout_ms = std::min(point.feedback_timeout_ms, 3000);
+                }
                 if (protocol(channel) == ems::model::ProtocolType::IEC61850) {
                     auto point_config = object(point.protocol_address_json);
                     if (point_config.contains("code"))
@@ -390,8 +404,13 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
                 if constexpr (std::is_same_v<Point, CfgPointYkRow>) {
                     route.write_mode = point.write_mode;
                     route.fixed_raw_value = static_cast<double>(point.fixed_raw_value);
+                    route.pulse_width_ms = point.pulse_width_ms;
                 }
-                if constexpr (std::is_same_v<Point, CfgPointYtRow>) route.write_mode = "scaled";
+                if constexpr (std::is_same_v<Point, CfgPointYtRow>) {
+                    route.write_mode = "scaled";
+                    route.range_min = point.range_min;
+                    route.range_max = point.range_max;
+                }
                 auto& device = routes[channel.id][owner.device_id];
                 device.deviceId_ = owner.id;
                 device.deviceKey_ = owner.device_id;

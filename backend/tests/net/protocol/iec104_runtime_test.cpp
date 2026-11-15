@@ -303,6 +303,12 @@ struct Simulator {
             ++self->executions;
         self->last_command = value;
         const int mode = self->mode;
+        if (mode >= 6 && mode <= 9) {
+            CS101_ASDU_setCOT(request, static_cast<CS101_CauseOfTransmission>(
+                                          CS101_COT_UNKNOWN_TYPE_ID + mode - 6));
+            IMasterConnection_sendASDU(peer, request);
+            return true;
+        }
         if (mode == 2) return true;                   // 丢弃应答，模拟执行结果未知。
         if (mode == 3) CS101_ASDU_setCA(request, 2);  // 其他站的确认不能匹配。
         if (mode == 5) CS101_ASDU_setTest(request, true);
@@ -457,6 +463,7 @@ void monitoring_types() {
     const auto rows = client.read(codes);
     for (std::size_t i = 0; i < codes.size(); ++i) {
         CHECK(rows.at(i).at("code") == codes[i]);
+        CHECK(rows.at(i).at("received_at_ms").get<std::int64_t>() > 0);
         const int type = kMonitoring[i % kMonitoring.size()];
         CHECK(std::abs(rows.at(i).at("value").get<double>() - monitoring_value(type)) < 0.0001);
         if (type >= 30) {
@@ -571,6 +578,18 @@ void command_timeout() {
     client.init(config);
     client.connect();
     CHECK(client.write("1:100:45", 1) == 0);
+    for (const auto& [mode, reason] : std::vector<std::pair<int, std::string>>{
+             {6, "unsupported_asdu_type"}, {7, "unsupported_cause_of_transmission"},
+             {8, "unknown_common_address"}, {9, "unknown_information_object_address"}}) {
+        simulator.mode = mode;
+        config["command_timeout_ms"] = 2000;
+        client.init(config);
+        client.connect();
+        const auto started = std::chrono::steady_clock::now();
+        CHECK(client.write("1:100:45", 1) < 0);
+        CHECK(client.error().find(reason) != std::string::npos);
+        CHECK(std::chrono::steady_clock::now() - started < 1s);
+    }
 }
 
 void server() {

@@ -1,11 +1,11 @@
 # 数据库 ORM 与迁移
 
 `db/models/` 使用 SQLAlchemy 2 的 `DeclarativeBase`、`Mapped`、`mapped_column` 定义工程库
-19 张业务表；`web_db/models/` 独立定义 Web 库的 5 张表。两套模型不共用 Base 或 metadata。
+20 张业务表；`web_db/models/` 独立定义 Web 库的 5 张表。两套模型不共用 Base 或 metadata。
 四遥对应 `YcPoint` / `YxPoint` / `YkPoint` / `YtPoint`，共享抽象 `PointBase`，
 仍是四张物理表。Alembic 管理数据库结构的初始化和迁移，业务进程不在启动时执行 DDL。
 
-19 张业务表统一具有数据库生成的整数 `id` 主键。设备类型、类型固有点、模板、导入任务、
+20 张业务表统一具有数据库生成的整数 `id` 主键。设备类型、类型固有点、模板、导入任务、
 通信统计和历史表的原业务主键改为唯一约束；外键继续引用这些稳定业务字段。
 `alembic_version` 是 Alembic 自己维护的迁移记录表，不属于业务模型。
 
@@ -106,7 +106,7 @@ ems-db check                  # 比对 ORM 与当前库；差异返回非零退�
 backend/python/
   database.yaml                 # 两库共用的唯一连接配置
   db/
-    models/                     # 工程库 19 表，Base
+    models/                     # 工程库 20 表，Base
     migrations/                 # 工程库独立迁移历史
     tests/
     seeds.py                    # catalog / demo
@@ -252,7 +252,7 @@ PostgreSQL 使用自己的序列与类型；MySQL 通过类型 variant 保留原
 `ems-db check` 会报告这些退役表；通过 `ems-db revision --autogenerate -m "remove legacy tables"`
 可从当前 ORM 自动生成删除变更，审查后再 `ems-db upgrade head`。不能用 `stamp` 代替结构变更。
 
-本工具覆盖现有 19 张关系表，表结构与种子数据分别维护在 `db/models/` 和 `db/seed_data.py`。
+本工具覆盖现有 20 张关系表，表结构与种子数据分别维护在 `db/models/` 和 `db/seed_data.py`。
 另外通过独立 `web_db` 模型与迁移覆盖 Web 业务库的 5 表，使用同一命令显式选择目标。
 原 `backend/data` 下的 SQL 脚本已移除。TDengine 历史库不在当前 SQLAlchemy 迁移范围内，
 需根据[存储设计](../../website/docs/processes/storage/design.md#31-表结构与时间)由部署单独准备。

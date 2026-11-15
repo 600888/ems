@@ -48,28 +48,6 @@ target_link_libraries(ems_messaging_api INTERFACE ems_common_core)
 target_compile_features(ems_messaging_api INTERFACE cxx_std_17)
 
 if(EMS_WITH_ZEROMQ)
-    find_package(PkgConfig QUIET)
-
-    if(PkgConfig_FOUND)
-        pkg_check_modules(EMS_LIBZMQ QUIET IMPORTED_TARGET libzmq>=4.3)
-    endif()
-
-    if(EMS_LIBZMQ_FOUND)
-        set(EMS_LIBZMQ_TARGET PkgConfig::EMS_LIBZMQ)
-    else()
-        find_path(EMS_LIBZMQ_INCLUDE_DIR zmq.h REQUIRED)
-
-        find_library(EMS_LIBZMQ_LIBRARY NAMES zmq libzmq REQUIRED)
-
-        add_library(ems_libzmq UNKNOWN IMPORTED)
-
-        set_target_properties(
-            ems_libzmq PROPERTIES IMPORTED_LOCATION "${EMS_LIBZMQ_LIBRARY}"
-                                  INTERFACE_INCLUDE_DIRECTORIES "${EMS_LIBZMQ_INCLUDE_DIR}"
-        )
-        set(EMS_LIBZMQ_TARGET ems_libzmq)
-    endif()
-
     add_library(
         ems_zmq_messaging STATIC messaging/zmq_change_channel.cpp messaging/zmq_command_channel.cpp
     )
@@ -81,7 +59,7 @@ if(EMS_WITH_ZEROMQ)
     target_link_libraries(
         ems_zmq_messaging
         PUBLIC ems_messaging_api
-        PRIVATE ${EMS_LIBZMQ_TARGET} Threads::Threads
+        PRIVATE ems::libzmq Threads::Threads
     )
 
     set_target_properties(

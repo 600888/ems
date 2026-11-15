@@ -38,8 +38,10 @@ uint64_t now_ms() {
 // ============================================================
 
 ChannelThread::ChannelThread(const ChannelConfig& channelConfig,
-                             std::shared_ptr<DataDispatcher> dispatcher)
-    : channel_config_(channelConfig), dispatcher_(std::move(dispatcher)) {}
+                             std::shared_ptr<DataDispatcher> dispatcher, HandlerFactory factory)
+    : channel_config_(channelConfig),
+      dispatcher_(std::move(dispatcher)),
+      handler_factory_(std::move(factory)) {}
 
 ChannelThread::~ChannelThread() {
     stop();
@@ -56,8 +58,11 @@ bool ChannelThread::start(PluginManager& plugin_manager) {
     join();
     set_state(ChannelState::Starting);
     try {
-        handler_ = handler::create_handler(plugin_manager,
-                                           rtdb::protocolTypeToString(channel_config_.protocol_));
+        handler_ = handler_factory_
+                       ? handler_factory_(plugin_manager)
+                       : handler::create_handler(
+                             plugin_manager, rtdb::protocolTypeToString(channel_config_.protocol_));
+        if (!handler_) throw std::runtime_error("Handler factory returned no instance");
         json config = {{"channel_id", channel_config_.id_},
                        {"name", channel_config_.name_},
                        {"protocol", rtdb::protocolTypeToString(channel_config_.protocol_)},
@@ -145,21 +150,48 @@ std::future<bool> ChannelThread::post_command(const std::string& pointCode, doub
                                               int timeoutMs) {
     auto promise = std::make_shared<std::promise<bool>>();
     auto future = promise->get_future();
+    PointCommand command;
+    command.point_id = pointCode;
+    command.value = value;
+    command.expires_at_ms = static_cast<std::int64_t>(now_ms()) + std::max(0, timeoutMs);
+    if (!enqueue_command(
+            command, [] { return true; },
+            [promise](const auto& result) {
+                promise->set_value(result.status == "Acked" || result.status == "Succeeded");
+            }))
+        promise->set_value(false);
+    return future;
+}
 
-    CommandTask task;
-    task.taskId_ = now_ms();
-    task.pointCode_ = pointCode;
-    task.value_ = value;
-    task.timeoutMs_ = timeoutMs;
-    task.callback_ = [promise](bool success) { promise->set_value(success); };
-
+bool ChannelThread::enqueue_command(PointCommand command, BeforeCommand before_send,
+                                    CommandCompletion completion) {
+    if (!before_send || !completion) return false;
+    const auto remaining =
+        command.verify_only
+            ? 5000
+            : std::clamp<std::int64_t>(command.expires_at_ms - static_cast<std::int64_t>(now_ms()),
+                                       0, 3600000);
+    CommandTask task{std::move(command),
+                     std::chrono::steady_clock::now() + std::chrono::milliseconds(remaining),
+                     std::move(before_send), std::move(completion)};
     {
         std::lock_guard lock(cmd_mutex_);
+        const auto state = state_.load();
+        if ((state != ChannelState::Starting && state != ChannelState::Running) ||
+            cmd_queue_.size() >= 128)
+            return false;
         cmd_queue_.push_back(std::move(task));
     }
     cmd_cv_.notify_one();
+    return true;
+}
 
-    return future;
+std::optional<device::PointRoute> ChannelThread::command_route(const std::string& point_id) const {
+    for (const auto& device : devices())
+        for (const auto* routes : {&device.ykPoints_, &device.ytPoints_})
+            for (const auto& route : *routes)
+                if (route.point_id == point_id) return route;
+    return std::nullopt;
 }
 
 // ============================================================
@@ -168,7 +200,10 @@ std::future<bool> ChannelThread::post_command(const std::string& pointCode, doub
 
 void ChannelThread::run() {
     // 所有退出分支都先结束最后一次处理器调用，再销毁实例并释放租约。
-    auto release_handler = [this](void*) { handler_.reset(); };
+    auto release_handler = [this](void*) {
+        cancel_commands();
+        handler_.reset();
+    };
     std::unique_ptr<void, decltype(release_handler)> lease(handler_.get(), release_handler);
     auto expected = ChannelState::Starting;
     if (!state_.compare_exchange_strong(expected, ChannelState::Running)) {
@@ -207,7 +242,9 @@ void ChannelThread::run() {
         if (!check_connection()) {
             CHANNEL_LOG_WARN(this, "连接断开, 尝试重连...");
             reconnect();
-            std::this_thread::sleep_for(std::chrono::milliseconds(poll_interval_ms_.load()));
+            std::unique_lock lock(cmd_mutex_);
+            cmd_cv_.wait_for(lock, std::chrono::milliseconds(poll_interval_ms_.load()),
+                             [this] { return state_.load() != ChannelState::Running; });
             continue;
         }
 
@@ -240,8 +277,10 @@ void ChannelThread::run() {
         auto elapsed = now_ms() - cycleStart;
         int interval = poll_interval_ms_.load();
         if (elapsed < static_cast<uint64_t>(interval)) {
-            std::this_thread::sleep_for(
-                std::chrono::milliseconds(interval - static_cast<int>(elapsed)));
+            std::unique_lock lock(cmd_mutex_);
+            cmd_cv_.wait_for(
+                lock, std::chrono::milliseconds(interval - static_cast<int>(elapsed)),
+                [this] { return state_.load() != ChannelState::Running || !cmd_queue_.empty(); });
         }
         // 如果采集耗时超过周期，立即开始下一轮
     }
@@ -306,44 +345,163 @@ bool ChannelThread::reconnect() {
 // ============================================================
 
 void ChannelThread::process_command_queue() {
-    while (true) {
-        CommandTask task;
-        {
-            std::lock_guard lock(cmd_mutex_);
-            if (cmd_queue_.empty()) break;
-            task = std::move(cmd_queue_.front());
-            cmd_queue_.pop_front();
-        }
+    CommandTask task;
+    {
+        std::lock_guard lock(cmd_mutex_);
+        if (cmd_queue_.empty() || state_.load() != ChannelState::Running) return;
+        task = std::move(cmd_queue_.front());
+        cmd_queue_.pop_front();
+    }
+    PointCommandResult result;
+    try {
+        result = execute_command(task);
+    } catch (const std::exception& error) {
+        result = {"Unknown", error.what()};
+    } catch (...) {
+        result = {"Unknown", "unexpected command exception"};
+    }
+    try {
+        task.completion(result);
+    } catch (...) {
+        LOG_ERROR("Command completion failed; persistent execution state must be reconciled");
+    }
+}
 
-        CHANNEL_LOG_INFO(this,
-                         fmt::format("执行命令: taskId={}, pointCode={}, value={}, timeout={}ms",
-                                     task.taskId_, task.pointCode_, task.value_, task.timeoutMs_)
-                             .c_str());
+PointCommandResult ChannelThread::execute_command(const CommandTask& task) {
+    const auto& command = task.command;
+    if (!command.verify_only && (std::chrono::steady_clock::now() >= task.deadline ||
+                                 static_cast<std::int64_t>(now_ms()) >= command.expires_at_ms))
+        return {"Expired", "expired_before_send"};
+    if (state_.load() != ChannelState::Running) return {"Rejected", "channel_stopping"};
+    const auto route = command_route(command.point_id);
+    if (!route) return {"Rejected", "control_point_not_found"};
+    if (command.verify_only) {
+        if (!task.before_send()) return {"Deferred", "verification_not_ready"};
+        return verify_command(command, *route);
+    }
+    if (!std::isfinite(command.value)) return {"Rejected", "non_finite_value"};
+    if (route->pulse_width_ms != 0) return {"Rejected", "pulse_control_not_supported"};
+    if (route->write_mode != "fixed" && route->write_mode != "direct" &&
+        route->write_mode != "scaled")
+        return {"Rejected", "invalid_write_mode"};
+    if (route->write_mode == "scaled" &&
+        (command.value < route->range_min || command.value > route->range_max))
+        return {"Rejected", "engineering_value_out_of_range"};
+    double raw = command.value;
+    if (route->write_mode == "fixed") raw = route->fixed_raw_value;
+    if (route->write_mode == "scaled") {
+        if (!std::isfinite(route->scale_factor) || route->scale_factor == 0)
+            return {"Rejected", "invalid_scale"};
+        raw = (raw - route->offset_value) / route->scale_factor;
+    }
+    if (!std::isfinite(raw)) return {"Rejected", "non_finite_raw_value"};
+    const auto& wire = route->wire_type;
+    if ((wire == "bool" && raw != 0 && raw != 1) ||
+        ((wire == "u16" || wire == "i16" || wire == "u32" || wire == "i32") &&
+         std::trunc(raw) != raw) ||
+        (wire == "u16" && (raw < 0 || raw > 65535)) ||
+        (wire == "i16" && (raw < -32768 || raw > 32767)) ||
+        (wire == "u32" && (raw < 0 || raw > 4294967295.0)) ||
+        (wire == "i32" && (raw < -2147483648.0 || raw > 2147483647.0)))
+        return {"Rejected", "raw_value_out_of_range"};
+    const auto group = route->write_group_key.empty() ? route->point_id : route->write_group_key;
+    const auto last = last_command_.find(group);
+    if (last != last_command_.end() && std::chrono::steady_clock::now() - last->second <
+                                           std::chrono::milliseconds(route->min_interval_ms))
+        return {"Rejected", "minimum_control_interval"};
+    if (!handler_ || !handler_->is_connected()) return {"Deferred", "channel_disconnected"};
+    if (!task.before_send()) return {"Deferred", "execution_registration_failed"};
+    // 登记期间可能消耗期限；此时已登记 Executing，但可以证明未发送。
+    if (state_.load() != ChannelState::Running) return {"Rejected", "channel_stopping"};
+    if (std::chrono::steady_clock::now() >= task.deadline ||
+        static_cast<std::int64_t>(now_ms()) >= command.expires_at_ms)
+        return {"Expired", "expired_before_send"};
+    last_command_[group] = std::chrono::steady_clock::now();
+    // 现有插件 bool 接口不能证明失败发生在发送前，统一保守记为 Unknown。
+    const auto sent_at = static_cast<std::int64_t>(now_ms());
+    if (!handler_->write_value(route->protocol_code, raw))
+        return {"Unknown", handler_->last_error(), sent_at};
+    return {"Acked", route->feedback_json.empty() ? "protocol_acknowledged" : "feedback_pending",
+            sent_at};
+}
 
-        bool success = false;
-        for (const auto& device : devices()) {
-            for (const auto* routes : {&device.ykPoints_, &device.ytPoints_}) {
-                for (const auto& route : *routes) {
-                    if (route.point_id != task.pointCode_) continue;
-                    double raw = task.value_;
-                    if (route.write_mode == "fixed")
-                        raw = route.fixed_raw_value;
-                    else if (route.write_mode == "scaled") {
-                        if (route.scale_factor == 0) continue;
-                        raw = (raw - route.offset_value) / route.scale_factor;
-                    }
-                    success = handler_ && std::isfinite(raw) &&
-                              handler_->write_value(route.protocol_code, raw);
+PointCommandResult ChannelThread::verify_command(const PointCommand& command,
+                                                 const device::PointRoute& route) {
+    if (command.sent_at_ms <= 0) return {"Unknown", "send_time_missing"};
+    if (route.feedback_json.empty()) return {"Unknown", "feedback_not_configured"};
+    const auto rules = json::parse(route.feedback_json);
+    if (!rules.is_array() || rules.empty() || rules.size() > 32)
+        return {"Unknown", "invalid_feedback_rules"};
+    const auto current = devices();
+    std::string owner;
+    for (const auto& device : current)
+        for (const auto* points : {&device.ykPoints_, &device.ytPoints_})
+            for (const auto& point : *points)
+                if (point.point_id == command.point_id) owner = device.deviceKey_;
+    bool required = false;
+    for (const auto& rule : rules) {
+        if (!rule.value("required", true)) continue;
+        required = true;
+        const auto code = rule.at("point_code").get<std::string>();
+        const device::PointRoute* feedback = nullptr;
+        bool discrete = false;
+        for (const auto& device : current) {
+            if (device.deviceKey_ != owner) continue;
+            for (const auto& point : device.ycPoints_)
+                if (point.point_code == code) feedback = &point;
+            for (const auto& point : device.yxPoints_)
+                if (point.point_code == code) {
+                    feedback = &point;
+                    discrete = true;
                 }
-            }
         }
+        if (!feedback) return {"Unknown", "feedback_requires_same_connection"};
+        std::vector<PointValue> values;
+        if (!handler_ || handler_->read_batch({feedback->protocol_code}, values) != 1 ||
+            values.size() != 1 || values[0].quality != enum_value(protocol::SampleQuality::Good))
+            return {"Unknown", "feedback_unavailable"};
+        const auto& sample = values[0];
+        if (channel_config_.protocol_ == ems::model::ProtocolType::IEC104 &&
+            (!sample.details.is_object() || !sample.details.contains("received_at_ms") ||
+             !sample.details.at("received_at_ms").is_number_integer()))
+            return {"Unknown", "feedback_receive_time_unavailable"};
+        const auto received =
+            sample.details.is_object()
+                ? sample.details.value("received_at_ms",
+                                       static_cast<std::int64_t>(sample.timestamp))
+                : static_cast<std::int64_t>(sample.timestamp);
+        if (received <= command.sent_at_ms) return {"Unknown", "feedback_not_newer_than_send"};
+        const double observed =
+            discrete ? static_cast<double>((sample.value != 0) != feedback->invert)
+                     : sample.value * feedback->scale_factor + feedback->offset_value;
+        const auto expected_value = rule.find("expected");
+        const double expected = expected_value == rule.end() ? command.value
+                                : expected_value->is_boolean()
+                                    ? (expected_value->get<bool>() ? 1.0 : 0.0)
+                                    : expected_value->get<double>();
+        const auto criterion = rule.at("criterion").get<std::string>();
+        const double tolerance = criterion == "equals" ? 0 : rule.value("tolerance", -1.0);
+        if ((criterion != "equals" && criterion != "within_tolerance") ||
+            !std::isfinite(expected) || !std::isfinite(tolerance) || tolerance < 0)
+            return {"Unknown", "invalid_feedback_criterion"};
+        if (!std::isfinite(observed) || std::abs(observed - expected) > tolerance)
+            return {"Unknown", "feedback_mismatch"};
+    }
+    return required ? PointCommandResult{"Succeeded", "fresh_feedback_verified"}
+                    : PointCommandResult{"Unknown", "required_feedback_missing"};
+}
 
-        CHANNEL_LOG_INFO(this, fmt::format("命令执行{}: taskId={}, pointCode={}",
-                                           success ? "成功" : "失败", task.taskId_, task.pointCode_)
-                                   .c_str());
-
-        if (task.callback_) {
-            task.callback_(success);
+void ChannelThread::cancel_commands() {
+    std::deque<CommandTask> pending;
+    {
+        std::lock_guard lock(cmd_mutex_);
+        pending.swap(cmd_queue_);
+    }
+    for (auto& task : pending) {
+        try {
+            task.completion({"Rejected", "channel_stopped_before_send"});
+        } catch (...) {
+            LOG_ERROR("Command cancellation persistence failed");
         }
     }
 }
@@ -360,25 +518,89 @@ void ChannelThread::collect_device(const DeviceContext& device) {
 void ChannelThread::collect_points(const std::vector<device::PointRoute>& routes,
                                    const char* point_type) {
     if (routes.empty() || !handler_) return;
-    std::vector<std::string> codes;
-    for (const auto& route : routes) codes.push_back(route.protocol_code);
-    std::vector<PointValue> values;
-    if (handler_->read_batch(codes, values) < 0 || values.size() != routes.size()) {
-        last_err_ = "read_batch failed or returned incomplete results: " + handler_->last_error();
-        return;
+    using Route = device::PointRoute;
+    std::vector<std::vector<const Route*>> batches;
+    const auto protocol = channel_config_.protocol_;
+    if (protocol == ems::model::ProtocolType::ModbusTCP ||
+        protocol == ems::model::ProtocolType::ModbusRTU) {
+        struct Read {
+            const Route* route;
+            int slave, function, address, width;
+        };
+
+        std::vector<Read> reads;
+        for (const auto& route : routes) {
+            try {
+                std::istringstream parts(route.protocol_code);
+                std::string part;
+                std::vector<int> fields;
+                while (std::getline(parts, part, ':')) fields.push_back(std::stoi(part));
+                if (fields.size() < 3) throw std::invalid_argument("address");
+                const int decode = fields.size() > 3 ? fields[3] : 0;
+                const int width = decode == 5 ? 4 : (decode >= 2 && decode <= 4 ? 2 : 1);
+                reads.push_back({&route, fields[0], fields[1], fields[2], width});
+            } catch (...) {
+                batches.push_back({&route});
+            }
+        }
+        std::sort(reads.begin(), reads.end(), [](const auto& a, const auto& b) {
+            return std::tie(a.slave, a.function, a.address) <
+                   std::tie(b.slave, b.function, b.address);
+        });
+        for (std::size_t first = 0; first < reads.size();) {
+            const auto& begin = reads[first];
+            int end = begin.address + begin.width;
+            std::size_t next = first + 1;
+            std::vector<const Route*> batch{begin.route};
+            const int maximum = begin.function <= 2 ? 2000 : 125;
+            while (next < reads.size()) {
+                const auto& read = reads[next];
+                const int extended = std::max(end, read.address + read.width);
+                if (read.slave != begin.slave || read.function != begin.function ||
+                    read.address > end || extended - begin.address > maximum)
+                    break;
+                batch.push_back(read.route);
+                end = extended;
+                ++next;
+            }
+            batches.push_back(std::move(batch));
+            first = next;
+        }
+    } else {
+        // IEC104 读取的是接收缓存；其他协议保留原批量能力。
+        const std::size_t maximum =
+            protocol == ems::model::ProtocolType::IEC104 ? 64 : routes.size();
+        for (std::size_t i = 0; i < routes.size(); i += maximum) {
+            std::vector<const Route*> batch;
+            for (std::size_t j = i; j < std::min(i + maximum, routes.size()); ++j)
+                batch.push_back(&routes[j]);
+            batches.push_back(std::move(batch));
+        }
     }
-    for (std::size_t i = 0; i < values.size(); ++i) {
-        auto& value = values[i];
-        const auto& route = routes[i];
-        value.code = route.point_id;
-        if (std::string(point_type) == "yc")
-            value.value = value.value * route.scale_factor + route.offset_value;
-        else
-            value.value = (value.value != 0) != route.invert ? 1.0 : 0.0;
-        if (!value.details.is_object()) value.details = json::object();
-        value.details["point_type"] = point_type;
+    for (const auto& batch : batches) {
+        if (state_.load() != ChannelState::Running || !handler_) return;
+        process_command_queue();
+        if (state_.load() != ChannelState::Running || !handler_) return;
+        std::vector<std::string> codes;
+        for (const auto* route : batch) codes.push_back(route->protocol_code);
+        std::vector<PointValue> values;
+        if (handler_->read_batch(codes, values) < 0 || values.size() != batch.size()) {
+            last_err_ = "read_batch failed: " + handler_->last_error();
+            continue;
+        }
+        for (std::size_t i = 0; i < values.size(); ++i) {
+            auto& value = values[i];
+            const auto& route = *batch[i];
+            value.code = route.point_id;
+            if (std::string(point_type) == "yc")
+                value.value = value.value * route.scale_factor + route.offset_value;
+            else
+                value.value = (value.value != 0) != route.invert ? 1.0 : 0.0;
+            if (!value.details.is_object()) value.details = json::object();
+            value.details["point_type"] = point_type;
+        }
+        if (dispatcher_) dispatcher_->batch_update(values);
     }
-    if (dispatcher_ && !values.empty()) dispatcher_->batch_update(values);
 }
 
 // ============================================================

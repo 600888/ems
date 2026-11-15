@@ -2,6 +2,27 @@ import { request } from './http'
 import type { Point, PointType, Page } from '@/types/engineering'
 import { historyApi } from './history'
 export type { HistorySample } from './history'
+export const COMMAND_TIMEOUT_MS = 3000
+
+export function commandReason(reason: string): string {
+  const messages: Record<string, string> = {
+    expired_before_send: '命令在 3 秒内未发出，请检查设备连接后再操作',
+    expired_before_acceptance: '命令已超过 3 秒有效期，未发往设备',
+    feedback_timeout: '设备已确认指令，但 3 秒内未收到匹配的反馈，请核对设备状态',
+    channel_disconnected: '设备通信连接尚未建立',
+    control_point_or_protocol_not_available: '控制点或通信通道不可用，请检查设备连接与配置',
+    control_route_removed: '控制通道已不可用，请检查设备连接与配置',
+    protocol_acknowledged: '设备已返回协议确认，未配置反馈，实际状态尚未核验',
+    collector_unreachable: '无法连接采集服务，请检查采集进程及命令端点',
+    command_database_unavailable: '命令记录暂时不可用，请检查数据库连接',
+    engineering_value_out_of_range: '下发值超出测点允许范围',
+    raw_value_out_of_range: '下发值不能转换为该测点的协议数值，请检查类型和系数',
+    minimum_control_interval: '操作过于频繁，请等待测点最小控制间隔后再操作',
+  }
+  if (reason.startsWith('Command timeout/disconnection'))
+    return '设备在 3 秒内未返回有效协议确认，执行结果未确认，请核对设备状态，勿重复下发'
+  return messages[reason] ?? reason
+}
 export interface LivePoint {
   definition: Point
   sample: { value: number | string | boolean; timestamp: number; quality_code: number } | null
@@ -31,5 +52,12 @@ export const monitorApi = {
     value: number | boolean
     reason: string
     intent_id: string
-  }) => request<{ intent_id: string; status: string }>('/api/commands/submit', body),
+    expires_at_ms?: number
+  }, timeoutMs = COMMAND_TIMEOUT_MS) => request<{ intent_id: string; status: string }>('/api/commands/submit', body, { timeoutMs }),
+  query: (device_id: string, intent_id: string, timeoutMs = COMMAND_TIMEOUT_MS) =>
+    request<{ intent_id: string; status: string; reason: string; updated_at_ms: number }>(
+      '/api/commands/query',
+      { device_id, intent_id },
+      { timeoutMs },
+    ),
 }

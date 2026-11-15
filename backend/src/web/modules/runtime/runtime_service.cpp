@@ -47,7 +47,18 @@ RuntimeService::RuntimeService(database::MySqlDatabaseContext database, RuntimeO
     : database_(std::move(database)),
       options_(std::move(options)),
       reader_(std::move(reader)),
-      history_reader_(std::move(history_reader)) {}
+      history_reader_(std::move(history_reader)) {
+#if defined(EMS_WITH_ZEROMQ)
+    // 每次提交使用独立 REQ socket，可从业务线程池并发调用。
+    if (!options_.command_endpoint.empty()) {
+        auto config = std::make_shared<messaging::ZmqCommandConfig>();
+        config->endpoint = options_.command_endpoint;
+        command_submitter_ = [config](const messaging::ZmqCommandRequest& request) {
+            return messaging::ZmqCommandClient(*config).send(request);
+        };
+    }
+#endif
+}
 
 DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
                                      const Principal& actor, const core::CallContext& ctx) {
@@ -83,7 +94,8 @@ DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
     DeviceRequest request(database_, actor, ctx, false);
     const auto owner = request.device(text(body, "device_id"));
     if (path == "/api/commands/submit") {
-        fields(body, {"device_id", "point_id", "point_type", "value", "reason", "intent_id"});
+        fields(body, {"device_id", "point_id", "point_type", "value", "reason", "intent_id",
+                      "expires_at_ms"});
         const auto kind = text(body, "point_type", 2);
         if (kind != "yk" && kind != "yt") throw ApiError(422, "InvalidArgument", "command_type");
         request.principal.require(kind == "yk" ? "command.yk" : "command.yt");
@@ -92,8 +104,78 @@ DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
             throw ApiError(404, "NotFound", "point_not_found");
         if (point.at("enabled") == 0 || owner.at("enabled") == 0)
             throw ApiError(422, "InvalidArgument", "command_disabled");
-        // Web 不绕过策略仲裁直接写采集通道；当前没有可持久受理意图的策略服务。
-        throw ApiError(503, "NotReady", "control_service_unavailable", "NotApplied");
+        const auto& intent = text(body, "intent_id", 128);
+        if (!body.at("value").is_number() || !std::isfinite(body.at("value").get<double>()))
+            throw ApiError(422, "InvalidArgument", "command_value");
+        if (!command_submitter_)
+            throw ApiError(503, "NotReady", "control_service_unavailable", "NotApplied");
+        const auto now = core::now_utc_micros() / 1000;
+        if (body.contains("expires_at_ms") && !body.at("expires_at_ms").is_number_integer())
+            throw ApiError(422, "InvalidArgument", "invalid_command_deadline");
+        const auto expires_at = body.value("expires_at_ms", now + 3000);
+        if (expires_at <= 0 || expires_at > now + 3000)
+            throw ApiError(422, "InvalidArgument", "invalid_command_deadline");
+        // 采集侧命令契约：载荷仅允许 op/point_id/value/config_revision/expires_at_ms。
+        const Json payload = {{"op", "submit"},
+                              {"point_id", point.at("point_id")},
+                              {"value", body.at("value")},
+                              {"config_revision", request.station.at("config_revision")},
+                              {"expires_at_ms", expires_at}};
+        const auto reply = command_submitter_({intent, payload.dump()});
+        using Code = messaging::ZmqCommandReplyCode;
+        if (reply.code == Code::Accepted || reply.code == Code::Duplicate ||
+            reply.code == Code::Unknown) {
+            // Duplicate 表示同 ID 已登记；Unknown 表示不能确认登记，调用方用同一 ID 对账查询。
+            return {{{"intent_id", intent}, {"status", "accepted"}}, Json::object(), 202};
+        }
+        if (reply.code == Code::Rejected)
+            throw ApiError(409, "Conflict", "command_rejected", "NotApplied",
+                           Json::array({{{"reason", reply.reason}}}));
+        if (reply.code == Code::Invalid)
+            throw ApiError(422, "InvalidArgument", "command_invalid", "NotApplied",
+                           Json::array({{{"reason", reply.reason}}}));
+        throw ApiError(503, "NotReady", "collector_not_ready", "NotApplied");
+    }
+    if (path == "/api/commands/query") {
+        fields(body, {"device_id", "intent_id"});
+        if (!request.principal.permissions.count("command.yk") &&
+            !request.principal.permissions.count("command.yt"))
+            throw ApiError(403, "PermissionDenied", "command_read_denied");
+        const auto& intent = text(body, "intent_id", 128);
+        if (!command_submitter_)
+            throw ApiError(503, "NotReady", "control_service_unavailable", "NotApplicable");
+        const auto reply = command_submitter_({intent, R"({"op":"query"})"});
+        using Code = messaging::ZmqCommandReplyCode;
+        if (reply.code == Code::Rejected)
+            throw ApiError(404, "NotFound", "intent_not_found", "NotApplicable");
+        if (reply.code == Code::RetryLater)
+            throw ApiError(503, "NotReady", "collector_not_ready", "NotApplicable");
+        if (reply.code == Code::Unknown)
+            throw ApiError(503, "NotReady", "collector_unreachable", "Unknown");
+        auto row = Json::parse(reply.reason, nullptr, false);
+        if (reply.code != Code::Result || row.is_discarded() || !row.is_object() ||
+            !row.contains("status"))
+            throw ApiError(503, "NotReady", "control_result_corrupt", "NotApplicable");
+        // 命令所属点必须属于请求可见的设备，避免越权探测其他设备的意图。
+        const auto point_id = row.value("point_id", "");
+        bool owned = false;
+        for (const auto* kind : {"yk", "yt"}) {
+            try {
+                owned =
+                    request.one(point_table(kind), "point_id", point_id).at("owner_device_id") ==
+                    owner.at("device_id");
+                break;
+            } catch (const ApiError& error) {
+                if (error.status != 404) throw;
+            }
+        }
+        if (!owned) throw ApiError(404, "NotFound", "intent_not_found", "NotApplicable");
+        return {
+            {// 终态：Succeeded/Failed/Expired/Rejected；中间态：Queued/Executing/Acked/Unknown。
+             {"intent_id", intent},
+             {"status", row.at("status")},
+             {"reason", row.value("reason", "")},
+             {"updated_at_ms", row.value("updated_at_ms", 0)}}};
     }
     if (path != "/api/monitor/points") throw ApiError(404, "NotFound", "route_not_found");
     request.principal.require("monitor.read");

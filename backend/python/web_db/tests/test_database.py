@@ -62,7 +62,7 @@ def session_row(**changes):
 
 def test_independent_registries_and_foreign_keys():
     assert set(WebBase.metadata.tables) == TABLES
-    assert len(Base.metadata.tables) == 19
+    assert len(Base.metadata.tables) == 20
     assert not set(Base.metadata.tables) & TABLES
     assert WebBase.registry is not Base.registry
     for table in WebBase.metadata.tables.values():

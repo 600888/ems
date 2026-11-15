@@ -46,11 +46,14 @@ export interface ApiResponse<T> {
 export async function requestResponse<T>(
   path: string,
   body?: object | FormData,
-  options: { anonymous?: boolean; signal?: AbortSignal } = {},
+  options: { anonymous?: boolean; signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<ApiResponse<T>> {
   const controller = new AbortController()
   const multipart = body instanceof FormData
-  const timeout = window.setTimeout(() => controller.abort(), multipart ? 120000 : 12000)
+  const timeout = window.setTimeout(
+    () => controller.abort(),
+    options.timeoutMs ?? (multipart ? 120000 : 12000),
+  )
   const abort = () => controller.abort()
   options.signal?.addEventListener('abort', abort, { once: true })
   if (options.signal?.aborted) controller.abort()
@@ -119,7 +122,7 @@ export async function requestResponse<T>(
 export async function request<T>(
   path: string,
   body?: object | FormData,
-  options: { anonymous?: boolean; signal?: AbortSignal } = {},
+  options: { anonymous?: boolean; signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<T> {
   return (await requestResponse<T>(path, body, options)).data
 }

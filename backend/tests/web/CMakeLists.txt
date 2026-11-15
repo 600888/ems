@@ -24,6 +24,7 @@ if(MSVC)
     target_link_options(test_web PRIVATE /DEBUG:FULL)
 endif()
 ems_copy_mysql_runtime(test_web)
+ems_copy_taos_runtime(test_web)
 ems_copy_directory_runtime_dependencies()
 
 gtest_discover_tests(test_web)

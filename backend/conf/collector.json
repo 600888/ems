@@ -3,5 +3,6 @@
     "rtdb_config": "realtime.json",
     "scope_code": "station",
     "poll_interval_ms": 1000,
-    "max_channels": 256
+    "max_channels": 256,
+    "command_endpoint": "tcp://127.0.0.1:5558"
 }

@@ -6,11 +6,14 @@ endif()
 add_executable(test_point_table_db test_point_table_db.cpp test_cfg_loader.cpp)
 target_link_libraries(
     test_point_table_db PRIVATE ems_database_configuration ems_database_mysql ems_database_runtime
-                                net_para_loader gtest_main
+                                net_para_loader net_collect gtest_main
 )
 target_compile_definitions(
     test_point_table_db PRIVATE EMS_CONFIG_SCHEMA_FILE="${CMAKE_CURRENT_SOURCE_DIR}/../web/schema.sql"
 )
+if(EMS_WITH_ZEROMQ)
+    target_compile_definitions(test_point_table_db PRIVATE EMS_TEST_ZEROMQ)
+endif()
 set_target_properties(test_point_table_db PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
 if(TARGET SQLite::SQLite3)
     target_link_libraries(test_point_table_db PRIVATE SQLite::SQLite3)

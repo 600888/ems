@@ -157,7 +157,7 @@ def normalize_url(value: str | URL) -> URL:
 
 
 def make_engine(url: str | URL) -> Engine:
-    """Create an engine with SQLite foreign keys enabled for every pooled connection."""
+    """Create an engine with SQLite WAL, bounded lock waiting and foreign keys enabled."""
     url = normalize_url(url)
     kwargs = {"pool_pre_ping": True, "hide_parameters": True}
     if url.get_backend_name() == "mysql":
@@ -183,6 +183,8 @@ def make_engine(url: str | URL) -> Engine:
             # leaves CREATE/DROP outside transactions even inside engine.begin().
             dbapi_connection.isolation_level = None
             cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA busy_timeout=5000")
+            cursor.execute("PRAGMA journal_mode=WAL")
             cursor.execute("PRAGMA foreign_keys=ON")
             cursor.close()
 

@@ -45,12 +45,20 @@ const commandState = computed(() => {
       desc: monitor.controlError || '控制意图未能提交，请检查后重试。',
       spin: false,
     }
+  if (monitor.controlResult === 'acknowledged' || monitor.controlResult === 'unknown')
+    return {
+      tone: 'text-warn',
+      icon: 'info',
+      title: monitor.controlResult === 'acknowledged' ? '协议已确认' : '执行结果未确认',
+      desc: monitor.controlError,
+      spin: false,
+    }
   if (monitor.controlResult === 'timeout')
     return {
       tone: 'text-warn',
       icon: 'clock-3',
       title: '执行超时',
-      desc: '结果未确认，请核对设备状态与操作记录。',
+      desc: monitor.controlError || '3 秒内未确认执行结果，请核对设备状态，勿重复下发。',
       spin: false,
     }
   return null

@@ -109,6 +109,8 @@ char reply_code(ZmqCommandReplyCode code) {
             return 'I';
         case ZmqCommandReplyCode::Unknown:
             return 'U';
+        case ZmqCommandReplyCode::Result:
+            return 'S';
     }
     return 'U';
 }
@@ -127,6 +129,8 @@ ZmqCommandReplyCode parse_reply_code(char code) {
             return ZmqCommandReplyCode::Invalid;
         case 'U':
             return ZmqCommandReplyCode::Unknown;
+        case 'S':
+            return ZmqCommandReplyCode::Result;
         default:
             return ZmqCommandReplyCode::Unknown;
     }

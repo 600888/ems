@@ -1,5 +1,14 @@
 add_executable(ems-collector main.cpp)
 target_link_libraries(ems-collector PRIVATE net_collect net_para_loader ems_database_mysql)
+if(EMS_WITH_ZEROMQ)
+    target_compile_definitions(ems-collector PRIVATE EMS_WITH_ZEROMQ)
+    add_executable(ems-command command_main.cpp)
+    target_link_libraries(ems-command PRIVATE ems_zmq_messaging)
+    set_target_properties(ems-command PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
+    if(BUILD_TESTS)
+        add_test(NAME collector_command_help COMMAND ems-command --help)
+    endif()
+endif()
 set_target_properties(ems-collector PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)
 
 # 可执行文件与协议插件在不同目录，多配置构建还需跨过配置名这一层。

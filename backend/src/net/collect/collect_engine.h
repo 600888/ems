@@ -30,6 +30,7 @@
 #include <vector>
 
 #include "channel_thread.h"
+#include "command_router.h"
 #include "data_dispatcher.h"
 #include "forwarding_channel.h"
 #include "net/collect/collect_defaults.h"
@@ -82,7 +83,7 @@ struct EngineConfig {
  *
  * 线程安全：内部持有互斥锁保护通道列表。
  */
-class CollectEngine {
+class CollectEngine : public CommandRouter {
    public:
     /** @brief 构造 CollectEngine 实例。 */
     CollectEngine();
@@ -196,10 +197,20 @@ class CollectEngine {
     std::shared_ptr<ChannelThread> find_channel(int64_t channel_id) const;
 
     /**
+     * @brief 按稳定测点 ID 查找可控的 Modbus/IEC104 客户端连接。
+     * @param[in] point_id 命令点 ID。
+     * @return 当前运行连接；停机、非支持协议或非客户端返回空。
+     */
+    std::shared_ptr<ChannelThread> command_channel(const std::string& point_id) const override;
+
+    /** @brief 返回运行目录对应的站根修订号。 @return 当前 config_revision。 */
+    std::int64_t config_revision() const override { return config_revision_.load(); }
+
+    /**
      * @brief 是否正在运行
      * @return true 表示条件成立；false 表示不成立。
      */
-    bool is_running() const { return state_.load() == EngineState::Running; }
+    bool is_running() const override { return state_.load() == EngineState::Running; }
 
     // ============================================================
     // 组件访问
@@ -251,6 +262,7 @@ class CollectEngine {
 
     EngineConfig config_;
     std::atomic<EngineState> state_{EngineState::Idle};
+    std::atomic<std::int64_t> config_revision_{0};
     PluginManager plugin_manager_;
 
     // 通道管理

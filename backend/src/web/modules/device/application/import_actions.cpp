@@ -483,7 +483,7 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
                 if (kind == "yx" && options.contains("invert"))
                     patch["invert"] = options.at("invert").get<int>() != 0;
                 if (options.contains("feedback_key")) {
-                    // 关联编码不能推断命令期望值或容差，保留来源并保持写点停用。
+                    // 关联编码不能推断命令期望值或容差，仅保留来源。
                     patch["description"] =
                         "关联反馈编码：" + options.at("feedback_key").get<std::string>();
                     extra["feedback_key"] = options.at("feedback_key");
@@ -499,9 +499,7 @@ DeviceResult import_action(DeviceRequest& request, const std::string& path, cons
             if (old.empty()) {
                 patch["code"] =
                     semantic.empty() ? row.at("vendor_key").get<std::string>() : semantic;
-                patch["enabled"] = kind == "yc" || kind == "yx";
-                if (kind == "yk" || kind == "yt")
-                    patch["disabled_reason"] = "导入后需补齐写入及反馈规则";
+                patch["enabled"] = true;
                 patch["origin"] = "vendor";
             }
             auto persisted =

@@ -247,7 +247,8 @@ class WebDevice : public ::testing::Test {
                 EXPECT_EQ(item.at("code"), item.at("vendor_key"));
             for (const auto& item : yt.data.at("items"))
                 EXPECT_EQ(item.at("code"), item.at("vendor_key"));
-            EXPECT_EQ(yk.data.at("items").front().at("enabled"), false);
+            EXPECT_EQ(yk.data.at("items").front().at("enabled"), true);
+            EXPECT_EQ(yt.data.at("items").front().at("enabled"), true);
             EXPECT_TRUE(yk.data.at("items")
                             .front()
                             .at("address")
@@ -382,6 +383,7 @@ TEST_F(WebDevice, StationTelemetrySharesRackTemplateWithIndependentSlaveBindings
                                         {"channel_code", channel},
                                         {"device_address", std::to_string(rack + 1)},
                                         {"can_collect", true},
+                                        {"can_control", true},
                                         {"enabled", false}});
         manifest["point_files"].push_back({{"device_code", "hvac01"},
                                            {"binding_code", channel},
@@ -435,7 +437,7 @@ TEST_F(WebDevice, StationTelemetrySharesRackTemplateWithIndependentSlaveBindings
         auto commands = execute("/api/points/list",
                                 {{"device_id", job.at("target_device_id")}, {"point_type", "yt"}});
         EXPECT_EQ(commands.data.at("total"), 1);
-        EXPECT_EQ(commands.data.at("items").front().at("enabled"), false);
+        EXPECT_EQ(commands.data.at("items").front().at("enabled"), true);
         auto preview =
             execute("/api/point-imports/rows", {{"import_job_id", job.at("import_job_id")}});
         auto row = preview.data.at("items").front();

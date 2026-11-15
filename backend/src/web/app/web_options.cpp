@@ -29,7 +29,8 @@ WebOptions load_web_options(const std::string& path) {
                "secure_cookie",
                "realtime_config",
                "realtime_scope_code",
-               "timeseries_config"});
+               "timeseries_config",
+               "command_endpoint"});
     WebOptions o;
     auto number = [&](const char* key, std::size_t fallback, std::size_t maximum) {
         if (j.count(key) && !j.at(key).is_number_integer())
@@ -61,6 +62,7 @@ WebOptions load_web_options(const std::string& path) {
     o.realtime_config = j.value("realtime_config", std::string{});
     o.timeseries_config = j.value("timeseries_config", std::string{});
     o.realtime_scope_code = j.value("realtime_scope_code", o.realtime_scope_code);
+    o.command_endpoint = j.value("command_endpoint", std::string{});
     for (const auto& origin : o.allowed_origins) {
         if (origin.empty() || (o.secure_cookie && origin.rfind("https://", 0) != 0))
             throw std::invalid_argument("invalid allowed origin");

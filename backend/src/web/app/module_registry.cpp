@@ -47,6 +47,7 @@ const std::vector<Route>& device_routes() {
         {"/api/monitor/points", true},
         {"/api/history/query", true},
         {"/api/commands/submit", true},
+        {"/api/commands/query", true},
         {"/api/audit/list", true},
     };
     return routes;

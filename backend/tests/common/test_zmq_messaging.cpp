@@ -16,6 +16,9 @@ TEST(ZmqCommandChannelTest, RoundTripAndStableIdRetry) {
     ems::messaging::ZmqCommandServer server;
     ASSERT_TRUE(server.start(config, [&deliveries](const auto& request) {
         if (request.command_id == "cmd_throw") throw std::runtime_error("uncertain commit");
+        if (request.payload_json == R"({"op":"query"})")
+            return ems::messaging::ZmqCommandReply{ems::messaging::ZmqCommandReplyCode::Result,
+                                                   R"({"status":"Unknown"})"};
         EXPECT_EQ(request.command_id, "cmd_test_01");
         EXPECT_EQ(request.payload_json, R"({"command_id":"cmd_test_01"})");
         const int count = ++deliveries;
@@ -34,6 +37,9 @@ TEST(ZmqCommandChannelTest, RoundTripAndStableIdRetry) {
     EXPECT_EQ(client.send(command).code, ems::messaging::ZmqCommandReplyCode::Accepted);
     EXPECT_EQ(client.send(command).code, ems::messaging::ZmqCommandReplyCode::Duplicate);
     EXPECT_EQ(deliveries, 2);
+    const auto queried = client.send({"cmd_test_01", R"({"op":"query"})"});
+    EXPECT_EQ(queried.code, ems::messaging::ZmqCommandReplyCode::Result);
+    EXPECT_EQ(queried.reason, R"({"status":"Unknown"})");
 
     EXPECT_EQ(client.send({"invalid/id", "{}"}).code, ems::messaging::ZmqCommandReplyCode::Invalid);
     EXPECT_EQ(client.send({"cmd_throw", "{}"}).code, ems::messaging::ZmqCommandReplyCode::Unknown);

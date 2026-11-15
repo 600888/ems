@@ -23,6 +23,15 @@ struct PointRoute {
     bool invert{false};
     std::string write_mode;
     double fixed_raw_value{0.0};
+    std::string point_code;
+    double range_min{-9999999.0};
+    double range_max{9999999.0};
+    std::string wire_type;
+    int pulse_width_ms{0};
+    int min_interval_ms{0};
+    std::string write_group_key;
+    std::string feedback_json;
+    int feedback_timeout_ms{5000};
 };
 
 /** @brief 通道内的点归属节点；部件点保留部件身份，使用来源设备的绑定通信。 */

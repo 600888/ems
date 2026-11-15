@@ -34,7 +34,8 @@ enum class ZmqCommandReplyCode {
     Rejected,    ///< 已明确拒绝；业务回调应持久记录原因
     RetryLater,  ///< 未登记，暂时不可受理
     Unknown,     ///< 客户端不能判断远端是否受理
-    Invalid      ///< 本地请求不符合契约，或服务端明确拒绝无效帧
+    Invalid,     ///< 本地请求不符合契约，或服务端明确拒绝无效帧
+    Result       ///< 查询返回命令执行状态，reason 为业务结果 JSON
 };
 
 struct ZmqCommandReply {

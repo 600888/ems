@@ -13,6 +13,7 @@
 #include <string_view>
 #include <utility>
 
+#include "../collector_commands.h"
 #include "../configuration/orm_device_config_repository.h"
 #include "../configuration/orm_device_management_store.h"
 #include "../identity/user_repository.h"
@@ -652,6 +653,12 @@ core::Result<MySqlDatabaseContext> connect_mysql_database(const MySqlConnectionO
             return mysql_error_result(connection.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "configuration schema");
     }
+    if (options.require_command_schema) {
+        connection.orm.query_s<CollectorCommandRow>("1=0");
+        if (connection.orm.has_error())
+            return mysql_error_result(connection.orm.get_last_error_code(),
+                                      core::WriteEffect::NotApplied, "command schema");
+    }
     auto released = tx.rollback(ctx);
     if (!core::is_ok(released)) return core::error_of(released);
     auto repositories = std::make_shared<HistoryRepositories>(pool);
@@ -683,8 +690,17 @@ core::Result<MySqlDatabaseContext> connect_mysql_database(const MySqlConnectionO
             return mysql_error_result(driver.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "identity operation");
         });
+    auto commands = std::make_shared<detail::OrmCollectorCommandRepository<MySqlConnection>>(
+        [repositories](ITransaction& transaction, const core::CallContext& context) {
+            return repositories->session(transaction, context);
+        },
+        [pool](ITransaction& transaction) { pool->invalidate(transaction); },
+        [](MySqlConnection& driver) {
+            return mysql_error_result(driver.orm.get_last_error_code(),
+                                      core::WriteEffect::NotApplied, "command operation");
+        });
     return MySqlDatabaseContext{pool,       repositories, repositories, device_config,
-                                management, identity,     identity};
+                                management, identity,     identity,     commands};
 }
 
 }  // namespace ems::database

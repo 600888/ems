@@ -1152,3 +1152,28 @@ class StateLog(Base):
             "mysql_charset": "utf8mb4",
         },
     )
+
+
+class CollectorCommand(Base):
+    """Durable collector inbox and execution outcome; never a configuration snapshot."""
+
+    __tablename__ = "ops_command"
+    command_id: Mapped[str] = mapped_column(
+        sa.String(128).with_variant(sa.String(128, collation="utf8mb4_bin"), "mysql"),
+        nullable=False,
+    )
+    scope_code: Mapped[str] = mapped_column(sa.String(128), nullable=False)
+    point_id: Mapped[str] = mapped_column(sa.String(64), nullable=False)
+    value: Mapped[float] = mapped_column(sa.Float(53), nullable=False)
+    config_revision: Mapped[int] = mapped_column(sa.BigInteger(), nullable=False)
+    expires_at_ms: Mapped[int] = mapped_column(sa.BigInteger(), nullable=False)
+    payload_json: Mapped[str] = mapped_column(sa.String(2048), nullable=False)
+    status: Mapped[str] = mapped_column(sa.String(32), nullable=False)
+    reason: Mapped[str] = mapped_column(sa.String(512), nullable=False)
+    sent_at_ms: Mapped[int] = mapped_column(sa.BigInteger(), nullable=False)
+    updated_at_ms: Mapped[int] = mapped_column(sa.BigInteger(), nullable=False)
+    __table_args__ = (
+        sa.UniqueConstraint("scope_code", "command_id", name="uq_command_scope_id"),
+        sa.Index("ix_command_pending", "scope_code", "status", "id"),
+        {"mysql_engine": "InnoDB", "mysql_charset": "utf8mb4"},
+    )

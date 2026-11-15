@@ -20,6 +20,8 @@ struct WebOptions {
     std::string realtime_config;
     std::string timeseries_config;
     std::string realtime_scope_code{"station001"};
+    /// 采集侧命令通道端点；为空时遥控遥调提交不可用。
+    std::string command_endpoint;
     std::string workspace{"web-upload"};
     std::size_t io_threads{2}, workers{4}, queue_size{128}, import_workers{1}, import_queue_size{8};
     int request_timeout_ms{5000}, import_timeout_ms{30000}, audit_retention_days{180};

@@ -11,6 +11,7 @@
   "realtime_config": "conf/realtime.json",
   "timeseries_config": "conf/timeseries.json",
   "realtime_scope_code": "station",
+  "command_endpoint": "tcp://127.0.0.1:5558",
   "io_threads": 2,
   "workers": 4,
   "queue_size": 128,

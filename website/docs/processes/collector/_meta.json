@@ -11,6 +11,11 @@
   },
   {
     "type": "file",
+    "name": "commands",
+    "label": "遥控与遥调"
+  },
+  {
+    "type": "file",
     "name": "design",
     "label": "采集执行与协议插件"
   },

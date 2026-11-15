@@ -161,6 +161,7 @@ struct Sample {
     int quality{enum_value(SampleQuality::Good)};
     std::int64_t timestamp{0};
     Clock::time_point received{Clock::now()};
+    std::int64_t received_at_ms{now_ms()};
     bool device_time{false};
     bool invalid_time{false};
 };
@@ -467,6 +468,7 @@ class Iec104Protocol::Impl {
         bool active{false}, confirmed{false}, done{false}, rejected{false};
         Address address{0, 0, 0};
         std::tuple<double, bool, int> value{0, false, 0};
+        std::string rejection;
     } pending;
 
     void set_error(std::string text) {
@@ -532,9 +534,32 @@ class Iec104Protocol::Impl {
                     return true;
                 ObjectPtr object(CS101_ASDU_getElement(asdu, 0), InformationObject_destroy);
                 if (!object ||
-                    InformationObject_getObjectAddress(object.get()) != self->pending.address.ioa ||
-                    command_value(type, object.get()) != self->pending.value)
+                    InformationObject_getObjectAddress(object.get()) != self->pending.address.ioa)
                     return true;
+                const char* rejection = nullptr;
+                switch (cot) {
+                    case CS101_COT_UNKNOWN_TYPE_ID:
+                        rejection = "unsupported_asdu_type";
+                        break;
+                    case CS101_COT_UNKNOWN_COT:
+                        rejection = "unsupported_cause_of_transmission";
+                        break;
+                    case CS101_COT_UNKNOWN_CA:
+                        rejection = "unknown_common_address";
+                        break;
+                    case CS101_COT_UNKNOWN_IOA:
+                        rejection = "unknown_information_object_address";
+                        break;
+                    default:
+                        break;
+                }
+                if (rejection) {
+                    self->pending.rejected = self->pending.done = true;
+                    self->pending.rejection = rejection;
+                    self->cv.notify_all();
+                    return true;
+                }
+                if (command_value(type, object.get()) != self->pending.value) return true;
                 if (cot != CS101_COT_ACTIVATION_CON && cot != CS101_COT_ACTIVATION_TERMINATION)
                     return true;
                 if (CS101_ASDU_isNegative(asdu)) {
@@ -962,6 +987,7 @@ int Iec104Protocol::read_batch(const std::vector<std::string>& codes, std::strin
                                 sample.value == enum_value(DoublePointState::Off) ||
                                 sample.value == enum_value(DoublePointState::On));
             row["timestamp"] = sample.timestamp;
+            row["received_at_ms"] = sample.received_at_ms;
             row["iec_quality"] = sample.quality;
             row["timestamp_source"] = impl_->server_role   ? "local_image"
                                       : sample.device_time ? "device_cp56"
@@ -1001,6 +1027,7 @@ int Iec104Protocol::write(const std::string& code, double value) {
                 sample.value = value;
                 sample.timestamp = now_ms();
                 sample.received = Clock::now();
+                sample.received_at_ms = now_ms();
                 found->second = sample;
             }
             auto asdu = impl_->make_asdu(address, sample, CS101_COT_SPONTANEOUS, impl_->originator);
@@ -1057,7 +1084,11 @@ int Iec104Protocol::write(const std::string& code, double value) {
                     "Command timeout/disconnection; outcome unknown, session closed; do not auto "
                     "retry");
             }
-            if (rejected) throw std::runtime_error("IEC104 command negatively confirmed");
+            if (rejected) {
+                if (!impl_->pending.rejection.empty())
+                    throw std::runtime_error("IEC104 command rejected: " + impl_->pending.rejection);
+                throw std::runtime_error("IEC104 command negatively confirmed");
+            }
         }
         return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {

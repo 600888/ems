@@ -18,6 +18,7 @@
 #include "common/log/default_logger.hpp"
 #include "common/log/process_logger.hpp"
 #include "net/collect/collect_engine.h"
+#include "net/collect/command_service.h"
 #include "net/para_loader/cfg_loader.h"
 
 namespace {
@@ -31,6 +32,7 @@ void stop(int) { stopping = 1; }
 struct Options {
     EngineConfig engine;
     ems::database::MySqlConnectionOptions database;
+    std::string command_endpoint;
 };
 
 fs::path resolve(const fs::path& base, const std::string& value) {
@@ -66,7 +68,8 @@ Options load_options(const std::string& file, const char* executable) {
     for (auto it = json.begin(); it != json.end(); ++it) {
         if (it.key() != "database_config" && it.key() != "rtdb_config" &&
             it.key() != "scope_code" && it.key() != "plugin_dir" &&
-            it.key() != "poll_interval_ms" && it.key() != "max_channels")
+            it.key() != "poll_interval_ms" && it.key() != "max_channels" &&
+            it.key() != "command_endpoint")
             throw std::invalid_argument("unknown collector option");
     }
 
@@ -78,6 +81,12 @@ Options load_options(const std::string& file, const char* executable) {
     if (!ems::core::is_ok(database)) throw std::invalid_argument("database configuration");
     options.database = ems::core::value_of(database);
     options.database.require_configuration_schema = true;
+    options.command_endpoint = json.value("command_endpoint", std::string{});
+    options.database.require_command_schema = !options.command_endpoint.empty();
+#if !defined(EMS_WITH_ZEROMQ)
+    if (!options.command_endpoint.empty())
+        throw std::invalid_argument("command_endpoint requires EMS_WITH_ZEROMQ=ON");
+#endif
 
     auto& engine = options.engine;
     const auto rtdb_file = json.at("rtdb_config").get<std::string>();
@@ -164,11 +173,35 @@ int main(int argc, char** argv) {
         const auto started = engine.start_all(loader);
         if (started < 0 || static_cast<std::size_t>(started) != channel_count)
             throw std::runtime_error("channel startup failed");
+#if defined(EMS_WITH_ZEROMQ)
+        std::unique_ptr<ems::net::collect::CommandService> commands;
+        ems::messaging::ZmqCommandServer command_server;
+        if (!options.command_endpoint.empty()) {
+            const auto& context = ems::core::value_of(database);
+            commands = std::make_unique<ems::net::collect::CommandService>(
+                context.database, context.collector_commands, engine,
+                options.engine.rtdbScopeCode_);
+            ems::messaging::ZmqCommandConfig config;
+            config.endpoint = options.command_endpoint;
+            // 先独占端点再恢复，避免同端点的第二个实例改变在途记录。
+            if (!command_server.start(
+                    config, [&](const auto& request) { return commands->handle(request); }))
+                throw std::runtime_error("command endpoint unavailable");
+            if (!commands->recover()) throw std::runtime_error("command recovery failed");
+            commands->set_accepting(true);
+        }
+#endif
         LOG_INFO("ems-collector started, channels={}", started);
         std::cout << "ems-collector started, channels=" << started << std::endl;
         auto next_reload = std::chrono::steady_clock::now() + std::chrono::seconds(1);
         while (!stopping) {
             std::this_thread::sleep_for(std::chrono::milliseconds(100));
+#if defined(EMS_WITH_ZEROMQ)
+            if (commands) {
+                if (!command_server.running()) throw std::runtime_error("command server stopped");
+                if (!commands->poll()) LOG_WARN("ems-collector command scan failed");
+            }
+#endif
             if (std::chrono::steady_clock::now() < next_reload) continue;
             next_reload = std::chrono::steady_clock::now() + std::chrono::seconds(1);
             const auto revision = loader.config_revision();
@@ -183,13 +216,23 @@ int main(int argc, char** argv) {
                 LOG_WARN("ems-collector configuration exceeds channel limit");
                 continue;
             }
+#if defined(EMS_WITH_ZEROMQ)
+            if (commands) commands->set_accepting(false);
+#endif
             engine.stop_all();
             loader = std::move(candidate);
             if (engine.start_all(loader) !=
                 static_cast<int>(loader.channels().size() + loader.forwarding_channels().size()))
                 throw std::runtime_error("channel reload failed");
+#if defined(EMS_WITH_ZEROMQ)
+            if (commands) commands->set_accepting(true);
+#endif
             LOG_INFO("ems-collector reloaded, config_revision={}", loader.config_revision());
         }
+#if defined(EMS_WITH_ZEROMQ)
+        if (commands) commands->set_accepting(false);
+        command_server.stop();
+#endif
         engine.shutdown();
         LOG_INFO("ems-collector stopped");
         return 0;

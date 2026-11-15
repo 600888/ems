@@ -1,5 +1,6 @@
 #pragma once
 
+#include <common/database/collector_commands.h>
 #include <common/database/configuration/i_device_config_repository.h>
 #include <common/database/configuration/i_device_management_store.h>
 #include <common/database/history/repositories.h>
@@ -24,6 +25,7 @@ struct MySqlConnectionOptions {
     unsigned int io_timeout_seconds{5};
     bool require_history_schema{false};
     bool require_configuration_schema{false};
+    bool require_command_schema{false};
 };
 
 /** @brief 同一进程的一组 Repository；共同使用 ormpp 进程内连接池与事务上下文。 */
@@ -35,6 +37,7 @@ struct MySqlDatabaseContext {
     std::shared_ptr<IDeviceManagementStore> device_management;
     std::shared_ptr<IUserRepository> users;
     std::shared_ptr<IAuditRepository> audit;
+    std::shared_ptr<ICollectorCommandRepository> collector_commands;
 };
 
 /**

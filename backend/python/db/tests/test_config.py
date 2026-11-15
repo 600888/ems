@@ -145,3 +145,22 @@ def test_missing_database_driver_has_install_hint_without_credentials(monkeypatc
     assert f"uv sync --extra {backend}" in message
     assert f".[{backend}]" in message
     assert "secret" not in message
+
+
+def test_file_sqlite_uses_wal_and_writer_does_not_block_reader(tmp_path):
+    engine = make_engine(f"sqlite:///{tmp_path / 'wal.sqlite3'}")
+    try:
+        with engine.begin() as connection:
+            assert connection.exec_driver_sql("PRAGMA journal_mode").scalar_one() == "wal"
+            assert connection.exec_driver_sql("PRAGMA busy_timeout").scalar_one() == 5000
+            connection.exec_driver_sql("CREATE TABLE concurrency_probe(value INTEGER)")
+            connection.exec_driver_sql("INSERT INTO concurrency_probe VALUES (1)")
+        with engine.connect() as reader, engine.connect() as writer:
+            assert reader.exec_driver_sql("SELECT value FROM concurrency_probe").scalar_one() == 1
+            with writer.begin():
+                writer.exec_driver_sql("UPDATE concurrency_probe SET value=2")
+            assert reader.exec_driver_sql("SELECT value FROM concurrency_probe").scalar_one() == 1
+            reader.commit()
+            assert reader.exec_driver_sql("SELECT value FROM concurrency_probe").scalar_one() == 2
+    finally:
+        engine.dispose()

@@ -37,6 +37,7 @@ from .device_management import (
     ImportRow,
     CommStat5m,
     StateLog,
+    CollectorCommand,
 )  # noqa: E402, F401
 from .history import (
     HistoryPointVersion,
@@ -64,6 +65,7 @@ __all__ = [
     "ImportRow",
     "CommStat5m",
     "StateLog",
+    "CollectorCommand",
     "HistoryPointVersion",
     "HistoryPointSeries",
     "HistoryPointSnapshot",

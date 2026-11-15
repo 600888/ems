@@ -156,8 +156,16 @@ set_target_properties(
                POSITION_INDEPENDENT_CODE ON
 )
 
-find_path(EMS_DATABASE_TAOS_INCLUDE_DIR taos.h)
-find_library(EMS_DATABASE_TAOS_LIBRARY NAMES taos)
+# Windows 齿轮构建也能找到 setup_tdengine_dependencies.ps1 解压的客户端。
+# 已显式设置的缓存路径仍优先，不要求使用者额外传入命令行参数。
+if(WIN32)
+    set(_ems_taos_sdk "${CMAKE_SOURCE_DIR}/build/tdengine-deps/sdk/app")
+    find_path(EMS_DATABASE_TAOS_INCLUDE_DIR taos.h HINTS "${_ems_taos_sdk}/include")
+    find_library(EMS_DATABASE_TAOS_LIBRARY NAMES taos taos.lib HINTS "${_ems_taos_sdk}/driver")
+else()
+    find_path(EMS_DATABASE_TAOS_INCLUDE_DIR taos.h)
+    find_library(EMS_DATABASE_TAOS_LIBRARY NAMES taos)
+endif()
 if(EMS_DATABASE_TAOS_INCLUDE_DIR AND EMS_DATABASE_TAOS_LIBRARY)
     if(WIN32)
         get_filename_component(_ems_taos_library_dir "${EMS_DATABASE_TAOS_LIBRARY}" DIRECTORY)

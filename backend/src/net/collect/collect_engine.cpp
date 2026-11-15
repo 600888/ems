@@ -158,6 +158,7 @@ int CollectEngine::start_all(CfgLoader& loader) {
         LOG_ERROR("参数加载器未初始化");
         return enum_value(protocol::OperationResult::Failure);
     }
+    config_revision_ = loader.config_revision();
 
     // 1. 加载所有启用的通道配置
     auto channels = loader.channels();
@@ -389,6 +390,7 @@ bool CollectEngine::stop_channel(int64_t channel_id) {
 // ============================================================
 
 void CollectEngine::stop_all() {
+    state_.store(EngineState::Stopped);
     LOG_INFO(fmt::format("停止所有通道, 当前通道数={}", channels_.size()).c_str());
     std::vector<std::shared_ptr<ChannelThread>> allChannels;
     std::vector<std::shared_ptr<ForwardingChannel>> outputs;
@@ -477,6 +479,24 @@ std::shared_ptr<ChannelThread> CollectEngine::find_channel(int64_t channel_id) c
     std::lock_guard lock(channels_mutex_);
     auto it = channels_.find(channel_id);
     return it != channels_.end() ? it->second : nullptr;
+}
+
+std::shared_ptr<ChannelThread> CollectEngine::command_channel(const std::string& point_id) const {
+    std::lock_guard lock(channels_mutex_);
+    if (state_.load() != EngineState::Running) return nullptr;
+    for (const auto& [id, channel] : channels_) {
+        if (channel->state() != ChannelState::Running) continue;
+        const auto& config = channel->channel_config();
+        using P = ems::model::ProtocolType;
+        if (config.protocol_ != P::ModbusTCP && config.protocol_ != P::ModbusRTU &&
+            config.protocol_ != P::IEC104)
+            continue;
+        const auto settings = settings_of(config);
+        if (settings.value("local_role", settings.value("role", std::string("client"))) != "client")
+            continue;
+        if (channel->command_route(point_id)) return channel;
+    }
+    return nullptr;
 }
 
 // ============================================================

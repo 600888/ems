@@ -70,6 +70,6 @@ InfluxDB 使用 `backend/third_party/influxdb-cxx`，不修改第三方源码。
 
 2026-11-08 已完成 TDengine 3.4.3.9 社区版接入，原生数值 / 精确整数 / 布尔 / 中文文本 / null、复合主键、批量写入、游标分页与实际点表的历史查询均已联调。15,617 个配置点位以 5 秒周期完整归档，周期计数可通过 `elapsed_ms`、`written`、`failed` 核对。采集通道尚无有效样本时仍保存 null 与质量原因，不能把这些记录视为有效测量。
 
-Windows 可执行 `scripts/setup_tdengine_dependencies.ps1` 安全解压匹配的官方 SDK。`timeseries.json` 的 `client_config_dir` 指向客户端配置目录；相对路径以连接文件所在目录为基准，`EMS_TAOS_CONFIG_DIR` 可覆盖。中文账户下将进程 TEMP / TMP 指向存在的 ASCII 路径（例如 `backend/tmp`），避免原生 SDK 的默认临时目录编码问题。守护配置已为 Web 和存储设置 `TEMP=tmp` / `TMP=tmp`。
+Windows 可执行 `scripts/setup_tdengine_dependencies.ps1` 安全解压匹配的官方 SDK。CMake 自动搜索其默认解压目录 `backend/build/tdengine-deps/sdk/app`；VSCode CMake Tools 用户执行 `CMake: Configure` 后即可继续使用齿轮构建，无需另填 SDK 参数。显式设置的 `EMS_DATABASE_TAOS_INCLUDE_DIR` 和 `EMS_DATABASE_TAOS_LIBRARY` 优先。`timeseries.json` 的 `client_config_dir` 指向客户端配置目录；相对路径以连接文件所在目录为基准，`EMS_TAOS_CONFIG_DIR` 可覆盖。中文账户下将进程 TEMP / TMP 指向存在的 ASCII 路径（例如 `backend/tmp`），避免原生 SDK 的默认临时目录编码问题。守护配置已为 Web 和存储设置 `TEMP=tmp` / `TMP=tmp`。
 
 真实集成用例 `TaosLive.*` 仅在显式设置 `EMS_TAOS_LIVE_CONFIG` 时连接服务；工程历史查询还需 `EMS_MYSQL_LIVE_CONFIG`。这两个变量只放配置文件路径，不在命令行传密码。

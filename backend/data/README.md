@@ -6,7 +6,7 @@
    在仓库根目录安装 `python -m pip install -e ./backend/python`，按需安装 `[mysql]` 或
    `[postgresql]` 驱动，编辑 `backend/python/database.yaml` 选择数据库及连接参数。
    YAML 仅供迁移工具使用；配置和命令详见 [Python 迁移说明](../python/README.md)。
-2. MySQL / PostgreSQL 先创建空数据库，再运行 `ems-db init`，统一建立现有 19 张关系表；
+2. MySQL / PostgreSQL 先创建空数据库，再运行 `ems-db init`，统一建立现有 20 张关系表；
    默认 SQLite 在 `backend/python/ems.sqlite3` 建库。`ems-db seed catalog` 显式写入站根、
    11 个设备类型与 47 个固有点；`ems-db check` 检查结构差异。
 3. 原建表与种子 SQL 脚本已移除，不再手动执行 SQL 初始化关系表。
