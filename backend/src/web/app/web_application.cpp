@@ -392,8 +392,9 @@ int run_web_with_database(const WebOptions& options, database::MySqlDatabaseCont
     app.setDefaultHandler([state](const drogon::HttpRequestPtr& request, Callback&& callback) {
         const auto& path = request->path();
         const bool page = path == "/" || path == "/profile" || path == "/forbidden" ||
-                          path == "/login" || path.rfind("/login/", 0) == 0 ||
-                          path.rfind("/admin/", 0) == 0 || path.rfind("/monitor/", 0) == 0;
+                          path == "/alarms" || path == "/history" || path == "/login" ||
+                          path.rfind("/login/", 0) == 0 || path.rfind("/admin/", 0) == 0 ||
+                          path.rfind("/monitor/", 0) == 0;
         const auto index = std::filesystem::u8path(state->options.document_root) / "index.html";
         if (page && request->method() == drogon::Get && !state->options.document_root.empty() &&
             request->getHeader("accept").find("text/html") != std::string::npos &&

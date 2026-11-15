@@ -71,7 +71,11 @@ export function passwordError(password: string, username: string, min = 12, oldP
 }
 
 export function safeReturnTo(value: unknown) {
-  if (typeof value !== 'string' || !/^\/(monitor|admin|profile)(\/|\?|$)/.test(value)) return ''
+  if (
+    typeof value !== 'string' ||
+    !/^\/(monitor|admin|profile|history|alarms)(\/|\?|$)/.test(value)
+  )
+    return ''
   if (/[\\\r\n]/.test(value)) return ''
   return value
 }

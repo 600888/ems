@@ -1,137 +1,39 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
-import AppIcon from '@/components/common/AppIcon.vue'
-import { useMonitorStore, type MonitorScope } from '@/stores/monitor'
+import DeviceScopeTree from './DeviceScopeTree.vue'
+import { useMonitorStore } from '@/stores/monitor'
 import type { DeviceNode } from '@/types/domain'
-
 const monitor = useMonitorStore()
-const tree = computed(() => monitor.filteredTree)
-
-const scopes: { key: MonitorScope; label: string }[] = [{ key: 'all', label: '全部' }]
-
-const scopeCount = computed(() => ({
-  all: monitor.counts.all,
-  alarm: monitor.counts.alarm,
-  offline: monitor.counts.offline,
-}))
-
-function dotClass(status?: string) {
-  if (status === 'alarm') return 'text-warn'
-  if (status === 'offline') return 'text-subtle'
-  if (status === 'online') return 'text-ok'
-  return 'text-subtle'
-}
-
-function hasChildren(data: DeviceNode) {
-  return Boolean(data.children && data.children.length)
-}
-
-function onNodeClick(data: DeviceNode) {
-  if (data.isDevice || data.kind === 'component') monitor.selectDevice(data.id)
+function select(node: DeviceNode) {
+  if (node.isDevice || node.kind === 'component') void monitor.selectDevice(node.id)
 }
 </script>
-
 <template>
-  <aside
-    class="flex w-[288px] shrink-0 flex-col gap-1 overflow-hidden border-r border-line bg-panel p-4"
+  <DeviceScopeTree
+    v-model:keyword="monitor.keyword"
+    :tree="monitor.tree"
+    :model-value="monitor.selectedId"
+    :expanded-keys="monitor.expandedKeys"
+    @select="select"
   >
-    <div class="flex items-center gap-[10px]">
-      <h2 class="text-lead font-semibold text-ink">设备目录</h2>
-      <div class="flex-1" />
-      <AppIcon name="list-filter" :size="15" class="text-muted" />
-      <AppIcon name="panel-left-close" :size="15" class="text-muted" />
-    </div>
-
-    <el-input
-      v-model="monitor.keyword"
-      class="ctl search-input mt-1"
-      placeholder="搜索设备名称 / 编码"
-      clearable
+    <template #toolbar
+      ><span class="self-start rounded bg-sel px-2 py-1 text-small text-accent"
+        >全部 {{ monitor.counts.all }}</span
+      ></template
     >
-      <template #prefix>
-        <AppIcon name="search" :size="14" class="text-subtle" />
-      </template>
-    </el-input>
-
-    <div class="flex items-center gap-[6px]">
-      <button
-        v-for="scope in scopes"
-        :key="scope.key"
-        type="button"
-        class="rounded-[4px] px-[9px] py-1 text-small transition-colors"
-        :class="
-          monitor.scope === scope.key
-            ? 'bg-sel text-accent'
-            : 'bg-surface text-muted hover:text-ink'
-        "
-        @click="monitor.scope = scope.key"
-      >
-        {{ scope.label }} {{ scopeCount[scope.key] }}
-      </button>
-    </div>
-
-    <div class="my-1 h-px w-full bg-line" />
-
-    <div class="min-h-0 flex-1 overflow-y-auto pl-1">
-      <el-tree
-        class="ems-tree"
-        :data="tree"
-        node-key="id"
-        :props="{ label: 'name', children: 'children' }"
-        :indent="13"
-        :default-expanded-keys="monitor.expandedKeys"
-        :current-node-key="monitor.selectedId"
-        highlight-current
-        :expand-on-click-node="false"
-        @node-click="onNodeClick"
-      >
-        <template #default="{ node, data }">
-          <div class="flex w-full min-w-0 items-center gap-[6px]">
-            <button
-              v-if="hasChildren(data as DeviceNode)"
-              type="button"
-              class="flex shrink-0 items-center text-muted"
-              @click.stop="node.expanded ? node.collapse() : node.expand()"
-            >
-              <AppIcon :name="node.expanded ? 'chevron-down' : 'chevron-right'" :size="12" />
-            </button>
-            <span v-else class="w-3 shrink-0" />
-            <AppIcon
-              :name="(data as DeviceNode).icon"
-              :size="13"
-              :class="data.id === monitor.selectedId ? 'text-accent' : 'text-muted'"
-            />
-            <span
-              class="truncate text-small"
-              :class="data.id === monitor.selectedId ? 'font-semibold text-ink' : 'text-muted'"
-            >
-              {{ data.name }}
-            </span>
-            <div class="flex-1" />
-            <i
-              v-if="(data as DeviceNode).status"
-              class="dot"
-              :class="dotClass((data as DeviceNode).status)"
-            />
-          </div>
-        </template>
-      </el-tree>
-    </div>
-
-    <div class="h-px w-full bg-line" />
-
-    <div class="flex items-center gap-3 py-[2px]">
-      <span class="flex items-center gap-[5px] text-caption text-muted">
-        <i class="dot text-ok" />在线
-      </span>
-      <span class="flex items-center gap-[5px] text-caption text-muted">
-        <i class="dot text-warn" />告警
-      </span>
-      <span class="flex items-center gap-[5px] text-caption text-muted">
-        <i class="dot text-subtle" />离线
-      </span>
-    </div>
-    <p class="text-caption text-subtle">站 → 单元 → 设备 → 部件</p>
-  </aside>
+    <template #footer>
+      <div class="flex items-center gap-3 py-0.5">
+        <span
+          v-for="item in [
+            { label: '在线', tone: 'text-ok' },
+            { label: '告警', tone: 'text-warn' },
+            { label: '离线', tone: 'text-subtle' },
+          ]"
+          :key="item.label"
+          class="flex items-center gap-1.5 text-caption text-muted"
+          ><i class="dot" :class="item.tone" />{{ item.label }}</span
+        >
+      </div>
+      <p class="text-caption text-subtle">站 → 单元 → 设备 → 部件</p>
+    </template>
+  </DeviceScopeTree>
 </template>

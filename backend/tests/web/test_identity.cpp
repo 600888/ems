@@ -590,6 +590,13 @@ TEST_F(PersistentIdentity, HttpPersistentUserLifecycleAndCsrf) {
             ASSERT_EQ(shell.first, drogon::ReqResult::Ok);
             EXPECT_EQ(shell.second->statusCode(), 200);
             EXPECT_NE(shell.second->body().find("EMS test shell"), std::string_view::npos);
+            for (const auto* route : {"/alarms", "/history"}) {
+                page->setPath(route);
+                auto frontend = client->sendRequest(page, 10);
+                ASSERT_EQ(frontend.first, drogon::ReqResult::Ok);
+                EXPECT_EQ(frontend.second->statusCode(), 200);
+                EXPECT_NE(frontend.second->body().find("EMS test shell"), std::string_view::npos);
+            }
             page->setPath("/api/unknown-route");
             auto unknown = client->sendRequest(page, 10);
             ASSERT_EQ(unknown.first, drogon::ReqResult::Ok);

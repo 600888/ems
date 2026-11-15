@@ -241,6 +241,15 @@ const router = createRouter({
       ],
     },
 
+    {
+      path: '/alarms',
+      component: () => import('@/components/layout/MonitorShell.vue'),
+      meta: { permission: 'alarm.read', resourceScope: true },
+      children: [
+        { path: '', name: 'alarms', component: () => import('@/views/alarm/AlarmView.vue') },
+      ],
+    },
+
     // 30 前台 · 历史数据（独立页面，测点树勾选查询）
     {
       path: '/history',

@@ -1,5 +1,9 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue'
+import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { useRoute } from 'vue-router'
+import { errorMessage } from '@/api/http'
+import type { HistoryDeviceNode, HistoryTreeChild } from '@/stores/history'
+import { useAuthStore } from '@/stores/auth'
 
 import HistoryPointTree from '@/components/history/HistoryPointTree.vue'
 import LineChart from '@/components/charts/LineChart.vue'
@@ -14,6 +18,12 @@ import {
 } from '@/stores/history'
 
 const history = useHistoryStore()
+const route = useRoute()
+const auth = useAuthStore()
+let disposed = false
+onBeforeUnmount(() => {
+  disposed = true
+})
 
 const quickRanges: { key: QuickRangeKey; label: string }[] = [
   { key: '1h', label: '近 1 小时' },
@@ -78,8 +88,56 @@ const emptyText = computed(() => {
   return '所选时间范围内没有数据，请调整范围或测点后重新查询。'
 })
 
-onMounted(() => {
-  void history.load()
+onMounted(async () => {
+  const access = JSON.stringify([
+    auth.user?.user_id,
+    auth.session?.scope_mode,
+    auth.session?.scopes,
+    auth.session?.permissions,
+  ])
+  const current = () =>
+    !disposed &&
+    access ===
+      JSON.stringify([
+        auth.user?.user_id,
+        auth.session?.scope_mode,
+        auth.session?.scopes,
+        auth.session?.permissions,
+      ])
+  await history.load()
+  if (!current()) return
+  const { device_id: deviceId, point_id: pointId, at_ms: at } = route.query
+  if (typeof deviceId !== 'string' || typeof pointId !== 'string') return
+  const find = (nodes: HistoryTreeChild[]): HistoryDeviceNode | undefined => {
+    for (const node of nodes) {
+      if (node.isPoint) continue
+      if (node.id === deviceId) return node
+      const child = find(node.children ?? [])
+      if (child) return child
+    }
+  }
+  const device = find(history.tree)
+  if (!device) {
+    history.notice = '关联设备不在当前授权目录内，请检查设备范围。'
+    return
+  }
+  try {
+    const points = await history.ensurePoints(device)
+    if (!current()) return
+    const point = points.find((item) => item.pointId === pointId)
+    if (!point) {
+      history.notice = '关联测点已不存在或不支持历史查询。'
+      return
+    }
+    history.clearSelection()
+    history.togglePoint(point)
+    const instant = Number(at)
+    if (Number.isFinite(instant) && instant > 0)
+      history.customRange = [instant - 1800000, Math.min(Date.now(), instant + 1800000)]
+    await history.query()
+  } catch (cause) {
+    history.notice = errorMessage(cause)
+  }
 })
 </script>
 
