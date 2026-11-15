@@ -143,6 +143,17 @@ typedef int(EMS_PLUGIN_CALL* ems_plugin_write_fn)(void* instance, const char* po
                                                   double value);
 
 /**
+ * @brief 可选的带命令期限写入扩展，期限覆盖插件内各阶段，旧插件可不导出。
+ * @param[in,out] instance 借用的插件实例。
+ * @param[in] point_code 已配置的写入点编码。
+ * @param[in] value 原始写入值。
+ * @param[in] expires_at_ms UTC 毫秒绝对期限，过期不得发送。
+ * @return 0 协议确认；-1 失败，诊断由 last_error 提供。
+ */
+typedef int(EMS_PLUGIN_CALL* ems_plugin_write_until_fn)(void* instance, const char* point_code,
+                                                        double value, int64_t expires_at_ms);
+
+/**
  * @brief 可选的服务端映像批量更新扩展；旧插件可不导出，不改变必需 ABI。
  * @param[in] instance 服务端实例。
  * @param[in] samples_json 数组，每项含 code、value（null 保留旧值）、iec_quality、timestamp。
@@ -176,6 +187,7 @@ typedef const char*(EMS_PLUGIN_CALL* ems_plugin_last_error_fn)(void* instance);
 #define EMS_PLUGIN_DISCONNECT_SYMBOL "ems_plugin_disconnect"
 #define EMS_PLUGIN_READ_BATCH_SYMBOL "ems_plugin_read_batch"
 #define EMS_PLUGIN_WRITE_SYMBOL "ems_plugin_write"
+#define EMS_PLUGIN_WRITE_UNTIL_SYMBOL "ems_plugin_write_until"
 #define EMS_PLUGIN_UPDATE_IMAGE_SYMBOL "ems_plugin_update_image"
 #define EMS_PLUGIN_IS_CONNECTED_SYMBOL "ems_plugin_is_connected"
 #define EMS_PLUGIN_LAST_ERROR_SYMBOL "ems_plugin_last_error"

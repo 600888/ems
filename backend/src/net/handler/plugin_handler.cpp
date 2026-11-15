@@ -215,13 +215,21 @@ int PluginHandler::read_batch(const std::vector<std::string>& codes,
 }
 
 bool PluginHandler::write_value(const std::string& code, double value) {
+    return write_value_until(code, value, static_cast<std::int64_t>(now_ms()) + 3000);
+}
+
+bool PluginHandler::write_value_until(const std::string& code, double value,
+                                      std::int64_t expires_at_ms) {
     std::lock_guard<std::mutex> lock(impl_->mutex);
     if (!impl_->instance) {
         impl_->error = "Handler has not been initialized";
         return false;
     }
-    if (impl_->functions.write_fn(impl_->instance, code.c_str(), value) !=
-        enum_value(OperationResult::Success)) {
+    const int result =
+        impl_->functions.write_until_fn
+            ? impl_->functions.write_until_fn(impl_->instance, code.c_str(), value, expires_at_ms)
+            : impl_->functions.write_fn(impl_->instance, code.c_str(), value);
+    if (result != enum_value(OperationResult::Success)) {
         impl_->plugin_error();
         return false;
     }

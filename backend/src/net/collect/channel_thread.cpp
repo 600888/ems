@@ -417,10 +417,21 @@ PointCommandResult ChannelThread::execute_command(const CommandTask& task) {
         static_cast<std::int64_t>(now_ms()) >= command.expires_at_ms)
         return {"Expired", "expired_before_send"};
     last_command_[group] = std::chrono::steady_clock::now();
-    // 现有插件 bool 接口不能证明失败发生在发送前，统一保守记为 Unknown。
     const auto sent_at = static_cast<std::int64_t>(now_ms());
-    if (!handler_->write_value(route->protocol_code, raw))
-        return {"Unknown", handler_->last_error(), sent_at};
+    const auto remaining_ms =
+        std::max<std::int64_t>(0, std::chrono::duration_cast<std::chrono::milliseconds>(
+                                      task.deadline - std::chrono::steady_clock::now())
+                                      .count());
+    const auto write_deadline = std::min(command.expires_at_ms, sent_at + remaining_ms);
+    if (!handler_->write_value_until(route->protocol_code, raw, write_deadline)) {
+        const auto reason = handler_->last_error();
+        if (channel_config_.protocol_ == ems::model::ProtocolType::IEC61850 &&
+            (reason.rfind("IEC61850 not_sent:", 0) == 0 ||
+             reason.rfind("IEC61850 rejected:", 0) == 0))
+            return {"Rejected", reason};
+        // 其他插件尚未给出可证明的失败阶段，保守记为 Unknown。
+        return {"Unknown", reason, sent_at};
+    }
     return {"Acked", route->feedback_json.empty() ? "protocol_acknowledged" : "feedback_pending",
             sent_at};
 }

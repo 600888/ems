@@ -11,7 +11,7 @@ DeviceResult catalog_action(DeviceRequest& request, const std::string& path, con
         fields(body, {});
         // 只声明已接通解析与持久化的交集，不按协议插件目录猜测能力。
         return {
-            {{"protocols", Json::array({"modbus", "iec104", "dlt645"})},
+            {{"protocols", Json::array({"modbus", "iec104", "dlt645", "iec61850_mms"})},
              {"import_formats", Json::array({"vendor_csv", "vendor_xlsx", "telemetry_xlsx"})},
              {"supported_point_types", Json::array({"yc", "yx", "yk", "yt"})},
              {"supported_wire_layouts", Json::array({"ab", "ba", "ABCD", "BADC", "CDAB", "DCBA"})},

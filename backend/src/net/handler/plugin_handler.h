@@ -54,6 +54,16 @@ class PluginHandler : public ProtocolHandler {
      */
     bool write_value(const std::string& point_code, double value) override;
 
+    /**
+     * @brief 通过可选 ABI 扩展传递总期限，旧插件回退到常规写入。
+     * @param[in] point_code 协议地址或配置别名。
+     * @param[in] value 原始写入值。
+     * @param[in] expires_at_ms UTC 毫秒期限。
+     * @return true 协议确认；false 失败，可查询 last_error。
+     */
+    bool write_value_until(const std::string& point_code, double value,
+                           std::int64_t expires_at_ms) override;
+
     /** @brief 返回诊断副本。 @return 最近操作的错误文本。 */
     std::string last_error() const override;
 

@@ -26,6 +26,7 @@ const form = reactive({
   enabled: false,
   description: '',
 })
+const allowWrites = ref(false)
 let expected = '',
   createdId = ''
 async function load() {
@@ -42,6 +43,7 @@ async function load() {
   }
 }
 function edit(row?: Channel) {
+  allowWrites.value = Boolean((row?.serial?.iec61850 as Record<string, unknown>)?.allow_writes)
   createdId = stableId('ch')
   expected = row ? revisionOf(row) : engineeringRevision()
   Object.assign(
@@ -74,6 +76,18 @@ async function save() {
   busy.value = true
   try {
     const { channel_id, code, protocol, conn_mode, ...fields } = form
+    if (['iec61850_mms', 'iec61850', 'IEC61850'].includes(protocol) && conn_mode === 'tcp_client') {
+      const serial = rows.value.find((row) => row.channel_id === channel_id)?.serial ?? {}
+      Object.assign(fields, {
+        serial: {
+          ...serial,
+          iec61850: {
+            ...(serial.iec61850 as Record<string, unknown>),
+            allow_writes: allowWrites.value,
+          },
+        },
+      })
+    }
     if (channel_id) await deviceApi.updateChannel(channel_id, fields, expected)
     else
       await deviceApi.createChannel(createdId, { code, protocol, conn_mode, ...fields }, expected)
@@ -177,6 +191,13 @@ onMounted(load)
           :label="f.label"
           v-slot="slot"
           ><el-input-number :id="slot.id" v-model="form[f.key]" :min="0" /></FormField
+        ><label
+          v-if="
+            ['iec61850_mms', 'iec61850', 'IEC61850'].includes(form.protocol) &&
+            form.conn_mode === 'tcp_client'
+          "
+        >
+          允许 IEC61850 遥控 / 遥调 <el-switch v-model="allowWrites" /> </label
         ><label>启用 <el-switch v-model="form.enabled" /></label>
       </form>
       <template #footer

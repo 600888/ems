@@ -99,9 +99,26 @@ std::string address(const Point& point, const CfgBindingRow& binding, const CfgC
     using P = ems::model::ProtocolType;
     const auto kind = protocol(channel);
     if (kind == P::IEC61850) {
-        if (write) throw std::invalid_argument("IEC61850 control routes are not supported yet");
         const auto ref = extra.at("object_ref").template get<std::string>();
         const auto fc = extra.at("fc").template get<std::string>();
+        if (write) {
+            const auto mode = extra.value("write_mode", std::string());
+            if ((mode != "attribute" || fc != "SP") && (mode != "control" || fc != "CO"))
+                throw std::invalid_argument(
+                    "IEC61850 write requires SP attribute or CO control mode");
+            if constexpr (std::is_same_v<Point, CfgPointYkRow>)
+                if (mode != "control")
+                    throw std::invalid_argument("IEC61850 YK requires CO control mode");
+            if (!object(channel.serial_json)
+                     .value("iec61850", json::object())
+                     .value("allow_writes", false))
+                throw std::invalid_argument("IEC61850 control points require allow_writes=true");
+            if (ref.empty() || ref.find('/') == std::string::npos)
+                throw std::invalid_argument("invalid IEC61850 write object reference");
+            return "write:" + fc + ":" + ref;
+        }
+        if (extra.contains("write_mode") || extra.contains("control"))
+            throw std::invalid_argument("IEC61850 read points cannot declare write rules");
         const std::set<std::string> allowed{"MX", "ST", "SP", "CF", "DC", "EX"};
         if (ref.empty() || ref.find('/') == std::string::npos || !allowed.count(fc))
             throw std::invalid_argument("invalid IEC61850 object reference or FC");

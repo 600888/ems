@@ -31,8 +31,11 @@ Json new_channel(const std::string& id, const Json& patch) {
     for (auto key : {"code", "name", "protocol", "conn_mode", "endpoint"})
         text(row, key, key == std::string("endpoint") ? 255 : 128);
     if (row.at("protocol") != "modbus" && row.at("protocol") != "iec104" &&
-        row.at("protocol") != "dlt645")
+        row.at("protocol") != "dlt645" && row.at("protocol") != "iec61850_mms")
         throw ApiError(422, "Unsupported", "protocol_not_supported");
+    if (row.at("protocol") == "iec61850_mms" && row.at("conn_mode") != "tcp_client" &&
+        row.at("conn_mode") != "tcp_server")
+        throw ApiError(422, "InvalidArgument", "iec61850_requires_tcp");
     return row;
 }
 }  // namespace

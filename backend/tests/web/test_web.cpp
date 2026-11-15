@@ -1412,6 +1412,61 @@ TEST_F(WebDevice, ChannelAndBindingReplayRejectDifferentContent) {
         "3");
 }
 
+TEST_F(WebDevice, Iec61850ChannelsAndControlPointAddressesAreEditableFromWeb) {
+    execute("/api/devices/create", create());
+    const auto capabilities = execute("/api/device-management/capabilities", Json::object());
+    const auto protocols = capabilities.data.at("protocols");
+    EXPECT_NE(std::find(protocols.begin(), protocols.end(), "iec61850_mms"), protocols.end());
+    Json channel = {{"channel_id", "mms"},
+                    {"expected_config_revision", "1"},
+                    {"fields",
+                     {{"code", "mms"},
+                      {"name", "MMS"},
+                      {"protocol", "iec61850_mms"},
+                      {"conn_mode", "tcp_client"},
+                      {"endpoint", "127.0.0.1:10102"},
+                      {"serial", {{"iec61850", {{"allow_writes", true}}}}}}}};
+    EXPECT_EQ(execute("/api/channels/create", channel).status, 201);
+    EXPECT_TRUE(execute("/api/channels/detail", {{"channel_id", "mms"}})
+                    .data["serial"]["iec61850"]["allow_writes"]
+                    .get<bool>());
+    execute("/api/bindings/create", {{"device_id", "hvac01"},
+                                     {"binding_id", "mms-binding"},
+                                     {"expected_config_revision", "2"},
+                                     {"fields",
+                                      {{"channel_id", "mms"},
+                                       {"device_address", "IED"},
+                                       {"can_collect", true},
+                                       {"can_control", true}}}});
+    for (const auto& kind : {std::string("yt"), std::string("yk")}) {
+        const bool control = kind == "yk";
+        Json address = {
+            {"object_ref", control ? "SIMLD0/CSWI1.Pos" : "SIMLD0/GGIO1.Setpoint.setMag.f"},
+            {"fc", control ? "CO" : "SP"},
+            {"write_mode", control ? "control" : "attribute"}};
+        if (control)
+            address["control"] = {{"origin_category", 2},
+                                  {"origin_identifier", "EMS"},
+                                  {"test", false},
+                                  {"interlock_check", true},
+                                  {"synchro_check", true}};
+        auto saved =
+            execute("/api/points/create", {{"device_id", "hvac01"},
+                                           {"point_type", kind},
+                                           {"point_id", "mms-" + kind},
+                                           {"expected_config_revision", control ? "4" : "3"},
+                                           {"fields",
+                                            {{"binding_id", "mms-binding"},
+                                             {"code", "mms-" + kind},
+                                             {"name", kind},
+                                             {"wire_type", control ? "bool" : "f32"},
+                                             {"value_type", control ? "bool" : "double"},
+                                             {"enabled", true},
+                                             {"address", {{"protocol_address", address}}}}}});
+        EXPECT_EQ(saved.data["address"]["protocol_address"], address);
+    }
+}
+
 TEST_F(WebDevice, ReplayComparesJsonContentAcrossDatabaseSerialization) {
     Json saved = {{"channel_id", "serial"},
                   {"serial_json", "{\"parity\": \"none\", \"baud_rate\": 9600}"}};

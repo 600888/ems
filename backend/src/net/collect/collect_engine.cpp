@@ -489,7 +489,7 @@ std::shared_ptr<ChannelThread> CollectEngine::command_channel(const std::string&
         const auto& config = channel->channel_config();
         using P = ems::model::ProtocolType;
         if (config.protocol_ != P::ModbusTCP && config.protocol_ != P::ModbusRTU &&
-            config.protocol_ != P::IEC104)
+            config.protocol_ != P::IEC104 && config.protocol_ != P::IEC61850)
             continue;
         const auto settings = settings_of(config);
         if (settings.value("local_role", settings.value("role", std::string("client"))) != "client")

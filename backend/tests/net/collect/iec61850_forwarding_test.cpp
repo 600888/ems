@@ -8,10 +8,15 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #endif
+// CDC declarations depend on the model and API macros from the preceding headers.
+// clang-format off
 #include <iec61850_client.h>
 #include <iec61850_dynamic_model.h>
+#include <iec61850_cdc.h>
+// clang-format on
 #include <iec61850_server.h>
 
+#include <atomic>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -114,7 +119,9 @@ struct Storage {
 struct Source {
     IedModel* model = IedModel_create("SOURCE");
     IedServer server{nullptr};
-    DataAttribute *value, *quality, *time, *status;
+    DataAttribute *value, *quality, *time, *status, *setpoint;
+    std::atomic<int> commands{0};
+    std::atomic<bool> command_value{false}, reject_setpoint{false};
     const int port = unused_port();
     std::uint64_t timestamp{now_ms()};
 
@@ -133,7 +140,31 @@ struct Source {
         auto* state = DataObject_create("State", reinterpret_cast<ModelNode*>(node), 0);
         status = DataAttribute_create("stVal", reinterpret_cast<ModelNode*>(state),
                                       IEC61850_BOOLEAN, IEC61850_FC_ST, TRG_OPT_DATA_CHANGED, 0, 0);
+        auto* setting = DataObject_create("Setpoint", reinterpret_cast<ModelNode*>(node), 0);
+        setpoint = DataAttribute_create("setVal", reinterpret_cast<ModelNode*>(setting),
+                                        IEC61850_FLOAT32, IEC61850_FC_SP, 0, 0, 0);
+        auto* command_node = LogicalNode_create("CSWI1", device);
+        auto* command = CDC_SPC_create("Pos", reinterpret_cast<ModelNode*>(command_node), 0,
+                                       CDC_CTL_MODEL_SBO_ENHANCED | CDC_CTL_MODEL_HAS_CANCEL);
         server = IedServer_create(model);
+        IedServer_setWriteAccessPolicy(server, IEC61850_FC_SP, ACCESS_POLICY_ALLOW);
+        IedServer_handleWriteAccess(
+            server, setpoint,
+            [](DataAttribute*, MmsValue*, ClientConnection, void* data) {
+                return static_cast<Source*>(data)->reject_setpoint
+                           ? DATA_ACCESS_ERROR_OBJECT_ACCESS_DENIED
+                           : DATA_ACCESS_ERROR_SUCCESS;
+            },
+            this);
+        IedServer_setControlHandler(
+            server, command,
+            [](ControlAction, void* data, MmsValue* value, bool) {
+                auto& source = *static_cast<Source*>(data);
+                source.command_value = MmsValue_getBoolean(value);
+                ++source.commands;
+                return CONTROL_RESULT_OK;
+            },
+            this);
         update(21);
         IedServer_setLocalIpAddress(server, "127.0.0.1");
         IedServer_start(server, port);
@@ -180,6 +211,7 @@ database::DeviceConfigRecords configuration(int source_port, int output_port) {
     source.endpoint = "127.0.0.1:" + std::to_string(source_port);
     source.poll_interval_ms = 25;
     source.timeout_ms = 500;
+    source.serial_json = R"({"iec61850":{"allow_writes":true}})";
     rows.channels.push_back(source);
     auto output = source;
     output.id = 8;
@@ -211,11 +243,13 @@ database::DeviceConfigRecords configuration(int source_port, int output_port) {
     binding.device_id = "meter";
     binding.channel_id = "source";
     binding.can_collect = 1;
+    binding.can_control = 1;
     rows.bindings.push_back(binding);
     binding.id = 2;
     binding.binding_id = "output-binding";
     binding.channel_id = "output";
     binding.can_collect = 0;
+    binding.can_control = 0;
     binding.can_forward = 1;
     rows.bindings.push_back(binding);
     database::CfgPointYcRow point;
@@ -240,6 +274,27 @@ database::DeviceConfigRecords configuration(int source_port, int output_port) {
     state.invert = 1;
     state.protocol_address_json = R"({"object_ref":"SOURCELD0/MMXU1.State.stVal","fc":"ST"})";
     rows.points_yx.push_back(state);
+    database::CfgPointYtRow sp;
+    sp.point_id = "sp-command";
+    sp.owner_device_id = "meter";
+    sp.binding_id = "input-binding";
+    sp.wire_type = "f32";
+    sp.range_min = -1000;
+    sp.range_max = 1000;
+    sp.scale_factor = 2;
+    sp.offset_value = 1;
+    sp.protocol_address_json =
+        R"({"object_ref":"SOURCELD0/MMXU1.Setpoint.setVal","fc":"SP","write_mode":"attribute"})";
+    rows.points_yt.push_back(sp);
+    database::CfgPointYkRow co;
+    co.point_id = "co-command";
+    co.owner_device_id = "meter";
+    co.binding_id = "input-binding";
+    co.wire_type = "bool";
+    co.write_mode = "direct";
+    co.protocol_address_json =
+        R"({"object_ref":"SOURCELD0/CSWI1.Pos","fc":"CO","write_mode":"control","control":{"timeout_ms":3000,"origin_category":2,"origin_identifier":"EMS","test":false,"interlock_check":true,"synchro_check":true}})";
+    rows.points_yk.push_back(co);
     auto settings = Json::parse(rows.channels[1].serial_json);
     settings["iec61850"]["points"].push_back({{"code", "status"},
                                               {"object_ref", "EMSLD0/MMXU1.State.stVal"},
@@ -269,6 +324,37 @@ void run() {
     CHECK(engine.initialize(options));
     CHECK(engine.start_all(loader) == 2);
     CHECK(engine.channel_count() == 2);
+    eventually([&] { return engine.command_channel("sp-command") != nullptr; });
+    auto execute = [&](const std::string& id, double value, int lifetime = 3000) {
+        auto channel = engine.command_channel(id);
+        CHECK(channel);
+        net::collect::PointCommand command;
+        command.point_id = id;
+        command.value = value;
+        command.expires_at_ms = now_ms() + lifetime;
+        auto completion = std::make_shared<std::promise<net::collect::PointCommandResult>>();
+        auto result = completion->get_future();
+        CHECK(channel->enqueue_command(
+            command, [] { return true; },
+            [completion](const auto& value) { completion->set_value(value); }));
+        CHECK(result.wait_for(std::chrono::seconds(4)) == std::future_status::ready);
+        return result.get();
+    };
+    auto command = execute("sp-command", 85);
+    CHECK(command.status == "Acked" && command.reason == "protocol_acknowledged");
+    IedServer_lockDataModel(source.server);
+    const auto setpoint =
+        MmsValue_toFloat(IedServer_getAttributeValue(source.server, source.setpoint));
+    IedServer_unlockDataModel(source.server);
+    CHECK(setpoint == 42.0f);
+    command = execute("co-command", 1);
+    CHECK(command.status == "Acked" && source.command_value && source.commands == 1);
+    command = execute("co-command", 0);
+    CHECK(command.status == "Acked" && !source.command_value && source.commands == 2);
+    source.reject_setpoint = true;
+    command = execute("sp-command", 7);
+    CHECK(command.status == "Rejected" && command.reason.find("IEC61850 rejected:") == 0);
+    CHECK(engine.command_channel("point-power") == nullptr);
     auto writer = engine.data_dispatcher()->rtdb_manager()->getRtDb();
     auto connection =
         std::shared_ptr<sIedConnection>(IedConnection_create(), [](IedConnection value) {

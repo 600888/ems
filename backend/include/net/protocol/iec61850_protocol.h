@@ -1,9 +1,10 @@
 /** @file iec61850_protocol.h
- * @brief IEC 61850 MMS 轮询/报告客户端与只读服务端，原生对象和线程隐藏于 Impl。
+ * @brief IEC 61850 MMS 采集/控制客户端与只读服务端，原生对象和线程隐藏于 Impl。
  */
 #ifndef EMS_NET_PROTOCOL_IEC61850_PROTOCOL_H
 #define EMS_NET_PROTOCOL_IEC61850_PROTOCOL_H
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -48,12 +49,19 @@ class Iec61850Protocol final {
      * @return quality=0 的点数；-1 参数非法、序列化超限或实例未初始化。
      */
     int read_batch(const std::vector<std::string>& point_codes, std::string& result_json);
-    /** @brief 服务端本地更新值/q/t；客户端写入仍拒绝，不发送远端控制。
-     * @param[in] point_code 已配置的值点或显式 quality_code。
-     * @param[in] value 有限原始值；质量别名接受 IEC q 位掩码。
-     * @return 0 本地更新成功；-1 客户端写入、类型或别名错误，原映像不变。
+    /** @brief 服务端更新本地映像；客户端按白名单写 SP 或执行 CO，最多等待 3 秒。
+     * @param[in] point_code 已配置的写入点或服务端映像别名。
+     * @param[in] value 有限原始值；布尔仅接受 0/1。
+     * @return 0 完成协议要求的确认；-1 拒绝、未发送或结果未知，详见 last_error。
      */
     int write(const std::string& point_code, double value);
+    /** @brief 在命令剩余总预算内写入，共用选择、执行和终止确认期限，不自动重发。
+     * @param[in] point_code 已配置的写入点或服务端映像别名。
+     * @param[in] value 有限原始值，按在线 MMS 类型校验。
+     * @param[in] expires_at_ms 命令 UTC 毫秒期限；最多使用从当前起 3 秒。
+     * @return 0 协议确认；-1 失败，结果未知时关闭 association 以隔离迟到确认。
+     */
+    int write_until(const std::string& point_code, double value, std::int64_t expires_at_ms);
     /** @brief 服务端原子更新整批出口映像，客户端拒绝此操作。
      * @param[in] samples_json 带 code/value/iec_quality/timestamp 的 JSON 数组。
      * @return 0 成功；-1 参数错误、不支持或未初始化，原映像不变。

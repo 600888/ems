@@ -3,7 +3,7 @@ import { after, before, beforeEach, test } from 'node:test'
 import { createServer } from 'vite'
 import { createPinia, setActivePinia } from 'pinia'
 
-let server, useMonitorStore, useAuthStore, originalFetch, originalWindow
+let server, useMonitorStore, useAuthStore, commandReason, originalFetch, originalWindow
 const response = (data) => Response.json({ data, meta: {} })
 const row = (id, current = '—') => ({
   pointId: id,
@@ -20,6 +20,7 @@ before(async () => {
   server = await createServer({ server: { middlewareMode: true }, logLevel: 'silent' })
   ;({ useMonitorStore } = await server.ssrLoadModule('/src/stores/monitor.ts'))
   ;({ useAuthStore } = await server.ssrLoadModule('/src/stores/auth.ts'))
+  ;({ commandReason } = await server.ssrLoadModule('/src/api/monitor.ts'))
   originalFetch = globalThis.fetch
   originalWindow = globalThis.window
   globalThis.window = { setTimeout, clearTimeout, dispatchEvent() {} }
@@ -39,6 +40,15 @@ after(async () => {
   globalThis.fetch = originalFetch
   globalThis.window = originalWindow
   await server.close()
+})
+
+test('IEC61850 明确拒绝、未发送和未知结果保留设备诊断', () => {
+  assert.match(commandReason('IEC61850 rejected: operate ied_error=21'), /设备拒绝.*ied_error=21/)
+  assert.match(commandReason('IEC61850 not_sent: boolean_requires_zero_or_one'), /未发送.*boolean/)
+  assert.match(
+    commandReason('IEC61850 result_unknown: command_termination_timeout'),
+    /结果未知.*勿重复.*termination_timeout/,
+  )
 })
 
 test('未修改的无样本遥调点不阻断有效改值，同名点只下发选中的 ID', async () => {

@@ -92,6 +92,19 @@ class ProtocolHandler {
     virtual bool write_value(const std::string& point_code, double value) = 0;
 
     /**
+     * @brief 带绝对期限下发；未实现扩展的处理器保留现有写入行为。
+     * @param[in] point_code 协议地址或测点别名。
+     * @param[in] value 原始写入值。
+     * @param[in] expires_at_ms UTC 毫秒期限。
+     * @return true 协议确认；false 失败，详见 last_error。
+     */
+    virtual bool write_value_until(const std::string& point_code, double value,
+                                   std::int64_t expires_at_ms) {
+        (void)expires_at_ms;
+        return write_value(point_code, value);
+    }
+
+    /**
      * @brief 返回本次操作的诊断副本。
      * @return 错误说明；最近操作成功时为空。
      */

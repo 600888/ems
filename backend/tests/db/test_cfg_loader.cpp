@@ -434,3 +434,51 @@ TEST(CfgLoader, Iec61850RejectsServerControlAndDirectoryOverrides) {
     EXPECT_EQ(loader.channels().size(), 1u);
     EXPECT_EQ(loader.config_revision(), 7);
 }
+
+TEST(CfgLoader, Iec61850CompilesSpAndCoCommandsSeparatelyFromReadPoints) {
+    auto rows = configuration();
+    rows.channels[0].protocol = "iec61850_mms";
+    rows.channels[0].serial_json = R"({"iec61850":{"allow_writes":true}})";
+    rows.points_yc[0].protocol_address_json =
+        R"({"object_ref":"SIMLD0/MMXU1.TotW.mag.f","fc":"MX"})";
+    CfgPointYtRow setpoint;
+    setpoint.point_id = "setpoint";
+    setpoint.owner_device_id = "rack";
+    setpoint.binding_id = "binding";
+    setpoint.wire_type = "f32";
+    setpoint.scale_factor = 0.1;
+    setpoint.feedback_json = "[]";
+    setpoint.protocol_address_json =
+        R"({"object_ref":"SIMLD0/GGIO1.Setpoint.setMag.f","fc":"SP","write_mode":"attribute"})";
+    rows.points_yt.push_back(setpoint);
+    CfgPointYkRow control;
+    control.point_id = "command";
+    control.owner_device_id = "rack";
+    control.binding_id = "binding";
+    control.wire_type = "bool";
+    control.protocol_address_json =
+        R"({"object_ref":"SIMLD0/CSWI1.Pos","fc":"CO","write_mode":"control","control":{"origin_category":2,"origin_identifier":"EMS","test":false,"interlock_check":true,"synchro_check":true}})";
+    rows.points_yk.push_back(control);
+    CfgLoader loader;
+    ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
+    const auto device = loader.devices(7)[0];
+    ASSERT_EQ(device.ykPoints_.size(), 1u);
+    ASSERT_EQ(device.ytPoints_.size(), 1u);
+    EXPECT_EQ(device.ykPoints_[0].protocol_code, "write:CO:SIMLD0/CSWI1.Pos");
+    EXPECT_EQ(device.ytPoints_[0].protocol_code, "write:SP:SIMLD0/GGIO1.Setpoint.setMag.f");
+    EXPECT_TRUE(device.ytPoints_[0].feedback_json.empty());
+    EXPECT_LE(device.ytPoints_[0].feedback_timeout_ms, 3000);
+    const auto points = nlohmann::json::parse(loader.channels()[0].settings_)["iec61850"]["points"];
+    ASSERT_EQ(points.size(), 3u);
+    EXPECT_EQ(points[1]["mms_type"], "boolean");
+    EXPECT_EQ(points[1]["control"]["origin_identifier"], "EMS");
+    rows.bindings[0].can_control = 0;
+    EXPECT_FALSE(loader.configure(rows));
+    rows.bindings[0].can_control = 1;
+    rows.channels[0].serial_json = R"({"iec61850":{"allow_writes":false}})";
+    EXPECT_FALSE(loader.configure(rows));
+    rows.channels[0].serial_json = R"({"iec61850":{"allow_writes":true}})";
+    rows.points_yt[0].protocol_address_json =
+        R"({"object_ref":"SIMLD0/GGIO1.Setpoint.setMag.f","fc":"CF","write_mode":"attribute"})";
+    EXPECT_FALSE(loader.configure(rows));
+}

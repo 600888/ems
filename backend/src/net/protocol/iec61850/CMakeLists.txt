@@ -119,7 +119,7 @@ install(FILES "${EMS_BACKEND_ROOT}/include/net/protocol/iec61850_protocol.h"
 install(FILES "${EMS_LIBIEC61850_ROOT}/COPYING" DESTINATION plugins/iec61850/1.0.0
         RENAME LICENSE.libiec61850)
 file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/manifest-$<CONFIG>.json" CONTENT
-    "{\n  \"plugin_id\": \"iec61850\",\n  \"package_version\": \"1.0.0\",\n  \"abi_major\": 1,\n  \"binary\": \"$<TARGET_FILE_NAME:proto_iec61850>\",\n  \"protocols\": [\"IEC61850\"],\n  \"roles\": [\"client\", \"server_readonly\"],\n  \"services\": [\"read\", \"dataset_read\", \"reports\", \"server_readonly\"],\n  \"tls\": false\n}\n")
+    "{\n  \"plugin_id\": \"iec61850\",\n  \"package_version\": \"1.0.0\",\n  \"abi_major\": 1,\n  \"binary\": \"$<TARGET_FILE_NAME:proto_iec61850>\",\n  \"protocols\": [\"IEC61850\"],\n  \"roles\": [\"client\", \"server_readonly\"],\n  \"services\": [\"read\", \"dataset_read\", \"reports\", \"attribute_write\", \"control\", \"server_readonly\"],\n  \"tls\": false\n}\n")
 install(FILES "${CMAKE_CURRENT_BINARY_DIR}/manifest-$<CONFIG>.json"
         DESTINATION plugins/iec61850/1.0.0 RENAME manifest.json)
 if(EMS_PROTOCOL_RUNTIME_DEPENDENCIES)

@@ -145,6 +145,10 @@ struct Point {
     std::string quality;
     std::string timestamp;
     std::set<double> invalid;
+    std::string write_mode;
+    int control_timeout{3000}, origin_category{0};
+    std::string origin_identifier;
+    bool test{false}, interlock{true}, synchro{true};
 };
 
 struct ReportConfig {
@@ -167,6 +171,7 @@ struct Sample {
 struct Config {
     std::string host;
     bool server{false};
+    bool allow_writes{false};
     std::string server_options;
     std::string read_mode{"poll"};
     int poll_interval{1000}, queue_size{1024};
@@ -240,7 +245,7 @@ Config configuration(const std::string& text) {
     require(
         config.read_mode == "poll" || config.read_mode == "report" || config.read_mode == "hybrid",
         "invalid read_mode");
-    require(!options.value("allow_writes", false), "client writes are not supported");
+    config.allow_writes = options.value("allow_writes", false);
     config.poll_interval = integer(value, "poll_interval_ms", 1000, 1, 86400000);
     config.connect_timeout = integer(options, "connect_timeout_ms", 3000, 1, 60000);
     config.discovery_timeout = integer(options, "discovery_timeout_ms", 60000, 1, 600000);
@@ -255,7 +260,7 @@ Config configuration(const std::string& text) {
     std::set<std::string> codes;
     for (const auto& item : points) {
         fields(item, {"code", "object_ref", "fc", "mms_type", "quality_ref", "timestamp_ref",
-                      "invalid_values"});
+                      "invalid_values", "write_mode", "control"});
         Point point;
         point.code = item.at("code").get<std::string>();
         require(!point.code.empty() && point.code.size() <= 256 &&
@@ -263,7 +268,43 @@ Config configuration(const std::string& text) {
                 "point code is invalid or duplicated");
         point.ref = item.at("object_ref").get<std::string>();
         reference(point.ref);
-        point.fc = constraint(item.at("fc").get<std::string>());
+        point.write_mode = item.value("write_mode", std::string());
+        const auto fc = item.at("fc").get<std::string>();
+        if (point.write_mode.empty()) {
+            require(!item.contains("control"), "read point cannot contain control settings");
+            point.fc = constraint(fc);
+        } else {
+            require(config.allow_writes, "write points require allow_writes=true");
+            require(point.ref.find('(') == std::string::npos,
+                    "array element writes are not supported");
+            if (point.write_mode == "attribute") {
+                require(fc == "SP" && !item.contains("control"),
+                        "attribute write requires SP and no control settings");
+                point.fc = IEC61850_FC_SP;
+            } else {
+                require(point.write_mode == "control" && fc == "CO" &&
+                            point.ref.size() - point.ref.find('/') - 1 + 8 <= 64,
+                        "control write requires a CO data object reference");
+                point.fc = IEC61850_FC_CO;
+                const auto& control = item.at("control");
+                fields(control, {"timeout_ms", "origin_category", "origin_identifier", "test",
+                                 "interlock_check", "synchro_check"});
+                point.control_timeout = std::min(
+                    3000, integer(control, "timeout_ms", std::min(config.timeout, 3000), 1, 60000));
+                require(control.contains("origin_category"), "control origin_category is required");
+                point.origin_category = integer(control, "origin_category", 0, 1, 8);
+                point.origin_identifier = control.at("origin_identifier").get<std::string>();
+                require(!point.origin_identifier.empty() && point.origin_identifier.size() <= 64 &&
+                            point.origin_identifier.find('\0') == std::string::npos,
+                        "control origin_identifier is invalid");
+                point.test = control.at("test").get<bool>();
+                point.interlock = control.at("interlock_check").get<bool>();
+                point.synchro = control.at("synchro_check").get<bool>();
+            }
+            require(!item.contains("quality_ref") && !item.contains("timestamp_ref") &&
+                        !item.contains("invalid_values"),
+                    "write points cannot contain read metadata");
+        }
         point.type = item.value("mms_type", std::string());
         require(
             std::set<std::string>{"", "boolean", "integer", "unsigned", "float32", "float64"}.count(
@@ -483,6 +524,60 @@ double number(MmsValue* value, MmsVariableSpecification* spec, Json& result) {
             "integer_precision_loss");
     return static_cast<double>(signed_value);
 }
+
+Value write_value(double value, MmsVariableSpecification* spec) {
+    require(spec && std::isfinite(value), "non_finite_or_missing_value_type");
+    const auto type = MmsVariableSpecification_getType(spec);
+    const int width = MmsVariableSpecification_getSize(spec);
+    if (type == MMS_BOOLEAN) {
+        require(value == 0 || value == 1, "boolean_requires_zero_or_one");
+        return Value(MmsValue_newBoolean(value != 0), MmsValue_delete);
+    }
+    if (type == MMS_FLOAT) {
+        require(width == 32 || width == 64, "unsupported_float_width");
+        require(width != 32 || std::abs(value) <= std::numeric_limits<float>::max(),
+                "float_value_out_of_range");
+        return Value(
+            width == 32 ? MmsValue_newFloat(static_cast<float>(value)) : MmsValue_newDouble(value),
+            MmsValue_delete);
+    }
+    require((type == MMS_INTEGER || type == MMS_UNSIGNED) && width > 0 && width <= 64,
+            "unsupported_write_type");
+    require(std::trunc(value) == value && std::abs(value) <= 9007199254740991.0,
+            "integer_precision_or_fraction_error");
+    require(type == MMS_INTEGER
+                ? (value >= -std::ldexp(1.0, width - 1) && value < std::ldexp(1.0, width - 1))
+                : (value >= 0 && value < std::ldexp(1.0, width)),
+            "integer_value_out_of_range");
+    Value result(nullptr, MmsValue_delete);
+    if (type == MMS_INTEGER)
+        result.reset(MmsValue_newIntegerFromInt64(static_cast<std::int64_t>(value)));
+    else {
+        // Build a positive BER unsigned value using only the public MMS codec.
+        std::array<std::uint8_t, 10> encoded{};
+        auto raw = static_cast<std::uint64_t>(value);
+        for (int i = 9; i >= 2; --i) {
+            encoded[i] = static_cast<std::uint8_t>(raw);
+            raw >>= 8;
+        }
+        int start = 2;
+        while (start < 9 && encoded[start] == 0 && !(encoded[start + 1] & 0x80)) ++start;
+        encoded[start - 2] = 0x86;
+        encoded[start - 1] = static_cast<std::uint8_t>(10 - start);
+        int end = 0;
+        result.reset(MmsValue_decodeMmsData(encoded.data(), start - 2,
+                                            static_cast<int>(encoded.size()), &end));
+        require(result && end == encoded.size(), "cannot_encode_unsigned_value");
+    }
+    require(result != nullptr, "cannot_allocate_write_value");
+    return result;
+}
+
+bool explicit_rejection(IedClientError error) {
+    return (error >= IED_ERROR_ACCESS_DENIED && error <= IED_ERROR_OBJECT_INVALIDATED) ||
+           error == IED_ERROR_OBJECT_CONSTRAINT_CONFLICT ||
+           error == IED_ERROR_SERVICE_NOT_SUPPORTED || error == IED_ERROR_SERVICE_NOT_IMPLEMENTED;
+}
 }  // namespace
 
 class Iec61850Protocol::Impl {
@@ -493,12 +588,26 @@ class Iec61850Protocol::Impl {
     std::string error;
     std::map<std::string, Spec> roots;
     std::map<std::string, Target> targets;
+    std::map<std::string, Target> attributes;
     std::map<std::string, std::size_t> points;
+
+    struct Control {
+        ControlObjectClient client{nullptr};            // association owns the native client.
+        MmsVariableSpecification* value_spec{nullptr};  // borrowed from roots.
+        bool composite{false};
+        std::mutex mutex;
+        std::condition_variable wake;
+        bool waiting{false}, terminated{false};
+        LastApplError termination{};
+    };
+
+    std::map<std::string, std::unique_ptr<Control>> controls;
     std::vector<Dataset> datasets;
     std::size_t model_nodes{0};
 
     std::unique_ptr<MmsReadOnlyServer> server;
-    mutable std::mutex io_mutex;
+    mutable std::timed_mutex io_mutex;
+    std::atomic<bool> write_lock_timeout{false};
     std::map<std::string, Sample> cache;
     std::string report_warning;
 
@@ -571,14 +680,17 @@ class Iec61850Protocol::Impl {
         if (server) server->disconnect();
         cache.clear();
         datasets.clear();
-        targets.clear();
-        roots.clear();
-        points.clear();
         if (connection) {
             IedConnection_close(connection);
             IedConnection_destroy(connection);
             connection = nullptr;
         }
+        // destroy joins the receiver before callback parameters and model specs are freed.
+        controls.clear();
+        targets.clear();
+        attributes.clear();
+        roots.clear();
+        points.clear();
     }
 
     bool connected() const {
@@ -645,6 +757,69 @@ class Iec61850Protocol::Impl {
         for (std::size_t i = 0; i < config.points.size(); ++i) {
             budget(deadline);
             const auto& point = config.points[i];
+            if (point.write_mode == "attribute") {
+                auto target = lookup(point.ref, point.fc, deadline);
+                require(scalar(MmsVariableSpecification_getType(target.spec)) &&
+                            (point.type.empty() || type_name(target.spec) == point.type),
+                        "SP write leaf/type mismatch: " + point.ref);
+                attributes.emplace(point.code, target);
+                points.emplace(point.code, i);
+                continue;
+            }
+            if (point.write_mode == "control") {
+                auto target = lookup(point.ref, point.fc, deadline);
+                require(MmsVariableSpecification_getType(target.spec) == MMS_STRUCTURE,
+                        "CO reference must identify a control object: " + point.ref);
+                auto* oper =
+                    MmsVariableSpecification_getNamedVariableRecursive(target.spec, "Oper");
+                auto* value_spec =
+                    oper ? MmsVariableSpecification_getNamedVariableRecursive(oper, "ctlVal")
+                         : nullptr;
+                if (!value_spec && oper)
+                    value_spec = MmsVariableSpecification_getNamedVariableRecursive(oper, "setMag");
+                const bool composite =
+                    value_spec && MmsVariableSpecification_getType(value_spec) == MMS_STRUCTURE;
+                if (composite) {
+                    require(MmsVariableSpecification_getSize(value_spec) == 1,
+                            "unsupported composite ctlVal: " + point.ref);
+                    value_spec =
+                        MmsVariableSpecification_getChildSpecificationByIndex(value_spec, 0);
+                }
+                require(value_spec && scalar(MmsVariableSpecification_getType(value_spec)),
+                        "control has no scalar ctlVal: " + point.ref);
+                require(point.type.empty() || type_name(value_spec) == point.type,
+                        "MMS ctlVal type mismatch: " + point.ref);
+                if (!controls.count(point.ref)) {
+                    budget(deadline);
+                    IedClientError code = IED_ERROR_OK;
+                    const auto model = IedConnection_readUnsigned32Value(
+                        connection, &code, (point.ref + ".ctlModel").c_str(), IEC61850_FC_CF);
+                    require(code == IED_ERROR_OK && model >= 1 && model <= 4,
+                            "control_model_not_controllable: " + point.ref +
+                                " ied_error=" + std::to_string(code));
+                    auto control = std::make_unique<Control>();
+                    control->value_spec = value_spec;
+                    control->composite = composite;
+                    control->client =
+                        ControlObjectClient_createEx(point.ref.c_str(), connection,
+                                                     static_cast<ControlModel>(model), target.spec);
+                    require(control->client != nullptr, "invalid control model: " + point.ref);
+                    ControlObjectClient_setCommandTerminationHandler(
+                        control->client,
+                        [](void* parameter, ControlObjectClient client) {
+                            auto& pending = *static_cast<Control*>(parameter);
+                            std::lock_guard<std::mutex> lock(pending.mutex);
+                            if (!pending.waiting) return;
+                            pending.termination = ControlObjectClient_getLastApplError(client);
+                            pending.terminated = true;
+                            pending.wake.notify_all();
+                        },
+                        control.get());
+                    controls.emplace(point.ref, std::move(control));
+                }
+                points.emplace(point.code, i);
+                continue;
+            }
             add_target(point.ref, point.fc, deadline);
             auto* spec = targets.at(key(point.ref, point.fc)).spec;
             require(scalar(MmsVariableSpecification_getType(spec)),
@@ -1169,7 +1344,8 @@ void Iec61850Protocol::Impl::drain_reports() {
 bool Iec61850Protocol::Impl::refresh(Clock::time_point deadline) {
     const bool recovering = resync;
     std::vector<std::string> codes;
-    for (const auto& point : config.points) codes.push_back(point.code);
+    for (const auto& point : config.points)
+        if (point.write_mode.empty()) codes.push_back(point.code);
     std::string unused;
     const int result = poll_batch(codes, unused, true, deadline);
     if (result == 0) {
@@ -1203,7 +1379,7 @@ void Iec61850Protocol::Impl::run_reports() noexcept {
                               [&] { return stopping || !events.empty() || !lost.empty(); });
             }
             if (stopping) break;
-            std::lock_guard<std::mutex> lock(io_mutex);
+            std::lock_guard<std::timed_mutex> lock(io_mutex);
             drain_reports();
             if (!connected() || fatal_report) continue;
             if (resync || (config.read_mode == "hybrid" && Clock::now() >= next_poll)) {
@@ -1214,7 +1390,7 @@ void Iec61850Protocol::Impl::run_reports() noexcept {
         }
     } catch (...) {
         try {
-            std::lock_guard<std::mutex> lock(io_mutex);
+            std::lock_guard<std::timed_mutex> lock(io_mutex);
             for (auto& [_, sample] : cache) sample.error = "report_worker_failed";
             if (connection) IedConnection_close(connection);
         } catch (...) {
@@ -1227,6 +1403,7 @@ Iec61850Protocol::Iec61850Protocol() : impl_(std::make_unique<Impl>()) {}
 Iec61850Protocol::~Iec61850Protocol() = default;
 
 int Iec61850Protocol::initialize(const std::string& text) {
+    impl_->write_lock_timeout = false;
     try {
         require(!impl_->connected(), "disconnect before reconfiguring IEC61850");
         auto candidate = configuration(text);
@@ -1247,6 +1424,7 @@ int Iec61850Protocol::initialize(const std::string& text) {
 }
 
 int Iec61850Protocol::connect() {
+    impl_->write_lock_timeout = false;
     if (impl_->connected()) return 0;
     if (impl_->server) {
         const int result = impl_->server->connect();
@@ -1285,6 +1463,7 @@ int Iec61850Protocol::connect() {
 }
 
 int Iec61850Protocol::disconnect() {
+    impl_->write_lock_timeout = false;
     impl_->close();
     impl_->error.clear();
     return 0;
@@ -1293,23 +1472,159 @@ int Iec61850Protocol::disconnect() {
 bool Iec61850Protocol::is_connected() const { return impl_->connected(); }
 
 int Iec61850Protocol::write(const std::string& code, double value) {
-    std::lock_guard<std::mutex> lock(impl_->io_mutex);
+    return write_until(code, value, static_cast<std::int64_t>(now_ms()) + 3000);
+}
+
+int Iec61850Protocol::write_until(const std::string& code, double value,
+                                  std::int64_t expires_at_ms) {
+    const auto wall_now = static_cast<std::int64_t>(now_ms());
+    const auto remaining =
+        expires_at_ms > wall_now ? std::min<std::int64_t>(expires_at_ms - wall_now, 3000) : 0;
+    auto deadline = Clock::now() + std::chrono::milliseconds(remaining);
+    std::unique_lock<std::timed_mutex> lock(impl_->io_mutex, std::defer_lock);
+    if (!lock.try_lock_until(deadline)) {
+        impl_->write_lock_timeout = true;
+        return -1;
+    }
+    impl_->write_lock_timeout = false;
     if (impl_->server) {
         const int result = impl_->server->write(code, value);
         impl_->error = impl_->server->last_error();
         return result;
     }
-    impl_->error = "unsupported: IEC61850 client is read-only; command not sent";
-    return -1;
+    bool sent = false, selected = false;
+    Impl::Control* pending = nullptr;
+    auto finish_pending = [&] {
+        if (pending) {
+            std::lock_guard<std::mutex> guard(pending->mutex);
+            pending->waiting = false;
+        }
+    };
+    try {
+        require(impl_->initialized && impl_->config.allow_writes, "writes_not_enabled");
+        require(impl_->connected(), "association_not_connected");
+        const auto found = impl_->points.find(code);
+        require(found != impl_->points.end(), "write_point_not_found");
+        const auto& point = impl_->config.points[found->second];
+        require(!point.write_mode.empty(), "point_is_read_only");
+        deadline = std::min(
+            deadline,
+            Clock::now() + std::chrono::milliseconds(point.write_mode == "control"
+                                                         ? point.control_timeout
+                                                         : std::min(impl_->config.timeout, 3000)));
+        if (point.write_mode == "attribute") {
+            auto data = write_value(value, impl_->attributes.at(point.code).spec);
+            require(data != nullptr, "cannot_allocate_write_value");
+            impl_->budget(deadline);
+            IedClientError error = IED_ERROR_OK;
+            sent = true;
+            IedConnection_writeObject(impl_->connection, &error, point.ref.c_str(), point.fc,
+                                      data.get());
+            if (error != IED_ERROR_OK) {
+                if (!explicit_rejection(error))
+                    throw std::runtime_error("attribute_write ied_error=" + std::to_string(error));
+                impl_->error =
+                    "IEC61850 rejected: attribute_write ied_error=" + std::to_string(error);
+                return -1;
+            }
+        } else {
+            pending = impl_->controls.at(point.ref).get();
+            auto* client = pending->client;
+            auto data = write_value(value, pending->value_spec);
+            require(data != nullptr, "cannot_allocate_control_value");
+            if (pending->composite) {
+                Value structure(MmsValue_createEmptyStructure(1), MmsValue_delete);
+                require(structure != nullptr, "cannot_allocate_control_structure");
+                MmsValue_setElement(structure.get(), 0, data.release());
+                data = std::move(structure);
+            }
+            ControlObjectClient_setOrigin(client, point.origin_identifier.c_str(),
+                                          point.origin_category);
+            ControlObjectClient_setTestMode(client, point.test);
+            ControlObjectClient_setInterlockCheck(client, point.interlock);
+            ControlObjectClient_setSynchroCheck(client, point.synchro);
+            const auto model = ControlObjectClient_getControlModel(client);
+            auto failure = [&](const char* stage, bool may_execute) {
+                const auto error = ControlObjectClient_getLastError(client);
+                const auto application = ControlObjectClient_getLastApplError(client);
+                const auto details = std::string(stage) + " ied_error=" + std::to_string(error) +
+                                     " appl_error=" + std::to_string(application.error) +
+                                     " add_cause=" + std::to_string(application.addCause);
+                if (!explicit_rejection(error) && !(error == IED_ERROR_OK && !may_execute)) {
+                    // An unresolved selection is also retired by closing the association.
+                    sent = may_execute;
+                    throw std::runtime_error(details);
+                }
+                impl_->error = "IEC61850 rejected: " + details;
+            };
+            if (model == 2 || model == 4) {
+                impl_->budget(deadline);
+                selected = true;
+                const bool ok = model == 2
+                                    ? ControlObjectClient_select(client)
+                                    : ControlObjectClient_selectWithValue(client, data.get());
+                if (!ok || ControlObjectClient_getLastError(client) != IED_ERROR_OK) {
+                    failure("select", false);
+                    return -1;
+                }
+            }
+            impl_->budget(deadline);
+            {
+                std::lock_guard<std::mutex> guard(pending->mutex);
+                pending->waiting = true;
+                pending->terminated = false;
+            }
+            sent = true;
+            const bool ok = ControlObjectClient_operate(client, data.get(), 0);
+            if (!ok || ControlObjectClient_getLastError(client) != IED_ERROR_OK) {
+                failure("operate", true);
+                finish_pending();
+                if (selected && Clock::now() < deadline) {
+                    impl_->budget(deadline);
+                    if (!ControlObjectClient_cancel(client)) impl_->error += " cancel_failed";
+                }
+                return -1;
+            }
+            selected = false;
+            if (model == 3 || model == 4) {
+                std::unique_lock<std::mutex> guard(pending->mutex);
+                while (!pending->terminated && impl_->connected() && Clock::now() < deadline)
+                    pending->wake.wait_until(
+                        guard, std::min(deadline, Clock::now() + std::chrono::milliseconds(20)));
+                require(pending->terminated, "command_termination_timeout_or_disconnect");
+                const auto application = pending->termination;
+                pending->waiting = false;
+                if (application.error != CONTROL_ERROR_NO_ERROR ||
+                    application.addCause != ADD_CAUSE_UNKNOWN) {
+                    impl_->error = "IEC61850 rejected: termination appl_error=" +
+                                   std::to_string(application.error) +
+                                   " add_cause=" + std::to_string(application.addCause);
+                    return -1;
+                }
+            }
+            finish_pending();
+        }
+        impl_->error.clear();
+        return 0;
+    } catch (const std::exception& error) {
+        finish_pending();
+        // Retire uncertain sessions so delayed responses cannot complete another command.
+        if (impl_->connection && (sent || selected)) IedConnection_close(impl_->connection);
+        impl_->error =
+            std::string(sent ? "IEC61850 result_unknown: " : "IEC61850 not_sent: ") + error.what();
+        return -1;
+    }
 }
 
 std::string Iec61850Protocol::last_error() const {
-    std::lock_guard<std::mutex> lock(impl_->io_mutex);
+    if (impl_->write_lock_timeout) return "IEC61850 not_sent: request_budget_exceeded";
+    std::lock_guard<std::timed_mutex> lock(impl_->io_mutex);
     return impl_->error;
 }
 
 int Iec61850Protocol::update_image(const std::string& samples_json) {
-    std::lock_guard<std::mutex> lock(impl_->io_mutex);
+    std::lock_guard<std::timed_mutex> lock(impl_->io_mutex);
+    impl_->write_lock_timeout = false;
     if (!impl_->server) {
         impl_->error = "image update requires an initialized server";
         return -1;
@@ -1320,7 +1635,8 @@ int Iec61850Protocol::update_image(const std::string& samples_json) {
 }
 
 int Iec61850Protocol::read_batch(const std::vector<std::string>& codes, std::string& output) {
-    std::lock_guard<std::mutex> lock(impl_->io_mutex);
+    std::lock_guard<std::timed_mutex> lock(impl_->io_mutex);
+    impl_->write_lock_timeout = false;
     if (impl_->server) {
         const int result = impl_->server->read_batch(codes, output);
         impl_->error = impl_->server->last_error();
@@ -1354,6 +1670,7 @@ int Iec61850Protocol::Impl::poll_batch(const std::vector<std::string>& codes, st
             auto point = points.find(code);
             if (point == points.end()) continue;
             const auto& p = config.points[point->second];
+            if (!p.write_mode.empty()) continue;
             requested.insert(key(p.ref, p.fc));
             if (!p.quality.empty()) requested.insert(key(p.quality, p.fc));
             if (!p.timestamp.empty()) requested.insert(key(p.timestamp, p.fc));
@@ -1502,6 +1819,7 @@ int Iec61850Protocol::Impl::render(const std::vector<std::string>& codes,
                 const auto found = points.find(code);
                 require(found != points.end(), "point_not_configured");
                 const auto& p = config.points[found->second];
+                require(p.write_mode.empty(), "point_is_write_only");
                 item["object_ref"] = p.ref;
                 item["fc"] = FunctionalConstraint_toString(p.fc);
                 auto& sample = samples.at(key(p.ref, p.fc));

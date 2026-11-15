@@ -5,6 +5,12 @@ export type { HistorySample } from './history'
 export const COMMAND_TIMEOUT_MS = 3000
 
 export function commandReason(reason: string): string {
+  if (reason.startsWith('IEC61850 result_unknown:'))
+    return `IEC61850 执行结果未知，请核对设备状态，勿重复下发（${reason.slice(25).trim()}）`
+  if (reason.startsWith('IEC61850 rejected:'))
+    return `IEC61850 设备拒绝命令（${reason.slice(18).trim()}）`
+  if (reason.startsWith('IEC61850 not_sent:'))
+    return `IEC61850 命令未发送，请检查写入权限、测点类型和剩余期限（${reason.slice(18).trim()}）`
   const messages: Record<string, string> = {
     expired_before_send: '命令在 3 秒内未发出，请检查设备连接后再操作',
     expired_before_acceptance: '命令已超过 3 秒有效期，未发往设备',

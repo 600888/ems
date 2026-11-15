@@ -42,6 +42,45 @@ const form = reactive({
   write_mode: 'direct',
   description: '',
 })
+const protocolAddress = ref('{}')
+const isMms = computed(() =>
+  ['iec61850_mms', 'iec61850', 'IEC61850'].includes(
+    bindings.value.find((binding) => binding.binding_id === form.binding_id)?.channel?.protocol ??
+      '',
+  ),
+)
+function defaultMmsAddress() {
+  return {
+    object_ref: '',
+    fc: kind.value === 'yk' ? 'CO' : kind.value === 'yt' ? 'SP' : kind.value === 'yc' ? 'MX' : 'ST',
+    ...(kind.value === 'yt' ? { write_mode: 'attribute' } : {}),
+    ...(kind.value === 'yk'
+      ? {
+          write_mode: 'control',
+          control: {
+            timeout_ms: 3000,
+            origin_category: 2,
+            origin_identifier: 'EMS',
+            test: false,
+            interlock_check: true,
+            synchro_check: true,
+          },
+        }
+      : {}),
+  }
+}
+watch(isMms, (enabled) => {
+  if (enabled && !editing.value) {
+    protocolAddress.value = JSON.stringify(defaultMmsAddress(), null, 2)
+    form.wire_type = kind.value === 'yk' || kind.value === 'yx' ? 'bool' : 'f32'
+  }
+})
+function pointAddress(row: Point) {
+  return (
+    (row.address?.protocol_address as Record<string, unknown>)?.object_ref ??
+    `${row.address?.space} / ${row.address?.offset}`
+  )
+}
 async function load() {
   busy.value = true
   error.value = ''
@@ -93,6 +132,13 @@ function edit(row?: Point) {
     form.offset = Number(row.address?.offset ?? 0)
     form.register_count = Number(row.address?.register_count ?? 1)
   }
+  protocolAddress.value = JSON.stringify(
+    row?.address?.protocol_address ?? (isMms.value ? defaultMmsAddress() : {}),
+    null,
+    2,
+  )
+  if (!row && isMms.value)
+    form.wire_type = kind.value === 'yk' || kind.value === 'yx' ? 'bool' : 'f32'
   editRevision = row ? revisionOf(row) : engineeringRevision()
   dialog.value = true
   error.value = ''
@@ -112,6 +158,18 @@ async function save() {
       ...common
     } = form
     const previous = rows.value.find((p) => p.point_id === editing.value)
+    const protocol = isMms.value
+      ? JSON.parse(protocolAddress.value)
+      : previous?.address?.protocol_address
+    if (
+      isMms.value &&
+      (!protocol ||
+        typeof protocol !== 'object' ||
+        Array.isArray(protocol) ||
+        !protocol.object_ref ||
+        !protocol.fc)
+    )
+      throw new Error('请填写有效的 IEC61850 对象引用与 FC')
     await deviceApi.savePoint(
       id.value,
       kind.value,
@@ -119,7 +177,13 @@ async function save() {
       {
         ...common,
         ...(!editing.value ? { code } : {}),
-        address: { ...previous?.address, space, offset, register_count },
+        address: {
+          ...previous?.address,
+          space,
+          offset,
+          register_count,
+          ...(isMms.value ? { protocol_address: protocol } : {}),
+        },
         ...(['yc', 'yt'].includes(kind.value) ? { scale_factor, offset_value } : {}),
         ...(kind.value === 'yk' ? { fixed_raw_value, write_mode } : {}),
       },
@@ -193,7 +257,7 @@ let newPointId = ''
                 <p class="text-small text-muted">{{ row.code }}</p>
               </td>
               <td>{{ row.semantic_code || '—' }}</td>
-              <td>{{ row.address?.space }} / {{ row.address?.offset }}</td>
+              <td>{{ pointAddress(row) }}</td>
               <td>{{ row.wire_type }} → {{ row.value_type }} {{ row.unit }}</td>
               <td>{{ row.enabled ? '启用' : row.disabled_reason || '停用' }}</td>
               <td>
@@ -250,7 +314,7 @@ let newPointId = ''
         ><FormField label="传输类型" v-slot="s"
           ><el-select :id="s.id" v-model="form.wire_type"
             ><el-option
-              v-for="v in ['bool', 'i16', 'u16']"
+              v-for="v in ['bool', 'i16', 'u16', 'i32', 'u32', 'f32']"
               :key="v"
               :value="v"
               :label="v" /></el-select></FormField
@@ -267,15 +331,17 @@ let newPointId = ''
               :key="v"
               :label="v"
               :value="v" /></el-select></FormField
-        ><FormField label="字节序" v-slot="s"
+        ><FormField v-if="!isMms" label="字节序" v-slot="s"
           ><el-select :id="s.id" v-model="form.byte_order"
             ><el-option label="AB" value="ab" /><el-option
               label="BA"
               value="ba" /></el-select></FormField
-        ><FormField label="地址空间" v-slot="s"
+        ><FormField v-if="!isMms" label="地址空间" v-slot="s"
           ><el-input :id="s.id" v-model="form.space" /></FormField
-        ><FormField label="点表地址" v-slot="s"
+        ><FormField v-if="!isMms" label="点表地址" v-slot="s"
           ><el-input-number :id="s.id" v-model="form.offset" :min="0" /></FormField
+        ><FormField v-if="isMms" label="IEC61850 对象与写入规则（JSON）" v-slot="s">
+          <el-input :id="s.id" v-model="protocolAddress" type="textarea" :rows="10" /> </FormField
         ><template v-if="kind === 'yc' || kind === 'yt'"
           ><FormField label="倍率" v-slot="s"
             ><el-input-number :id="s.id" v-model="form.scale_factor" /></FormField

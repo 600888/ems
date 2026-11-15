@@ -18,7 +18,8 @@ namespace {
 using ems::net::protocol::Iec61850Protocol;
 
 const EmPluginInfo kInfo = {EMS_PLUGIN_API_VERSION, "IEC61850",
-                            "IEC 61850 MMS polling/report client and read-only server", "1.0.0"};
+                            "IEC 61850 MMS polling/report/control client and read-only server",
+                            "1.0.0"};
 
 struct Instance {
     Iec61850Protocol protocol;
@@ -161,6 +162,18 @@ EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_update_image(void* opaque, cons
         instance.pending.clear();
         instance.pending_codes.clear();
         return instance.protocol.update_image(samples);
+    });
+}
+
+EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_write_until(void* opaque, const char* code,
+                                                             double value, int64_t expires_at_ms) {
+    return invoke(opaque, [&](Instance& instance) {
+        if (!code) {
+            instance.set_error("IEC61850 not_sent: point_code_is_null");
+            return -1;
+        }
+        instance.pending.clear();
+        return instance.protocol.write_until(code, value, expires_at_ms);
     });
 }
 

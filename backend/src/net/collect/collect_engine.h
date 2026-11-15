@@ -197,7 +197,7 @@ class CollectEngine : public CommandRouter {
     std::shared_ptr<ChannelThread> find_channel(int64_t channel_id) const;
 
     /**
-     * @brief 按稳定测点 ID 查找可控的 Modbus/IEC104 客户端连接。
+     * @brief 按稳定测点 ID 查找可控的 Modbus/IEC104/IEC61850 客户端连接。
      * @param[in] point_id 命令点 ID。
      * @return 当前运行连接；停机、非支持协议或非客户端返回空。
      */

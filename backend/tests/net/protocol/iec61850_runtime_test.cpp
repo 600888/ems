@@ -7,8 +7,12 @@
 #include <unistd.h>
 #endif
 
+// CDC declarations depend on the model and API macros from the preceding headers.
+// clang-format off
 #include <iec61850_client.h>
 #include <iec61850_dynamic_model.h>
+#include <iec61850_cdc.h>
+// clang-format on
 #include <iec61850_server.h>
 #include <mms_server.h>
 
@@ -16,6 +20,7 @@
 #include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <filesystem>
 #include <iostream>
 #include <limits>
@@ -83,11 +88,47 @@ struct Server {
         *double_value;
     const int port{unused_port()};
     std::atomic<MmsServerConnection> peer{nullptr};
+    DataAttribute *setpoint, *signed_setting, *unsigned_setting;
+
+    struct ControlSlot {
+        Server* owner{nullptr};
+        DataObject* object{nullptr};
+        bool analog{false};
+        std::atomic<int> executions{0}, selections{0}, last_number{-1}, select_delay{0};
+        std::atomic<bool> reject_select{false}, reject_operate{false}, withhold{false};
+        std::atomic<double> value{0};
+        std::atomic<bool> origin_ok{false};
+    } controls[5];
+
+    std::atomic<int> attribute_writes{0};
+    std::atomic<bool> reject_attribute{false};
 
     Server() {
         auto* ld = LogicalDevice_create("LD0", model);
         auto* lln = LogicalNode_create("LLN0", ld);
         auto* ln = LogicalNode_create("MMXU1", ld);
+        auto* setting = DataObject_create("Setting", reinterpret_cast<ModelNode*>(ln), 0);
+        setpoint = DataAttribute_create("setVal", reinterpret_cast<ModelNode*>(setting),
+                                        IEC61850_FLOAT32, IEC61850_FC_SP, 0, 0, 0);
+        signed_setting = DataAttribute_create("signedVal", reinterpret_cast<ModelNode*>(setting),
+                                              IEC61850_INT16, IEC61850_FC_SP, 0, 0, 0);
+        unsigned_setting =
+            DataAttribute_create("unsignedVal", reinterpret_cast<ModelNode*>(setting),
+                                 IEC61850_INT32U, IEC61850_FC_SP, 0, 0, 0);
+        auto* commands = LogicalNode_create("CSWI1", ld);
+        for (int i = 0; i < 5; ++i) {
+            auto& slot = controls[i];
+            slot.owner = this;
+            slot.analog = i == 4;
+            const auto name = "Command" + std::to_string(i + 1);
+            slot.object =
+                slot.analog
+                    ? CDC_APC_create(name.c_str(), reinterpret_cast<ModelNode*>(commands), 0,
+                                     CDC_CTL_MODEL_SBO_ENHANCED | CDC_CTL_MODEL_HAS_CANCEL, false)
+                    : CDC_SPC_create(name.c_str(), reinterpret_cast<ModelNode*>(commands), 0,
+                                     (i + 1) | CDC_CTL_MODEL_HAS_CANCEL);
+            CHECK(slot.object);
+        }
         auto* watts = DataObject_create("TotW", reinterpret_cast<ModelNode*>(ln), 0);
         auto* mag = DataAttribute_create(
             "mag", reinterpret_cast<ModelNode*>(watts), IEC61850_CONSTRUCTED, IEC61850_FC_MX,
@@ -136,6 +177,54 @@ struct Server {
                                         report_options, 0, 1000));
         server = IedServer_create(model);
         CHECK(server);
+        IedServer_setWriteAccessPolicy(server, IEC61850_FC_SP, ACCESS_POLICY_ALLOW);
+        IedServer_handleWriteAccess(
+            server, setpoint,
+            [](DataAttribute*, MmsValue*, ClientConnection, void* state) {
+                auto& self = *static_cast<Server*>(state);
+                ++self.attribute_writes;
+                return self.reject_attribute ? DATA_ACCESS_ERROR_OBJECT_ACCESS_DENIED
+                                             : DATA_ACCESS_ERROR_SUCCESS;
+            },
+            this);
+        for (auto& slot : controls) {
+            IedServer_setPerformCheckHandler(
+                server, slot.object,
+                [](ControlAction action, void* state, MmsValue*, bool, bool) {
+                    auto& pending = *static_cast<ControlSlot*>(state);
+                    if (ControlAction_isSelect(action)) {
+                        ++pending.selections;
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(pending.select_delay));
+                        if (pending.reject_select) return CONTROL_OBJECT_ACCESS_DENIED;
+                    }
+                    return CONTROL_ACCEPTED;
+                },
+                &slot);
+            IedServer_setControlHandler(
+                server, slot.object,
+                [](ControlAction action, void* state, MmsValue* value, bool) {
+                    auto& pending = *static_cast<ControlSlot*>(state);
+                    if (pending.reject_operate) {
+                        ControlAction_setAddCause(action, ADD_CAUSE_BLOCKED_BY_INTERLOCKING);
+                        return CONTROL_RESULT_FAILED;
+                    }
+                    const int number = ControlAction_getCtlNum(action);
+                    const bool first = pending.last_number.exchange(number) != number;
+                    pending.value = pending.analog
+                                        ? MmsValue_toDouble(MmsValue_getElement(value, 0))
+                                        : (MmsValue_getBoolean(value) ? 1 : 0);
+                    int size = 0;
+                    auto* origin = ControlAction_getOrIdent(action, &size);
+                    pending.origin_ok = ControlAction_getOrCat(action) == 2 && size == 3 &&
+                                        std::memcmp(origin, "EMS", 3) == 0 &&
+                                        ControlAction_getInterlockCheck(action) &&
+                                        ControlAction_getSynchroCheck(action);
+                    if (first) ++pending.executions;
+                    return pending.withhold ? CONTROL_RESULT_WAITING : CONTROL_RESULT_OK;
+                },
+                &slot);
+        }
         IedServer_setConnectionIndicationHandler(
             server,
             [](IedServer, ClientConnection connection, bool connected, void* state) {
@@ -317,6 +406,183 @@ Json report_config(int port, bool buffered = false, std::string mode = "report")
     return value;
 }
 
+Json command_config(int port, bool reports = false) {
+    auto value = reports ? report_config(port) : config(port);
+    auto& options = value["iec61850"];
+    options["allow_writes"] = true;
+    for (const auto& setting :
+         {std::make_pair("sp", "setVal"), std::make_pair("signed", "signedVal"),
+          std::make_pair("unsigned_sp", "unsignedVal")})
+        options["points"].push_back(
+            {{"code", setting.first},
+             {"object_ref", "SIMLD0/MMXU1.Setting." + std::string(setting.second)},
+             {"fc", "SP"},
+             {"write_mode", "attribute"}});
+    for (int i = 1; i <= 5; ++i)
+        options["points"].push_back({{"code", "co" + std::to_string(i)},
+                                     {"object_ref", "SIMLD0/CSWI1.Command" + std::to_string(i)},
+                                     {"fc", "CO"},
+                                     {"mms_type", i == 5 ? "float32" : "boolean"},
+                                     {"write_mode", "control"},
+                                     {"control",
+                                      {{"timeout_ms", 3000},
+                                       {"origin_category", 2},
+                                       {"origin_identifier", "EMS"},
+                                       {"test", false},
+                                       {"interlock_check", true},
+                                       {"synchro_check", true}}}});
+    return value;
+}
+
+void run_commands(const std::string& scenario) {
+    Server server;
+    Plugin p;
+    auto settings = command_config(server.port, scenario == "command_reports");
+    if (scenario == "command_validation") {
+        for (int i = 0; i < 5; ++i) {
+            auto invalid = settings;
+            auto& point = invalid["iec61850"]["points"].back();
+            if (i == 0) invalid["iec61850"]["allow_writes"] = false;
+            if (i == 1) point["control"].erase("origin_identifier");
+            if (i == 2) point["fc"] = "SP";
+            if (i == 3) point["write_mode"] = "attribute";
+            if (i == 4) point["control"].erase("interlock_check");
+            CHECK(p.api.init_fn(p.instance, invalid.dump().c_str()) == -1);
+        }
+        auto invalid = settings;
+        invalid["iec61850"]["points"].back()["mms_type"] = "integer";
+        p.init(invalid);
+        CHECK(p.api.connect_fn(p.instance) == -1);
+        CHECK(p.error().find("ctlVal type mismatch") != std::string::npos);
+        IedServer_lockDataModel(server.server);
+        IedServer_updateCtlModel(server.server, server.controls[0].object,
+                                 CONTROL_MODEL_STATUS_ONLY);
+        IedServer_unlockDataModel(server.server);
+        p.init(settings);
+        CHECK(p.api.connect_fn(p.instance) == -1);
+        for (const auto& control : server.controls) CHECK(control.executions == 0);
+        return;
+    }
+    p.init(settings);
+    p.connect();
+    CHECK(p.api.write_until_fn);
+    auto write = [&](const char* code, double value) {
+        return p.api.write_fn(p.instance, code, value);
+    };
+    auto until = [&](const char* code, double value, int milliseconds) {
+        const auto end = std::chrono::duration_cast<std::chrono::milliseconds>(
+                             std::chrono::system_clock::now().time_since_epoch())
+                             .count() +
+                         milliseconds;
+        return p.api.write_until_fn(p.instance, code, value, end);
+    };
+    if (scenario == "command_attribute") {
+        CHECK(write("sp", 42.5) == 0);
+        IedServer_lockDataModel(server.server);
+        const auto observed =
+            MmsValue_toFloat(IedServer_getAttributeValue(server.server, server.setpoint));
+        IedServer_unlockDataModel(server.server);
+        CHECK(observed == 42.5f && server.attribute_writes == 1);
+        CHECK(write("signed", -32768) == 0);
+        CHECK(write("signed", 32768) == -1);
+        CHECK(write("signed", 0.5) == -1);
+        if (write("unsigned_sp", 4294967295.0) != 0) throw std::runtime_error(p.error());
+        IedServer_lockDataModel(server.server);
+        const auto signed_observed =
+            MmsValue_toInt32(IedServer_getAttributeValue(server.server, server.signed_setting));
+        const auto unsigned_observed =
+            MmsValue_toUint32(IedServer_getAttributeValue(server.server, server.unsigned_setting));
+        IedServer_unlockDataModel(server.server);
+        CHECK(signed_observed == -32768);
+        CHECK(unsigned_observed == UINT32_MAX);
+        CHECK(write("unsigned_sp", 4294967296.0) == -1);
+        CHECK(write("unsigned_sp", -1) == -1);
+        CHECK(write("sp", std::numeric_limits<double>::max()) == -1);
+        CHECK(write("sp", std::numeric_limits<double>::quiet_NaN()) == -1);
+        CHECK(write("power", 1) == -1);
+        CHECK(write("missing", 1) == -1);
+        CHECK(server.attribute_writes == 1);
+        server.reject_attribute = true;
+        CHECK(write("sp", 7) == -1);
+        CHECK(p.error().find("IEC61850 rejected:") == 0);
+    } else if (scenario == "command_models" || scenario == "command_reports") {
+        for (int i = 1; i <= 5; ++i) {
+            const auto code = "co" + std::to_string(i);
+            CHECK(p.api.write_fn(p.instance, code.c_str(), i == 5 ? 42.5 : 1) == 0);
+            eventually([&] { return server.controls[i - 1].executions == 1; });
+            CHECK(server.controls[i - 1].origin_ok);
+            if (server.controls[i - 1].value != (i == 5 ? 42.5 : 1))
+                throw std::runtime_error(
+                    code + " observed=" + std::to_string(server.controls[i - 1].value.load()));
+            CHECK(p.api.is_connected_fn(p.instance) == 1);
+            CHECK(p.api.write_fn(p.instance, code.c_str(), 0) == 0);
+            eventually([&] { return server.controls[i - 1].executions == 2; });
+            CHECK(server.controls[i - 1].value == 0);
+        }
+        CHECK(server.controls[1].selections >= 2 && server.controls[3].selections >= 2);
+        if (scenario == "command_reports") CHECK(p.read({"power"})[0]["quality"] == 0);
+    } else if (scenario == "command_rejections") {
+        server.controls[3].reject_select = true;
+        CHECK(write("co4", 1) == -1);
+        CHECK(p.error().find("IEC61850 rejected:") == 0);
+        CHECK(server.controls[3].executions == 0);
+        CHECK(write("co1", 2) == -1);
+        CHECK(p.error().find("IEC61850 not_sent:") == 0);
+        CHECK(server.controls[0].executions == 0);
+        server.controls[2].reject_operate = true;
+        CHECK(write("co3", 1) == -1);
+        CHECK(p.error().find("IEC61850 rejected:") == 0);
+        CHECK(p.api.is_connected_fn(p.instance) == 1);
+        server.controls[3].reject_select = false;
+        CHECK(write("co4", 1) == 0);
+    } else if (scenario == "command_budget" || scenario == "command_timeout") {
+        const bool short_budget = scenario == "command_budget";
+        server.controls[3].withhold = true;
+        server.controls[3].select_delay = short_budget ? 150 : 0;
+        // A larger channel timeout must not extend the command's 3 second budget.
+        if (!short_budget) {
+            CHECK(p.api.disconnect_fn(p.instance) == 0);
+            settings["timeout_ms"] = 60000;
+            p.init(settings);
+            p.connect();
+        }
+        const auto start = std::chrono::steady_clock::now();
+        CHECK(until("co4", 1, short_budget ? 300 : 10000) == -1);
+        const auto elapsed = std::chrono::steady_clock::now() - start;
+        CHECK(elapsed < std::chrono::milliseconds(short_budget ? 650 : 3400));
+        CHECK(elapsed >= std::chrono::milliseconds(short_budget ? 250 : 2800));
+        CHECK(p.error().find("IEC61850 result_unknown:") == 0);
+        CHECK(server.controls[3].value == 1 && server.controls[3].executions == 1);
+        CHECK(p.api.is_connected_fn(p.instance) == 0);
+        CHECK(write("co4", 0) == -1);
+        CHECK(server.controls[3].executions == 1);
+        server.controls[3].withhold = false;
+        p.connect();
+        CHECK(write("co4", 0) == 0);
+    } else if (scenario == "command_disconnect") {
+        server.controls[2].withhold = true;
+        std::thread stop([&] {
+            std::this_thread::sleep_for(std::chrono::milliseconds(100));
+            IedServer_stop(server.server);
+        });
+        const auto start = std::chrono::steady_clock::now();
+        const auto result = write("co3", 1);
+        stop.join();
+        CHECK(result == -1 && p.error().find("IEC61850 result_unknown:") == 0);
+        CHECK(std::chrono::steady_clock::now() - start < std::chrono::seconds(1));
+        CHECK(server.controls[2].value == 1 && server.controls[2].executions == 1);
+        CHECK(p.api.is_connected_fn(p.instance) == 0);
+    } else if (scenario == "command_expired") {
+        CHECK(until("co4", 1, -10) == -1);
+        CHECK(p.error().find("IEC61850 not_sent:") == 0);
+        CHECK(server.controls[3].selections == 0 && server.controls[3].executions == 0);
+        CHECK(server.attribute_writes == 0);
+        CHECK(until("sp", 1, -10) == -1);
+        CHECK(server.attribute_writes == 0);
+    }
+    CHECK(p.api.disconnect_fn(p.instance) == 0);
+}
+
 Json server_config(int port) {
     Json points = Json::array({{{"code", "power"},
                                 {"object_ref", "SIMLD0/MMXU1.TotW.mag.f"},
@@ -479,6 +745,10 @@ void run_server(const std::string& scenario) {
 }
 
 void run(const std::string& scenario) {
+    if (scenario.rfind("command_", 0) == 0) {
+        run_commands(scenario);
+        return;
+    }
     if (scenario.rfind("server_", 0) == 0) {
         run_server(scenario);
         return;
@@ -503,7 +773,7 @@ void run(const std::string& scenario) {
         for (int i = 0; i < 10; ++i) {
             auto value = base;
             if (i == 0) value["iec61850"]["read_mode"] = "report";
-            if (i == 1) value["iec61850"]["allow_writes"] = true;
+            if (i == 1) value["iec61850"]["allow_writes"] = "invalid";
             if (i == 2) value["role"] = "server";
             if (i == 3) value["iec61850"]["points"][0]["fc"] = "CO";
             if (i == 4) value["iec61850"]["points"].push_back(value["iec61850"]["points"][0]);
