@@ -20,6 +20,11 @@
     "label": "历史数据查询"
   },
   {
+    "type": "file",
+    "name": "alarms",
+    "label": "告警后端接入计划"
+  },
+  {
     "type": "dir",
     "name": "user",
     "label": "用户管理模块",
