@@ -15,3 +15,48 @@ CREATE TABLE ops_comm_stat_5m (id INTEGER PRIMARY KEY AUTOINCREMENT,binding_id T
 CREATE TABLE ops_state_log (id INTEGER PRIMARY KEY AUTOINCREMENT,object_kind TEXT,object_id TEXT,state TEXT,since TEXT,reason TEXT);
 
 CREATE TABLE ops_command (id INTEGER PRIMARY KEY AUTOINCREMENT,command_id TEXT COLLATE BINARY NOT NULL,scope_code TEXT NOT NULL,point_id TEXT NOT NULL,value REAL NOT NULL,config_revision INTEGER NOT NULL,expires_at_ms INTEGER NOT NULL,payload_json TEXT NOT NULL,status TEXT NOT NULL,reason TEXT NOT NULL,sent_at_ms INTEGER NOT NULL,updated_at_ms INTEGER NOT NULL,UNIQUE(scope_code,command_id));
+CREATE TABLE alarm_archive_progress (
+	id INTEGER NOT NULL,
+	station_id VARCHAR(64) NOT NULL,
+	committed_seq BIGINT NOT NULL,
+	archived_seq BIGINT NOT NULL,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_alarm_archive_progress_station UNIQUE (station_id),
+	CONSTRAINT ck_alarm_archive_progress_bounds CHECK (archived_seq >= 0 AND committed_seq >= archived_seq)
+);
+
+CREATE TABLE alarm_control (
+	id INTEGER NOT NULL,
+	alarm_id VARCHAR(64) NOT NULL,
+	station_id VARCHAR(64) NOT NULL,
+	device_id VARCHAR(64) NOT NULL,
+	active_key VARCHAR(128),
+	occurred_at_us BIGINT NOT NULL,
+	cleared_at_us BIGINT,
+	acknowledged_at_us BIGINT,
+	state_json TEXT NOT NULL,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_alarm_control_id UNIQUE (alarm_id),
+	CONSTRAINT uq_alarm_control_active_key UNIQUE (station_id, active_key),
+	CONSTRAINT ck_alarm_control_active CHECK ((active_key IS NULL AND cleared_at_us IS NOT NULL) OR (active_key IS NOT NULL AND cleared_at_us IS NULL)),
+	CONSTRAINT ck_alarm_control_times CHECK (occurred_at_us >= 0 AND (cleared_at_us IS NULL OR cleared_at_us >= occurred_at_us) AND (acknowledged_at_us IS NULL OR acknowledged_at_us >= occurred_at_us))
+);
+CREATE INDEX ix_alarm_control_active ON alarm_control (station_id, cleared_at_us, alarm_id);
+
+CREATE TABLE alarm_outbox (
+	id INTEGER NOT NULL,
+	event_id VARCHAR(64) NOT NULL,
+	alarm_id VARCHAR(64) NOT NULL,
+	station_id VARCHAR(64) NOT NULL,
+	device_id VARCHAR(64) NOT NULL,
+	stream_seq BIGINT NOT NULL,
+	kind INTEGER NOT NULL,
+	event_time_us BIGINT NOT NULL,
+	event_json TEXT NOT NULL,
+	state_json TEXT NOT NULL,
+	PRIMARY KEY (id),
+	CONSTRAINT uq_alarm_outbox_event UNIQUE (event_id),
+	CONSTRAINT uq_alarm_outbox_sequence UNIQUE (station_id, stream_seq),
+	CONSTRAINT uq_alarm_outbox_lifecycle UNIQUE (alarm_id, kind),
+	CONSTRAINT ck_alarm_outbox_event CHECK (stream_seq > 0 AND event_time_us >= 0 AND kind IN (0, 1, 2))
+);

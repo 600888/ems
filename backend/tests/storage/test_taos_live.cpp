@@ -6,6 +6,10 @@
 #include <taos.h>
 
 #include <cstdlib>
+#include <memory>
+#include <string_view>
+
+#include "alarm_fixture.h"
 
 #ifdef EMS_TAOS_WEB_LIVE
 #include "web/modules/history/history_service.h"
@@ -13,6 +17,78 @@
 
 namespace ems::database {
 namespace {
+TEST(TaosLive, AlarmWritesRetainEqualTimeEventsAndReplayWithoutDuplicates) {
+    const auto config = std::getenv("EMS_TAOS_LIVE_CONFIG");
+    if (!config) GTEST_SKIP() << "Requires an explicitly selected live TDengine configuration";
+    auto loaded = load_time_series_options(config);
+    ASSERT_TRUE(core::is_ok(loaded));
+    const auto& options = core::value_of(loaded);
+    auto opened = connect_time_series(options);
+    ASSERT_TRUE(core::is_ok(opened));
+    auto store = std::get<0>(std::move(opened));
+    const auto ctx = core::make_call_context(std::chrono::seconds(15));
+    const auto checked = store->check_alarm_schema(ctx);
+    ASSERT_TRUE(core::is_ok(checked))
+        << (core::is_ok(checked) ? "" : core::error_of(checked).message);
+    const auto now = core::now_utc_micros();
+    const auto station = "alarm-test-" + std::to_string(now);
+    const auto occurred = test::alarm_item(station, now);
+    const auto cleared = test::alarm_item(station, now, true);
+
+    struct Cleanup {
+        TAOS* connection;
+        std::string station_hex;
+
+        ~Cleanup() {
+            if (!connection) return;
+            for (const auto* prefix : {"alarm_event_", "alarm_state_"}) {
+                const auto sql =
+                    "DROP TABLE IF EXISTS ems_history." + std::string(prefix) + station_hex;
+                if (auto result = taos_query(connection, sql.c_str())) taos_free_result(result);
+            }
+            taos_close(connection);
+        }
+    } cleanup{taos_connect(options.taos.host.c_str(), options.taos.user.c_str(),
+                           options.taos.password.c_str(), options.taos.database.c_str(),
+                           options.taos.port),
+              {}};
+
+    ASSERT_NE(cleanup.connection, nullptr);
+    for (const unsigned char c : station) {
+        cleanup.station_hex += "0123456789abcdef"[c >> 4];
+        cleanup.station_hex += "0123456789abcdef"[c & 15];
+    }
+
+    for (const auto* item : {&occurred, &cleared, &occurred}) {
+        const auto status = store->write_alarm(*item, ctx);
+        ASSERT_TRUE(core::is_ok(status))
+            << (core::is_ok(status) ? "" : core::error_of(status).message);
+    }
+    for (const auto* prefix : {"alarm_event_", "alarm_state_"}) {
+        const bool state = std::string_view(prefix) == "alarm_state_";
+        const auto sql = "SELECT event_id,payload FROM ems_history." + std::string(prefix) +
+                         cleanup.station_hex + " ORDER BY event_id";
+        std::unique_ptr<TAOS_RES, decltype(&taos_free_result)> rows(
+            taos_query(cleanup.connection, sql.c_str()), &taos_free_result);
+        ASSERT_TRUE(rows);
+        ASSERT_EQ(taos_errno(rows.get()), 0);
+        for (const auto* expected : {&occurred, &cleared}) {
+            auto row = taos_fetch_row(rows.get());
+            ASSERT_NE(row, nullptr);
+            const auto* lengths = taos_fetch_lengths(rows.get());
+            ASSERT_NE(lengths, nullptr);
+            ASSERT_NE(row[0], nullptr);
+            ASSERT_NE(row[1], nullptr);
+            EXPECT_EQ(std::string(static_cast<const char*>(row[0]), lengths[0]),
+                      expected->event_id.value());
+            EXPECT_EQ(std::string(static_cast<const char*>(row[1]), lengths[1]),
+                      state ? expected->state_json : expected->event_json);
+        }
+        EXPECT_EQ(taos_fetch_row(rows.get()), nullptr);
+        EXPECT_EQ(taos_errno(rows.get()), 0);
+    }
+}
+
 TEST(TaosLive, TypedRoundTripCompositeIdentityAndCursor) {
     const auto config = std::getenv("EMS_TAOS_LIVE_CONFIG");
     if (!config) GTEST_SKIP() << "Requires an explicitly selected live TDengine configuration";

@@ -2,7 +2,7 @@
 
 add_library(
     ems_storage_core STATIC storage.cpp storage.h sampling.cpp sampling.h telemetry_feed.h outbox_publisher.cpp
-                            outbox_publisher.h
+                            outbox_publisher.h alarm_archiver.cpp alarm_archiver.h
 )
 
 target_include_directories(ems_storage_core PUBLIC ${CMAKE_SOURCE_DIR}/include)

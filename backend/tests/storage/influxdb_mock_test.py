@@ -19,6 +19,7 @@ class Server(http.server.ThreadingHTTPServer):
         super().__init__(("127.0.0.1", 0), Handler)
         self.rows = {}
         self.errors = []
+        self.alarm_batches = []
 
 
 class Handler(http.server.BaseHTTPRequestHandler):
@@ -51,6 +52,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if db == "slow":
                 time.sleep(0.3)
             lines = body.splitlines()
+            partial_alarm = False
+            if db == "alarm_partial":
+                assert len(lines) == 2
+                assert lines[0].startswith("alarm_event,") and lines[1].startswith("alarm_state,")
+                partial_alarm = not self.server.alarm_batches
+                self.server.alarm_batches.append(body)
+                if partial_alarm:
+                    lines = lines[:1]
             if db in ("partial", "disconnect") and 'event_id=6661696c' in body:
                 if db == "partial":
                     self.reply({"error": "partial write test-secret"}, 400)
@@ -74,14 +83,37 @@ class Handler(http.server.BaseHTTPRequestHandler):
                         parsed[key] = int(value[:-1])
                     else:
                         parsed[key] = json.loads(value)
-                record = json.loads(parsed["record"])
-                assert int(timestamp) == record["source_time_us"] == parsed["source_time_us"]
-                assert tags["event_id"] == record["event_id"].encode().hex()
-                if record["value_type"] == 1 and record["value"] is not None:
-                    assert parsed["sample_value"] == record["value"]
+                if db == "alarm_partial":
+                    payload = json.loads(parsed["payload"])
+                    for name in ("alarm_id", "device_id", "station_id"):
+                        assert tags[name] == payload[name].encode().hex()
+                    if measurement == "alarm_event":
+                        assert int(timestamp) == payload["event_time_us"]
+                        assert tags["event_id"] == payload["event_id"].encode().hex()
+                        kind = payload["kind"]
+                        assert (parsed["kind"], parsed["stream_seq"]) == (
+                            (0, 1) if kind == "Occurred" else (1, 2)
+                        )
+                    else:
+                        assert parsed["occurred_at_us"] == payload["occurred_at_us"]
+                        assert parsed["severity"] == "Critical"
+                        assert parsed["acknowledged_at_us"] == -1
+                        assert parsed["cleared_at_us"] == (
+                            -1 if payload["cleared_at_us"] is None else payload["cleared_at_us"]
+                        )
+                        assert payload["name"] == "过温告警"
+                else:
+                    record = json.loads(parsed["record"])
+                    assert int(timestamp) == record["source_time_us"] == parsed["source_time_us"]
+                    assert tags["event_id"] == record["event_id"].encode().hex()
+                    if record["value_type"] == 1 and record["value"] is not None:
+                        assert parsed["sample_value"] == record["value"]
                 key = (db, measurement, tuple(sorted(tags.items())), timestamp)
                 self.server.rows[key] = (tags, parsed)
-            self.reply({}, 204)
+            if partial_alarm:
+                self.reply({"error": "partial write"}, 400)
+            else:
+                self.reply({}, 204)
         except Exception as error:
             self.server.errors.append(str(error))
             self.reply({"error": "fixture rejected request"}, 500)
@@ -149,6 +181,10 @@ def main():
         server.shutdown()
         if server.errors:
             raise AssertionError(server.errors)
+        if server.alarm_batches and result.returncode == 0:
+            first, retry, cleared, replay = server.alarm_batches
+            assert first == retry == replay and cleared != first
+            assert sum(key[0] == "alarm_partial" for key in server.rows) == 4
         return result.returncode
 
 

@@ -4,6 +4,8 @@
 #include <cstdlib>
 #include <limits>
 
+#include "alarm_fixture.h"
+
 namespace ems::database {
 namespace {
 core::CallContext context() { return core::make_call_context(std::chrono::seconds(10)); }
@@ -97,6 +99,28 @@ TEST_F(InfluxDbTest, TypedBatchRoundTripAndIdempotency) {
         EXPECT_EQ(rows[i].config_revision, "18");
         EXPECT_EQ(rows[i].payload_sha256, expected[i].payload_sha256);
     }
+}
+
+TEST_F(InfluxDbTest, ArchivesEventAndStateWithStableIdentityAndRetriesPartialWrites) {
+    options.database = "alarm_partial";
+    auto opened = connect_influxdb_series(options);
+    ASSERT_TRUE(core::is_ok(opened));
+    auto alarm_store = std::get<0>(std::move(opened));
+    ASSERT_TRUE(core::is_ok(alarm_store->check_alarm_schema(context())));
+    const auto occurred = test::alarm_item("station-1", 1700000000123456);
+    const auto cleared = test::alarm_item("station-1", occurred.event_time_us, true);
+
+    auto malformed = occurred;
+    malformed.device_id = core::DeviceId("different");
+    const auto rejected = alarm_store->write_alarm(malformed, context());
+    ASSERT_FALSE(core::is_ok(rejected));
+    EXPECT_EQ(core::error_of(rejected).code, core::ErrorCode::CorruptData);
+    const auto failed = alarm_store->write_alarm(occurred, context());
+    ASSERT_FALSE(core::is_ok(failed));
+    EXPECT_EQ(core::error_of(failed).effect, core::WriteEffect::Unknown);
+    ASSERT_TRUE(core::is_ok(alarm_store->write_alarm(occurred, context())));
+    ASSERT_TRUE(core::is_ok(alarm_store->write_alarm(cleared, context())));
+    ASSERT_TRUE(core::is_ok(alarm_store->write_alarm(occurred, context())));
 }
 
 TEST_F(InfluxDbTest, CursorOrdersEqualTimestampEventsAcrossPoints) {

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <common/database/alarm/repositories.h>
 #include <common/database/timeseries/types.h>
 
 namespace ems::database {
@@ -57,7 +58,31 @@ class ITimeSeriesReader {
                                                    const core::CallContext& ctx) = 0;
 };
 
-class ITimeSeriesDatabase : public ITimeSeriesStore, public ITimeSeriesReader {
+class IAlarmTimeSeriesStore {
+   public:
+    /** @brief 销毁告警时序写入接口。 */
+    virtual ~IAlarmTimeSeriesStore() = default;
+
+    /**
+     * @brief 检查告警表或对应数据库的访问条件，不执行建表。
+     * @param[in] ctx 调用期限。
+     * @return 检查结果；InfluxDB 写权限在首次实际写入时确认。
+     */
+    virtual core::Status check_alarm_schema(const core::CallContext& ctx) = 0;
+
+    /**
+     * @brief 按原事件时间和稳定身份写入事件及完整状态。同一项可安全重投。
+     * @param[in] item 公共告警仓储读取的不可变归档项。
+     * @param[in] ctx 两次写入共用的期限。
+     * @return 两条记录均确认写入时成功。可能只落库一条时返回 Unknown。
+     */
+    virtual core::Status write_alarm(const AlarmArchiveItem& item,
+                                     const core::CallContext& ctx) = 0;
+};
+
+class ITimeSeriesDatabase : public ITimeSeriesStore,
+                            public ITimeSeriesReader,
+                            public IAlarmTimeSeriesStore {
    public:
     /** @brief 销毁可读写时序库接口。 */
     ~ITimeSeriesDatabase() override = default;

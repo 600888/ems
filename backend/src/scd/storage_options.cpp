@@ -14,7 +14,7 @@ core::Result<StorageOptions> load_storage_options(const std::string& path) {
         nlohmann::json json;
         if (!input || !(input >> json) || !json.is_object()) throw std::invalid_argument("config");
         const std::set<std::string> allowed{"database_config", "rtdb_config", "timeseries_config",
-                                            "scope_code", "interval_ms"};
+                                            "scope_code",      "interval_ms", "archive_alarms"};
         for (auto it = json.begin(); it != json.end(); ++it)
             if (!allowed.count(it.key())) throw std::invalid_argument("unknown option");
         const auto resolve = [&](const char* key) {
@@ -28,6 +28,8 @@ core::Result<StorageOptions> load_storage_options(const std::string& path) {
         if (!core::is_ok(mysql)) return core::error_of(mysql);
         options.database = core::value_of(mysql);
         options.database.require_configuration_schema = true;
+        options.archive_alarms = json.value("archive_alarms", false);
+        options.database.require_alarm_schema = options.archive_alarms;
         auto series = database::load_time_series_options(resolve("timeseries_config"));
         if (!core::is_ok(series)) return core::error_of(series);
         options.timeseries = core::value_of(series);

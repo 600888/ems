@@ -13,6 +13,7 @@
 | [设备模块设计](device/index.md) | 设备树、绑定、四遥、保存与导入流程图 |
 | [设备模块 API](device/api.md) | 固定路由、JSON 参数、multipart 导入与响应 |
 | [历史数据查询](history.md) | 遥测 / 遥信、时间桶采样、权限、边界与部署 |
+| [告警后端接入计划](alarms.md) | 时序告警历史、事务协调、可靠归档、四条接口与验收流程图（实施中） |
 | [设备管理数据库](../../common/database/device-management.md) | 14 表及持久化字段 |
 
 ```mermaid

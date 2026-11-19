@@ -80,6 +80,20 @@ TEST_F(StorageOptionsTest, DefaultsToFiveSecondsAndResolvesPathsRelativeToConfig
     EXPECT_EQ(options.realtime_config, (directory / "realtime.json").u8string());
     EXPECT_EQ(options.timeseries.taos.port, 6030);
     EXPECT_TRUE(options.database.require_configuration_schema);
+    EXPECT_FALSE(options.archive_alarms);
+    EXPECT_FALSE(options.database.require_alarm_schema);
+}
+
+TEST_F(StorageOptionsTest, AlarmArchiveRequiresAnExplicitBooleanAndCoordinationSchema) {
+    auto json = config();
+    json["archive_alarms"] = true;
+    const auto enabled = load(json);
+    ASSERT_TRUE(core::is_ok(enabled));
+    EXPECT_TRUE(core::value_of(enabled).archive_alarms);
+    EXPECT_TRUE(core::value_of(enabled).database.require_alarm_schema);
+
+    json["archive_alarms"] = "true";
+    EXPECT_FALSE(core::is_ok(load(json)));
 }
 
 TEST_F(StorageOptionsTest, RejectsInvalidIntervalsUnknownOptionsAndMissingDependency) {

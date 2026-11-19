@@ -21,6 +21,7 @@ class Base(DeclarativeBase):
 metadata = Base.metadata
 
 from .point import PointBase
+from .alarm import AlarmArchiveProgress, AlarmControl, AlarmOutbox
 
 from .device_management import (
     Device,
@@ -51,6 +52,9 @@ __all__ = [
     "Base",
     "metadata",
     "PointBase",
+    "AlarmControl",
+    "AlarmOutbox",
+    "AlarmArchiveProgress",
     "Device",
     "DeviceType",
     "TypePoint",

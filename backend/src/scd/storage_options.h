@@ -12,6 +12,7 @@ struct StorageOptions {
     std::string realtime_config;
     std::string scope_code;
     std::int64_t interval_ms{kDefaultArchiveIntervalMs};
+    bool archive_alarms{false};
 };
 
 /**

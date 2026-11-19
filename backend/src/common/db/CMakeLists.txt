@@ -86,6 +86,8 @@ if(EMS_DATABASE_MYSQL_INCLUDE_DIR AND EMS_DATABASE_MYSQL_LIBRARY)
         )
     endif()
     add_library(ems_database_mysql STATIC mysql/mysql_database.cpp)
+    target_include_directories(ems_database_mysql PRIVATE
+        ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include)
     target_include_directories(
         ems_database_mysql SYSTEM PRIVATE ${EMS_DATABASE_MYSQL_INCLUDE_DIR}
                                           ${CMAKE_SOURCE_DIR}/third_party/ormpp
@@ -183,7 +185,8 @@ if(EMS_DATABASE_TAOS_INCLUDE_DIR AND EMS_DATABASE_TAOS_LIBRARY)
         set(_ems_taos_link "${EMS_DATABASE_TAOS_LIBRARY}")
     endif()
     add_library(ems_timeseries_taos STATIC timeseries/taos/taos_series.cpp)
-    target_include_directories(ems_timeseries_taos PRIVATE ${EMS_DATABASE_TAOS_INCLUDE_DIR})
+    target_include_directories(ems_timeseries_taos PRIVATE ${EMS_DATABASE_TAOS_INCLUDE_DIR}
+        ${CMAKE_SOURCE_DIR}/third_party/libmodbuspp/3rdparty/json/single_include)
     target_link_libraries(
         ems_timeseries_taos
         PUBLIC ems_timeseries_api

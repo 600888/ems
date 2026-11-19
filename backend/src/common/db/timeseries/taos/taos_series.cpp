@@ -14,6 +14,8 @@
 #include <variant>
 #include <vector>
 
+#include "../alarm_archive.h"
+
 namespace ems::database {
 namespace {
 
@@ -253,6 +255,43 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
    public:
     explicit TaosSeriesStore(TaosPtr connection) : connection_(std::move(connection)) {}
 
+    core::Status check_alarm_schema(const core::CallContext& ctx) override {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (const auto* sql :
+             {"SELECT ts,event_id,alarm_id,device_id,stream_seq,kind,payload,station_id "
+              "FROM ems_history.alarm_event LIMIT 0",
+              "SELECT ts,event_id,alarm_id,device_id,stream_seq,occurred_at_us,cleared_at_us,"
+              "acknowledged_at_us,severity,payload,station_id FROM ems_history.alarm_state "
+              "LIMIT 0"}) {
+            if (core::has_expired(ctx))
+                return core::make_error(core::ErrorCode::DeadlineExceeded,
+                                        core::WriteEffect::NotApplicable);
+            ResultPtr result(taos_query(connection_.get(), sql));
+            if (!result || taos_errno(result.get()) != 0 ||
+                taos_result_precision(result.get()) != 1)
+                return core::make_error(core::ErrorCode::SchemaMismatch,
+                                        core::WriteEffect::NotApplicable,
+                                        "TDengine alarm schema or precision mismatch");
+        }
+        return core::ok_status();
+    }
+
+    core::Status write_alarm(const AlarmArchiveItem& item, const core::CallContext& ctx) override {
+        auto columns = detail::alarm_state_columns(item);
+        if (!core::is_ok(columns)) return core::error_of(columns);
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto state = std::get<0>(std::move(columns));
+        auto event = insert_alarm_row(item, state, false, ctx);
+        if (!core::is_ok(event)) return event;
+        auto snapshot = insert_alarm_row(item, state, true, ctx);
+        if (!core::is_ok(snapshot)) {
+            auto error = core::error_of(snapshot);
+            error.effect = core::WriteEffect::Unknown;
+            return error;
+        }
+        return core::ok_status();
+    }
+
     core::Status write(const Sample& sample, const core::CallContext& ctx) override {
         return write_batch({sample}, ctx).front();
     }
@@ -420,6 +459,66 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
     }
 
    private:
+    core::Status insert_alarm_row(const AlarmArchiveItem& item, detail::AlarmStateColumns& state,
+                                  bool snapshot, const core::CallContext& ctx) {
+        if (core::has_expired(ctx))
+            return core::make_error(core::ErrorCode::DeadlineExceeded,
+                                    core::WriteEffect::NotApplied);
+        const auto* sql =
+            snapshot
+                ? "INSERT INTO ? USING ems_history.alarm_state TAGS(?) VALUES(?,?,?,?,?,?,?,?,?,?)"
+                : "INSERT INTO ? USING ems_history.alarm_event TAGS(?) VALUES(?,?,?,?,?,?,?)";
+        TAOS_STMT2_OPTION options{};
+        StatementPtr statement(taos_stmt2_init(connection_.get(), &options));
+        if (!statement || taos_stmt2_prepare(statement.get(), sql, 0) != 0)
+            return taos_error("alarm prepare", core::WriteEffect::NotApplied);
+
+        auto table = std::string(snapshot ? "alarm_state_" : "alarm_event_") +
+                     detail::alarm_id_hex(item.station_id.value());
+        auto timestamp = item.event_time_us;
+        auto sequence = item.stream_seq;
+        auto kind = static_cast<std::int8_t>(item.kind);
+        std::array<std::int32_t, 10> lengths{};
+        std::array<TAOS_STMT2_BIND, 10> columns{};
+        auto station_length = static_cast<std::int32_t>(item.station_id.value().size());
+        auto tag = bind_value(TSDB_DATA_TYPE_BINARY,
+                              const_cast<char*>(item.station_id.value().data()), &station_length);
+        std::size_t index = 0;
+        const auto add = [&](int type, void* value, std::size_t bytes) {
+            lengths[index] = static_cast<std::int32_t>(bytes);
+            columns[index] = bind_value(type, value, &lengths[index]);
+            ++index;
+        };
+        const auto text = [&](const std::string& value) {
+            add(TSDB_DATA_TYPE_BINARY, const_cast<char*>(value.data()), value.size());
+        };
+        add(TSDB_DATA_TYPE_TIMESTAMP, &timestamp, sizeof(timestamp));
+        text(item.event_id.value());
+        text(item.alarm_id.value());
+        text(item.device_id.value());
+        add(TSDB_DATA_TYPE_BIGINT, &sequence, sizeof(sequence));
+        if (snapshot) {
+            add(TSDB_DATA_TYPE_BIGINT, &state.occurred_at_us, sizeof(state.occurred_at_us));
+            add(TSDB_DATA_TYPE_BIGINT, &state.cleared_at_us, sizeof(state.cleared_at_us));
+            add(TSDB_DATA_TYPE_BIGINT, &state.acknowledged_at_us, sizeof(state.acknowledged_at_us));
+            text(state.severity);
+            text(item.state_json);
+        } else {
+            add(TSDB_DATA_TYPE_TINYINT, &kind, sizeof(kind));
+            text(item.event_json);
+        }
+        char* tables[] = {table.data()};
+        TAOS_STMT2_BIND* tags[] = {&tag};
+        TAOS_STMT2_BIND* values[] = {columns.data()};
+        TAOS_STMT2_BINDV bindings{1, tables, tags, values};
+        if (taos_stmt2_bind_param(statement.get(), &bindings, -1) != 0)
+            return taos_error("alarm bind", core::WriteEffect::NotApplied);
+        int affected = 0;
+        if (taos_stmt2_exec(statement.get(), &affected) != 0)
+            return taos_error("alarm write", core::WriteEffect::Unknown);
+        return core::ok_status();
+    }
+
     TaosPtr connection_;
     std::mutex mutex_;
 };

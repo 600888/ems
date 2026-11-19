@@ -11,6 +11,7 @@
 #include <tuple>
 #include <type_traits>
 
+#include "../alarm_archive.h"
 #include "options.h"
 
 namespace ems::database {
@@ -231,6 +232,75 @@ core::CallContext request_context(const InfluxDbConnectionOptions& options,
 class InfluxSeries final : public ITimeSeriesDatabase {
    public:
     explicit InfluxSeries(InfluxDbConnectionOptions options) : options_(std::move(options)) {}
+
+    core::Status check_alarm_schema(const core::CallContext& ctx) override {
+        const auto request_ctx = request_context(options_, ctx);
+        try {
+            for (const auto* measurement : {"alarm_event", "alarm_state"}) {
+                if (core::remaining_budget_ms(request_ctx) <= 0)
+                    return core::make_error(core::ErrorCode::DeadlineExceeded,
+                                            core::WriteEffect::NotApplicable);
+                const auto result =
+                    Json::parse(client(options_, request_ctx)
+                                    ->execute(std::string("SELECT \"payload\" FROM \"") +
+                                              measurement + "\" WHERE time > now() - 1u LIMIT 1"));
+                const auto& rows = result.at("results");
+                if (!rows.is_array() || rows.size() != 1 || rows[0].contains("error"))
+                    return core::make_error(core::ErrorCode::SchemaMismatch,
+                                            core::WriteEffect::NotApplicable,
+                                            "InfluxDB alarm query access unavailable");
+            }
+            return core::ok_status();
+        } catch (const std::exception&) {
+            return core::make_error(
+                core::remaining_budget_ms(request_ctx) <= 0 ? core::ErrorCode::DeadlineExceeded
+                                                            : core::ErrorCode::Unavailable,
+                core::WriteEffect::NotApplicable, "InfluxDB alarm check failed");
+        }
+    }
+
+    core::Status write_alarm(const AlarmArchiveItem& item, const core::CallContext& ctx) override {
+        const auto columns = detail::alarm_state_columns(item);
+        if (!core::is_ok(columns)) return core::error_of(columns);
+        const auto request_ctx = request_context(options_, ctx);
+        if (core::remaining_budget_ms(request_ctx) <= 0)
+            return core::make_error(core::ErrorCode::DeadlineExceeded,
+                                    core::WriteEffect::NotApplied);
+        const auto& state = core::value_of(columns);
+        const auto base = [&](const char* name) {
+            const auto timestamp = std::chrono::system_clock::time_point{
+                std::chrono::duration_cast<std::chrono::system_clock::duration>(
+                    std::chrono::microseconds(item.event_time_us))};
+            influxdb::Point point{name};
+            point.addTag("station_id", hex(item.station_id.value()))
+                .addTag("device_id", hex(item.device_id.value()))
+                .addTag("alarm_id", hex(item.alarm_id.value()))
+                .addTag("event_id", hex(item.event_id.value()))
+                .addField("stream_seq", static_cast<long long>(item.stream_seq))
+                .setTimestamp(timestamp);
+            return point;
+        };
+        auto event = base("alarm_event");
+        event.addField("kind", static_cast<int>(item.kind)).addField("payload", item.event_json);
+        auto snapshot = base("alarm_state");
+        snapshot.addField("occurred_at_us", static_cast<long long>(state.occurred_at_us))
+            .addField("cleared_at_us", static_cast<long long>(state.cleared_at_us))
+            .addField("acknowledged_at_us", static_cast<long long>(state.acknowledged_at_us))
+            .addField("severity", state.severity)
+            .addField("payload", item.state_json);
+        try {
+            std::vector<influxdb::Point> rows;
+            rows.push_back(std::move(event));
+            rows.push_back(std::move(snapshot));
+            client(options_, request_ctx)->write(std::move(rows));
+            return core::ok_status();
+        } catch (const std::exception&) {
+            return core::make_error(core::remaining_budget_ms(request_ctx) <= 0
+                                        ? core::ErrorCode::DeadlineExceeded
+                                        : core::ErrorCode::Unavailable,
+                                    core::WriteEffect::Unknown, "InfluxDB alarm write failed");
+        }
+    }
 
     core::Status write(const Sample& sample, const core::CallContext& ctx) override {
         return write_batch({sample}, ctx).front();

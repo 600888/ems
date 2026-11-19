@@ -1,11 +1,14 @@
 #include <common/core/time.h>
 #include <rtdb/client/rtdb.h>
 
+#include <algorithm>
 #include <chrono>
 #include <csignal>
+#include <future>
 #include <iostream>
 #include <thread>
 
+#include "alarm_archiver.h"
 #include "common/log/default_logger.hpp"
 #include "common/log/process_logger.hpp"
 #include "sampling.h"
@@ -15,6 +18,51 @@ namespace {
 volatile std::sig_atomic_t stopping = 0;
 
 void stop(int) { stopping = 1; }
+
+class AlarmArchiveRunner {
+   public:
+    AlarmArchiveRunner(const ems::database::MySqlDatabaseContext& database,
+                       const ems::database::TimeSeriesConnectionOptions& options,
+                       ems::core::StationId station_id)
+        : database_(database), options_(options), station_id_(std::move(station_id)) {}
+
+    bool poll() {
+        if (!series_) {
+            auto opened = ems::database::connect_time_series(options_);
+            if (!ems::core::is_ok(opened)) return report(ems::core::error_of(opened));
+            auto series = std::get<0>(std::move(opened));
+            const auto checked =
+                series->check_alarm_schema(ems::core::make_call_context(std::chrono::seconds(5)));
+            if (!ems::core::is_ok(checked)) return report(ems::core::error_of(checked));
+            series_ = std::move(series);
+        }
+
+        const auto archived = ems::storage::archive_alarm_batch(
+            *database_.database, *database_.alarms, *series_, station_id_,
+            ems::core::make_call_context(std::chrono::seconds(5)));
+        if (!ems::core::is_ok(archived)) {
+            const auto& error = ems::core::error_of(archived);
+            if (error.code == ems::core::ErrorCode::Unavailable) series_.reset();
+            return report(error);
+        }
+        const auto count = ems::core::value_of(archived);
+        if (count != 0) LOG_INFO("ems-storage alarm archive: written={}", count);
+        return true;
+    }
+
+   private:
+    static bool report(const ems::core::Error& error) {
+        LOG_WARN("ems-storage alarm archive deferred: code={}, effect={}, reason={}",
+                 ems::core::to_string(error.code), ems::core::to_string(error.effect),
+                 error.message);
+        return false;
+    }
+
+    const ems::database::MySqlDatabaseContext& database_;
+    const ems::database::TimeSeriesConnectionOptions& options_;
+    ems::core::StationId station_id_;
+    std::unique_ptr<ems::database::ITimeSeriesDatabase> series_;
+};
 }  // namespace
 
 int main(int argc, char** argv) {
@@ -60,7 +108,8 @@ int main(int argc, char** argv) {
         LOG_ERROR("ems-storage: configuration database unavailable");
         return 1;
     }
-    ems::storage::ArchiveDirectorySource directory(ems::core::value_of(connected));
+    const auto& database = ems::core::value_of(connected);
+    ems::storage::ArchiveDirectorySource directory(database);
     ems::rtdb::RtDb realtime;
     ems::rtdb::RtDbConfig realtime_options;
     realtime_options.config_path = options.realtime_config;
@@ -71,7 +120,8 @@ int main(int argc, char** argv) {
     }
     auto opened = ems::database::connect_time_series(options.timeseries);
     if (!ems::core::is_ok(opened)) {
-        LOG_ERROR("ems-storage: TDengine unavailable: {}", ems::core::error_of(opened).message);
+        LOG_ERROR("ems-storage: time-series backend unavailable: {}",
+                  ems::core::error_of(opened).message);
         return 1;
     }
     auto series = std::move(std::get<0>(opened));
@@ -84,6 +134,23 @@ int main(int argc, char** argv) {
         LOG_ERROR("ems-storage: archive directory unavailable: {}",
                   ems::core::error_of(initial).message);
         return 1;
+    }
+    AlarmArchiveRunner alarm_runner(database, options.timeseries,
+                                    ems::core::StationId(ems::core::value_of(initial).station_id));
+    // 停止信号先于 worker 析构，即使提前退出也会等待后台归档结束。
+    std::future<void> alarm_worker;
+    std::promise<void> stop_alarm_worker;
+    if (options.archive_alarms && !once) {
+        alarm_worker = std::async(
+            std::launch::async, [&alarm_runner, stop_signal = stop_alarm_worker.get_future()] {
+                auto delay = std::chrono::seconds(1);
+                do {
+                    if (alarm_runner.poll())
+                        delay = std::chrono::seconds(1);
+                    else
+                        delay = std::min(delay * 2, std::chrono::seconds(30));
+                } while (stop_signal.wait_for(delay) == std::future_status::timeout);
+            });
     }
     LOG_INFO("ems-storage ready: periodic archive, interval_ms={}", options.interval_ms);
     const auto interval = std::chrono::milliseconds(options.interval_ms);
@@ -99,7 +166,7 @@ int main(int argc, char** argv) {
         if (reconnect) {
             auto retry = ems::database::connect_time_series(options.timeseries);
             if (!ems::core::is_ok(retry)) {
-                LOG_ERROR("ems-storage: TDengine reconnect failed");
+                LOG_ERROR("ems-storage: time-series reconnect failed");
                 next = std::chrono::steady_clock::now() + interval;
                 continue;
             }
@@ -130,12 +197,17 @@ int main(int argc, char** argv) {
                     std::chrono::steady_clock::now() - cycle_started)
                     .count());
         }
-        if (once) return failed ? 1 : 0;
+        if (once) {
+            const bool alarm_ok = !options.archive_alarms || alarm_runner.poll();
+            return failed || !alarm_ok ? 1 : 0;
+        }
         // 只执行实际发生的采样；慢周期跳过错过的槽，不能用最新值回填过去。
         do {
             next += interval;
         } while (next <= std::chrono::steady_clock::now());
     }
+    stop_alarm_worker.set_value();
+    if (alarm_worker.valid()) alarm_worker.get();
     realtime.shutdown();
     LOG_INFO("ems-storage stopped");
     return 0;

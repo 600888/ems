@@ -44,13 +44,29 @@ influx v1 dbrp create --org YOUR_ORG --bucket-id YOUR_BUCKET_ID --db ems_history
 
 映射和 API token 的要求见 [InfluxDB 兼容接口](https://docs.influxdata.com/influxdb/v2/reference/api/influxdb-1x/) 与 [DBRP 管理](https://docs.influxdata.com/influxdb/v2/query-data/influxql/dbrp/)。`--check-config` 只校验文件；真正连接时执行只读查询验证访问。`influxdb-cxx` 的 `query()` 会将数值转换为 double，EMS 使用 `execute()` 的原始 JSON 保留精确整数。存储字段和分页边界见[详细设计](design.md#influxdb-29-存储)。
 
+## 告警时序归档
+
+部署工程库协调表和时序库后，在 `storage.json` 中设 `"archive_alarms": true`。默认关闭，启用后使用相同的时序配置和独立连接处理本站告警。TDengine 执行现有 `backend/data/tdengine_history.sql` 补建告警超级表。InfluxDB 使用配置中的 bucket，首次写入产生两个 measurement。
+
+```mermaid
+flowchart LR
+    A[(MySQL 告警队首)] --> B[存储进程]
+    B --> C[(时序库 alarm_event 与 alarm_state)]
+    C -->|两条均确认| D[推进归档位置]
+    C -->|失败或结果未知| A
+```
+
+每轮最多处理 32 项。失败后退避重试，同一事件沿用原时间、ID 和载荷。TDengine 使用复合主键，InfluxDB 使用 measurement、标签与时间共同确定写入身份。[TDengine 写入文档](https://docs.tdengine.com/tdengine-sql/data-write/insert/) · [InfluxDB 写入文档](https://docs.influxdata.com/influxdb/v2/reference/syntax/line-protocol/)
+
+归档保留期沿用所选时序库的配置。部署时需要让保留期覆盖预期告警生命周期和补写窗口。过期事件导致写入失败时，队列会保留该项并记录故障。Web 历史查询仍处于接入计划中。
+
 ## 构建与启动
 
 MySQL 客户端用于配置与稳定序列映射；RTDB 用于实时读取。周期存储不要求开启 ZeroMQ。TDengine C SDK 3.4.3.x 通过 `EMS_DATABASE_TAOS_INCLUDE_DIR` 和 `EMS_DATABASE_TAOS_LIBRARY` 指定，运行时需要对应客户端动态库。没有 SDK 时可编译并检查配置，真实连接会明确返回 Unsupported。
 
 InfluxDB 使用 `backend/third_party/influxdb-cxx`，不修改第三方源码。CMake 优先查找 `cpr::cpr`；未安装时默认从固定摘要的官方源码构建 cpr 和 curl（`EMS_FETCH_CPR=ON`），首次配置需要网络。离线构建可预先设置 `cpr_DIR` / `CMAKE_PREFIX_PATH`，或提供 `FETCHCONTENT_SOURCE_DIR_EMS_CPR` 和 `FETCHCONTENT_SOURCE_DIR_CURL`。Windows 使用系统 Schannel 验证 HTTPS 证书；Linux 构建 curl 需要 OpenSSL 开发包。InfluxDB 无需 TAOS SDK。
 
-服务端部署后，由部署账号执行 `backend/data/tdengine_history.sql`，创建微秒库及四张超级表；工程关系表继续通过现有 Python 初始化入口管理。应用不在启动时建库或建表。
+服务端部署后，由部署账号执行 `backend/data/tdengine_history.sql`，创建微秒库、四张遥测超级表和两张告警超级表。工程关系表继续通过现有 Python 初始化入口管理。应用启动时只检查结构。
 
 以下命令以 `backend` 为工作目录，先检查配置，再连接服务：
 
@@ -60,7 +76,7 @@ InfluxDB 使用 `backend/third_party/influxdb-cxx`，不修改第三方源码。
 ./build/windows-msvc/bin/Release/ems-storage.exe --config conf/storage.json
 ```
 
-`--check-config` 不连接外部服务。`--once` 执行一个实际归档周期，用于部署验收，任意写失败返回非零。持续运行支持 SIGINT / SIGTERM，Windows 另支持 SIGBREAK。
+`--check-config` 只检查配置。`--once` 执行一个四遥归档周期，开启告警归档时也执行一批告警归档。任意写入失败返回非零。持续运行支持 SIGINT / SIGTERM，Windows 另支持 SIGBREAK。
 
 守护配置已带上 `--config conf/storage.json`，存储项已启用。启动需要实时库已经可用，配置目录和时序连接全部就绪后才报告 ready。
 

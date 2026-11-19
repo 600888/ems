@@ -13,6 +13,7 @@
 #include <string_view>
 #include <utility>
 
+#include "../alarm/orm_alarm_repository.h"
 #include "../collector_commands.h"
 #include "../configuration/orm_device_config_repository.h"
 #include "../configuration/orm_device_management_store.h"
@@ -659,6 +660,23 @@ core::Result<MySqlDatabaseContext> connect_mysql_database(const MySqlConnectionO
             return mysql_error_result(connection.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "command schema");
     }
+    if (options.require_alarm_schema) {
+        auto verify = [&](auto* row) -> core::Status {
+            using Row = std::remove_pointer_t<decltype(row)>;
+            const auto prepared = connection.prepare(ctx);
+            if (!core::is_ok(prepared)) return prepared;
+            connection.orm.query_s<Row>("1=0");
+            if (connection.orm.has_error())
+                return mysql_error_result(connection.orm.get_last_error_code(),
+                                          core::WriteEffect::NotApplied, "alarm schema");
+            return core::ok_status();
+        };
+        for (const auto& status : {verify(static_cast<detail::AlarmControlRow*>(nullptr)),
+                                   verify(static_cast<detail::AlarmOutboxRow*>(nullptr)),
+                                   verify(static_cast<detail::AlarmProgressRow*>(nullptr))}) {
+            if (!core::is_ok(status)) return core::error_of(status);
+        }
+    }
     auto released = tx.rollback(ctx);
     if (!core::is_ok(released)) return core::error_of(released);
     auto repositories = std::make_shared<HistoryRepositories>(pool);
@@ -699,8 +717,18 @@ core::Result<MySqlDatabaseContext> connect_mysql_database(const MySqlConnectionO
             return mysql_error_result(driver.orm.get_last_error_code(),
                                       core::WriteEffect::NotApplied, "command operation");
         });
-    return MySqlDatabaseContext{pool,       repositories, repositories, device_config,
-                                management, identity,     identity,     commands};
+    auto alarms = std::make_shared<detail::OrmAlarmRepository<MySqlConnection>>(
+        [repositories](ITransaction& transaction, const core::CallContext& context) {
+            return repositories->session(transaction, context);
+        },
+        [pool](ITransaction& transaction) { pool->invalidate(transaction); },
+        [](MySqlConnection& driver) {
+            return mysql_error_result(driver.orm.get_last_error_code(),
+                                      core::WriteEffect::NotApplied, "alarm operation");
+        },
+        identity);
+    return MySqlDatabaseContext{pool,     repositories, repositories, device_config, management,
+                                identity, identity,     commands,     alarms};
 }
 
 }  // namespace ems::database

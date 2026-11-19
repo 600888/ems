@@ -15,6 +15,7 @@
 #include <common/core/call_context.h>
 #include <common/core/identity.h>
 #include <common/core/result.h>
+#include <common/database/alarm/repositories.h>
 #include <common/database/i_transaction.h>
 
 #include <cstdint>
@@ -168,43 +169,6 @@ class IControlRepository {
     virtual core::Result<CommandResultRow> find_command_result(ITransaction& tx,
                                                                const std::string& command_id,
                                                                const core::CallContext& ctx) = 0;
-};
-
-struct AlarmEventRow {
-    std::string event_id;
-    std::string alarm_code;
-    std::string device_id;  ///< 告警所属设备树节点
-    std::string lifecycle;
-    std::string acknowledged_by;
-    std::string detail;
-    std::int64_t event_time_us{0};
-    std::int64_t ingest_time_us{0};
-};
-
-/** @brief 保存告警生命周期事件并查询告警投影。 */
-class IAlarmRepository {
-   public:
-    /** @brief 销毁告警仓储接口。 */
-    virtual ~IAlarmRepository() = default;
-
-    /// 追加告警生命周期事件；event_id 唯一，重复幂等
-    /// @param[in,out] tx 数据库事务。
-    /// @param[in] event 事件数据。
-    /// @param[in] ctx 调用上下文，包含截止时间等信息。
-    /// @return 得到的操作状态。
-    virtual core::Status append_alarm_event(ITransaction& tx, const AlarmEventRow& event,
-                                            const core::CallContext& ctx) = 0;
-
-    /// 查询未恢复告警投影（分页，limit 必须 > 0）
-    /// @param[in,out] tx 数据库事务。
-    /// @param[in] scope 记录作用域。
-    /// @param[in] before_time_us 清理截止时间，单位为微秒。
-    /// @param[in] limit 结果数量上限。
-    /// @param[in] ctx 调用上下文，包含截止时间等信息。
-    /// @return 成功时包含结果；失败时包含错误信息。
-    virtual core::Result<std::vector<AlarmEventRow>> list_active_alarms(
-        ITransaction& tx, const std::string& scope, std::int64_t before_time_us,
-        std::uint32_t limit, const core::CallContext& ctx) = 0;
 };
 
 struct OutboxRecord {

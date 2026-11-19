@@ -96,6 +96,8 @@ struct ChannelIdTag {};
 
 struct EventIdTag {};
 
+struct AlarmIdTag {};
+
 struct IntentIdTag {};
 
 struct CommandIdTag {};

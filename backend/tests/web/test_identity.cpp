@@ -8,9 +8,11 @@
 #include <mutex>
 #include <ormpp/sqlite.hpp>
 
+#include "common/db/alarm/orm_alarm_repository.h"
 #include "common/db/configuration/orm_device_management_store.h"
 #include "common/db/identity/user_repository.h"
 #include "common/db/runtime/transaction_database.h"
+#include "scd/alarm_archiver.h"
 #include "web/app/web_options.h"
 #include "web/modules/device/application/device_service.h"
 #include "web/modules/identity/api/identity_codec.h"
@@ -123,6 +125,8 @@ class PersistentIdentity : public testing::Test {
         db.database = runtime;
         db.users = repository;
         db.audit = repository;
+        db.alarms = std::make_shared<detail::OrmAlarmRepository<IdentityConnection>>(
+            acquire, invalidate, failure, repository, false);
         db.device_management =
             std::make_shared<detail::OrmDeviceManagementStore<IdentityConnection>>(
                 acquire, invalidate, failure, false);
@@ -218,6 +222,207 @@ class PersistentIdentity : public testing::Test {
         }
     }
 };
+
+class AlarmRepository : public PersistentIdentity {
+   protected:
+    const core::StationId station{"station-main"};
+
+    AlarmChange occurrence() const {
+        AlarmChange event;
+        event.event_id = core::EventId("occurred-a");
+        event.alarm_id = model::AlarmId("alarm-a");
+        event.station_id = station;
+        event.device_id = core::DeviceId("device-a");
+        event.event_time_us = 1794009600000000;
+        event.change = AlarmOccurrence{"device-a:temp:high",
+                                       "TEMP_HIGH",
+                                       "电池温度高",
+                                       model::AlarmSeverity::Critical,
+                                       "电池",
+                                       "站 / 单元 / 电池",
+                                       "温度超过上限"};
+        return event;
+    }
+
+    AlarmChange acknowledge(AlarmChange event) const {
+        event.event_id = core::EventId("acknowledged-a");
+        ++event.event_time_us;
+        event.change = AlarmAcknowledgement{admin_id, "值班员", "已检查"};
+        return event;
+    }
+
+    AlarmChangeResult apply(const AlarmChange& event) {
+        const auto ctx = call().context;
+        auto tx = take(db.database->begin(ctx));
+        auto result = take(db.alarms->apply(*tx, event, ctx));
+        take(tx->commit(ctx));
+        return result;
+    }
+
+    AlarmArchiveProgress progress() {
+        const auto ctx = call().context;
+        auto tx = take(db.database->begin(ctx));
+        return take(db.alarms->progress(*tx, station, ctx));
+    }
+};
+
+TEST_F(AlarmRepository, PersistsIndependentLifecycleAndContiguousArchive) {
+    const auto first = occurrence();
+    EXPECT_EQ(apply(first), AlarmChangeResult::Applied);
+    EXPECT_EQ(apply(first), AlarmChangeResult::Duplicate);
+    auto recovered = first;
+    recovered.event_id = core::EventId("cleared-a");
+    recovered.event_time_us += 2;
+    recovered.change = AlarmRecovery{};
+    EXPECT_EQ(apply(recovered), AlarmChangeResult::Applied);
+
+    auto ack = acknowledge(first);
+    EXPECT_EQ(apply(ack), AlarmChangeResult::Applied);
+    EXPECT_EQ(apply(ack), AlarmChangeResult::Duplicate);
+    ack.event_id = core::EventId("other-ack");
+    std::get<AlarmAcknowledgement>(ack.change).remark = "不得覆盖";
+    EXPECT_EQ(apply(ack), AlarmChangeResult::AlreadyAcknowledged);
+    EXPECT_EQ(progress().committed_seq, 3);
+
+    const auto ctx = call().context;
+    {
+        auto tx = take(db.database->begin(ctx));
+        const auto state = take(db.alarms->find(*tx, station, first.alarm_id, ctx));
+        ASSERT_TRUE(state);
+        EXPECT_EQ(state->cleared_at_us, recovered.event_time_us);
+        EXPECT_EQ(state->acknowledged_at_us, ack.event_time_us);
+        EXPECT_FALSE(state->active_key);
+        EXPECT_EQ(Json::parse(state->state_json).at("acknowledgement").at("remark"), "已检查");
+    }
+
+    for (const auto& event_id :
+         {first.event_id, recovered.event_id, core::EventId("acknowledged-a")}) {
+        auto tx = take(db.database->begin(ctx));
+        const auto item = take(db.alarms->next_for_archive(*tx, station, ctx));
+        ASSERT_TRUE(item);
+        EXPECT_EQ(item->event_id, event_id);
+        take(tx->rollback(ctx));
+        if (item->stream_seq == 1) {
+            auto bad_tx = take(db.database->begin(ctx));
+            auto wrong = *item;
+            ++wrong.stream_seq;
+            EXPECT_EQ(core::error_of(db.alarms->mark_archived(*bad_tx, wrong, ctx)).code,
+                      core::ErrorCode::Conflict);
+            EXPECT_FALSE(core::is_ok(bad_tx->commit(ctx)));
+        }
+        for (int retry = 0; retry < 2; ++retry) {
+            auto mark_tx = take(db.database->begin(ctx));
+            take(db.alarms->mark_archived(*mark_tx, *item, ctx));
+            take(mark_tx->commit(ctx));
+        }
+    }
+    EXPECT_EQ(progress().archived_seq, 3);
+    EXPECT_EQ(apply(first), AlarmChangeResult::Duplicate);
+
+    auto recurrent = first;
+    recurrent.event_id = core::EventId("occurred-b");
+    recurrent.alarm_id = model::AlarmId("alarm-b");
+    recurrent.event_time_us += 3;
+    EXPECT_EQ(apply(recurrent), AlarmChangeResult::Applied);
+    auto tx = take(db.database->begin(ctx));
+    const auto active = take(db.alarms->active(*tx, station, {}, ctx));
+    ASSERT_EQ(active.size(), 1U);
+    EXPECT_EQ(active.front().alarm_id, recurrent.alarm_id);
+    const auto audit = take(db.audit->list(*tx, 0, 200, ctx));
+    EXPECT_EQ(std::count_if(audit.begin(), audit.end(),
+                            [](const auto& row) { return row.action == "alarm.acknowledge"; }),
+              1);
+}
+
+TEST_F(AlarmRepository, AuditFailureRollsBackConfirmationAndOutbox) {
+    const auto first = occurrence();
+    ASSERT_EQ(apply(first), AlarmChangeResult::Applied);
+    sql("CREATE TRIGGER ems_web.reject_alarm_ack BEFORE INSERT ON audit_log "
+        "WHEN NEW.action='alarm.acknowledge' BEGIN SELECT RAISE(ABORT, 'audit failure'); END;");
+    const auto ctx = call().context;
+    auto tx = take(db.database->begin(ctx));
+    const auto ack = acknowledge(first);
+    EXPECT_FALSE(core::is_ok(db.alarms->apply(*tx, ack, ctx)));
+    EXPECT_FALSE(core::is_ok(tx->commit(ctx)));
+    EXPECT_EQ(progress().committed_seq, 1);
+    {
+        auto read = take(db.database->begin(ctx));
+        const auto state = take(db.alarms->find(*read, station, first.alarm_id, ctx));
+        ASSERT_TRUE(state);
+        EXPECT_FALSE(state->acknowledged_at_us);
+    }
+    sql("DROP TRIGGER ems_web.reject_alarm_ack;");
+    EXPECT_EQ(apply(ack), AlarmChangeResult::Applied);
+    EXPECT_EQ(progress().committed_seq, 2);
+}
+
+TEST_F(AlarmRepository, ArchiveRetriesTheSameHeadAfterPartialTimeSeriesWrite) {
+    struct Series final : database::IAlarmTimeSeriesStore {
+        std::vector<database::AlarmArchiveItem> attempts;
+
+        core::Status check_alarm_schema(const core::CallContext&) override {
+            return core::ok_status();
+        }
+
+        core::Status write_alarm(const database::AlarmArchiveItem& item,
+                                 const core::CallContext&) override {
+            attempts.push_back(item);
+            if (attempts.size() == 1)
+                return core::make_error(core::ErrorCode::Unavailable, core::WriteEffect::Unknown,
+                                        "state row write failed");
+            return core::ok_status();
+        }
+    } series;
+
+    const auto first = occurrence();
+    ASSERT_EQ(apply(first), AlarmChangeResult::Applied);
+    ASSERT_EQ(apply(acknowledge(first)), AlarmChangeResult::Applied);
+
+    const auto archive = [&] {
+        return storage::archive_alarm_batch(*db.database, *db.alarms, series, station,
+                                            call().context);
+    };
+    const auto failed = archive();
+    ASSERT_FALSE(core::is_ok(failed));
+    EXPECT_EQ(core::error_of(failed).effect, core::WriteEffect::Unknown);
+    EXPECT_EQ(progress().archived_seq, 0);
+    ASSERT_EQ(series.attempts.size(), 1U);
+
+    EXPECT_EQ(take(archive()), 2U);
+    EXPECT_EQ(progress().archived_seq, 2);
+    ASSERT_EQ(series.attempts.size(), 3U);
+    EXPECT_EQ(series.attempts[0].event_id, series.attempts[1].event_id);
+    EXPECT_EQ(series.attempts[0].event_time_us, series.attempts[1].event_time_us);
+    EXPECT_EQ(series.attempts[0].event_json, series.attempts[1].event_json);
+    EXPECT_EQ(series.attempts[0].state_json, series.attempts[1].state_json);
+    EXPECT_EQ(series.attempts[2].kind, model::AlarmLifecycle::Acknowledged);
+    EXPECT_EQ(take(archive()), 0U);
+}
+
+TEST_F(AlarmRepository, RejectsConflictsWithoutConsumingArchiveSequence) {
+    auto event = occurrence();
+    ASSERT_EQ(apply(event), AlarmChangeResult::Applied);
+    auto assert_conflict = [&](const AlarmChange& rejected) {
+        const auto ctx = call().context;
+        auto tx = take(db.database->begin(ctx));
+        const auto result = db.alarms->apply(*tx, rejected, ctx);
+        ASSERT_FALSE(core::is_ok(result));
+        EXPECT_EQ(core::error_of(result).code, core::ErrorCode::Conflict);
+        EXPECT_FALSE(core::is_ok(tx->commit(ctx)));
+    };
+    event.detail = "different payload";
+    assert_conflict(event);
+    event.event_id = core::EventId("second-occurrence");
+    event.alarm_id = model::AlarmId("other-alarm");
+    // 同一规则条件已有未恢复实例，数据库唯一键拒绝新发生。
+    {
+        const auto ctx = call().context;
+        auto tx = take(db.database->begin(ctx));
+        EXPECT_FALSE(core::is_ok(db.alarms->apply(*tx, event, ctx)));
+        EXPECT_FALSE(core::is_ok(tx->commit(ctx)));
+    }
+    EXPECT_EQ(progress().committed_seq, 1);
+}
 
 TEST_F(PersistentIdentity, PersistentCookieRestrictedFirstPasswordAndNoSecrets) {
     auto user = create("observer1", "observer", "enabled");

@@ -100,7 +100,7 @@ def test_frozen_migration_matches_orm_ddl_for_each_database(dialect):
 
 
 def test_all_models_are_mapped_and_four_point_tables_share_base():
-    assert len(Base.registry.mappers) == len(Base.metadata.tables) == 20
+    assert len(Base.registry.mappers) == len(Base.metadata.tables) == 23
     assert not {"device", "channel", "point_yc", "point_yx", "point_yk", "point_yt"} & set(Base.metadata.tables)
     for table in Base.metadata.tables.values():
         assert list(table.c)[0].name == "id", table.name

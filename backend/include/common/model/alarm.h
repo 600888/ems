@@ -2,8 +2,7 @@
  * @file alarm.h
  * @brief 告警定义与告警事件（design.md 第 6.1 节）
  *
- * 告警定义、告警事件数据类型可共享；告警产生/恢复/确认的业务
- * 状态机归策略模块。
+ * 策略负责产生和恢复告警，Web 负责人工确认。公共仓储维护持久生命周期。
  */
 #pragma once
 
@@ -13,6 +12,8 @@
 #include <string>
 
 namespace ems::model {
+
+using AlarmId = core::StrongId<core::AlarmIdTag>;
 
 /// 告警级别
 enum class AlarmSeverity : std::uint8_t { Info = 0, Warning = 1, Critical = 2 };
@@ -24,7 +25,7 @@ enum class AlarmLifecycle : std::uint8_t {
     Acknowledged = 2  ///< 确认
 };
 
-/// 告警定义（版本化规则引用）
+/// 告警定义
 struct AlarmDefinition {
     std::string alarm_code;  ///< 稳定告警编码
     std::string name;
@@ -37,6 +38,7 @@ struct AlarmDefinition {
 /// 告警事件
 struct AlarmEvent {
     core::EventId event_id;    ///< 持久受理前生成
+    AlarmId alarm_id;          ///< 一次发生的稳定 ID，恢复与确认沿用
     std::string alarm_code;    ///< 规则/定义引用
     core::DeviceId device_id;  ///< 告警所属设备树节点
     AlarmLifecycle lifecycle{AlarmLifecycle::Occurred};
