@@ -541,8 +541,9 @@ station-package.zip
 
 `ops_command` 是独立于 `cfg_*` 的运行记录，保存稳定 `command_id`、目标 `point_id`、
 工程值、期限、站根 `config_revision`、发送时标和执行状态。它不保存配置副本，
-不参与配置修订号递增。按 `scope_code/command_id` 唯一约束去重，已发但不能确认的
-命令只核验，不自动重写。字段及调用方式见[遥控与遥调](../../processes/collector/commands.md)。
+不参与配置修订号递增。命令先通过公共实时库接口保存为独立 Pending 记录，
+采集侧读取后写入本表；执行状态和结果从本表同步回实时库，各进程从实时库查询。
+按 `scope_code/command_id` 唯一约束保留持久去重，已发但不能确认的命令只核验，不自动重写。字段及调用方式见[遥控与遥调](../../processes/collector/commands.md)。
 
 表结构随现有 Python ORM 和 Alembic 初始基线维护；SQLite 使用 WAL，通用 C++ 仓储
 通过事务入口与行锁能力装配，业务服务不依赖具体关系数据库品牌。

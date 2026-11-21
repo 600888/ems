@@ -382,7 +382,10 @@ private:
 | `updatePoint` | PointAddress、PointSample、CallContext | Applied / Duplicate / IgnoredOutOfOrder 或结构化 Error；执行第 5.2 节规则 |
 | `updatePoints` | 完整样本列表、CallContext | 逐项业务结果；部分成功不会被压成一个 bool |
 | `getState / updateState` | 类型化状态地址、状态样本、CallContext | 各状态类型定义唯一写角色及事件顺序，按相同 CAS 流程更新 |
-| `getCommandState` | 已鉴权的作用域与 command_id | 查询状态投影；没有“写值即执行”的接口 |
+| `submitCommand` | 已鉴权的作用域、稳定命令 ID、目标值、期限和 `config_revision` | 先写独立 Pending 命令记录，再提示执行者读取；不覆盖实测值 |
+| `readCommand` | 已鉴权的作用域与 command_id | 查询同一实时记录中的目标、执行状态和结果 |
+| `updateCommand` | 执行者与当前记录 revision | CAS 认领或更新状态，不能改变原命令目标 |
+| `requestVerification` | 已鉴权的作用域与 command_id | 登记只读反馈核验请求，不重发设备写入 |
 
 用于枚举设备/测点的目录来自当前配置版本，随后按地址批量读取；`IRealtimeStore` 不提供无限扫描或 `getAll()`。策略计算读取多点后检查配置组合、授权代次、采样时间窗口和质量覆盖率；若业务确实要求同一计算时刻的聚合，单独发布一个带输入版本的聚合状态记录，不把批量读当事务快照。
 
@@ -426,7 +429,7 @@ Web 通过本进程门面调用 getPoint/getPoints/getState，向浏览器返回
 | 单元状态 | `ems:{ess000001}:rt:state` |
 | station 公共设备状态 | `ems:{station:station001}:pcc-meter01:rt:state` |
 | station 通道状态 | `ems:{station:station001}:channel:rs48501:rt:state` |
-| 命令状态投影 | `ems:{ess000001}:command:<command_id>` |
+| 独立命令目标与执行状态 | `ems:{ess000001}:command:<command_id>` |
 
 以上全部为 Hash。新记录加 `_store_revision` 元字段，业务读返回时移除该字段并放入 `Record.revision`。不存在记录返回 NotFound；wrong type、保留字段错误或无法解码应返回明确错误，不能用空结果掩盖数据污染。
 
