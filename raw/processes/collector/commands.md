@@ -109,6 +109,31 @@ IEC61850 的 SP 写入和 CO 选择/执行/增强终止确认共用网页传入�
 遥控支持固定值或直接值。最小间隔在当前连接内按点/写组限制；同连接写入天然互斥。
 脉冲复位策略尚未实现，`pulse_width_ms != 0` 明确拒绝，防止只发置位而不复位。
 
+## 北向服务端控制
+
+IEC104 以 `server` 角色监听时，上级主站的选择/执行不再一律负确认。通道 settings 的 `points` 中
+带 `point_id` 的控制 ASDU 是北向控制点；选择只登记窗口（`select_timeout_ms`，默认 30 秒），
+执行才产生本地请求。
+
+```text
+上级 SELECT/EXECUTE → 插件受理(ACT_CON) → 通道每周期 take_controls
+  → CommandService 持久受理(ops_command, Queued) → 策略/路由 → 南向写入
+  → 反馈核验 → resolve_control → 上级 ACT_TERM 正/负
+```
+
+- 与 `ems-command` 共用同一条持久受理、修订号校验和路由，不另开旁路；北向地址与南向点位
+  通过 `point_id` 解耦，不要求两侧地址相同。
+- 插件只在 `ACT_CON` 之后交付一次请求；宿主未在 `command_timeout_ms` 内回执，插件自行回负
+  `ACT_TERM`，避免上级无限等待。
+- 未选择直接执行（`require_select=true`）、选择过期、地址未配置或队列满，均回负 `ACT_CON`，
+  不会写入命令表。
+- 上送通道仍需由绑定建立；控制能力在通道运行后自动生效，不额外新增协议入口。
+- 未配置命令端点（`command_endpoint` 为空）时没有受理方，插件队列填满后新执行一律负确认；
+  需要北向控制就必须启用命令端点。
+
+客户端方向的命令期限由 `ems_plugin_write_until` 传入，取 `min(调用方期限, command_timeout_ms)`；
+期限已过时不发帧、不关闭会话。此前 ABI v1 只导出 `write`，Web 期限无法传到底层，现已补齐。
+
 ## 反馈核验与当前边界
 
 反馈配置沿用 YK/YT 的 `feedback_json`，例如：
