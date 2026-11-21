@@ -119,8 +119,7 @@ backend/python/database.yaml # 仅供迁移工具使用的多数据库连接配�
 | ems_database_api / ems_database_mysql | Repository/事务接口及 ormpp 实现 | model、core；MySQL/ormpp 仅实现侧 |
 | ems_timeseries_api / ems_timeseries_taos | 时序接口及公共 TDengine 适配 | core/公共记录；TAOS 客户端仅实现侧，存储入口装配 |
 | ems_config_redis / ems_config_mysql | 快照适配及权威版本读取 | config_api、codec；各自数据库客户端 |
-| ems_realtime_api / ems_realtime_core | 实时接口与业务门面 | core、model、config_api |
-| ems_realtime_client | 统一业务入口、管理发现与内部后端组装 | realtime core/api、管理客户端及已内置适配器；具体后端参数不暴露给业务 |
+| ems::rtdb | 统一记录后端、运行目录、测点与命令客户端 | core、model 及内部后端适配器；业务不直接依赖 SDK |
 | ems_realtime_redis / ems_realtime_shm | 实时后端 | realtime_api，私有平台或数据库依赖 |
 | ems_messaging_api / ems_zmq_messaging | 事件信封及 ZeroMQ 传输 | model、core；codec/ZeroMQ 仅实现侧 |
 | ems_observability | 日志、指标、健康基础能力 | core，复用现有 spdlog 封装 |
@@ -129,7 +128,7 @@ backend/python/database.yaml # 仅供迁移工具使用的多数据库连接配�
 
 上表是目标拆分，不要求每项产出动态库。纯头接口使用 INTERFACE target，普通公共实现首期优先静态链接；旧 `ems_db` 与 DBManager 已删除，调用方直接使用公共数据库 target，不保留兼容转发。
 
-实时数据库交付采用独立例外：`ems_rtdb` 为 SHARED，统一包含公共记录层、配置客户端和已启用的 Boost.Interprocess/redis-plus-plus 适配器。原 ems_realtime_core/shm/redis/client 名称作为链接同一动态库的兼容目标，对外安装为 `ems::rtdb`，不要求业务直接链接第三方 SDK。
+实时数据库交付采用独立例外：`ems_rtdb` 为 SHARED，统一包含公共记录层、配置客户端和已启用的 Boost.Interprocess/redis-plus-plus 适配器。旧兼容目标已删除，对外安装为 `ems::rtdb`，不要求业务直接链接第三方 SDK。
 
 业务模块链接所需公共 API；实时访问只使用统一 `RealtimeClient`，具体后端发现和组装由公共实现完成，不在业务入口按 Redis/共享内存分支。工厂显式注册后冻结；没有编译的后端被配置选中时启动失败，不能悄悄替换成其他后端。不要用一个 `ems_common` 聚合 target 强迫协议插件链接 MySQL、Redis 与全部公共能力。
 
@@ -463,7 +462,7 @@ outbox 按第 8 节保留与对账，不增加文件水位、日志段回收或�
 | 当前路径/内容 | 目标归属 | 迁移重点 |
 | --- | --- | --- |
 | backend/src/common/models/base.h | common/model 与协议处理器共享类型 | 仅保留仍使用的枚举、JSON 别名与解码工具；无引用的模型基类和混入类已删除 |
-| backend/src/common/models/point_runtime.hpp | common/model/point + realtime | 分离配置、实时值、厂家解码；保留值类型/质量/时间 |
+| 已删除旧 point_runtime.hpp | common/model/point + rtdb | 配置、类型化实时样本及厂家解码分别管理 |
 | 原 backend/include/db/*.h（已删除） | common/database/configuration 公共记录与仓储 + 公共 ORM 实现 | 参数加载、点表导入和测试已直接替换，不保留旧别名 |
 | backend/src/common/db/db_manager.cpp | database_mysql 与各 Repository | 拆开池/事务、业务 CRUD 和旧建表逻辑；历史业务编排留存储，数据库调用统一公共层 |
 | backend/src/scd/mysql_history.cpp | src/common/db/mysql + 公共 history API | 迁移实体、反射、查询与事件/目录持久化，复用公共连接/事务 |
@@ -543,7 +542,7 @@ P4 的事件测试可用测试替身，但不能据此宣称历史链路完成�
 ### 2026-09-19 目录规范化与第二批实现
 
 - 目录规范化：`backend/inc` 重命名为 `backend/include`，同步更新全部 CMake 引用（12 处）与文档（design.md、system-design.md、access-design.md）。
-- realtime API：按实时专题第 5 节草案落地 `include/rtdb/store/realtime_store.h`（IRealtimeStore/RealtimeStoreBase 批量默认实现）与 `include/rtdb/store/backend_factory.h`（注册-冻结-Unsupported 语义），`src/rtdb/store/realtime_store.cpp` 实现 RecordKey 公共验证器；ems_realtime_api/ems_realtime_core 为统一动态库的接口或兼容目标。
+- realtime API：按实时专题第 5 节草案落地 `include/rtdb/store/realtime_store.h`（IRealtimeStore/RealtimeStoreBase 批量默认实现）与 `include/rtdb/store/backend_factory.h`（注册-冻结-Unsupported 语义），`src/rtdb/store/realtime_store.cpp` 实现 RecordKey 公共验证器；业务直接链接 `ems::rtdb`，不再保留旧兼容目标。
 - config core：`src/common/config/` 新增 CatalogValidator（复用 model 纯校验），target ems_config_core。
 - 当时测试报告为 82 用例，包含实时 API 和后来移除的本地文件记录测试；该数量是历史记录，不代表当前用例数。
 - 修复：realtime Revision 缺判等运算符；当时文件记录实现的修复随模块移除，不再作为当前交付内容。
