@@ -1,4 +1,4 @@
-# 在对应工具链终端中构建；依赖须使用相同架构和编译器。
+﻿# 在对应工具链终端中构建；依赖须使用相同架构和编译器。
 [CmdletBinding()]
 param(
     [ValidateSet('msvc', 'mingw')]
@@ -16,7 +16,7 @@ $ErrorActionPreference = 'Stop'
 # 中文 MSVC 的 /showIncludes 输出需与 CMake 的检测编码一致，否则 Ninja 会漏记头文件依赖。
 $previousCodePage = (& chcp.com) -replace '\D', ''
 & chcp.com 65001 | Out-Null
-$backendDir = Join-Path (Split-Path $PSScriptRoot -Parent) 'backend'
+$backendDir = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'backend'
 $preset = "windows-$Toolchain"
 $buildDir = Join-Path $backendDir "build/$preset"
 

@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$BuildDirectory = '',
     [ValidateSet('msvc', 'mingw')]
@@ -8,7 +8,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$projectRoot = Split-Path $PSScriptRoot -Parent
+$scriptsRoot = Split-Path $PSScriptRoot -Parent
+$projectRoot = Split-Path $scriptsRoot -Parent
 if (-not $BuildDirectory) {
     $BuildDirectory = Join-Path $projectRoot 'backend/build/database-deps'
 }

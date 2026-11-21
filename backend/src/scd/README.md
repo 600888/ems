@@ -26,7 +26,7 @@
 
 ## Windows SDK 与联调
 
-从仓库根目录执行 `./scripts/setup_tdengine_dependencies.ps1`，只解压官方 3.4.3.9 客户端到构建缓存，并输出 CMake 参数。SDK、解压工具均固定摘要，不执行安装器，不修改系统目录；依赖 Python 3。
+从仓库根目录执行 `./scripts/windows/setup_tdengine_dependencies.ps1`，只解压官方 3.4.3.9 客户端到构建缓存，并输出 CMake 参数。SDK、解压工具均固定摘要，不执行安装器，不修改系统目录；依赖 Python 3。
 
 Web / 存储共用 `timeseries.json` 的 `client_config_dir`，指定 `conf/tdengine/taos.cfg` 所在目录。Windows 中文账户的原生客户端临时目录需要使用 ASCII 路径；守护配置为两个进程设置 `TEMP=tmp`、`TMP=tmp`，启动前确保工作目录下存在 `tmp`。手工启动时可将 TEMP / TMP 指向 `backend/tmp` 的绝对路径。
 

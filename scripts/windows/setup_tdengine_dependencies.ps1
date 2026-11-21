@@ -1,11 +1,11 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
     [string]$BuildDirectory = ''
 )
 
 $ErrorActionPreference = 'Stop'
 $Version = '3.4.3.9'
-$projectRoot = Split-Path $PSScriptRoot -Parent
+$projectRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
 if (-not $BuildDirectory) {
     $BuildDirectory = Join-Path $projectRoot 'backend/build/tdengine-deps'
 }

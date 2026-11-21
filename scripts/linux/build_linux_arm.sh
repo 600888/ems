@@ -8,7 +8,7 @@ PYTHON_EXECUTABLE="${PYTHON_EXECUTABLE:-/usr/bin/python3}"
 PYTHON_INCLUDE_DIR="${PYTHON_INCLUDE_DIR:-}"
 PYTHON_LIBRARY="${PYTHON_LIBRARY:-}"
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 BACKEND_DIR="${ROOT_DIR}/backend"
 
 if [[ ! -f "${BACKEND_DIR}/CMakeLists.txt" ]]; then

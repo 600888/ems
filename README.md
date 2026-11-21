@@ -50,11 +50,25 @@ DLT645 默认启用，需要 **Boost 1.83+ 头文件**；协议栈源码已集�
 可通过 `-DBOOST_ROOT=<Boost 根目录>` 指定头文件，或用 `-DEMS_BUILD_DLT645=OFF` 关闭该插件。
 发行版提供的 Boost 版本较旧时，需要单独准备 1.83+；仅使用头文件，无需编译 Boost 库。
 
-### Ubuntu/Debian
+### Ubuntu 24.04
+
+```bash
+# 编译器、CMake、Ninja、OpenSSL、hiredis、libmodbus、MySQL 客户端开发包
+sudo ./scripts/linux/setup_dependencies.sh build
+```
+
+等价的 apt 命令：
 
 ```bash
 sudo apt-get update
-sudo apt-get install -y pkg-config libhiredis-dev libmodbus-dev
+sudo apt-get install -y build-essential cmake ninja-build pkg-config libssl-dev \
+  zlib1g-dev libhiredis-dev libmodbus-dev libmysqlclient-dev python3-dev
+```
+
+MySQL、Redis、TDengine 运行服务由同一脚本的 `runtime` 目标安装：
+
+```bash
+sudo ./scripts/linux/setup_dependencies.sh runtime
 ```
 
 ### CentOS/RHEL
@@ -116,8 +130,8 @@ ctest --preset windows-mingw
 也可以在仓库根目录使用 PowerShell 脚本完成配置、编译和测试：
 
 ```powershell
-./scripts/build_windows.ps1 -Toolchain msvc -PrefixPath C:/deps/msvc-x64 -CMakeArgs @('-DBOOST_ROOT=C:/deps/boost') -Test
-./scripts/build_windows.ps1 -Toolchain mingw -PrefixPath C:/deps/mingw-x64 -CMakeArgs @('-DBOOST_ROOT=C:/deps/boost') -Test
+./scripts/windows/build_windows.ps1 -Toolchain msvc -PrefixPath C:/deps/msvc-x64 -CMakeArgs @('-DBOOST_ROOT=C:/deps/boost') -Test
+./scripts/windows/build_windows.ps1 -Toolchain mingw -PrefixPath C:/deps/mingw-x64 -CMakeArgs @('-DBOOST_ROOT=C:/deps/boost') -Test
 ```
 
 依赖不在标准安装布局时，通过 `-DLIBMODBUS_INCLUDE_DIR=...`、`-DLIBMODBUS_LIBRARY=...`、
@@ -155,7 +169,7 @@ Web 的 Drogon、Trantor、JsonCpp 和 zlib 使用 `backend/third_party` 中的�
 Trantor 位于 `drogon/trantor`，JsonCpp 和 zlib 分别位于 `jsoncpp`、`zlib`；
 三个框架依赖均静态链接，默认 `TRANTOR_USE_TLS=none`，远程部署由 Nginx 终止 TLS。
 Web 和采集进程还必须链接 MySQL/MariaDB 客户端；缺少头文件或库时 CMake 会拒绝配置。
-Windows 可执行 `./scripts/setup_database_dependencies.ps1 -Toolchain mingw`（MSVC 使用 `msvc`），
+Windows 可执行 `./scripts/windows/setup_database_dependencies.ps1 -Toolchain mingw`（MSVC 使用 `msvc`），
 将固定的 MariaDB Connector/C 3.4.8 编译并安装到
 `backend/build/database-deps/mariadb-<工具链>/install`，后续配置自动查找该目录。
 外部安装可通过 `EMS_DATABASE_DEPENDENCY_PREFIX` 或 `CMAKE_PREFIX_PATH` 指定；
@@ -186,37 +200,41 @@ Windows 构建时会将已声明的运行依赖 DLL 复制到对应 EXE 所在�
 
 ## Linux ARM (ARM64) 构建
 
+### 0) 安装依赖
+
+以 Ubuntu 24.04 LTS 为基准，依赖安装脚本按阶段执行：
+
+```bash
+sudo ./scripts/linux/setup_dependencies.sh build      # 编译工具链与客户端库
+sudo ./scripts/linux/setup_dependencies.sh runtime    # MySQL / Redis / TDengine
+```
+
+x86_64 主机交叉编译时追加 ARM64 工具链与 ARM64 Python 开发包：
+
+```bash
+sudo ./scripts/linux/setup_dependencies.sh --cross
+```
+
+脚本幂等，默认锁定 MySQL `8.0.46-0ubuntu0.24.04.5`、Redis `7.0.15-1ubuntu0.24.04.5`、
+TDengine `3.4.3.9`。APT 源内缺少目标版本时按候选版本安装并告警，`--strict` 可改为直接失败；
+`--no-tdengine`、`--no-enable` 分别跳过 TDengine 和安装后的服务启动。
+
 ### 1) 板端原生构建（推荐）
 
 在 Linux ARM64 设备上执行：
 
 ```bash
-./scripts/build_linux_arm.sh native Release
+./scripts/linux/build_linux_arm.sh native Release
 ```
 
 说明：该脚本默认 `BUILD_TESTS=OFF`，优先保证部署构建成功。
 
 ### 2) x86_64 主机交叉编译
 
-先安装交叉工具链：
+先按上一步的 `--cross` 安装交叉工具链与 ARM64 Python 开发包，然后执行：
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
-```
-
-如果需要构建 `iec104` 的 Python 绑定，再安装 ARM64 Python 开发包：
-
-```bash
-sudo dpkg --add-architecture arm64
-sudo apt-get update
-sudo apt-get install -y python3-dev:arm64 libpython3-dev:arm64
-```
-
-然后执行：
-
-```bash
-./scripts/build_linux_arm.sh cross Release
+./scripts/linux/build_linux_arm.sh cross Release
 ```
 
 如果 Python 头文件或库不在默认路径，可以通过环境变量覆盖：
@@ -225,7 +243,7 @@ sudo apt-get install -y python3-dev:arm64 libpython3-dev:arm64
 PYTHON_EXECUTABLE=/usr/bin/python3 \
 PYTHON_INCLUDE_DIR=/usr/include/aarch64-linux-gnu/python3.12 \
 PYTHON_LIBRARY=/usr/lib/aarch64-linux-gnu/libpython3.12.so \
-./scripts/build_linux_arm.sh cross Release
+./scripts/linux/build_linux_arm.sh cross Release
 ```
 
 ### 3) 使用 CMake Preset

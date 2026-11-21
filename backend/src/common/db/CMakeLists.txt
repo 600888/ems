@@ -102,8 +102,9 @@ else()
     if(EMS_BUILD_WEB OR EMS_BUILD_COLLECTOR)
         message(FATAL_ERROR
             "MySQL/MariaDB client headers and library are required by ems-web/ems-collector. "
-            "On Windows, run scripts/setup_database_dependencies.ps1 -Toolchain msvc (or mingw) "
+            "On Windows, run scripts/windows/setup_database_dependencies.ps1 -Toolchain msvc (or mingw) "
             "from the repository root in the matching compiler terminal, then configure again. "
+            "On Linux, run scripts/linux/setup_dependencies.sh build, then configure again. "
             "For an external installation, set EMS_DATABASE_DEPENDENCY_PREFIX or CMAKE_PREFIX_PATH, "
             "or set EMS_DATABASE_MYSQL_INCLUDE_DIR and EMS_DATABASE_MYSQL_LIBRARY explicitly."
         )

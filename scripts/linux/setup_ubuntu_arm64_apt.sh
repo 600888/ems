@@ -33,4 +33,4 @@ apt-get install -y \
 
 echo "ARM64 Python development packages are installed."
 echo "You can now run:"
-echo "  ./scripts/build_linux_arm.sh cross Release"
+echo "  ./scripts/linux/build_linux_arm.sh cross Release"
