@@ -173,6 +173,7 @@ if(TARGET proto_iec104)
               commands_activation_confirmation
               command_timeout
               server
+              server_control
               buffer_retry
               reconnect
               concurrent_instances

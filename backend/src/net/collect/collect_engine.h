@@ -252,6 +252,19 @@ class CollectEngine : public CommandRouter {
      */
     void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
 
+    /** @brief 北向控制转交入口：逻辑通道 ID、请求本体与执行回执。 */
+    using PeerControlSink = std::function<void(std::int64_t, const ChannelThread::PeerControl&,
+                                               ChannelThread::PeerOutcomeHandler)>;
+
+    /**
+     * @brief 设置北向控制转交入口；须在 start_all 之前设置才对该批通道生效。
+     * @param[in] sink 受理一条北向控制并返回执行结果的函数；为空表示不启用。
+     */
+    void set_peer_control_sink(PeerControlSink sink) {
+        std::lock_guard lock(peer_mutex_);
+        peer_sink_ = std::move(sink);
+    }
+
    private:
     /**
      * @brief 处理通道上报的错误。
@@ -259,6 +272,12 @@ class CollectEngine : public CommandRouter {
      * @param[in] error 错误说明。
      */
     void on_channel_error(int64_t channel_id, const std::string& error);
+
+    /**
+     * @brief 给通道注入北向控制转交入口；未设置时不启用服务端控制。
+     * @param[in,out] channel 目标连接工作线程。
+     */
+    void attach_peer_sink(ChannelThread& channel);
 
     EngineConfig config_;
     std::atomic<EngineState> state_{EngineState::Idle};
@@ -277,6 +296,8 @@ class CollectEngine : public CommandRouter {
     // 回调
     ChannelStateCallback state_cb_;
     ErrorCallback error_cb_;
+    mutable std::mutex peer_mutex_;
+    PeerControlSink peer_sink_;
 };
 
 }  // namespace collect

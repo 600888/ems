@@ -4,6 +4,8 @@
 #include <common/messaging/zmq_command_channel.h>
 
 #include <atomic>
+#include <deque>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <set>
@@ -62,13 +64,47 @@ class CommandService {
      */
     void set_accepting(bool accepting);
 
+    /**
+     * @brief 登记一条北向服务端控制，仅供 poll 所在的调度线程受理。
+     *
+     * 不在此线程访问数据库：请求进入有界队列，由 poll 转成与 ems-command
+     * 完全相同的持久记录、路由与执行回执。
+     *
+     * @param[in] channel_id 受理该控制的逻辑通道 ID，用于生成稳定命令 ID。
+     * @param[in] control 协议插件给出的控制请求。
+     * @param[in] done 执行结果回执；注册成功时恰好调用一次，注册失败时立即以失败调用。
+     * @return true 已登记；false 队列已满或已停止受理，done 已同步调用。
+     */
+    bool submit_peer(std::int64_t channel_id, const ChannelThread::PeerControl& control,
+                     ChannelThread::PeerOutcomeHandler done);
+
    private:
     struct Journal;
+
+    /** @brief 待受理的北向控制；只在 poll 线程访问数据库。 */
+    struct PeerRequest {
+        std::int64_t channel_id{0};
+        ChannelThread::PeerControl control;
+        ChannelThread::PeerOutcomeHandler done;
+    };
 
     struct Active {
         std::mutex mutex;
         std::set<std::string> ids;
+        std::map<std::string, ChannelThread::PeerOutcomeHandler> peers;
     };
+
+    /**
+     * @brief 把队列中的北向控制转成持久命令并调度。
+     * @return 本次队列可用时为 true。
+     */
+    bool drain_peers();
+
+    /**
+     * @brief 受理单条北向控制；失败时立即回执负结果。
+     * @param[in] request 已出队的请求。
+     */
+    void accept_peer(PeerRequest request);
 
     /**
      * @brief 安排一次物理发送或只读核验。
@@ -83,5 +119,10 @@ class CommandService {
     std::shared_ptr<std::atomic<bool>> accepting_{std::make_shared<std::atomic<bool>>(false)};
     CommandRouter& engine_;
     std::int64_t cursor_{0};
+
+    // 北向控制：通道线程只入队，poll 线程受理。
+    std::mutex peer_mutex_;
+    std::deque<PeerRequest> peer_queue_;
+    std::string peer_prefix_;
 };
 }  // namespace ems::net::collect

@@ -170,10 +170,8 @@ int main(int argc, char** argv) {
         ems::net::collect::CollectEngine engine;
         if (!engine.initialize(options.engine)) throw std::runtime_error("engine initialization");
         if (stopping) return 0;
-        const auto started = engine.start_all(loader);
-        if (started < 0 || static_cast<std::size_t>(started) != channel_count)
-            throw std::runtime_error("channel startup failed");
 #if defined(EMS_WITH_ZEROMQ)
+        // 命令服务先装配再启动通道：服务端受理的北向控制需要立即有受理方。
         std::unique_ptr<ems::net::collect::CommandService> commands;
         ems::messaging::ZmqCommandServer command_server;
         if (!options.command_endpoint.empty()) {
@@ -181,6 +179,23 @@ int main(int argc, char** argv) {
             commands = std::make_unique<ems::net::collect::CommandService>(
                 context.database, context.collector_commands, engine,
                 options.engine.rtdbScopeCode_);
+            engine.set_peer_control_sink(
+                [&commands](std::int64_t channel_id,
+                            const ems::net::collect::ChannelThread::PeerControl& control,
+                            ems::net::collect::ChannelThread::PeerOutcomeHandler done) {
+                    if (!commands) {
+                        if (done) done(false, "command_service_unavailable");
+                        return;
+                    }
+                    commands->submit_peer(channel_id, control, std::move(done));
+                });
+        }
+#endif
+        const auto started = engine.start_all(loader);
+        if (started < 0 || static_cast<std::size_t>(started) != channel_count)
+            throw std::runtime_error("channel startup failed");
+#if defined(EMS_WITH_ZEROMQ)
+        if (commands) {
             ems::messaging::ZmqCommandConfig config;
             config.endpoint = options.command_endpoint;
             // 先独占端点再恢复，避免同端点的第二个实例改变在途记录。

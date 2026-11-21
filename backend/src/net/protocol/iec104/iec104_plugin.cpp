@@ -27,6 +27,8 @@ struct Instance {
     std::string pending;
     std::vector<std::string> pending_codes;
     int pending_count{0};
+    std::string pending_controls;
+    int pending_control_count{0};
 
     void set_error(const char* text) noexcept {
         std::snprintf(error.data(), error.size(), "%s", text ? text : "Unknown plugin error");
@@ -79,6 +81,7 @@ EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_init(void* opaque, const char* 
             return enum_value(OperationResult::Failure);
         }
         instance.pending.clear();
+        instance.pending_controls.clear();
         return instance.protocol.initialize(config);
     });
 }
@@ -90,6 +93,7 @@ EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_connect(void* opaque) {
 EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_disconnect(void* opaque) {
     return invoke(opaque, [](Instance& instance) {
         instance.pending.clear();
+        instance.pending_controls.clear();
         return instance.protocol.disconnect();
     });
 }
@@ -138,6 +142,56 @@ EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_write(void* opaque, const char*
         }
         instance.pending.clear();
         return instance.protocol.write(code, value);
+    });
+}
+
+EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_write_until(void* opaque, const char* code,
+                                                             double value, int64_t expires_at_ms) {
+    return invoke(opaque, [&](Instance& instance) {
+        if (!code) {
+            instance.set_error("Point code is null");
+            return enum_value(OperationResult::Failure);
+        }
+        instance.pending.clear();
+        return instance.protocol.write_until(code, value, expires_at_ms);
+    });
+}
+
+EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_take_controls(void* opaque, char* output,
+                                                               int capacity) {
+    if (output && capacity > 0) output[0] = '\0';
+    return invoke(opaque, [&](Instance& instance) {
+        if (!output || capacity <= 0) {
+            instance.set_error("Invalid control buffer");
+            return enum_value(OperationResult::Failure);
+        }
+        if (instance.pending_controls.empty()) {
+            const int count = instance.protocol.take_controls(instance.pending_controls);
+            if (count < 0) return enum_value(OperationResult::Failure);
+            instance.pending_control_count = count;
+            if (count == 0) {
+                instance.pending_controls.clear();
+                return 0;
+            }
+        }
+        if (instance.pending_controls.size() + 1 > static_cast<std::size_t>(capacity)) {
+            std::snprintf(instance.error.data(), instance.error.size(),
+                          "Control buffer too small; required=%zu",
+                          instance.pending_controls.size() + 1);
+            return enum_value(OperationResult::BufferTooSmall);
+        }
+        std::memcpy(output, instance.pending_controls.c_str(),
+                    instance.pending_controls.size() + 1);
+        // 交付后清空缓存，避免同一批请求重复投递。
+        instance.pending_controls.clear();
+        return instance.pending_control_count;
+    });
+}
+
+EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL ems_plugin_resolve_control(void* opaque, int64_t control_id,
+                                                                 int accepted, const char* reason) {
+    return invoke(opaque, [&](Instance& instance) {
+        return instance.protocol.resolve_control(control_id, accepted != 0, reason ? reason : "");
     });
 }
 

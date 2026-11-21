@@ -471,6 +471,33 @@ class Iec104Protocol::Impl {
         std::string rejection;
     } pending;
 
+    /** @brief 北向控制点：CA:IOA:ASDU 到本地稳定点 ID；不进入监视映像。 */
+    std::map<std::tuple<int, int, int>, std::string> control_points;
+
+    struct Selection {
+        std::tuple<double, bool, int> value{0, false, 0};
+        Clock::time_point expires{Clock::now()};
+    };
+
+    /** @brief 每个会话每个控制点至多一个待执行选择。 */
+    std::map<std::pair<const void*, std::tuple<int, int, int>>, Selection> selections;
+
+    struct Inbound {
+        std::int64_t id{0};
+        IMasterConnection peer{nullptr};
+        AsduPtr request{nullptr, CS101_ASDU_destroy};
+        std::string code, point_id;
+        double value{0};
+        std::int64_t expires_at_ms{0};
+        bool delivered{false};
+    };
+
+    /** @brief 已受理、等待宿主执行并回执的北向控制。 */
+    std::map<std::int64_t, Inbound> inbound;
+    std::int64_t next_control_id{1};
+    int select_timeout_ms{30000}, control_queue_size{64};
+    bool require_select{true};
+
     void set_error(std::string text) {
         std::lock_guard<std::mutex> lock(mutex);
         error = std::move(text);
@@ -679,8 +706,100 @@ class Iec104Protocol::Impl {
         }
     }
 
-    static bool reject_control(void*, IMasterConnection peer, CS101_ASDU request) noexcept {
-        return IMasterConnection_sendACT_CON(peer, request, true);
+    /** @brief 向上级回执结束确认；连接已关闭时发送会安全失败。 */
+    static void finish(IMasterConnection peer, CS101_ASDU asdu, bool accepted) {
+        if (!peer || !asdu) return;
+        CS101_ASDU_setCOT(asdu, CS101_COT_ACTIVATION_TERMINATION);
+        CS101_ASDU_setNegative(asdu, !accepted);
+        IMasterConnection_sendASDU(peer, asdu);
+    }
+
+    /** @brief 会话关闭时丢弃该会话的选择与待回执请求，避免回执发往已复用的连接对象。 */
+    static void server_connection(void* parameter, IMasterConnection peer,
+                                  CS104_PeerConnectionEvent event) noexcept {
+        if (event != CS104_CON_EVENT_CONNECTION_CLOSED) return;
+        auto* self = static_cast<Impl*>(parameter);
+        try {
+            std::lock_guard<std::mutex> lock(self->mutex);
+            for (auto it = self->selections.begin(); it != self->selections.end();)
+                it = it->first.first == peer ? self->selections.erase(it) : std::next(it);
+            for (auto it = self->inbound.begin(); it != self->inbound.end();)
+                it = it->second.peer == peer ? self->inbound.erase(it) : std::next(it);
+        } catch (...) {
+        }
+    }
+
+    /** @brief 受理上级选择/执行：选择只登记窗口，执行才排入本地命令队列。 */
+    static bool server_control(void* parameter, IMasterConnection peer,
+                               CS101_ASDU request) noexcept {
+        auto* self = static_cast<Impl*>(parameter);
+        try {
+            const int type = CS101_ASDU_getTypeID(request);
+            if (!control(type)) return false;  // 非控制类型交给协议栈回负应答。
+            auto reply = [&](CS101_CauseOfTransmission cause, bool negative) {
+                CS101_ASDU_setCOT(request, cause);
+                CS101_ASDU_setNegative(request, negative);
+                return IMasterConnection_sendASDU(peer, request);
+            };
+            const int ca = CS101_ASDU_getCA(request);
+            if (CS101_ASDU_isTest(request) || CS101_ASDU_getCOT(request) != CS101_COT_ACTIVATION)
+                return reply(CS101_COT_UNKNOWN_COT, true);
+            if (!self->stations.count(ca)) return reply(CS101_COT_UNKNOWN_CA, true);
+            if (CS101_ASDU_getNumberOfElements(request) != 1)
+                return reply(CS101_COT_UNKNOWN_IOA, true);
+            ObjectPtr object(CS101_ASDU_getElement(request, 0), InformationObject_destroy);
+            if (!object) return reply(CS101_COT_UNKNOWN_IOA, true);
+            const int ioa = InformationObject_getObjectAddress(object.get());
+            const auto value = command_value(type, object.get());
+            try {
+                validate_value(type, std::get<0>(value));
+            } catch (...) {
+                return reply(CS101_COT_ACTIVATION_CON, true);
+            }
+            bool negative = false;
+            CS101_CauseOfTransmission cause = CS101_COT_ACTIVATION_CON;
+            {
+                std::lock_guard<std::mutex> lock(self->mutex);
+                const auto key = std::make_tuple(ca, ioa, type);
+                const auto point = self->control_points.find(key);
+                if (point == self->control_points.end()) {
+                    negative = true;
+                    cause = CS101_COT_UNKNOWN_IOA;
+                } else if (std::get<1>(value)) {
+                    self->selections[{peer, key}] = {
+                        value, Clock::now() + std::chrono::milliseconds(self->select_timeout_ms)};
+                } else {
+                    const auto selection = self->selections.find({peer, key});
+                    // 选择与执行只比较编码后的值与限定词，选择位本身必然不同。
+                    const bool selected =
+                        selection != self->selections.end() &&
+                        std::get<0>(selection->second.value) == std::get<0>(value) &&
+                        std::get<2>(selection->second.value) == std::get<2>(value) &&
+                        Clock::now() < selection->second.expires;
+                    self->selections.erase({peer, key});
+                    if (self->require_select && !selected) {
+                        negative = true;
+                    } else if (self->inbound.size() >=
+                               static_cast<std::size_t>(self->control_queue_size)) {
+                        negative = true;
+                    } else {
+                        Inbound item;
+                        item.id = self->next_control_id++;
+                        item.peer = peer;
+                        item.request.reset(CS101_ASDU_clone(request, nullptr));
+                        item.code = std::to_string(ca) + ":" + std::to_string(ioa) + ":" +
+                                    std::to_string(type);
+                        item.point_id = point->second;
+                        item.value = std::get<0>(value);
+                        item.expires_at_ms = now_ms() + self->command_timeout_ms;
+                        self->inbound.emplace(item.id, std::move(item));
+                    }
+                }
+            }
+            return reply(cause, negative);
+        } catch (...) {
+            return false;
+        }
     }
 };
 
@@ -756,14 +875,24 @@ int Iec104Protocol::initialize(const std::string& text) {
         const int max_points = option_int(config, "max_points", enum_value(Defaults::MaxPoints), 1,
                                           enum_value(Limits::MaxPoints));
         std::map<std::tuple<int, int, int>, Sample> samples;
+        std::map<std::tuple<int, int, int>, std::string> control_points;
         const auto points = config.value("points", Json::array());
         if (!points.is_array() || points.size() > static_cast<std::size_t>(max_points))
             throw std::invalid_argument("Invalid point image size");
         for (const auto& point : points) {
             const auto address = parse(point.at("code").get<std::string>());
-            if (control(address.type) || !stations.count(address.ca))
-                throw std::invalid_argument(
-                    "Image point must be monitoring type in configured station");
+            if (!stations.count(address.ca))
+                throw std::invalid_argument("Point must be in configured station");
+            if (control(address.type)) {
+                // 北向控制点只登记本地路由，不进入监视映像，也不参与总召。
+                if (!server_role) throw std::invalid_argument("Control points require server role");
+                const auto point_id = point.value("point_id", std::string());
+                if (point_id.empty() || point_id.size() > 64)
+                    throw std::invalid_argument("Control point requires 1..64 byte point_id");
+                if (!control_points.emplace(address.key(), point_id).second)
+                    throw std::invalid_argument("Duplicate control point");
+                continue;
+            }
             Sample sample;
             sample.value = point.value("value", 0.0);
             validate_value(address.type, sample.value);
@@ -825,12 +954,24 @@ int Iec104Protocol::initialize(const std::string& text) {
         const bool select_execute = config.value("select_execute", false);
         // ACTCON 是协议受理确认；实际状态由采集侧反馈核验，ACTTERM 只在显式配置时等待。
         const bool termination = config.value("command_require_termination", false);
+        // 从站选择窗口与受理队列；require_select 为真时未选择直接执行回负确认。
+        const int select_timeout = option_int(config, "select_timeout_ms", 30000, 1000, 600000);
+        const int control_queue = option_int(config, "control_queue_size", 64, 1, 1024);
+        const bool require_select = config.value("require_select", true);
         std::lock_guard<std::mutex> lock(impl_->mutex);
         impl_->server_role = server_role;
         impl_->host = std::move(host);
         impl_->port = port;
         impl_->stations = std::move(stations);
         impl_->samples = server_role ? std::move(samples) : decltype(samples){};
+        impl_->control_points =
+            server_role ? std::move(control_points) : decltype(control_points){};
+        impl_->selections.clear();
+        impl_->inbound.clear();
+        impl_->next_control_id = 1;
+        impl_->select_timeout_ms = select_timeout;
+        impl_->control_queue_size = control_queue;
+        impl_->require_select = require_select;
         impl_->apci = apci;
         impl_->timeout_ms = timeout;
         impl_->command_timeout_ms = command_timeout;
@@ -868,7 +1009,9 @@ int Iec104Protocol::connect() {
             *CS104_Slave_getConnectionParameters(impl_->server) = impl_->apci;
             CS104_Slave_setInterrogationHandler(impl_->server, Impl::interrogation, impl_.get());
             CS104_Slave_setReadHandler(impl_->server, Impl::read_point, impl_.get());
-            CS104_Slave_setASDUHandler(impl_->server, Impl::reject_control, impl_.get());
+            CS104_Slave_setASDUHandler(impl_->server, Impl::server_control, impl_.get());
+            CS104_Slave_setConnectionEventHandler(impl_->server, Impl::server_connection,
+                                                  impl_.get());
             CS104_Slave_start(impl_->server);
             if (!CS104_Slave_isRunning(impl_->server))
                 throw std::runtime_error("IEC104 listen failed");
@@ -1009,6 +1152,10 @@ int Iec104Protocol::read_batch(const std::vector<std::string>& codes, std::strin
 }
 
 int Iec104Protocol::write(const std::string& code, double value) {
+    return write_until(code, value, now_ms() + impl_->command_timeout_ms);
+}
+
+int Iec104Protocol::write_until(const std::string& code, double value, std::int64_t expires_at_ms) {
     try {
         if (!is_connected()) throw std::invalid_argument("IEC104 is not ready");
         const auto address = parse(code);
@@ -1037,12 +1184,13 @@ int Iec104Protocol::write(const std::string& code, double value) {
         }
         if (!control(address.type))
             throw std::invalid_argument("Client write requires command ASDU");
-        const auto deadline = Clock::now() + std::chrono::milliseconds(impl_->command_timeout_ms);
+        const auto wall = now_ms();
+        // 调用方期限与通道命令期限取较小值；已过期则不发帧，也不破坏现有会话。
+        if (expires_at_ms <= wall)
+            throw std::runtime_error("Command deadline expired before send; not sent");
+        const auto budget = std::min<std::int64_t>(expires_at_ms - wall, impl_->command_timeout_ms);
+        const auto deadline = Clock::now() + std::chrono::milliseconds(budget);
         for (int phase = impl_->select_execute ? 0 : 1; phase <= 1; ++phase) {
-            if (Clock::now() >= deadline) {
-                impl_->stop();
-                throw std::runtime_error("Command deadline elapsed before send; session closed");
-            }
             if (Clock::now() >= deadline) {
                 impl_->stop();
                 throw std::runtime_error("Command deadline elapsed before send; session closed");
@@ -1057,14 +1205,6 @@ int Iec104Protocol::write(const std::string& code, double value) {
                 impl_->pending.active = true;
                 impl_->pending.address = address;
                 impl_->pending.value = command_value(address.type, object.get());
-            }
-            if (Clock::now() >= deadline) {
-                impl_->stop();
-                throw std::runtime_error("Command deadline elapsed before send; session closed");
-            }
-            if (Clock::now() >= deadline) {
-                impl_->stop();
-                throw std::runtime_error("Command deadline elapsed before send; session closed");
             }
             if (!CS104_Connection_sendProcessCommandEx(impl_->connection, CS101_COT_ACTIVATION,
                                                        address.ca, object.get())) {
@@ -1102,6 +1242,66 @@ int Iec104Protocol::write(const std::string& code, double value) {
         impl_->set_error(error.what());
         return enum_value(OperationResult::Failure);
     }
+}
+
+int Iec104Protocol::take_controls(std::string& result) {
+    // 客户端实例不支持北向控制；不写错误，避免每次轮询覆盖真实诊断。
+    if (!impl_->server_role) return enum_value(OperationResult::Failure);
+    Json rows = Json::array();
+    std::vector<Impl::Inbound> expired;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        const auto now = now_ms();
+        for (auto it = impl_->inbound.begin(); it != impl_->inbound.end();) {
+            if (it->second.expires_at_ms > now) {
+                ++it;
+                continue;
+            }
+            expired.push_back(std::move(it->second));
+            it = impl_->inbound.erase(it);
+        }
+        for (auto& item : impl_->inbound) {
+            if (item.second.delivered) continue;
+            item.second.delivered = true;
+            rows.push_back({{"id", item.second.id},
+                            {"code", item.second.code},
+                            {"point_id", item.second.point_id},
+                            {"value", item.second.value},
+                            {"expires_at_ms", item.second.expires_at_ms}});
+        }
+    }
+    // 已过期但未回执的请求回负结束确认，避免上级无限等待。
+    for (auto& item : expired) Impl::finish(item.peer, item.request.get(), false);
+    result = rows.dump();
+    return static_cast<int>(rows.size());
+}
+
+int Iec104Protocol::resolve_control(std::int64_t control_id, bool accepted,
+                                    const std::string& reason) {
+    if (!impl_->server_role) {
+        impl_->set_error("Northbound controls require server role");
+        return enum_value(OperationResult::Failure);
+    }
+    Impl::Inbound item;
+    {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        const auto found = impl_->inbound.find(control_id);
+        if (found == impl_->inbound.end()) {
+            impl_->error = "Unknown or already resolved control id";
+            return enum_value(OperationResult::Failure);
+        }
+        item = std::move(found->second);
+        impl_->inbound.erase(found);
+    }
+    // 已停止监听时会话随栈一起销毁，不需要补发结束确认。
+    if (!impl_->server) return enum_value(OperationResult::Success);
+    Impl::finish(item.peer, item.request.get(), accepted);
+    if (!accepted) {
+        std::lock_guard<std::mutex> lock(impl_->mutex);
+        impl_->error = "IEC104 control rejected: " +
+                       (reason.empty() ? std::string("execution_failed") : reason);
+    }
+    return enum_value(OperationResult::Success);
 }
 
 }  // namespace ems::net::protocol

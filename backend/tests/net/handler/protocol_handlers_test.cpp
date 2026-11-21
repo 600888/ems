@@ -331,6 +331,106 @@ void channel(const std::string& protocol, const char* plugin_path,
     CHECK(manager.loaded_library_count() == 0);
 }
 
+/** @brief 假处理器与测试共享的北向控制观测点。 */
+struct PeerProbe {
+    std::mutex mutex;
+    bool delivered{false};
+    bool resolved{false};
+    std::int64_t resolved_id{0};
+    bool accepted{false};
+    std::string reason;
+};
+
+/** @brief 只实现北向控制扩展的处理器，用于验证通道线程的转交与回执链路。 */
+class FakePeerHandler final : public h::ProtocolHandler {
+   public:
+    explicit FakePeerHandler(std::shared_ptr<PeerProbe> probe) : probe_(std::move(probe)) {}
+
+    bool initialize(const Json&) override { return true; }
+
+    bool connect() override { return true; }
+
+    bool disconnect() override { return true; }
+
+    bool is_connected() const override { return true; }
+
+    int read_batch(const std::vector<std::string>&, std::vector<h::PointValue>& results) override {
+        results.clear();
+        return 0;
+    }
+
+    bool write_value(const std::string&, double) override { return false; }
+
+    std::string last_error() const override { return {}; }
+
+    std::string protocol_name() const override { return "IEC104"; }
+
+    int peer_controls(std::string& result) override {
+        std::lock_guard<std::mutex> lock(probe_->mutex);
+        result = "[]";
+        if (probe_->delivered) return 0;
+        probe_->delivered = true;
+        result = R"([{"id":11,"code":"1:1001:45","point_id":"pcs-set-on","value":1,)";
+        result += R"("expires_at_ms":4102444800000}])";
+        return 1;
+    }
+
+    bool resolve_peer_control(std::int64_t id, bool accepted, const std::string& reason) override {
+        std::lock_guard<std::mutex> lock(probe_->mutex);
+        probe_->resolved = true;
+        probe_->resolved_id = id;
+        probe_->accepted = accepted;
+        probe_->reason = reason;
+        return true;
+    }
+
+   private:
+    std::shared_ptr<PeerProbe> probe_;
+};
+
+void channel_peer_control() {
+    using namespace ems::net::collect;
+    PluginManager manager;
+    ems::rtdb::ChannelConfig config;
+    config.id_ = 7;
+    config.name_ = "peer-control-test";
+    config.protocol_ = ems::model::ProtocolType::IEC104;
+    config.settings_ = R"({"role":"server"})";
+    auto probe = std::make_shared<PeerProbe>();
+    ChannelThread worker(config, nullptr, [probe](PluginManager&) {
+        return std::unique_ptr<h::ProtocolHandler>(new FakePeerHandler(probe));
+    });
+    std::atomic<bool> seen{false};
+    worker.set_peer_control_sink(
+        [&seen](const ChannelThread::PeerControl& control, ChannelThread::PeerOutcomeHandler done) {
+            CHECK(control.control_id == 11);
+            CHECK(control.point_id == "pcs-set-on");
+            CHECK(control.code == "1:1001:45");
+            CHECK(std::abs(control.value - 1.0) < 1e-9);
+            seen = true;
+            done(true, "");
+        });
+    worker.set_poll_interval(50);
+    CHECK(worker.start(manager));
+    const auto deadline = std::chrono::steady_clock::now() + 5s;
+    while (std::chrono::steady_clock::now() < deadline) {
+        {
+            std::lock_guard<std::mutex> lock(probe->mutex);
+            if (probe->resolved) break;
+        }
+        std::this_thread::sleep_for(10ms);
+    }
+    worker.stop();
+    worker.join();
+    CHECK(worker.state() == ChannelState::Stopped);
+    CHECK(seen.load());
+    std::lock_guard<std::mutex> lock(probe->mutex);
+    CHECK(probe->resolved);
+    CHECK(probe->resolved_id == 11);
+    CHECK(probe->accepted);
+    CHECK(probe->reason.empty());
+}
+
 void channel_failure() {
     using namespace ems::net::collect;
     PluginManager manager;
@@ -399,6 +499,8 @@ int main(int argc, char** argv) {
                 Json{{"points",
                       Json::array({{{"oad", "F0010200"}, {"type", "float64"}, {"value", 0}}})}});
 #endif
+        else if (scenario == "channel_peer_control")
+            channel_peer_control();
         else if (scenario == "channel_failure")
             channel_failure();
 #endif

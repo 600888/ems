@@ -105,6 +105,31 @@ class ProtocolHandler {
     }
 
     /**
+     * @brief 取出服务端已受理、尚未交给本地的北向控制请求。
+     * @param[out] result_json 请求数组；无待处理时为空数组。
+     * @return 本次交付的请求数；0 表示无；-1 表示该协议或角色不支持。
+     */
+    virtual int peer_controls(std::string& result_json) {
+        (void)result_json;
+        return -1;
+    }
+
+    /**
+     * @brief 回执北向控制执行结果，由协议向上级发送结束确认。
+     * @param[in] control_id peer_controls 返回的请求 ID。
+     * @param[in] accepted 是否执行成功。
+     * @param[in] reason 失败原因，可空。
+     * @return true 已回执；false 未知 ID、不支持或会话已关闭。
+     */
+    virtual bool resolve_peer_control(std::int64_t control_id, bool accepted,
+                                      const std::string& reason) {
+        (void)control_id;
+        (void)accepted;
+        (void)reason;
+        return false;
+    }
+
+    /**
      * @brief 返回本次操作的诊断副本。
      * @return 错误说明；最近操作成功时为空。
      */

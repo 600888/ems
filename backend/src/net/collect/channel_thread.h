@@ -196,6 +196,30 @@ class ChannelThread {
     std::optional<device::PointRoute> command_route(const std::string& point_id) const;
 
     // ============================================================
+    // 北向控制回传
+    // ============================================================
+
+    /** @brief 服务端受理的北向控制；point_id 由协议配置给出。 */
+    struct PeerControl {
+        std::int64_t control_id{0};
+        std::string point_id;
+        std::string code;
+        double value{0};
+        std::int64_t expires_at_ms{0};
+    };
+
+    /** @brief 管线回执；可在任意线程调用，协议回帧由通道线程下一周期发送。 */
+    using PeerOutcomeHandler = std::function<void(bool accepted, const std::string& reason)>;
+    /** @brief 控制转交入口；未设置时不从服务端取控制请求。 */
+    using PeerControlSink = std::function<void(const PeerControl&, PeerOutcomeHandler)>;
+
+    /**
+     * @brief 设置北向控制转交入口。
+     * @param[in] sink 由上层注入的命令受理函数；为空表示不启用控制回传。
+     */
+    void set_peer_control_sink(PeerControlSink sink);
+
+    // ============================================================
     // 查询
     // ============================================================
 
@@ -304,6 +328,11 @@ class ChannelThread {
      */
     void collect_points(const std::vector<device::PointRoute>& routes, const char* point_type);
 
+    /** @brief 取出服务端插件已受理的北向控制，转交上层命令管线。 */
+    void relay_peer_controls();
+    /** @brief 把上层回执交回协议，向上级发送结束确认。 */
+    void flush_peer_outcomes();
+
     // ---- 状态切换 ----
     /**
      * @brief 更新通道运行状态。
@@ -335,6 +364,18 @@ class ChannelThread {
     mutable std::mutex cmd_mutex_;
     std::condition_variable cmd_cv_;
     std::map<std::string, std::chrono::steady_clock::time_point> last_command_;
+
+    // 北向控制回传：回执可能来自其他通道线程，统一在下一周期交回协议。
+    struct PeerState {
+        std::mutex mutex;
+        std::deque<std::pair<std::int64_t, std::pair<bool, std::string>>> outcomes;
+        std::atomic<bool> alive{true};
+    };
+
+    std::shared_ptr<PeerState> peer_state_{std::make_shared<PeerState>()};
+    mutable std::mutex peer_sink_mutex_;
+    PeerControlSink peer_sink_;
+    bool relay_peer_controls_{false};  ///< 仅服务端角色轮询北向控制，避免客户端空转。
 
     // 状态控制
     std::atomic<ChannelState> state_{ChannelState::Created};

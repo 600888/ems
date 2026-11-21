@@ -45,13 +45,13 @@ const std::vector<int> kMonitoring = {1, 2, 3, 4, 9, 10, 11, 12, 13, 14, 21, 30,
 const std::vector<int> kCommands = {45, 46, 47, 48, 49, 50, 58, 59, 60, 61, 62, 63};
 
 template <typename Predicate>
-void eventually(Predicate predicate) {
+void eventually(Predicate predicate, const char* what = "condition") {
     const auto deadline = std::chrono::steady_clock::now() + 4s;
     do {
         if (predicate()) return;
         std::this_thread::sleep_for(5ms);
     } while (std::chrono::steady_clock::now() < deadline);
-    CHECK(predicate());
+    if (!predicate()) throw std::runtime_error(std::string("eventually: ") + what);
 }
 
 int unused_port() {
@@ -115,6 +115,25 @@ struct Plugin {
 
     int write(const std::string& code, double value) {
         return functions.write_fn(instance, code.c_str(), value);
+    }
+
+    int write_until(const std::string& code, double value, std::int64_t expires_at_ms) {
+        CHECK(functions.write_until_fn);
+        return functions.write_until_fn(instance, code.c_str(), value, expires_at_ms);
+    }
+
+    std::pair<int, Json> controls() {
+        CHECK(functions.take_controls_fn);
+        std::vector<char> output(65536);
+        const int count =
+            functions.take_controls_fn(instance, output.data(), static_cast<int>(output.size()));
+        CHECK(count >= 0);
+        return {count, count > 0 ? Json::parse(output.data()) : Json::array()};
+    }
+
+    bool resolve(std::int64_t id, bool accepted, const std::string& reason = {}) {
+        CHECK(functions.resolve_control_fn);
+        return functions.resolve_control_fn(instance, id, accepted ? 1 : 0, reason.c_str()) == 0;
     }
 };
 
@@ -322,6 +341,7 @@ struct NativeClient {
     CS104_Connection connection{nullptr};
     std::atomic<bool> ready{false};
     std::atomic<int> termination{0}, negative{0};
+    std::atomic<int> confirms{0}, negative_confirms{0}, terms{0}, negative_terms{0};
     std::mutex mutex;
     std::map<std::tuple<int, int, int>, double> values;
     std::atomic<std::int64_t> device_timestamp{0};
@@ -349,6 +369,15 @@ struct NativeClient {
         if (CS101_ASDU_isNegative(asdu)) ++self->negative;
         if (type == 100 && CS101_ASDU_getCOT(asdu) == CS101_COT_ACTIVATION_TERMINATION)
             ++self->termination;
+        if (type >= 45 && type <= 63) {
+            const auto cot = CS101_ASDU_getCOT(asdu);
+            const bool negative = CS101_ASDU_isNegative(asdu);
+            if (cot == CS101_COT_ACTIVATION_CON)
+                negative ? ++self->negative_confirms : ++self->confirms;
+            else if (cot == CS101_COT_ACTIVATION_TERMINATION)
+                negative ? ++self->negative_terms : ++self->terms;
+            return true;
+        }
         if (type != 1 && type != 13 && type != 36) return true;
         std::lock_guard<std::mutex> lock(self->mutex);
         for (int i = 0; i < CS101_ASDU_getNumberOfElements(asdu); ++i) {
@@ -376,6 +405,16 @@ struct NativeClient {
 
     void gi(int ca) {
         CHECK(CS104_Connection_sendInterrogationCommand(connection, CS101_COT_ACTIVATION, ca, 20));
+    }
+
+    /** @brief 发送单点命令；select 为真时发选择，否则发执行。 */
+    void command(int ca, int ioa, bool on, bool select) {
+        auto object = SingleCommand_create(nullptr, ioa, on, select, 0);
+        CHECK(object);
+        const bool sent = CS104_Connection_sendProcessCommandEx(connection, CS101_COT_ACTIVATION,
+                                                                ca, (InformationObject)object);
+        SingleCommand_destroy(object);
+        CHECK(sent);
     }
 };
 
@@ -576,6 +615,15 @@ void commands_activation_confirmation() {
     CHECK(simulator.last_command == -7.25);
     CHECK(simulator.executions == 3);
     CHECK(client.functions.is_connected_fn(client.instance) == 1);
+    // 调用方期限已过：拒发且不破坏会话；未过期时按期限发送。
+    CHECK(client.write_until("1:100:50", 1.0, 1) < 0);
+    CHECK(client.error().find("expired before send") != std::string::npos);
+    CHECK(client.functions.is_connected_fn(client.instance) == 1);
+    const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
+                         std::chrono::system_clock::now().time_since_epoch())
+                         .count();
+    CHECK(client.write_until("1:100:50", -7.25, now + 2000) == 0);
+    CHECK(client.functions.is_connected_fn(client.instance) == 1);
 }
 
 void command_timeout() {
@@ -661,6 +709,82 @@ void server() {
     eventually([&] { return first.negative > 1; });
 }
 
+void server_control() {
+    PluginManager manager;
+    configure_manager(manager);
+    Plugin server(manager);
+    const int port = unused_port();
+    Json config = {{"host", "127.0.0.1"},
+                   {"port", port},
+                   {"local_role", "server"},
+                   {"common_addresses", {1}},
+                   {"select_timeout_ms", 1000},
+                   {"command_timeout_ms", 2000},
+                   {"points",
+                    {{{"code", "1:100:13"}, {"value", 12.5}},
+                     {{"code", "1:1001:45"}, {"point_id", "pcs-set-on"}}}}};
+    server.init(config);
+    server.connect();
+    NativeClient master(port);
+    master.gi(1);
+    eventually([&] { return master.has(1, 100, 13, 12.5); }, "server image ready");
+
+    int count = 0;
+    Json controls;
+    // 未选择直接执行：负激活确认，不产生本地请求。
+    master.command(1, 1001, true, false);
+    eventually([&] { return master.negative_confirms == 1; }, "direct execute rejected");
+    std::tie(count, controls) = server.controls();
+    CHECK(count == 0);
+    CHECK(controls.empty());
+
+    // 选择只登记窗口；执行才交付本地管线。
+    master.command(1, 1001, true, true);
+    eventually([&] { return master.confirms == 1; }, "select confirmed");
+    std::tie(count, controls) = server.controls();
+    CHECK(count == 0);
+    master.command(1, 1001, true, false);
+    eventually([&] { return master.confirms == 2; }, "execute confirmed");
+    std::tie(count, controls) = server.controls();
+    CHECK(count == 1);
+    CHECK(controls[0]["point_id"] == "pcs-set-on");
+    CHECK(controls[0]["code"] == "1:1001:45");
+    CHECK(controls[0]["value"] == 1);
+    const auto first_id = controls[0]["id"].get<std::int64_t>();
+    CHECK(server.resolve(first_id, true));
+    eventually([&] { return master.terms == 1; }, "positive act term");
+    CHECK(master.negative_terms == 0);
+    // 同一请求只交付一次，回执也只接受一次。
+    std::tie(count, controls) = server.controls();
+    CHECK(count == 0);
+    CHECK(!server.resolve(first_id, true));
+
+    // 执行失败：负结束确认。
+    master.command(1, 1001, true, true);
+    eventually([&] { return master.confirms == 3; }, "second select");
+    master.command(1, 1001, true, false);
+    eventually([&] { return master.confirms == 4; }, "second execute");
+    std::tie(count, controls) = server.controls();
+    CHECK(count == 1);
+    CHECK(server.resolve(controls[0]["id"].get<std::int64_t>(), false, "device_fault"));
+    eventually([&] { return master.negative_terms == 1; }, "negative act term");
+
+    // 选择窗口过期后执行：回负激活确认。
+    master.command(1, 1001, true, true);
+    eventually([&] { return master.confirms == 5; }, "third select");
+    std::this_thread::sleep_for(1100ms);
+    master.command(1, 1001, true, false);
+    eventually([&] { return master.negative_confirms == 2; }, "expired selection rejected");
+    std::tie(count, controls) = server.controls();
+    CHECK(count == 0);
+
+    // 未配置的控制点：按未知信息体地址拒绝（负应答 COT=UNKNOWN_IOA）。
+    master.command(1, 1002, true, false);
+    eventually([&] { return master.negative == 3; }, "unknown ioa rejected");
+    std::tie(count, controls) = server.controls();
+    CHECK(count == 0);
+}
+
 void buffer_retry() {
     Simulator simulator;
     PluginManager manager;
@@ -743,6 +867,7 @@ int main(int argc, char** argv) {
             {"commands_activation_confirmation", commands_activation_confirmation},
             {"command_timeout", command_timeout},
             {"server", server},
+            {"server_control", server_control},
             {"buffer_retry", buffer_retry},
             {"reconnect", reconnect},
             {"concurrent_instances", concurrent_instances}};

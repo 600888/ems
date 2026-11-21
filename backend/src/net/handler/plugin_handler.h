@@ -64,6 +64,23 @@ class PluginHandler : public ProtocolHandler {
     bool write_value_until(const std::string& point_code, double value,
                            std::int64_t expires_at_ms) override;
 
+    /**
+     * @brief 通过可选 ABI 扩展取出服务端北向控制请求。
+     * @param[out] result_json 请求数组 JSON；不支持时清空。
+     * @return 交付的请求数；-1 表示插件未导出该扩展或调用失败。
+     */
+    int peer_controls(std::string& result_json) override;
+
+    /**
+     * @brief 通过可选 ABI 扩展回执北向控制执行结果。
+     * @param[in] control_id 插件分配的请求 ID。
+     * @param[in] accepted 是否执行成功。
+     * @param[in] reason 失败原因，可空。
+     * @return true 已回执；false 不支持、未知 ID 或会话已关闭。
+     */
+    bool resolve_peer_control(std::int64_t control_id, bool accepted,
+                              const std::string& reason) override;
+
     /** @brief 返回诊断副本。 @return 最近操作的错误文本。 */
     std::string last_error() const override;
 

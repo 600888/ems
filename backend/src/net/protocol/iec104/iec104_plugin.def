@@ -7,5 +7,8 @@ EXPORTS
     ems_plugin_disconnect
     ems_plugin_read_batch
     ems_plugin_write
+    ems_plugin_write_until
+    ems_plugin_take_controls
+    ems_plugin_resolve_control
     ems_plugin_is_connected
     ems_plugin_last_error

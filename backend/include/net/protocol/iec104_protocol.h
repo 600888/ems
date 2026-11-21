@@ -4,6 +4,7 @@
 #ifndef EMS_NET_PROTOCOL_IEC104_PROTOCOL_H
 #define EMS_NET_PROTOCOL_IEC104_PROTOCOL_H
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -57,6 +58,30 @@ class Iec104Protocol final {
      * @note 确认不等于设备物理动作完成；超时断开会话且不自动重发命令。
      */
     int write(const std::string& point_code, double value);
+    /**
+     * @brief 带绝对期限的客户端控制；选择与执行共用该期限。
+     * @param[in] point_code CA:IOA:ASDU 编码；必须是控制类型。
+     * @param[in] value 有限且符合该 ASDU 类型范围的值。
+     * @param[in] expires_at_ms UTC 毫秒绝对期限；已过期时拒发且不改变会话。
+     * @return 0 协议确认成功；-1 拒绝、期限已过或结果未知。
+     * @note 实际等待不超过命令期限与通道 command_timeout_ms 的较小值。
+     */
+    int write_until(const std::string& point_code, double value, std::int64_t expires_at_ms);
+    /**
+     * @brief 取出服务端已受理、尚未交给宿主的北向控制请求。
+     * @param[out] result_json JSON 数组，元素含 id、point_id、code、value、expires_at_ms。
+     * @return 本次交付的请求数；0 表示无待处理；-1 未初始化或非服务端角色。
+     * @note 每个请求只交付一次；宿主须用 resolve_control 回执，超时后自动收敛。
+     */
+    int take_controls(std::string& result_json);
+    /**
+     * @brief 回执北向控制执行结果，并向上级发送结束确认。
+     * @param[in] control_id take_controls 返回的请求 ID。
+     * @param[in] accepted 是否执行成功。
+     * @param[in] reason 失败原因，可空。
+     * @return 0 已发送或会话已关闭；-1 未知 ID 或非服务端角色。
+     */
+    int resolve_control(std::int64_t control_id, bool accepted, const std::string& reason);
     /**
      * @brief 客户端提交总召；服务端不支持此操作。
      * @param[in] common_address 公共地址；0 表示分别向所有配置站提交总召。

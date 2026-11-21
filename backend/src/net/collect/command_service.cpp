@@ -93,6 +93,8 @@ CommandService::CommandService(std::shared_ptr<database::IDatabase> database,
       engine_(engine) {
     if (!journal_->database || !journal_->repository || journal_->scope.empty())
         throw std::invalid_argument("command service requires database, repository and scope");
+    // 前缀隔离不同进程实例；北向控制 ID 在插件内单调递增，重连后会从头开始。
+    peer_prefix_ = "peer104-" + std::to_string(utc_ms()) + "-";
 }
 
 CommandService::~CommandService() { set_accepting(false); }
@@ -246,17 +248,97 @@ bool CommandService::schedule(const Row& row, bool verify) {
                         journal->change(row.command_id, "Queued", result);
                 }
             }
-            std::lock_guard lock(active->mutex);
-            active->ids.erase(row.command_id);
+            ChannelThread::PeerOutcomeHandler peer;
+            {
+                std::lock_guard lock(active->mutex);
+                active->ids.erase(row.command_id);
+                const auto found = active->peers.find(row.command_id);
+                if (found != active->peers.end()) {
+                    peer = std::move(found->second);
+                    active->peers.erase(found);
+                }
+            }
+            // 北向控制回执：只有协议确认或反馈满足才算执行成功。
+            if (peer) {
+                const bool accepted = result.status == "Acked" || result.status == "Succeeded";
+                peer(accepted, result.status + (result.reason.empty() ? "" : ": " + result.reason));
+            }
         });
     if (!queued) {
-        std::lock_guard lock(active_->mutex);
-        active_->ids.erase(row.command_id);
+        ChannelThread::PeerOutcomeHandler peer;
+        {
+            std::lock_guard lock(active_->mutex);
+            active_->ids.erase(row.command_id);
+            const auto found = active_->peers.find(row.command_id);
+            if (found != active_->peers.end()) {
+                peer = std::move(found->second);
+                active_->peers.erase(found);
+            }
+        }
+        // 入队失败不会有完成回调，必须在这里结束北向请求，不能留在待定状态。
+        if (peer) peer(false, "command_queue_full");
+        return false;
     }
     return queued;
 }
 
+bool CommandService::submit_peer(std::int64_t channel_id, const ChannelThread::PeerControl& control,
+                                 ChannelThread::PeerOutcomeHandler done) {
+    if (!done) return false;
+    bool accepted = false;
+    {
+        std::lock_guard lock(peer_mutex_);
+        // 有界队列：协议侧已回正 ACT_CON，超限必须尽快给出负结束确认。
+        if (peer_queue_.size() < 256) {
+            peer_queue_.push_back({channel_id, control, done});
+            accepted = true;
+        }
+    }
+    if (!accepted) done(false, "peer_control_queue_full");
+    return accepted;
+}
+
+bool CommandService::drain_peers() {
+    std::deque<PeerRequest> batch;
+    {
+        std::lock_guard lock(peer_mutex_);
+        batch.swap(peer_queue_);
+    }
+    for (auto& item : batch) accept_peer(std::move(item));
+    return true;
+}
+
+void CommandService::accept_peer(PeerRequest request) {
+    auto done = std::move(request.done);
+    const auto id = peer_prefix_ + std::to_string(request.channel_id) + "-" +
+                    std::to_string(request.control.control_id);
+    const Json payload = {{"op", "submit"},
+                          {"point_id", request.control.point_id},
+                          {"value", request.control.value},
+                          {"config_revision", engine_.config_revision()},
+                          {"expires_at_ms", request.control.expires_at_ms}};
+    // 先登记回执再受理：受理成功时完成回调可能在本函数返回前发生。
+    {
+        std::lock_guard lock(active_->mutex);
+        active_->peers[id] = std::move(done);
+    }
+    const auto reply = handle({id, payload.dump()});
+    if (reply.code == Code::Accepted) return;
+    ChannelThread::PeerOutcomeHandler peer;
+    {
+        std::lock_guard lock(active_->mutex);
+        const auto found = active_->peers.find(id);
+        if (found != active_->peers.end()) {
+            peer = std::move(found->second);
+            active_->peers.erase(found);
+        }
+    }
+    // Duplicate 说明同 ID 记录已存在且可能仍在执行，本次无法据其确认执行结果。
+    if (peer) peer(false, reply.code == Code::Duplicate ? "duplicate_peer_control" : reply.reason);
+}
+
 bool CommandService::poll() {
+    drain_peers();
     if (!accepting_->load()) return true;
     auto page = journal_->pending(cursor_);
     if (!core::is_ok(page)) return false;

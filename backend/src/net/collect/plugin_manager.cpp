@@ -52,6 +52,10 @@ struct LibraryEntry {
                 library.symbol(EMS_PLUGIN_UPDATE_IMAGE_SYMBOL));
             functions.write_until_fn = reinterpret_cast<ems_plugin_write_until_fn>(
                 library.symbol(EMS_PLUGIN_WRITE_UNTIL_SYMBOL));
+            functions.take_controls_fn = reinterpret_cast<ems_plugin_take_controls_fn>(
+                library.symbol(EMS_PLUGIN_TAKE_CONTROLS_SYMBOL));
+            functions.resolve_control_fn = reinterpret_cast<ems_plugin_resolve_control_fn>(
+                library.symbol(EMS_PLUGIN_RESOLVE_CONTROL_SYMBOL));
             ready = true;
         });
     }

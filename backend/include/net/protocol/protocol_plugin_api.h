@@ -162,6 +162,34 @@ typedef int(EMS_PLUGIN_CALL* ems_plugin_write_until_fn)(void* instance, const ch
 typedef int(EMS_PLUGIN_CALL* ems_plugin_update_image_fn)(void* instance, const char* samples_json);
 
 /**
+ * @brief 可选的服务端北向控制队列扩展；旧插件可不导出。
+ *
+ * 服务端受理上级控制后按到达顺序排队，由宿主取出并交给本地命令管线。
+ * 每个请求只交付一次；宿主未回执前保持待定，超时由插件自行收敛。
+ *
+ * @param[in,out] instance 服务端实例。
+ * @param[out] result_json 请求数组，元素含 id、point_id、code、value、expires_at_ms。
+ * @param[in] result_buf_size 输出缓冲区字节数。
+ * @return >=0 本次交付的请求数；-2 缓冲不足（同一次调用扩容重取）；-1 不支持或失败
+ */
+typedef int(EMS_PLUGIN_CALL* ems_plugin_take_controls_fn)(void* instance, char* result_json,
+                                                          int result_buf_size);
+
+/**
+ * @brief 可选的服务端控制回执扩展；旧插件可不导出。
+ *
+ * 宿主完成本地下发后回执执行结果，插件据此向上级发送正/负结束确认。
+ *
+ * @param[in,out] instance 服务端实例。
+ * @param[in] control_id take_controls 返回的请求 ID。
+ * @param[in] accepted 非 0 表示执行成功。
+ * @param[in] reason 失败原因，可空；最长保留 256 字节。
+ * @return 0 已发送或会话已关闭；-1 未知 ID 或发送失败
+ */
+typedef int(EMS_PLUGIN_CALL* ems_plugin_resolve_control_fn)(void* instance, int64_t control_id,
+                                                            int accepted, const char* reason);
+
+/**
  * @brief 获取连接状态
  * @param[in] instance 插件实例指针
  * @return 1 已连接, 0 未连接, -1 错误
@@ -189,6 +217,8 @@ typedef const char*(EMS_PLUGIN_CALL* ems_plugin_last_error_fn)(void* instance);
 #define EMS_PLUGIN_WRITE_SYMBOL "ems_plugin_write"
 #define EMS_PLUGIN_WRITE_UNTIL_SYMBOL "ems_plugin_write_until"
 #define EMS_PLUGIN_UPDATE_IMAGE_SYMBOL "ems_plugin_update_image"
+#define EMS_PLUGIN_TAKE_CONTROLS_SYMBOL "ems_plugin_take_controls"
+#define EMS_PLUGIN_RESOLVE_CONTROL_SYMBOL "ems_plugin_resolve_control"
 #define EMS_PLUGIN_IS_CONNECTED_SYMBOL "ems_plugin_is_connected"
 #define EMS_PLUGIN_LAST_ERROR_SYMBOL "ems_plugin_last_error"
 

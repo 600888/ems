@@ -73,6 +73,18 @@ bool ChannelThread::start(PluginManager& plugin_manager) {
                        {"stop_bits", channel_config_.stopBits_},
                        {"parity", channel_config_.parity_}};
         if (!handler_->initialize(config)) throw std::runtime_error(handler_->last_error());
+        // 只有服务端角色可能收到上级控制；客户端不轮询，避免每周期无效调用。
+        relay_peer_controls_ = false;
+        try {
+            const auto settings = channel_config_.settings_.empty()
+                                      ? json::object()
+                                      : json::parse(channel_config_.settings_);
+            relay_peer_controls_ =
+                settings.value("local_role", settings.value("role", std::string("client"))) !=
+                "client";
+        } catch (const std::exception&) {
+            relay_peer_controls_ = false;
+        }
         last_err_.clear();
         thread_ = std::make_shared<std::thread>([this]() {
             try {
@@ -195,12 +207,72 @@ std::optional<device::PointRoute> ChannelThread::command_route(const std::string
 }
 
 // ============================================================
+// 北向控制回传
+// ============================================================
+
+void ChannelThread::set_peer_control_sink(PeerControlSink sink) {
+    std::lock_guard lock(peer_sink_mutex_);
+    peer_sink_ = std::move(sink);
+}
+
+void ChannelThread::relay_peer_controls() {
+    if (!relay_peer_controls_) return;
+    PeerControlSink sink;
+    {
+        std::lock_guard lock(peer_sink_mutex_);
+        sink = peer_sink_;
+    }
+    if (!sink || !handler_) return;
+    std::string text;
+    if (handler_->peer_controls(text) <= 0) return;
+    json items;
+    try {
+        items = json::parse(text);
+    } catch (...) {
+        return;
+    }
+    if (!items.is_array()) return;
+    auto state = peer_state_;
+    for (const auto& item : items) {
+        try {
+            PeerControl control;
+            control.control_id = item.at("id").get<std::int64_t>();
+            control.point_id = item.at("point_id").get<std::string>();
+            control.code = item.at("code").get<std::string>();
+            control.value = item.at("value").get<double>();
+            control.expires_at_ms = item.at("expires_at_ms").get<std::int64_t>();
+            const auto id = control.control_id;
+            sink(control, [state, id](bool accepted, const std::string& reason) {
+                if (!state || !state->alive.load()) return;
+                std::lock_guard lock(state->mutex);
+                state->outcomes.emplace_back(id, std::make_pair(accepted, reason));
+            });
+        } catch (const std::exception&) {
+            // 单条请求格式错误不影响同批其他控制。
+        }
+    }
+}
+
+void ChannelThread::flush_peer_outcomes() {
+    if (!handler_) return;
+    std::deque<std::pair<std::int64_t, std::pair<bool, std::string>>> outcomes;
+    {
+        std::lock_guard lock(peer_state_->mutex);
+        outcomes.swap(peer_state_->outcomes);
+    }
+    for (const auto& [id, result] : outcomes)
+        handler_->resolve_peer_control(id, result.first, result.second);
+}
+
+// ============================================================
 // 线程主循环
 // ============================================================
 
 void ChannelThread::run() {
     // 所有退出分支都先结束最后一次处理器调用，再销毁实例并释放租约。
     auto release_handler = [this](void*) {
+        // 先停止接收跨线程回执，再结束最后一次处理器调用并释放租约。
+        peer_state_->alive.store(false);
         cancel_commands();
         handler_.reset();
     };
@@ -250,6 +322,10 @@ void ChannelThread::run() {
 
         // 3.2 处理命令队列（遥控/遥调优先）
         process_command_queue();
+
+        // 3.2.1 服务端北向控制：先取新请求，再回执上一周期的执行结果
+        relay_peer_controls();
+        flush_peer_outcomes();
 
         // 3.3 逐设备采集
         std::vector<DeviceContext> currentDevices;

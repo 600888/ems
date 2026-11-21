@@ -237,6 +237,48 @@ bool PluginHandler::write_value_until(const std::string& code, double value,
     return true;
 }
 
+int PluginHandler::peer_controls(std::string& result_json) {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    result_json.clear();
+    if (!impl_->instance || !impl_->functions.take_controls_fn) return -1;
+    std::vector<char> output(enum_value(PluginLimits::InitialResultBytes));
+    constexpr std::size_t max_bytes = 1024 * 1024;  // 一条控制请求约 200 字节，1 MiB 足够
+    int count;
+    do {
+        count = impl_->functions.take_controls_fn(impl_->instance, output.data(),
+                                                  static_cast<int>(output.size()));
+        if (count != enum_value(OperationResult::BufferTooSmall) || output.size() >= max_bytes)
+            break;
+        output.resize(
+            std::min(output.size() * enum_value(PluginLimits::BufferGrowthFactor), max_bytes));
+    } while (true);
+    if (count < 0) {
+        impl_->plugin_error();
+        return enum_value(OperationResult::Failure);
+    }
+    const auto terminator = std::find(output.begin(), output.end(), '\0');
+    result_json.assign(output.begin(), terminator);
+    impl_->error.clear();
+    return count;
+}
+
+bool PluginHandler::resolve_peer_control(std::int64_t control_id, bool accepted,
+                                         const std::string& reason) {
+    std::lock_guard<std::mutex> lock(impl_->mutex);
+    if (!impl_->instance || !impl_->functions.resolve_control_fn) {
+        impl_->error = "Plugin does not support northbound control results";
+        return false;
+    }
+    if (impl_->functions.resolve_control_fn(impl_->instance, control_id, accepted ? 1 : 0,
+                                            reason.c_str()) !=
+        enum_value(OperationResult::Success)) {
+        impl_->plugin_error();
+        return false;
+    }
+    impl_->error.clear();
+    return true;
+}
+
 std::string PluginHandler::last_error() const {
     std::lock_guard<std::mutex> lock(impl_->mutex);
     return impl_->error;

@@ -223,6 +223,7 @@ int CollectEngine::start_all(CfgLoader& loader) {
         auto channelThread = std::make_shared<ChannelThread>(chConfig, dispatcher_);
         channelThread->set_devices(std::move(connection.devices));
         channelThread->set_poll_interval(connection.interval);
+        attach_peer_sink(*channelThread);
 
         // 设置错误回调
         channelThread->set_error_callback(
@@ -324,6 +325,7 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig,
     auto channelThread = std::make_shared<ChannelThread>(config, dispatcher_);
     channelThread->set_poll_interval(
         settings_of(config).value("poll_interval_ms", config_.defaultPollIntervalMs_));
+    attach_peer_sink(*channelThread);
 
     channels_[channelConfig.id_] = channelThread;
     connection_scopes_[channelConfig.id_] = connection_scope;
@@ -500,9 +502,27 @@ std::shared_ptr<ChannelThread> CollectEngine::command_channel(const std::string&
 }
 
 // ============================================================
-// 错误回调
+// 北向控制转交
 // ============================================================
 
+void CollectEngine::attach_peer_sink(ChannelThread& channel) {
+    std::lock_guard lock(peer_mutex_);
+    if (!peer_sink_) return;
+    auto sink = peer_sink_;
+    const auto channel_id = channel.channel_id();
+    channel.set_peer_control_sink([sink, channel_id](const ChannelThread::PeerControl& control,
+                                                     ChannelThread::PeerOutcomeHandler done) {
+        try {
+            sink(channel_id, control, std::move(done));
+        } catch (const std::exception& error) {
+            if (done) done(false, error.what());
+        }
+    });
+}
+
+// ============================================================
+// 错误回调
+// ============================================================
 void CollectEngine::on_channel_error(int64_t channel_id, const std::string& error) {
     LOG_ERROR(fmt::format("通道[{}] 错误: {}", channel_id, error).c_str());
     if (error_cb_) {

@@ -29,6 +29,9 @@ endforeach()
 add_test(NAME channel_handler_failure COMMAND test_channel_handlers channel_failure)
 set_tests_properties(channel_handler_failure PROPERTIES TIMEOUT 30)
 
+add_test(NAME channel_peer_control COMMAND test_channel_handlers channel_peer_control)
+set_tests_properties(channel_peer_control PROPERTIES TIMEOUT 30)
+
 if(TARGET proto_modbus AND TARGET proto_iec104 AND EMS_REALTIME_WITH_SHM)
     add_executable(test_connection_reuse connection_reuse_test.cpp)
     target_link_libraries(test_connection_reuse PRIVATE net_collect net_para_loader ems_libmodbus ems_lib60870)
