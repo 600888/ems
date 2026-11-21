@@ -50,3 +50,6 @@ YK/YT 另投影命令目标及状态，反馈读取先回写 YC/YX；通道运�
 旧 `RtDb`、`RtDbManager`、`RTDBEMS`、business 键映射及旧命令队列已经删除。交付为 `ems_rtdb.dll/.lib` 或 SO、公共头及 CMake 包；调用方链接 `ems::rtdb`。真实 Redis 联调仍需专用实例。实际构建、接口与限制见[实现说明](https://github.com/600888/ems/blob/main/backend/src/rtdb/README.md)。
 
 生命周期、管理接口、部署字段、故障矩阵和实施阶段见[实时数据库进程详细设计](design.md)。记录布局、CAS、错误与来源检查继续以[公共实时访问接口](../../common/realtime/access-design.md)为唯一契约；整体边界见[系统架构](../../architecture/system-design.md)。
+
+控制命令按绑定通信设备订阅主题并进入设备 FIFO，受理工作池在设备间并行，
+物理连接工作线程负责设备之间的轮转和单连接串行下发；通知和补偿扫描共用同一队列。

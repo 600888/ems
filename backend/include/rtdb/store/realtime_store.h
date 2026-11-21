@@ -47,8 +47,8 @@ struct Scope {
     std::string code;
 };
 
-/// 记录种类：测点 / 设备状态 / 通道状态 / 独立命令目标与执行状态
-enum class RecordKind { Point, DeviceState, ChannelState, CommandState };
+/// 记录种类：测点 / 设备状态 / 通道状态 / 独立命令状态 / 控制点到通信设备的路由
+enum class RecordKind { Point, DeviceState, ChannelState, CommandState, CommandRoute };
 
 /// 逻辑身份：作用域 + 种类 + 设备路径 + 资源 code（不传 Redis 原始键/共享段 offset）
 struct RecordKey {

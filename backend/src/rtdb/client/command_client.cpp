@@ -10,6 +10,18 @@
 #endif
 
 namespace ems::rtdb {
+std::string command_device_topic(const std::string& device_id) {
+    if (device_id.empty()) return "command.pending.unrouted";
+    if (device_id.size() > 64) return {};
+    constexpr char hex[] = "0123456789abcdef";
+    std::string topic = "command.pending.device.";
+    for (unsigned char c : device_id) {
+        topic += hex[c >> 4];
+        topic += hex[c & 15];
+    }
+    return topic;
+}
+
 namespace {
 using Json = nlohmann::json;
 
@@ -42,6 +54,7 @@ Fields encode(const CommandRecord& record) {
     const auto& request = record.request;
     return {{"json", Json{{"command_id", request.command_id},
                           {"point_id", request.point_id},
+                          {"device_id", record.device_id},
                           {"value", request.value},
                           {"config_revision", request.config_revision},
                           {"expires_at_ms", request.expires_at_ms},
@@ -63,9 +76,9 @@ struct CommandClient::Impl {
 
     RecordKey key(const std::string& id) const { return {scope, RecordKind::CommandState, {}, id}; }
 
-    bool notify(const char* topic, const std::string& id) {
+    bool notify(const std::string& device_id, const std::string& id) {
 #ifdef EMS_RTDB_WITH_ZEROMQ
-        return publisher && publisher->publish(topic, id);
+        return publisher && publisher->publish(command_device_topic(device_id), id);
 #else
         return false;
 #endif
@@ -103,6 +116,26 @@ Result<std::shared_ptr<CommandClient>> CommandClient::open(const std::string& co
     return std::shared_ptr<CommandClient>(new CommandClient(std::move(impl)));
 }
 
+Result<std::string> CommandClient::resolveDevice(const std::string& id, std::int64_t revision,
+                                                 const CallContext& ctx) {
+    const RecordKey key{impl_->scope, RecordKind::CommandRoute, {}, id};
+    auto found = impl_->realtime->read(key, ctx);
+    if (!core::is_ok(found)) {
+        if (core::error_of(found).code == ErrorCode::NotFound) return std::string{};
+        return core::error_of(found);
+    }
+    try {
+        const auto& fields = core::value_of(found).fields;
+        if (fields.at("point_id") != id || fields.at("enabled") != "1" ||
+            fields.at("config_revision") != std::to_string(revision))
+            return std::string{};
+        const auto& device = fields.at("device_id");
+        if (!device.empty() && device.size() <= 64) return device;
+    } catch (const std::exception&) {
+    }
+    return Error{ErrorCode::CorruptData, WriteEffect::NotApplicable, "invalid command route"};
+}
+
 Result<CommandRecord> CommandClient::readCommand(const std::string& id, const CallContext& ctx) {
     auto result = impl_->realtime->read(impl_->key(id), ctx);
     if (!core::is_ok(result)) return core::error_of(result);
@@ -116,6 +149,7 @@ Result<CommandRecord> CommandClient::readCommand(const std::string& id, const Ca
         request.value = json.at("value").get<double>();
         request.config_revision = json.at("config_revision").get<std::int64_t>();
         request.expires_at_ms = json.at("expires_at_ms").get<std::int64_t>();
+        record.device_id = json.value("device_id", std::string{});
         record.status = json.at("status").get<std::string>();
         record.reason = json.at("reason").get<std::string>();
         record.sent_at_ms = json.at("sent_at_ms").get<std::int64_t>();
@@ -124,7 +158,7 @@ Result<CommandRecord> CommandClient::readCommand(const std::string& id, const Ca
         record.revision = stored.revision;
         if (request.command_id == id && valid_request(request, impl_->scope) &&
             valid_status(record.status) && record.reason.size() <= 512 && record.sent_at_ms >= 0 &&
-            record.updated_at_ms > 0)
+            record.updated_at_ms > 0 && record.device_id.size() <= 64)
             return record;
     } catch (const std::exception&) {
     }
@@ -142,8 +176,9 @@ Result<CommandSubmission> CommandClient::submitCommand(const CommandRequest& req
         if (!same_request(core::value_of(existing).request, request))
             return Error{ErrorCode::Conflict, WriteEffect::NotApplied,
                          "command_id_payload_conflict"};
-        return CommandSubmission{core::value_of(existing), true,
-                                 impl_->notify("command.pending", request.command_id)};
+        return CommandSubmission{
+            core::value_of(existing), true,
+            impl_->notify(core::value_of(existing).device_id, request.command_id)};
     }
     if (core::error_of(existing).code != ErrorCode::NotFound) return core::error_of(existing);
     const auto now = utc_ms();
@@ -152,6 +187,9 @@ Result<CommandSubmission> CommandClient::submitCommand(const CommandRequest& req
                      "invalid command deadline"};
     CommandRecord record;
     record.request = request;
+    auto device = resolveDevice(request.point_id, request.config_revision, ctx);
+    if (!core::is_ok(device)) return core::error_of(device);
+    record.device_id = core::value_of(device);
     record.updated_at_ms = now;
     auto written = impl_->realtime->compareExchange(
         {impl_->key(request.command_id), encode(record), std::nullopt}, ctx);
@@ -160,7 +198,7 @@ Result<CommandSubmission> CommandClient::submitCommand(const CommandRequest& req
         return core::error_of(written);
     }
     record.revision = core::value_of(written).revision;
-    return CommandSubmission{record, false, impl_->notify("command.pending", request.command_id)};
+    return CommandSubmission{record, false, impl_->notify(record.device_id, request.command_id)};
 }
 
 Result<std::vector<std::string>> CommandClient::listCommands(const CallContext& ctx) {
@@ -204,7 +242,7 @@ Result<CommandRecord> CommandClient::requestVerification(const std::string& id,
                      "command does not require verification"};
     record.verify_requested = true;
     auto result = updateCommand(record, ctx);
-    if (core::is_ok(result)) impl_->notify("command.pending", id);
+    if (core::is_ok(result)) impl_->notify(record.device_id, id);
     return result;
 }
 }  // namespace ems::rtdb

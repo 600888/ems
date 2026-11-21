@@ -6,6 +6,7 @@
 #include <limits>
 #include <mutex>
 #include <nlohmann/json.hpp>
+#include <shared_mutex>
 
 namespace ems::rtdb {
 namespace {
@@ -54,9 +55,9 @@ struct PointClient::Impl {
     std::shared_ptr<RealtimeClient> client;
     std::shared_ptr<const RuntimeCatalog> catalog;
     std::unique_ptr<RealtimeService> service;
-    std::mutex mutex;
+    std::shared_mutex mutex;
     core::SourceEpoch epoch{static_cast<std::uint64_t>(core::now_utc_micros())};
-    core::Sequence sequence{0};
+    std::atomic<core::Sequence> sequence{0};
     bool writer{false};
 
     model::PointSample sample(model::PointValue value, model::Quality quality, std::int64_t time) {
@@ -95,13 +96,42 @@ Result<std::shared_ptr<PointClient>> PointClient::open(
 }
 
 core::Status PointClient::installWriter(const CallContext& ctx) {
-    std::lock_guard lock(impl_->mutex);
+    std::unique_lock lock(impl_->mutex);
     impl_->writer = false;
     for (const auto& point : impl_->catalog->points()) {
         SourcePolicy source{"ems-collector", impl_->epoch, impl_->catalog->configVersion(),
                             point.enabled};
         auto authorized = impl_->service->authorizePoint(point.address, source, ctx);
         if (!core::is_ok(authorized)) return core::error_of(authorized);
+        if (model::is_command(point.point_type)) {
+            const RecordKey key{
+                point.address.scope, RecordKind::CommandRoute, {}, point.point_id.value()};
+            Fields fields{
+                {"point_id", point.point_id.value()},
+                {"device_id", point.control_device_id},
+                {"config_revision", impl_->catalog->configVersion()},
+                {"enabled", point.enabled && !point.control_device_id.empty() ? "1" : "0"}};
+            bool installed = false;
+            for (unsigned attempt = 0; attempt < 8; ++attempt) {
+                auto old = impl_->client->read(key, ctx);
+                if (!core::is_ok(old) && core::error_of(old).code != ErrorCode::NotFound)
+                    return core::error_of(old);
+                auto written = impl_->client->compareExchange(
+                    {key, fields,
+                     core::is_ok(old) ? std::optional<Revision>{core::value_of(old).revision}
+                                      : std::nullopt},
+                    ctx);
+                if (core::is_ok(written)) {
+                    installed = true;
+                    break;
+                }
+                if (core::error_of(written).code != ErrorCode::Conflict)
+                    return core::error_of(written);
+            }
+            if (!installed)
+                return core::make_error(ErrorCode::Conflict, WriteEffect::NotApplied,
+                                        "command route installation conflicted");
+        }
     }
     impl_->writer = true;
     return core::ok_status();
@@ -110,7 +140,7 @@ core::Status PointClient::installWriter(const CallContext& ctx) {
 Result<SampleResult> PointClient::update(const std::string& id, double value,
                                          model::Quality quality, std::int64_t time,
                                          const CallContext& ctx) {
-    std::lock_guard lock(impl_->mutex);
+    std::shared_lock lock(impl_->mutex);
     const auto* point = impl_->catalog->findPoint(core::PointId{id});
     if (!point) return Error{ErrorCode::NotFound, WriteEffect::NotApplied, "point not configured"};
     if (!impl_->writer)
@@ -159,7 +189,7 @@ Result<std::string> PointClient::readPointJson(const std::string& type, const st
 
 Result<SampleResult> PointClient::projectCommand(const CommandRecord& command, std::int64_t order,
                                                  const CallContext& ctx) {
-    std::lock_guard lock(impl_->mutex);
+    std::shared_lock lock(impl_->mutex);
     const auto* point = impl_->catalog->findPoint(core::PointId{command.request.point_id});
     if (!point || !point->enabled) return SampleResult::IgnoredOutOfOrder;
     if (!impl_->writer)
@@ -183,7 +213,7 @@ Result<SampleResult> PointClient::projectCommand(const CommandRecord& command, s
 
 core::Status PointClient::reportChannel(const std::string& id, ChannelRunState state,
                                         const std::string& reason, const CallContext& ctx) {
-    std::lock_guard lock(impl_->mutex);
+    std::shared_lock lock(impl_->mutex);
     if (!impl_->writer)
         return core::make_error(ErrorCode::PermissionDenied, WriteEffect::NotApplied,
                                 "writer not installed");

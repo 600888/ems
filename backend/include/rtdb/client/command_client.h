@@ -6,6 +6,13 @@
 
 namespace ems::rtdb {
 
+/**
+ * @brief 生成设备级精确通知主题，空设备 ID 对应未路由命令主题。
+ * @param[in] device_id 通信设备稳定 ID，不按设备编码或部件 ID 推导。
+ * @return ASCII 主题；ID 超过 64 字节时返回空串。
+ */
+EMS_RTDB_API std::string command_device_topic(const std::string& device_id);
+
 /** @brief 不可变命令目标；目标值与设备实际反馈分开保存。 */
 struct CommandRequest {
     std::string command_id;
@@ -24,6 +31,7 @@ struct CommandRecord {
     std::int64_t updated_at_ms{0};
     bool verify_requested{false};
     Revision revision;
+    std::string device_id;  ///< 实时运行目录解析出的通信设备；只作分发提示，执行前重新核对。
 };
 
 struct CommandSubmission {
@@ -51,6 +59,16 @@ class EMS_RTDB_API CommandClient final {
     static Result<std::shared_ptr<CommandClient>> open(const std::string& config_path, Scope scope,
                                                        const std::string& notification_endpoint,
                                                        const CallContext& ctx);
+
+    /**
+     * @brief 从采集进程发布的实时路由索引解析通信设备。
+     * @param[in] point_id 稳定控制点 ID。
+     * @param[in] config_revision 命令对应的站根修订号。
+     * @param[in] ctx 读取预算。
+     * @return 通信设备 ID；路由缺失、禁用或修订号不匹配返回空串，存储错误明确返回。
+     */
+    Result<std::string> resolveDevice(const std::string& point_id, std::int64_t config_revision,
+                                      const CallContext& ctx);
 
     /** @brief 停止通知线程并释放本进程的实时库映射。 */
     ~CommandClient();

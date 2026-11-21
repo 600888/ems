@@ -97,6 +97,7 @@ struct RuntimePoint {
     std::uint32_t stale_after_ms{60000};                    ///< 陈旧阈值
     bool enabled{true};                                     ///< 配置启用
     SourcePolicy source;                                    ///< 已安装的来源授权
+    std::string control_device_id;  ///< 控制绑定的通信设备，部件点不能用所属部件 ID 代替
 };
 
 /// 运行目录中的设备：用于解析设备状态记录路径。
@@ -316,6 +317,7 @@ struct CatalogPoint {
     std::string unit;
     std::uint32_t stale_after_ms{0};  ///< 0 表示使用构建参数中的默认值
     bool enabled{true};
+    std::string control_device_id;  ///< 来自绑定的实际通信设备 ID
 };
 
 /// 运行目录构建输入：通道（通道状态记录固定使用站作用域）。

@@ -33,6 +33,7 @@ struct PointRoute {
     std::string write_group_key;
     std::string feedback_json;
     int feedback_timeout_ms{3000};
+    std::string control_device_id;  ///< 控制绑定的通信设备 ID，用于设备队列与订阅。
 };
 
 /** @brief 通道内的点归属节点；部件点保留部件身份，使用来源设备的绑定通信。 */

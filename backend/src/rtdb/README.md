@@ -39,11 +39,15 @@ backend/tests/rtdb/           后端、业务、采集分发器、安装包消�
 `<rtdb/client/command_client.h>` 提供 `CommandClient::open`、`submitCommand`、
 `readCommand`、`requestVerification`、`listCommands` 和执行者用的 `updateCommand`。
 调用方先将命令目标、值、期限和站根 `config_revision` 写入独立 `CommandState` 记录，
-再由库内部异步发布 `command.pending` 提示；通知正文只有命令 ID。
+再由库内部按控制绑定设备发布 `command.pending.device.<编码设备 ID>` 提示；正文只有命令 ID。
+采集者发布实时 `CommandRoute` 索引供生产者解析设备，索引受当前站根修订号约束。
+路由缺失的命令使用未路由主题，由消费者重新读取并判断，不依赖通知携带控制值。
 每个 ID 独立保存，命令目标不可修改，revision 用于 CAS 认领，实测值继续由采集更新。
 
 Web、命令行、北向控制均使用这一入口，采集进程不再开放命令 REQ/REP 端点。
-采集侧接到提示后从实时库读取，并以有界扫描补偿丢通知；执行前保留 MySQL 条件登记，
+采集侧使用同一 SUB socket 订阅各设备主题，回调将 ID 分发到设备 FIFO。
+8 个受理线程在设备之间轮转，设备内保持有序；物理连接线程再按设备轮转执行。
+有界扫描补偿丢通知并进入相同设备队列；执行前保留 MySQL 条件登记，
 执行结果同步写回独立命令记录及 YK/YT 测点投影，失败时重试补同步，重启后的未决动作
 只核验、不盲目重发。YK/YT 值表示命令目标并附带命令状态；设备实际状态仍读取 YC/YX。
 反馈核验读取的新样本先写实时库，再判定命令成功。北向成功回执等待持久记录及实时投影

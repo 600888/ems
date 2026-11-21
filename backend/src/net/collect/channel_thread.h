@@ -171,6 +171,13 @@ class ChannelThread {
      */
     std::optional<device::PointRoute> command_route(const std::string& point_id) const;
 
+    /**
+     * @brief 解析控制点绑定的通信设备，用于设备队列；部件点归到通信设备。
+     * @param[in] point_id 稳定控制点 ID。
+     * @return 通信设备 ID；路由不存在返回空串。
+     */
+    std::string command_device(const std::string& point_id) const;
+
     // ============================================================
     // 北向控制回传
     // ============================================================
@@ -334,6 +341,9 @@ class ChannelThread {
      */
     void set_state(ChannelState new_state);
 
+    /** @brief 发布当前连接状态，不修改生命周期，避免周期刷新覆盖停机请求。 */
+    void publish_state();
+
     // ---- 重连退避 ----
     /**
      * @brief 计算下次重连的退避时间。
@@ -355,7 +365,9 @@ class ChannelThread {
     mutable std::mutex device_mutex_;
 
     // 命令队列
-    std::deque<CommandTask> cmd_queue_;
+    std::map<std::string, std::deque<CommandTask>> device_commands_;
+    std::deque<std::string> ready_devices_;
+    std::size_t queued_commands_{0};
     mutable std::mutex cmd_mutex_;
     std::condition_variable cmd_cv_;
     std::map<std::string, std::chrono::steady_clock::time_point> last_command_;

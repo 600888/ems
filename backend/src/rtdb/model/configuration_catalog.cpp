@@ -49,13 +49,16 @@ Result<std::shared_ptr<const RuntimeCatalog>> configuration_catalog(
                               enabled(row.device_id)});
     }
     std::map<std::string, bool> channels, bindings;
+    std::map<std::string, std::string> control_devices;
     for (const auto& row : records.channels) {
         tree.channels.push_back({core::ChannelId{row.channel_id}, row.code, row.enabled != 0});
         channels[row.channel_id] = row.enabled != 0;
     }
-    for (const auto& row : records.bindings)
+    for (const auto& row : records.bindings) {
         bindings[row.binding_id] =
             row.enabled && enabled(row.device_id) && channels[row.channel_id];
+        if (row.can_control) control_devices[row.binding_id] = row.device_id;
+    }
     bool valid = true;
     auto append = [&](const auto& rows, model::PointType type) {
         for (const auto& row : rows) {
@@ -82,7 +85,8 @@ Result<std::shared_ptr<const RuntimeCatalog>> configuration_catalog(
                 {core::PointId{row.point_id}, row.owner_device_id, row.code, type,
                  model::to_point_kind(type), value, row.unit,
                  static_cast<std::uint32_t>(row.stale_after_ms > 0 ? row.stale_after_ms : 0),
-                 row.enabled && enabled(row.owner_device_id) && bindings[row.binding_id]});
+                 row.enabled && enabled(row.owner_device_id) && bindings[row.binding_id],
+                 model::is_command(type) ? control_devices[row.binding_id] : std::string{}});
         }
     };
     append(records.points_yc, model::PointType::YC);

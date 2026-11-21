@@ -190,13 +190,17 @@ int main(int argc, char** argv) {
         bool notified = false;
 #ifdef EMS_WITH_ZEROMQ
         ems::messaging::ZmqChangeSubscriber command_subscriber;
-        if (!options.command_endpoint.empty()) {
+#endif
+        auto bind_notifications = [&] {
+            const auto topics = commands->configure_subscriptions(*loader.runtime_catalog());
+#ifdef EMS_WITH_ZEROMQ
+            command_subscriber.stop();
+            if (options.command_endpoint.empty()) return;
             ems::messaging::ZmqChangeConfig config;
             config.endpoint = options.command_endpoint;
             config.publisher_bind = false;
-            // 唯一消费者绑定端点；通知不携带控制载荷，只唤醒实时库补偿扫描。
-            if (!command_subscriber.start(config, {"command.pending"}, [&](auto&, const auto& id) {
-                    commands->notify(id);
+            if (!command_subscriber.start(config, topics, [&](const auto& topic, const auto& id) {
+                    commands->notify(topic, id);
                     {
                         std::lock_guard lock(wake_mutex);
                         notified = true;
@@ -204,8 +208,9 @@ int main(int argc, char** argv) {
                     wake.notify_one();
                 }))
                 throw std::runtime_error("command notification endpoint unavailable");
-        }
 #endif
+        };
+        bind_notifications();
         engine.set_peer_control_sink(
             [&commands](std::int64_t channel_id,
                         const ems::net::collect::ChannelThread::PeerControl& control,
@@ -244,9 +249,11 @@ int main(int argc, char** argv) {
             commands->set_accepting(false);
             engine.stop_all();
             loader = std::move(candidate);
+            bind_notifications();
             if (engine.start_all(loader) !=
                 static_cast<int>(loader.channels().size() + loader.forwarding_channels().size()))
                 throw std::runtime_error("channel reload failed");
+            if (!commands->recover()) throw std::runtime_error("command reload recovery failed");
             commands->set_accepting(true);
             LOG_INFO("ems-collector reloaded, config_revision={}", loader.config_revision());
         }

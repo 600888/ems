@@ -356,6 +356,7 @@ RuntimeCatalogBuildResult buildRuntimeCatalog(const DeviceTreeSnapshot& snapshot
         runtime.stale_after_ms =
             point.stale_after_ms != 0 ? point.stale_after_ms : options.default_stale_after_ms;
         runtime.enabled = point.enabled;
+        runtime.control_device_id = point.control_device_id;
         runtime.source = options.default_source;
         if (runtime.source.config_version.empty()) {
             runtime.source.config_version = options.config_version;

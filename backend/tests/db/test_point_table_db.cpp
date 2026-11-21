@@ -212,6 +212,7 @@ class ConfigurationStore : public ConfigurationDatabase {
             if (std::string(id) == "setpoint") {
                 point.point_type = model::PointType::YT;
                 point.kind = model::PointKind::Command;
+                point.control_device_id = "pcs";
             }
             ASSERT_TRUE(catalog->addPoint(point));
         }
@@ -680,7 +681,8 @@ TEST_F(ConfigurationStore, CommandQueueIsBoundedAndEveryCancellationCompletes) {
     for (int i = 0; i < 130; ++i)
         ASSERT_TRUE(core::is_ok(
             submit_command(*realtime, "bounded" + std::to_string(i), submit_payload())));
-    ASSERT_TRUE(service.poll());
+    ASSERT_TRUE(wait_status(service, *realtime, "bounded0", "Queued"));
+    service.set_accepting(false);
     router.worker->stop();
     router.release();
     router.worker->join();
@@ -690,8 +692,8 @@ TEST_F(ConfigurationStore, CommandQueueIsBoundedAndEveryCancellationCompletes) {
         if (status == "Rejected") ++rejected;
         if (status == "Pending") ++pending;
     }
-    EXPECT_EQ(rejected, 128);
-    EXPECT_EQ(pending, 2);
+    EXPECT_EQ(rejected, 1);
+    EXPECT_EQ(pending, 129);
     EXPECT_EQ(router.state->writes, 0);
 }
 
@@ -735,8 +737,8 @@ TEST_F(ConfigurationStore, RealtimeSubmissionSurvivesLostNotificationAndKeepsInd
     EXPECT_EQ(core::error_of(producer->submitCommand(changed, context())).code,
               core::ErrorCode::Conflict);
     ASSERT_TRUE(service.poll());
-    EXPECT_EQ(command_status(*realtime, first.command_id), "Queued");
-    EXPECT_EQ(command_status(*realtime, second.command_id), "Queued");
+    ASSERT_TRUE(wait_status(service, *realtime, first.command_id, "Queued"));
+    EXPECT_EQ(command_status(*realtime, second.command_id), "Pending");
     router.release();
     ASSERT_TRUE(wait_status(service, *realtime, first.command_id, "Acked"));
     ASSERT_TRUE(wait_status(service, *realtime, second.command_id, "Acked"));
@@ -775,11 +777,14 @@ TEST_F(ConfigurationStore, MultipleProducersNotifyAfterRealtimeCommit) {
     config.publisher_bind = false;
     messaging::ZmqChangeSubscriber subscriber;
     std::atomic<int> received{0};
-    ASSERT_TRUE(subscriber.start(config, {"command.pending"}, [&](auto&, const auto& id) {
+    const auto topics = service.configure_subscriptions(*dispatcher->point_client()->catalog());
+    ASSERT_TRUE(subscriber.start(config, topics, [&](const auto& topic, const auto& id) {
         auto current = realtime->readCommand(id, context());
         EXPECT_TRUE(core::is_ok(current));
         if (core::is_ok(current)) {
-            service.notify(id);
+            EXPECT_EQ(topic, rtdb::command_device_topic("pcs"));
+            EXPECT_EQ(core::value_of(current).device_id, "pcs");
+            service.notify(topic, id);
             received.fetch_or(id == "notify-one" ? 1 : 2);
         }
     }));
@@ -799,7 +804,6 @@ TEST_F(ConfigurationStore, MultipleProducersNotifyAfterRealtimeCommit) {
         std::this_thread::sleep_for(20ms);
     }
     EXPECT_EQ(received, 3);
-    EXPECT_EQ(router.state->writes, 0);
     ASSERT_TRUE(wait_status(service, *realtime, "notify-one", "Acked"));
     ASSERT_TRUE(wait_status(service, *realtime, "notify-two", "Acked"));
     EXPECT_EQ(router.state->writes, 2);

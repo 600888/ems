@@ -367,6 +367,7 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
                     throw std::invalid_argument(
                         "point binding role does not permit this point type");
                 PointRoute route;
+                route.control_device_id = binding.device_id;
                 route.point_id = point.point_id;
                 route.protocol_code = address(point, binding, channel, write);
                 route.point_code = point.code;

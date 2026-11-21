@@ -16,9 +16,9 @@ std::string validate_record_key(const RecordKey& key) {
     for (const auto& part : key.device_path)
         if (!detail::valid_code(part, true)) return "invalid/reserved device path code";
     if (key.kind != RecordKind::DeviceState && key.kind != RecordKind::CommandState &&
-        !detail::valid_code(key.name))
+        key.kind != RecordKind::CommandRoute && !detail::valid_code(key.name))
         return "invalid point/channel code";
-    if (key.kind == RecordKind::CommandState) {
+    if (key.kind == RecordKind::CommandState || key.kind == RecordKind::CommandRoute) {
         if (key.name.empty() || key.name.size() > 128) return "invalid command ID";
         for (auto c : key.name)
             if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') ||
@@ -38,6 +38,7 @@ std::string validate_record_key(const RecordKey& key) {
                 return "ChannelState 缺少通道 code";
             }
             break;
+        case RecordKind::CommandRoute:
         case RecordKind::CommandState:
             // CommandState 的 name 为命令 ID 且路径为空
             if (!key.device_path.empty()) {

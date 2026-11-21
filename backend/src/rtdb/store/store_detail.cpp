@@ -84,6 +84,8 @@ std::string physical_key(const RecordKey& k) {
             return s + ":channel:" + k.name + ":rt:state";
         case RecordKind::CommandState:
             return s + ":command:" + k.name;
+        case RecordKind::CommandRoute:
+            return s + ":command-route:" + k.name;
     }
     return {};
 }

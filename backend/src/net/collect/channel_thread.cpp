@@ -179,6 +179,8 @@ std::vector<DeviceContext> ChannelThread::devices() const {
 bool ChannelThread::enqueue_command(PointCommand command, BeforeCommand before_send,
                                     CommandCompletion completion) {
     if (!before_send || !completion) return false;
+    const auto device_id = command_device(command.point_id);
+    if (device_id.empty()) return false;
     const auto remaining =
         command.verify_only
             ? 5000
@@ -191,12 +193,26 @@ bool ChannelThread::enqueue_command(PointCommand command, BeforeCommand before_s
         std::lock_guard lock(cmd_mutex_);
         const auto state = state_.load();
         if ((state != ChannelState::Starting && state != ChannelState::Running) ||
-            cmd_queue_.size() >= 128)
+            queued_commands_ >= 4096)
             return false;
-        cmd_queue_.push_back(std::move(task));
+        auto& queue = device_commands_[device_id];
+        if (queue.size() >= 128) return false;
+        if (queue.empty()) ready_devices_.push_back(device_id);
+        queue.push_back(std::move(task));
+        ++queued_commands_;
     }
     cmd_cv_.notify_one();
     return true;
+}
+
+std::string ChannelThread::command_device(const std::string& point_id) const {
+    for (const auto& device : devices())
+        for (const auto* routes : {&device.ykPoints_, &device.ytPoints_})
+            for (const auto& route : *routes)
+                if (route.point_id == point_id)
+                    return route.control_device_id.empty() ? device.deviceKey_
+                                                           : route.control_device_id;
+    return {};
 }
 
 std::optional<device::PointRoute> ChannelThread::command_route(const std::string& point_id) const {
@@ -357,7 +373,7 @@ void ChannelThread::run() {
             std::unique_lock lock(cmd_mutex_);
             cmd_cv_.wait_for(
                 lock, std::chrono::milliseconds(interval - static_cast<int>(elapsed)),
-                [this] { return state_.load() != ChannelState::Running || !cmd_queue_.empty(); });
+                [this] { return state_.load() != ChannelState::Running || queued_commands_ != 0; });
         }
         // 如果采集耗时超过周期，立即开始下一轮
     }
@@ -377,7 +393,7 @@ void ChannelThread::run() {
 
 bool ChannelThread::check_connection() {
     const bool connected = handler_ && handler_->is_connected();
-    set_state(state_.load());
+    publish_state();
     return connected;
 }
 
@@ -429,9 +445,17 @@ void ChannelThread::process_command_queue() {
     CommandTask task;
     {
         std::lock_guard lock(cmd_mutex_);
-        if (cmd_queue_.empty() || state_.load() != ChannelState::Running) return;
-        task = std::move(cmd_queue_.front());
-        cmd_queue_.pop_front();
+        if (ready_devices_.empty() || state_.load() != ChannelState::Running) return;
+        auto device_id = std::move(ready_devices_.front());
+        ready_devices_.pop_front();
+        auto& queue = device_commands_.at(device_id);
+        task = std::move(queue.front());
+        queue.pop_front();
+        --queued_commands_;
+        if (queue.empty())
+            device_commands_.erase(device_id);
+        else
+            ready_devices_.push_back(std::move(device_id));
     }
     PointCommandResult result;
     try {
@@ -597,7 +621,14 @@ void ChannelThread::cancel_commands() {
     std::deque<CommandTask> pending;
     {
         std::lock_guard lock(cmd_mutex_);
-        pending.swap(cmd_queue_);
+        for (auto& [_, queue] : device_commands_)
+            while (!queue.empty()) {
+                pending.push_back(std::move(queue.front()));
+                queue.pop_front();
+            }
+        device_commands_.clear();
+        ready_devices_.clear();
+        queued_commands_ = 0;
     }
     for (auto& task : pending) {
         try {
@@ -711,9 +742,14 @@ void ChannelThread::collect_points(const std::vector<device::PointRoute>& routes
 
 void ChannelThread::set_state(ChannelState new_state) {
     state_.store(new_state);
+    publish_state();
+}
+
+void ChannelThread::publish_state() {
     if (!dispatcher_) return;
     auto client = dispatcher_->point_client();
     if (!client) return;
+    const auto new_state = state_.load();
     const auto connected =
         new_state == ChannelState::Running && handler_ && handler_->is_connected();
     const auto state =
