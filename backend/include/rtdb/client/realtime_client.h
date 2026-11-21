@@ -61,6 +61,14 @@ class EMS_RTDB_API RealtimeClient final {
     Result<std::vector<RecordKey>> listDeviceStates(const Scope& scope, const CallContext& ctx);
 
     /**
+     * @brief 枚举独立命令记录，用于补偿扫描；不保证并发快照。
+     * @param[in] scope 命令作用域。
+     * @param[in] ctx 扫描期限。
+     * @return 至多 65536 个键或明确错误，不返回截断结果。
+     */
+    Result<std::vector<RecordKey>> listCommandStates(const Scope& scope, const CallContext& ctx);
+
+    /**
      * @brief 按预期版本完整替换或条件创建记录。
      * @param[in] request 键、新字段及预期 revision。
      * @param[in] ctx 调用预算。

@@ -20,6 +20,9 @@
 #include "common/db/configuration/orm_device_config_repository.h"
 #include "common/db/runtime/transaction_database.h"
 #include "net/collect/command_service.h"
+#ifdef EMS_TEST_ZEROMQ
+#include <common/messaging/zmq_change_channel.h>
+#endif
 #endif
 
 namespace ems::database {
@@ -163,6 +166,9 @@ class ConfigurationStore : public ConfigurationDatabase {
     std::shared_ptr<IDeviceConfigRepository> repository;
     std::shared_ptr<ICollectorCommandRepository> commands;
     sqlite3* raw{nullptr};
+    std::shared_ptr<rtdb::CommandClient> realtime;
+    std::unique_ptr<rtdb::RealtimeClient> realtime_owner;
+    std::string realtime_config;
 
     static auto context() { return core::make_call_context(std::chrono::seconds(5)); }
 
@@ -175,6 +181,27 @@ class ConfigurationStore : public ConfigurationDatabase {
 
     void SetUp() override {
         ConfigurationDatabase::SetUp();
+#ifdef EMS_TEST_SHM
+        realtime_config = (dir / "realtime.json").u8string();
+        const auto segment =
+            "command_test_" +
+            std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+        std::ofstream(std::filesystem::u8path(realtime_config)) << nlohmann::json{
+            {"realtime",
+             {{"backend",
+               {{"type", "shm"},
+                {"options",
+                 {{"segment_name", segment},
+                  {"capacity", 1024},
+                  {"segment_bytes", 1048576}}}}}}}}.dump();
+        auto owner = rtdb::RealtimeClient::initialize(realtime_config, context());
+        ASSERT_TRUE(core::is_ok(owner)) << core::error_of(owner).message;
+        realtime_owner = std::move(std::get<0>(owner));
+        auto client = rtdb::CommandClient::open(
+            realtime_config, {rtdb::ScopeKind::Station, "station"}, "", context());
+        ASSERT_TRUE(core::is_ok(client));
+        realtime = core::value_of(client);
+#endif
         SqliteTestConnection::unknown_execution_commit = false;
         const auto file = (dir / "configuration.db").u8string();
         ASSERT_EQ(sqlite3_open(file.c_str(), &raw), SQLITE_OK);
@@ -249,6 +276,9 @@ class ConfigurationStore : public ConfigurationDatabase {
         repository.reset();
         database.reset();
         sqlite3_close(raw);
+        realtime.reset();
+        realtime_owner.reset();
+        if (!realtime_config.empty()) rtdb::RealtimeClient::cleanup(realtime_config, context());
         ConfigurationDatabase::TearDown();
     }
 
@@ -295,6 +325,7 @@ TEST_F(ConfigurationStore, ExpiredReadIsRejected) {
     EXPECT_FALSE(core::is_ok(repository->load_configuration(*handle, expired)));
 }
 
+#ifdef EMS_TEST_SHM
 using namespace std::chrono_literals;
 namespace collect = ems::net::collect;
 using Json = nlohmann::json;
@@ -432,17 +463,26 @@ Json submit_payload(std::int64_t expires = command_time() + 5000) {
             {"expires_at_ms", expires}};
 }
 
-std::string command_status(collect::CommandService& service, const std::string& id) {
-    auto result = service.handle({id, R"({"op":"query"})"});
-    if (result.code != messaging::ZmqCommandReplyCode::Result) return "";
-    return Json::parse(result.reason).at("status").get<std::string>();
+core::Result<rtdb::CommandSubmission> submit_command(rtdb::CommandClient& client,
+                                                     const std::string& id, const Json& payload) {
+    return client.submitCommand(
+        {id, payload.at("point_id").get<std::string>(), payload.at("value").get<double>(),
+         payload.at("config_revision").get<std::int64_t>(),
+         payload.at("expires_at_ms").get<std::int64_t>()},
+        core::make_call_context(2s));
 }
 
-bool wait_status(collect::CommandService& service, const std::string& id, const char* expected) {
+std::string command_status(rtdb::CommandClient& client, const std::string& id) {
+    auto result = client.readCommand(id, core::make_call_context(2s));
+    return core::is_ok(result) ? core::value_of(result).status : "";
+}
+
+bool wait_status(collect::CommandService& service, rtdb::CommandClient& client,
+                 const std::string& id, const char* expected) {
     const auto until = std::chrono::steady_clock::now() + 3s;
     do {
         if (!service.poll()) return false;
-        if (command_status(service, id) == expected) return true;
+        if (command_status(client, id) == expected) return true;
         std::this_thread::sleep_for(5ms);
     } while (std::chrono::steady_clock::now() < until);
     return false;
@@ -450,96 +490,93 @@ bool wait_status(collect::CommandService& service, const std::string& id, const 
 
 TEST_F(ConfigurationStore, CommandScalesWakesDeduplicatesAndPersistsQuery) {
     ControlRouter router;
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     ASSERT_TRUE(service.recover());
     service.set_accepting(true);
     const auto payload = submit_payload();
     const auto start = std::chrono::steady_clock::now();
-    EXPECT_EQ(service.handle({"cmd-1", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
-    ASSERT_TRUE(wait_status(service, "cmd-1", "Acked"));
+    EXPECT_TRUE(core::is_ok(submit_command(*realtime, "cmd-1", payload)));
+    ASSERT_TRUE(wait_status(service, *realtime, "cmd-1", "Acked"));
     EXPECT_LT(std::chrono::steady_clock::now() - start, 1s);
     EXPECT_DOUBLE_EQ(router.state->raw, 23.5);
-    EXPECT_EQ(service.handle({"cmd-1", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Duplicate);
+    EXPECT_TRUE(core::value_of(submit_command(*realtime, "cmd-1", payload)).duplicate);
     auto different = payload;
     different["value"] = 49;
-    EXPECT_EQ(service.handle({"cmd-1", different.dump()}).code,
-              messaging::ZmqCommandReplyCode::Rejected);
-    collect::CommandService reader(database, commands, router, "station");
-    EXPECT_EQ(command_status(reader, "cmd-1"), "Acked");
+    EXPECT_EQ(core::error_of(submit_command(*realtime, "cmd-1", different)).code,
+              core::ErrorCode::Conflict);
+    auto peer = rtdb::CommandClient::open(realtime_config, {rtdb::ScopeKind::Station, "station"},
+                                          "", context());
+    ASSERT_TRUE(core::is_ok(peer));
+    EXPECT_EQ(command_status(*core::value_of(peer), "cmd-1"), "Acked");
     EXPECT_EQ(router.state->writes, 1);
 }
 
 TEST_F(ConfigurationStore, CommandRunsBetweenReadTransactions) {
     ControlRouter router(false, true, 2);
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
-    ASSERT_EQ(service.handle({"insert", submit_payload().dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "insert", submit_payload())));
     EXPECT_EQ(router.state->writes, 0);
+    ASSERT_TRUE(service.poll());
     router.release();
-    ASSERT_TRUE(wait_status(service, "insert", "Acked"));
+    ASSERT_TRUE(wait_status(service, *realtime, "insert", "Acked"));
     EXPECT_EQ(router.state->writes, 1);
     EXPECT_EQ(router.state->write_read_count, 1);
 }
 
 TEST_F(ConfigurationStore, QueuedCommandExpiresAndNeverWrites) {
     ControlRouter router(false, true);
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
-    EXPECT_EQ(service.handle({"expires", submit_payload(command_time() + 60).dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
+    EXPECT_TRUE(
+        core::is_ok(submit_command(*realtime, "expires", submit_payload(command_time() + 60))));
     ASSERT_TRUE(service.poll());
     std::this_thread::sleep_for(100ms);
     router.release();
-    ASSERT_TRUE(wait_status(service, "expires", "Expired"));
+    ASSERT_TRUE(wait_status(service, *realtime, "expires", "Expired"));
     EXPECT_EQ(router.state->writes, 0);
 }
 
 TEST_F(ConfigurationStore, ControlInsertsAfterCurrentReadAndStopCancelsQueue) {
     ControlRouter router(false, true);
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
-    ASSERT_EQ(service.handle({"stopped", submit_payload().dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "stopped", submit_payload())));
     ASSERT_TRUE(service.poll());
     EXPECT_EQ(router.state->writes, 0);
     router.worker->stop();
     router.release();
     router.worker->join();
-    EXPECT_EQ(command_status(service, "stopped"), "Rejected");
+    EXPECT_EQ(command_status(*realtime, "stopped"), "Rejected");
     EXPECT_EQ(router.state->writes, 0);
 }
 
 TEST_F(ConfigurationStore, RevisionChangeRejectsQueuedCommand) {
     ControlRouter router(false, true);
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
-    ASSERT_EQ(service.handle({"old-route", submit_payload().dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "old-route", submit_payload())));
     ASSERT_TRUE(service.poll());
     router.revision = 8;
     router.release();
-    ASSERT_TRUE(wait_status(service, "old-route", "Rejected"));
+    ASSERT_TRUE(wait_status(service, *realtime, "old-route", "Rejected"));
     EXPECT_EQ(router.state->writes, 0);
 }
 
 TEST_F(ConfigurationStore, FailedExecutionRegistrationNeverSends) {
     ControlRouter router(false, true);
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
-    ASSERT_EQ(service.handle({"db-failed", submit_payload().dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "db-failed", submit_payload())));
     sql("CREATE TRIGGER reject_send BEFORE UPDATE ON ops_command WHEN NEW.status='Executing' "
         "BEGIN SELECT RAISE(ABORT,'registration unavailable'); END");
     router.release();
     ASSERT_TRUE(service.poll());
     std::this_thread::sleep_for(80ms);
     EXPECT_EQ(router.state->writes, 0);
-    EXPECT_EQ(command_status(service, "db-failed"), "Queued");
+    EXPECT_EQ(command_status(*realtime, "db-failed"), "Queued");
     sql("DROP TRIGGER reject_send");
-    ASSERT_TRUE(wait_status(service, "db-failed", "Acked"));
+    ASSERT_TRUE(wait_status(service, *realtime, "db-failed", "Acked"));
     EXPECT_EQ(router.state->writes, 1);
 }
 
@@ -547,54 +584,51 @@ TEST_F(ConfigurationStore, LostWriteReplyIsUnknownAndOnlyFreshFeedbackCanVerify)
     ControlRouter router(true);
     router.state->lost_reply = true;
     router.state->stale = true;
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     const auto payload = submit_payload();
-    ASSERT_EQ(service.handle({"lost", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
-    ASSERT_TRUE(wait_status(service, "lost", "Unknown"));
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "lost", payload)));
+    ASSERT_TRUE(wait_status(service, *realtime, "lost", "Unknown"));
     EXPECT_EQ(router.state->writes, 1);
-    EXPECT_EQ(service.handle({"lost", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Duplicate);
+    EXPECT_TRUE(core::value_of(submit_command(*realtime, "lost", payload)).duplicate);
     for (int i = 0; i < 5; ++i) {
         service.poll();
         std::this_thread::sleep_for(10ms);
     }
-    EXPECT_EQ(command_status(service, "lost"), "Unknown");
+    EXPECT_EQ(command_status(*realtime, "lost"), "Unknown");
     EXPECT_EQ(router.state->writes, 1);
     router.state->stale = false;
-    ASSERT_TRUE(wait_status(service, "lost", "Succeeded"));
+    ASSERT_TRUE(wait_status(service, *realtime, "lost", "Succeeded"));
     EXPECT_EQ(router.state->writes, 1);
 }
 
 TEST_F(ConfigurationStore, RestartNeverReplaysExecutingCommand) {
     ControlRouter router(true, true);
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     const auto payload = submit_payload();
-    ASSERT_EQ(service.handle({"restarted", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "restarted", payload)));
+    ASSERT_TRUE(service.poll());
     sql("UPDATE ops_command SET status='Executing',sent_at_ms=1 WHERE command_id='restarted'");
     ASSERT_TRUE(service.recover());
-    EXPECT_EQ(command_status(service, "restarted"), "Unknown");
+    EXPECT_EQ(command_status(*realtime, "restarted"), "Unknown");
     router.state->raw = 23.5;
     router.release();
     service.set_accepting(true);
-    ASSERT_TRUE(wait_status(service, "restarted", "Succeeded"));
+    ASSERT_TRUE(wait_status(service, *realtime, "restarted", "Succeeded"));
     EXPECT_EQ(router.state->writes, 0);
 }
 
 TEST_F(ConfigurationStore, InvalidValuesAreRejectedBeforeWrite) {
     ControlRouter router(false, true);
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     auto payload = submit_payload();
     payload["value"] = 1000;
-    ASSERT_EQ(service.handle({"range", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "range", payload)));
     ASSERT_TRUE(service.poll());
     router.release();
-    ASSERT_TRUE(wait_status(service, "range", "Rejected"));
+    ASSERT_TRUE(wait_status(service, *realtime, "range", "Rejected"));
     EXPECT_EQ(router.state->writes, 0);
 }
 
@@ -619,43 +653,184 @@ TEST_F(ConfigurationStore, CommandQueueIsBoundedAndEveryCancellationCompletes) {
 
 TEST_F(ConfigurationStore, UnknownExecutionCommitNeverStartsPhysicalWrite) {
     ControlRouter router(false, true);
-    collect::CommandService service(database, commands, router, "station");
+    collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     const auto payload = submit_payload();
-    ASSERT_EQ(service.handle({"commit-lost", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "commit-lost", payload)));
     SqliteTestConnection::unknown_execution_commit = true;
     router.release();
-    ASSERT_TRUE(wait_status(service, "commit-lost", "Unknown"));
+    ASSERT_TRUE(wait_status(service, *realtime, "commit-lost", "Unknown"));
     SqliteTestConnection::unknown_execution_commit = false;
     EXPECT_EQ(router.state->writes, 0);
-    EXPECT_EQ(service.handle({"commit-lost", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Duplicate);
+    EXPECT_TRUE(core::value_of(submit_command(*realtime, "commit-lost", payload)).duplicate);
     EXPECT_TRUE(service.poll());
     EXPECT_EQ(router.state->writes, 0);
 }
 
-#ifdef EMS_TEST_ZEROMQ
-TEST_F(ConfigurationStore, ZmqSubmitAndQueryDriveDurableCommand) {
-    ControlRouter router;
-    collect::CommandService service(database, commands, router, "station");
+TEST_F(ConfigurationStore, RealtimeSubmissionSurvivesLostNotificationAndKeepsIndependentCommands) {
+    ControlRouter router(false, true);
+    collect::CommandService service(database, commands, router, "station", realtime);
     ASSERT_TRUE(service.recover());
     service.set_accepting(true);
-    messaging::ZmqCommandConfig config;
+    auto peer = rtdb::CommandClient::open(realtime_config, {rtdb::ScopeKind::Station, "station"},
+                                          "", context());
+    ASSERT_TRUE(core::is_ok(peer));
+    auto producer = core::value_of(peer);
+    const auto deadline = command_time() + 5000;
+    const rtdb::CommandRequest first{"independent-a", "setpoint", 48, 7, deadline};
+    const rtdb::CommandRequest second{"independent-b", "setpoint", 50, 7, deadline};
+    auto submitted = producer->submitCommand(first, context());
+    ASSERT_TRUE(core::is_ok(submitted));
+    EXPECT_FALSE(core::value_of(submitted).notification_queued);
+    EXPECT_EQ(core::value_of(realtime->readCommand(first.command_id, context())).status, "Pending");
+    EXPECT_EQ(router.state->writes, 0);
+    ASSERT_TRUE(core::is_ok(producer->submitCommand(second, context())));
+    EXPECT_EQ(core::value_of(producer->submitCommand(first, context())).duplicate, true);
+    auto changed = first;
+    changed.value = 99;
+    EXPECT_EQ(core::error_of(producer->submitCommand(changed, context())).code,
+              core::ErrorCode::Conflict);
+    ASSERT_TRUE(service.poll());
+    EXPECT_EQ(command_status(*realtime, first.command_id), "Queued");
+    EXPECT_EQ(command_status(*realtime, second.command_id), "Queued");
+    router.release();
+    ASSERT_TRUE(wait_status(service, *realtime, first.command_id, "Acked"));
+    ASSERT_TRUE(wait_status(service, *realtime, second.command_id, "Acked"));
+    EXPECT_EQ(router.state->writes, 2);
+    EXPECT_EQ(core::value_of(producer->readCommand(first.command_id, context())).status, "Acked");
+    EXPECT_EQ(core::value_of(producer->readCommand(second.command_id, context())).request.value,
+              50);
+}
+
+TEST_F(ConfigurationStore, ConcurrentRealtimeClaimsHaveOneWinner) {
+    const rtdb::CommandRequest request{"claim-once", "setpoint", 48, 7, command_time() + 5000};
+    auto submitted = realtime->submitCommand(request, context());
+    ASSERT_TRUE(core::is_ok(submitted));
+    auto record = core::value_of(submitted).record;
+    record.status = "Executing";
+    std::atomic<int> wins{0};
+    std::thread one([&] {
+        if (core::is_ok(realtime->updateCommand(record, context()))) ++wins;
+    });
+    std::thread two([&] {
+        if (core::is_ok(realtime->updateCommand(record, context()))) ++wins;
+    });
+    one.join();
+    two.join();
+    EXPECT_EQ(wins, 1);
+}
+
+#ifdef EMS_TEST_ZEROMQ
+TEST_F(ConfigurationStore, MultipleProducersNotifyAfterRealtimeCommit) {
+    ControlRouter router;
+    collect::CommandService service(database, commands, router, "station", realtime);
+    ASSERT_TRUE(service.recover());
+    service.set_accepting(true);
+    messaging::ZmqChangeConfig config;
     config.endpoint = "tcp://127.0.0.1:*";
-    messaging::ZmqCommandServer server;
-    ASSERT_TRUE(server.start(config, [&](const auto& request) { return service.handle(request); }));
-    config.endpoint = server.bound_endpoint();
-    messaging::ZmqCommandClient client(config);
+    config.publisher_bind = false;
+    messaging::ZmqChangeSubscriber subscriber;
+    std::atomic<int> received{0};
+    ASSERT_TRUE(subscriber.start(config, {"command.pending"}, [&](auto&, const auto& id) {
+        auto current = realtime->readCommand(id, context());
+        EXPECT_TRUE(core::is_ok(current));
+        if (core::is_ok(current)) {
+            service.notify(id);
+            received.fetch_or(id == "notify-one" ? 1 : 2);
+        }
+    }));
+    auto one = rtdb::CommandClient::open(realtime_config, {rtdb::ScopeKind::Station, "station"},
+                                         subscriber.bound_endpoint(), context());
+    auto two = rtdb::CommandClient::open(realtime_config, {rtdb::ScopeKind::Station, "station"},
+                                         subscriber.bound_endpoint(), context());
+    ASSERT_TRUE(core::is_ok(one));
+    ASSERT_TRUE(core::is_ok(two));
+    const auto deadline = command_time() + 5000;
+    const auto until = std::chrono::steady_clock::now() + 2s;
+    while (received != 3 && std::chrono::steady_clock::now() < until) {
+        ASSERT_TRUE(core::is_ok(core::value_of(one)->submitCommand(
+            {"notify-one", "setpoint", 48, 7, deadline}, context())));
+        ASSERT_TRUE(core::is_ok(core::value_of(two)->submitCommand(
+            {"notify-two", "setpoint", 50, 7, deadline}, context())));
+        std::this_thread::sleep_for(20ms);
+    }
+    EXPECT_EQ(received, 3);
+    EXPECT_EQ(router.state->writes, 0);
+    ASSERT_TRUE(wait_status(service, *realtime, "notify-one", "Acked"));
+    ASSERT_TRUE(wait_status(service, *realtime, "notify-two", "Acked"));
+    EXPECT_EQ(router.state->writes, 2);
+    subscriber.stop();
+}
+#endif
+
+TEST_F(ConfigurationStore, RecoveryRepairsStaleRealtimeTerminalWithoutResending) {
+    ControlRouter router;
+    collect::CommandService service(database, commands, router, "station", realtime);
+    service.set_accepting(true);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "repair-terminal", submit_payload())));
+    ASSERT_TRUE(wait_status(service, *realtime, "repair-terminal", "Acked"));
+    auto current = realtime->readCommand("repair-terminal", context());
+    ASSERT_TRUE(core::is_ok(current));
+    auto stale = core::value_of(current);
+    stale.status = "Executing";
+    stale.reason = "simulated_crash_before_realtime_update";
+    ASSERT_TRUE(core::is_ok(realtime->updateCommand(stale, context())));
+    ASSERT_TRUE(service.recover());
+    EXPECT_EQ(command_status(*realtime, "repair-terminal"), "Acked");
+    EXPECT_EQ(router.state->writes, 1);
+}
+
+TEST_F(ConfigurationStore, DurableDedupSurvivesRealtimeRecordCleanupAndPayloadConflict) {
+    ControlRouter router;
+    collect::CommandService service(database, commands, router, "station", realtime);
+    service.set_accepting(true);
     const auto payload = submit_payload();
-    EXPECT_EQ(client.send({"zmq-command", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Accepted);
-    ASSERT_TRUE(wait_status(service, "zmq-command", "Acked"));
-    const auto result = client.send({"zmq-command", R"({"op":"query"})"});
-    EXPECT_EQ(result.code, messaging::ZmqCommandReplyCode::Result);
-    EXPECT_EQ(Json::parse(result.reason)["status"], "Acked");
-    EXPECT_EQ(client.send({"zmq-command", payload.dump()}).code,
-              messaging::ZmqCommandReplyCode::Duplicate);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "durable-id", payload)));
+    ASSERT_TRUE(wait_status(service, *realtime, "durable-id", "Acked"));
+    auto opened = rtdb::RealtimeClient::open(realtime_config, context());
+    ASSERT_TRUE(core::is_ok(opened));
+    auto raw_client = std::move(std::get<0>(opened));
+    const rtdb::RecordKey key{
+        {rtdb::ScopeKind::Station, "station"}, rtdb::RecordKind::CommandState, {}, "durable-id"};
+    auto cleanup_record = [&] {
+        auto stored = raw_client->read(key, context());
+        return core::is_ok(stored) &&
+               core::is_ok(raw_client->erase({key, core::value_of(stored).revision}, context()));
+    };
+    ASSERT_TRUE(cleanup_record());
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "durable-id", payload)));
+    ASSERT_TRUE(service.poll());
+    EXPECT_EQ(command_status(*realtime, "durable-id"), "Acked");
+    EXPECT_EQ(router.state->writes, 1);
+    ASSERT_TRUE(cleanup_record());
+    auto conflicting = payload;
+    conflicting["value"] = 99;
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "durable-id", conflicting)));
+    ASSERT_TRUE(service.poll());
+    EXPECT_EQ(command_status(*realtime, "durable-id"), "Rejected");
+    EXPECT_EQ(router.state->writes, 1);
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "unrelated-id", payload)));
+    ASSERT_TRUE(wait_status(service, *realtime, "unrelated-id", "Acked"));
+    EXPECT_EQ(router.state->writes, 2);
+}
+
+TEST_F(ConfigurationStore, NotificationChecksCommandBeforeItsRotatingScanPage) {
+    ControlRouter router(false, true);
+    collect::CommandService service(database, commands, router, "station", realtime);
+    service.set_accepting(true);
+    for (int i = 0; i < 128; ++i) {
+        rtdb::CommandRecord terminal;
+        terminal.request = {"a" + std::to_string(i), "setpoint", 0, 7, command_time() + 5000};
+        terminal.updated_at_ms = command_time();
+        terminal.status = "Rejected";
+        ASSERT_TRUE(core::is_ok(realtime->updateCommand(terminal, context())));
+    }
+    ASSERT_TRUE(core::is_ok(submit_command(*realtime, "z-notified", submit_payload())));
+    service.notify("z-notified");
+    ASSERT_TRUE(service.poll());
+    EXPECT_EQ(command_status(*realtime, "z-notified"), "Queued");
+    router.release();
+    ASSERT_TRUE(wait_status(service, *realtime, "z-notified", "Acked"));
     EXPECT_EQ(router.state->writes, 1);
 }
 #endif

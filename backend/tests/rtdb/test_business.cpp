@@ -1,9 +1,11 @@
 #include <gtest/gtest.h>
 #include <rtdb/backend/shared_memory_store.h>
+#include <rtdb/client/command_client.h>
 #include <rtdb/client/realtime_client.h>
 #include <rtdb/client/rtdb_ems.h>
 #include <rtdb/client/rtdb_manager.h>
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <thread>
@@ -13,6 +15,55 @@
 namespace ems::rtdb {
 namespace {
 #ifdef EMS_REALTIME_TEST_SHM
+TEST(CommandProcess, SubmissionAndResultAreVisibleAcrossProcesses) {
+    const auto segment = std::string("command_process_") + std::getenv("EMS_TEST_RUN_ID");
+    const auto path = std::filesystem::temp_directory_path() / (segment + ".json");
+
+    struct Cleanup {
+        std::string segment;
+        std::filesystem::path path;
+
+        ~Cleanup() {
+            SharedMemoryStore::remove(segment);
+            std::error_code ignored;
+            std::filesystem::remove(path, ignored);
+        }
+    } cleanup{segment, path};
+
+    std::ofstream(path) << "{\"realtime\":{\"backend\":{\"type\":\"shm\",\"options\":{"
+                           "\"segment_name\":\""
+                        << segment
+                        << "\",\"capacity\":128,\"shard_count\":1,\"segment_bytes\":1048576}}}}";
+    const auto context = core::make_call_context(std::chrono::seconds(5));
+    auto owner = RealtimeClient::initialize(path.u8string(), context);
+    ASSERT_TRUE(core::is_ok(owner));
+    ASSERT_EXIT(
+        {
+            auto opened =
+                CommandClient::open(path.u8string(), {ScopeKind::Station, "station"}, "", context);
+            if (!core::is_ok(opened)) std::_Exit(1);
+            const auto deadline = std::chrono::duration_cast<std::chrono::milliseconds>(
+                                      std::chrono::system_clock::now().time_since_epoch())
+                                      .count() +
+                                  10000;
+            auto submitted = core::value_of(opened)->submitCommand(
+                {"cross-process", "setpoint", 42, 7, deadline}, context);
+            if (!core::is_ok(submitted)) std::_Exit(2);
+            auto record = core::value_of(submitted).record;
+            record.status = "Acked";
+            record.reason = "child_process_result";
+            std::_Exit(core::is_ok(core::value_of(opened)->updateCommand(record, context)) ? 0 : 3);
+        },
+        ::testing::ExitedWithCode(0), "");
+    auto peer = CommandClient::open(path.u8string(), {ScopeKind::Station, "station"}, "", context);
+    ASSERT_TRUE(core::is_ok(peer));
+    auto record = core::value_of(peer)->readCommand("cross-process", context);
+    ASSERT_TRUE(core::is_ok(record));
+    EXPECT_EQ(core::value_of(record).status, "Acked");
+    EXPECT_EQ(core::value_of(record).reason, "child_process_result");
+    EXPECT_DOUBLE_EQ(core::value_of(record).request.value, 42);
+}
+
 class BusinessTest : public ::testing::Test {
    protected:
     RtDbConfig config;

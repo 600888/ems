@@ -21,6 +21,7 @@ struct ZmqChangeConfig {
     std::size_t max_queue_items{1024};
     std::size_t max_message_bytes{65536};
     int high_water_mark{1024};
+    bool publisher_bind{true};  ///< false 时 PUB 连接、SUB 绑定，支持多个生产者通知同一消费者。
 };
 
 struct ZmqChangeStats {
@@ -49,7 +50,7 @@ class ZmqChangePublisher {
     ZmqChangePublisher& operator=(const ZmqChangePublisher& other) = delete;
 
     /**
-     * @brief 在工作线程上创建并绑定 PUB socket。
+     * @brief 在工作线程上创建 PUB socket，按 publisher_bind 绑定或连接。
      * @param[in] config 端点、队列和消息大小限制。
      * @return 绑定成功时为 true；失败时可修改配置后重试。
      */
@@ -99,7 +100,7 @@ class ZmqChangeSubscriber {
     ZmqChangeSubscriber& operator=(const ZmqChangeSubscriber& other) = delete;
 
     /**
-     * @brief 连接端点并订阅指定的完整主题。
+     * @brief 按 publisher_bind 连接或绑定端点并订阅指定的完整主题。
      * @param[in] config 端点、接收高水位和消息大小限制。
      * @param[in] topics 完整主题列表，不能为空。
      * @param[in] callback 在接收线程执行的回调；不得在回调内调用 stop。
@@ -107,6 +108,12 @@ class ZmqChangeSubscriber {
      */
     bool start(const ZmqChangeConfig& config, const std::vector<std::string>& topics,
                Callback callback);
+
+    /**
+     * @brief 返回本次启动实际使用的端点，支持测试时绑定动态端口。
+     * @return 已启动的实际端点；未启动或已停止时为空。
+     */
+    std::string bound_endpoint() const;
 
     /** @brief 幂等停止并等待接收线程退出。 */
     void stop() noexcept;

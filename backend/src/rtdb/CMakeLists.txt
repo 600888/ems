@@ -24,6 +24,7 @@ add_library(
     store/realtime_store.cpp
     store/store_detail.cpp
     client/realtime_client.cpp
+    client/command_client.cpp
     client/realtime_service.cpp
     client/rtdb.cpp
     client/rtdb_manager.cpp
@@ -43,6 +44,10 @@ target_include_directories(
     PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/store"
 )
 target_link_libraries(ems_rtdb PRIVATE Threads::Threads)
+if(TARGET ems_zmq_messaging)
+    target_link_libraries(ems_rtdb PRIVATE ems_zmq_messaging)
+    target_compile_definitions(ems_rtdb PRIVATE EMS_RTDB_WITH_ZEROMQ)
+endif()
 target_compile_features(ems_rtdb PUBLIC cxx_std_17)
 target_compile_definitions(ems_rtdb PRIVATE EMS_RTDB_BUILD)
 set_target_properties(

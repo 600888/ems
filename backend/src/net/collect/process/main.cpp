@@ -1,6 +1,11 @@
 #include <common/database/mysql_database.h>
 
 #include <chrono>
+#include <condition_variable>
+#include <mutex>
+#ifdef EMS_WITH_ZEROMQ
+#include <common/messaging/zmq_change_channel.h>
+#endif
 #include <csignal>
 #include <cstdint>
 #include <filesystem>
@@ -82,7 +87,7 @@ Options load_options(const std::string& file, const char* executable) {
     options.database = ems::core::value_of(database);
     options.database.require_configuration_schema = true;
     options.command_endpoint = json.value("command_endpoint", std::string{});
-    options.database.require_command_schema = !options.command_endpoint.empty();
+    options.database.require_command_schema = true;
 #if !defined(EMS_WITH_ZEROMQ)
     if (!options.command_endpoint.empty())
         throw std::invalid_argument("command_endpoint requires EMS_WITH_ZEROMQ=ON");
@@ -170,53 +175,59 @@ int main(int argc, char** argv) {
         ems::net::collect::CollectEngine engine;
         if (!engine.initialize(options.engine)) throw std::runtime_error("engine initialization");
         if (stopping) return 0;
-#if defined(EMS_WITH_ZEROMQ)
-        // 命令服务先装配再启动通道：服务端受理的北向控制需要立即有受理方。
-        std::unique_ptr<ems::net::collect::CommandService> commands;
-        ems::messaging::ZmqCommandServer command_server;
+        auto opened = ems::rtdb::CommandClient::open(
+            options.engine.rtdbConfigPath_,
+            {ems::rtdb::ScopeKind::Station, options.engine.rtdbScopeCode_},
+            options.command_endpoint, ems::core::make_call_context(std::chrono::seconds(5)));
+        if (!ems::core::is_ok(opened))
+            throw std::runtime_error("command realtime store unavailable");
+        auto command_client = ems::core::value_of(opened);
+        const auto& context = ems::core::value_of(database);
+        auto commands = std::make_unique<ems::net::collect::CommandService>(
+            context.database, context.collector_commands, engine, options.engine.rtdbScopeCode_,
+            command_client);
+        std::mutex wake_mutex;
+        std::condition_variable wake;
+        bool notified = false;
+#ifdef EMS_WITH_ZEROMQ
+        ems::messaging::ZmqChangeSubscriber command_subscriber;
         if (!options.command_endpoint.empty()) {
-            const auto& context = ems::core::value_of(database);
-            commands = std::make_unique<ems::net::collect::CommandService>(
-                context.database, context.collector_commands, engine,
-                options.engine.rtdbScopeCode_);
-            engine.set_peer_control_sink(
-                [&commands](std::int64_t channel_id,
-                            const ems::net::collect::ChannelThread::PeerControl& control,
-                            ems::net::collect::ChannelThread::PeerOutcomeHandler done) {
-                    if (!commands) {
-                        if (done) done(false, "command_service_unavailable");
-                        return;
+            ems::messaging::ZmqChangeConfig config;
+            config.endpoint = options.command_endpoint;
+            config.publisher_bind = false;
+            // 唯一消费者绑定端点；通知不携带控制载荷，只唤醒实时库补偿扫描。
+            if (!command_subscriber.start(config, {"command.pending"}, [&](auto&, const auto& id) {
+                    commands->notify(id);
+                    {
+                        std::lock_guard lock(wake_mutex);
+                        notified = true;
                     }
-                    commands->submit_peer(channel_id, control, std::move(done));
-                });
+                    wake.notify_one();
+                }))
+                throw std::runtime_error("command notification endpoint unavailable");
         }
 #endif
+        engine.set_peer_control_sink(
+            [&commands](std::int64_t channel_id,
+                        const ems::net::collect::ChannelThread::PeerControl& control,
+                        ems::net::collect::ChannelThread::PeerOutcomeHandler done) {
+                commands->submit_peer(channel_id, control, std::move(done));
+            });
         const auto started = engine.start_all(loader);
         if (started < 0 || static_cast<std::size_t>(started) != channel_count)
             throw std::runtime_error("channel startup failed");
-#if defined(EMS_WITH_ZEROMQ)
-        if (commands) {
-            ems::messaging::ZmqCommandConfig config;
-            config.endpoint = options.command_endpoint;
-            // 先独占端点再恢复，避免同端点的第二个实例改变在途记录。
-            if (!command_server.start(
-                    config, [&](const auto& request) { return commands->handle(request); }))
-                throw std::runtime_error("command endpoint unavailable");
-            if (!commands->recover()) throw std::runtime_error("command recovery failed");
-            commands->set_accepting(true);
-        }
-#endif
+        if (!commands->recover()) throw std::runtime_error("command recovery failed");
+        commands->set_accepting(true);
         LOG_INFO("ems-collector started, channels={}", started);
         std::cout << "ems-collector started, channels=" << started << std::endl;
         auto next_reload = std::chrono::steady_clock::now() + std::chrono::seconds(1);
         while (!stopping) {
-            std::this_thread::sleep_for(std::chrono::milliseconds(100));
-#if defined(EMS_WITH_ZEROMQ)
-            if (commands) {
-                if (!command_server.running()) throw std::runtime_error("command server stopped");
-                if (!commands->poll()) LOG_WARN("ems-collector command scan failed");
+            {
+                std::unique_lock lock(wake_mutex);
+                wake.wait_for(lock, std::chrono::milliseconds(100), [&] { return notified; });
+                notified = false;
             }
-#endif
+            if (!commands->poll()) LOG_WARN("ems-collector command scan/synchronization failed");
             if (std::chrono::steady_clock::now() < next_reload) continue;
             next_reload = std::chrono::steady_clock::now() + std::chrono::seconds(1);
             const auto revision = loader.config_revision();
@@ -231,22 +242,18 @@ int main(int argc, char** argv) {
                 LOG_WARN("ems-collector configuration exceeds channel limit");
                 continue;
             }
-#if defined(EMS_WITH_ZEROMQ)
-            if (commands) commands->set_accepting(false);
-#endif
+            commands->set_accepting(false);
             engine.stop_all();
             loader = std::move(candidate);
             if (engine.start_all(loader) !=
                 static_cast<int>(loader.channels().size() + loader.forwarding_channels().size()))
                 throw std::runtime_error("channel reload failed");
-#if defined(EMS_WITH_ZEROMQ)
-            if (commands) commands->set_accepting(true);
-#endif
+            commands->set_accepting(true);
             LOG_INFO("ems-collector reloaded, config_revision={}", loader.config_revision());
         }
-#if defined(EMS_WITH_ZEROMQ)
-        if (commands) commands->set_accepting(false);
-        command_server.stop();
+        commands->set_accepting(false);
+#ifdef EMS_WITH_ZEROMQ
+        command_subscriber.stop();
 #endif
         engine.shutdown();
         LOG_INFO("ems-collector stopped");

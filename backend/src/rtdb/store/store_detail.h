@@ -47,6 +47,14 @@ std::string physical_key(const RecordKey& key);
 std::optional<RecordKey> device_state_key(const Scope& scope, std::string_view physical);
 
 /**
+ * @brief 解析作用域内的命令记录物理键，排除临时键和其他作用域。
+ * @param[in] scope 命令作用域。
+ * @param[in] physical 物理存储键。
+ * @return 匹配的合法命令键；不匹配时为空。
+ */
+std::optional<RecordKey> command_state_key(const Scope& scope, std::string_view physical);
+
+/**
  * @brief 为同一逻辑记录生成 Redis 哈希标签。
  * @param[in] key 逻辑记录键。
  * @return 包含作用域标识的 Redis 哈希标签。

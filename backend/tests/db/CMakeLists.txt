@@ -11,6 +11,9 @@ target_link_libraries(
 target_compile_definitions(
     test_point_table_db PRIVATE EMS_CONFIG_SCHEMA_FILE="${CMAKE_CURRENT_SOURCE_DIR}/../web/schema.sql"
 )
+if(EMS_REALTIME_WITH_SHM)
+    target_compile_definitions(test_point_table_db PRIVATE EMS_TEST_SHM)
+endif()
 if(EMS_WITH_ZEROMQ)
     target_compile_definitions(test_point_table_db PRIVATE EMS_TEST_ZEROMQ)
 endif()

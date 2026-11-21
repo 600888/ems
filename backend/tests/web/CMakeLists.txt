@@ -18,6 +18,9 @@ target_compile_definitions(
                      EMS_WEB_SCHEMA_FILE="${CMAKE_CURRENT_SOURCE_DIR}/schema.sql"
                      EMS_IDENTITY_SCHEMA_FILE="${CMAKE_CURRENT_SOURCE_DIR}/identity_schema.sql"
 )
+if(EMS_REALTIME_WITH_SHM)
+    target_compile_definitions(test_web PRIVATE EMS_TEST_SHM)
+endif()
 if(EMS_WITH_ZEROMQ)
     target_compile_definitions(test_web PRIVATE EMS_TEST_ZEROMQ)
 endif()

@@ -150,6 +150,11 @@ Result<WriteReceipt> RealtimeClient::compareExchange(const WriteRequest& request
     return impl_->store->compareExchange(request, ctx);
 }
 
+Result<std::vector<RecordKey>> RealtimeClient::listCommandStates(const Scope& scope,
+                                                                 const CallContext& ctx) {
+    return impl_->store->listCommandStates(scope, ctx);
+}
+
 Result<EraseReceipt> RealtimeClient::erase(const EraseRequest& request, const CallContext& ctx) {
     return impl_->store->erase(request, ctx);
 }

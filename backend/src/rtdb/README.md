@@ -34,6 +34,21 @@ backend/tests/rtdb/           后端、业务、采集分发器、安装包消�
 `rtdb` 构建名称仅为 `ems_rtdb` 的别名，不再生成第二个静态数据库库。
 原 realtime 公共头路径和命名空间已统一为 rtdb，调用方须重新编译。
 
+## 控制命令接口
+
+`<rtdb/client/command_client.h>` 提供 `CommandClient::open`、`submitCommand`、
+`readCommand`、`requestVerification`、`listCommands` 和执行者用的 `updateCommand`。
+调用方先将命令目标、值、期限和站根 `config_revision` 写入独立 `CommandState` 记录，
+再由库内部异步发布 `command.pending` 提示；通知正文只有命令 ID。
+每个 ID 独立保存，命令目标不可修改，revision 用于 CAS 认领，实测值继续由采集更新。
+
+Web、命令行、北向控制均使用这一入口，采集进程不再开放命令 REQ/REP 端点。
+采集侧接到提示后从实时库读取，并以有界扫描补偿丢通知；执行前保留 MySQL 条件登记，
+执行结果同步写回实时库，失败时重试补同步，重启后的未决动作只核验、不盲目重发。
+`Pending` 只保证实时库已写入，采集侧登记后才有持久记录；共享内存整体丢失可能丢掉
+尚未登记的 Pending。实时库容量耗尽时明确拒绝新提交，当前不自动清理命令记录。
+完整部署、命令行参数和故障边界见 `website/docs/processes/collector/commands.md`。
+
 ## 构建与安装
 
 需要 CMake 3.21+、C++17 编译器、仓库内 redis-plus-plus、系统安装的 Boost 1.83+ 头文件，

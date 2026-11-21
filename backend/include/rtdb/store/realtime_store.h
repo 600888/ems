@@ -47,7 +47,7 @@ struct Scope {
     std::string code;
 };
 
-/// 记录种类：测点 / 设备状态 / 通道状态 / 命令状态投影
+/// 记录种类：测点 / 设备状态 / 通道状态 / 独立命令目标与执行状态
 enum class RecordKind { Point, DeviceState, ChannelState, CommandState };
 
 /// 逻辑身份：作用域 + 种类 + 设备路径 + 资源 code（不传 Redis 原始键/共享段 offset）
@@ -156,6 +156,17 @@ class IRealtimeStore {
      */
     virtual Result<std::vector<RecordKey>> listDeviceStates(const Scope& scope,
                                                             const CallContext& ctx) {
+        return Error{ErrorCode::Unsupported, WriteEffect::NotApplicable, "enumeration unsupported"};
+    }
+
+    /**
+     * @brief 枚举作用域内独立命令记录，供丢通知后的补偿扫描。
+     * @param[in] scope 命令作用域。
+     * @param[in] ctx 扫描期限。
+     * @return 至多 65536 个键；不保证并发快照，超限返回错误。
+     */
+    virtual Result<std::vector<RecordKey>> listCommandStates(const Scope& scope,
+                                                             const CallContext& ctx) {
         return Error{ErrorCode::Unsupported, WriteEffect::NotApplicable, "enumeration unsupported"};
     }
 

@@ -75,7 +75,9 @@ bool ZmqChangePublisher::start(const ZmqChangeConfig& config) {
         bool ok =
             socket && zmq_setsockopt(socket, ZMQ_LINGER, &linger, sizeof(linger)) == 0 &&
             zmq_setsockopt(socket, ZMQ_SNDHWM, &high_water_mark, sizeof(high_water_mark)) == 0 &&
-            zmq_bind(socket, state->config.endpoint.c_str()) == 0;
+            (state->config.publisher_bind
+                 ? zmq_bind(socket, state->config.endpoint.c_str())
+                 : zmq_connect(socket, state->config.endpoint.c_str())) == 0;
         if (!ok) {
             close_socket(socket, context);
             signal.set_value(false);
@@ -149,6 +151,7 @@ void ZmqChangePublisher::stop() noexcept {
 struct ZmqChangeSubscriber::Impl {
     std::atomic<bool> stopping{false};
     std::thread worker;
+    std::string endpoint;
 };
 
 ZmqChangeSubscriber::ZmqChangeSubscriber() : impl_(std::make_unique<Impl>()) {}
@@ -163,7 +166,7 @@ bool ZmqChangeSubscriber::start(const ZmqChangeConfig& config,
         if (!valid_topic(topic)) return false;
 
     impl_->stopping = false;
-    std::promise<bool> initialized;
+    std::promise<std::string> initialized;
     auto future = initialized.get_future();
     impl_->worker =
         std::thread([state = impl_.get(), config, topics, callback = std::move(callback),
@@ -189,13 +192,22 @@ bool ZmqChangeSubscriber::start(const ZmqChangeConfig& config,
                     }
                 }
             }
-            if (ok) ok = zmq_connect(socket, config.endpoint.c_str()) == 0;
+            if (ok)
+                ok = (config.publisher_bind ? zmq_connect(socket, config.endpoint.c_str())
+                                            : zmq_bind(socket, config.endpoint.c_str())) == 0;
             if (!ok) {
                 close_socket(socket, context);
-                signal.set_value(false);
+                signal.set_value({});
                 return;
             }
-            signal.set_value(true);
+            char endpoint[1024];
+            std::size_t endpoint_size = sizeof(endpoint);
+            if (zmq_getsockopt(socket, ZMQ_LAST_ENDPOINT, endpoint, &endpoint_size) != 0) {
+                close_socket(socket, context);
+                signal.set_value({});
+                return;
+            }
+            signal.set_value(std::string(endpoint));
 
             while (!state->stopping) {
                 zmq_msg_t message;
@@ -224,7 +236,8 @@ bool ZmqChangeSubscriber::start(const ZmqChangeConfig& config,
             }
             close_socket(socket, context);
         });
-    if (!future.get()) {
+    impl_->endpoint = future.get();
+    if (impl_->endpoint.empty()) {
         impl_->worker.join();
         return false;
     }
@@ -234,6 +247,9 @@ bool ZmqChangeSubscriber::start(const ZmqChangeConfig& config,
 void ZmqChangeSubscriber::stop() noexcept {
     impl_->stopping = true;
     if (impl_->worker.joinable()) impl_->worker.join();
+    impl_->endpoint.clear();
 }
+
+std::string ZmqChangeSubscriber::bound_endpoint() const { return impl_->endpoint; }
 
 }  // namespace ems::messaging

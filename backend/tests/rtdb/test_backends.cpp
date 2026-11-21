@@ -158,6 +158,29 @@ TEST_P(BackendContract, ConcurrentCASHasOneWinner) {
     EXPECT_EQ(conflicts, 7);
 }
 
+TEST_P(BackendContract, CommandEnumerationIsIndependentAndScoped) {
+    RecordKey first{{ScopeKind::Station, scope}, RecordKind::CommandState, {}, "cmd-one"};
+    auto second = first;
+    second.name = "cmd-two";
+    auto other = first;
+    other.scope.kind = ScopeKind::Unit;
+    const auto one = take(store->compareExchange({first, {{"status", "Pending"}}, {}}, ctx()));
+    const auto two = take(store->compareExchange({second, {{"status", "Acked"}}, {}}, ctx()));
+    const auto unrelated = take(store->compareExchange({other, {}, {}}, ctx()));
+    auto keys = take(peer->listCommandStates(first.scope, ctx()));
+    ASSERT_EQ(keys.size(), 2u);
+    EXPECT_NE(keys[0].name, keys[1].name);
+    for (const auto& item : keys) {
+        EXPECT_EQ(item.kind, RecordKind::CommandState);
+        EXPECT_EQ(item.scope.kind, ScopeKind::Station);
+        EXPECT_EQ(item.scope.code, scope);
+        EXPECT_TRUE(item.device_path.empty());
+    }
+    take(store->erase({first, one.revision}, ctx()));
+    take(store->erase({second, two.revision}, ctx()));
+    take(store->erase({other, unrelated.revision}, ctx()));
+}
+
 TEST_P(BackendContract, InputLimitsDeadlineAndClose) {
     expect_error(store->compareExchange({k(), {{"_store_revision", "forged"}}, {}}, ctx()),
                  ErrorCode::InvalidArgument, WriteEffect::NotApplied);

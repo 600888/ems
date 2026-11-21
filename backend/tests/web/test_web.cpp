@@ -1,7 +1,7 @@
 #include <common/core/time.h>
 #include <common/database/configuration/device_management_validation.h>
 #ifdef EMS_TEST_ZEROMQ
-#include <common/messaging/zmq_command_channel.h>
+#include <rtdb/client/command_client.h>
 #endif
 #include <drogon/drogon.h>
 #include <gtest/gtest.h>
@@ -548,7 +548,7 @@ TEST_F(WebDevice, FieldStationPackageCreatesFourPcsFourBmsAndFortyEightRacks) {
     EXPECT_EQ(total, 15617);
 }
 
-#ifdef EMS_TEST_ZEROMQ
+#ifdef EMS_TEST_SHM
 TEST_F(WebDevice, CommandsUseThreeSecondDeadlineAndKeepClientDeadline) {
     bind_protocol("modbus");
     execute(
@@ -566,18 +566,29 @@ TEST_F(WebDevice, CommandsUseThreeSecondDeadlineAndKeepClientDeadline) {
            {"enabled", true},
            {"address", {{"space", "holding_register"}, {"offset", 50}, {"register_count", 2}}}}}});
     sql("UPDATE cfg_device SET enabled=1 WHERE device_id='hvac01'");
-    messaging::ZmqCommandConfig config;
-    config.endpoint = "tcp://127.0.0.1:*";
-    messaging::ZmqCommandServer server;
-    std::mutex mutex;
-    std::vector<Json> payloads;
-    ASSERT_TRUE(server.start(config, [&](const auto& request) {
-        std::lock_guard lock(mutex);
-        payloads.push_back(Json::parse(request.payload_json));
-        return messaging::ZmqCommandReply{messaging::ZmqCommandReplyCode::Accepted, ""};
-    }));
+    const auto realtime_config = (directory / "realtime.json").u8string();
+    const auto segment = "web_command_" + random_token().substr(0, 32);
+    std::ofstream(std::filesystem::u8path(realtime_config))
+        << Json{{"realtime",
+                 {{"backend",
+                   {{"type", "shm"},
+                    {"options", {{"segment_name", segment}, {"segment_bytes", 1048576}}}}}}}}
+               .dump();
+
+    struct Cleanup {
+        std::string path;
+
+        ~Cleanup() {
+            rtdb::RealtimeClient::cleanup(path, core::make_call_context(std::chrono::seconds(2)));
+        }
+    } cleanup{realtime_config};
+
+    auto owner = rtdb::RealtimeClient::initialize(realtime_config, context());
+    ASSERT_TRUE(core::is_ok(owner)) << core::error_of(owner).message;
+
     RuntimeOptions options;
-    options.command_endpoint = server.bound_endpoint();
+    options.realtime_config = realtime_config;
+    options.scope_code = "station";
     RuntimeService control(db, options);
     Json body = {{"device_id", "hvac01"}, {"point_type", "yt"}, {"point_id", "setpoint"},
                  {"value", 42},           {"reason", "test"},   {"intent_id", "deadline-a"}};
@@ -590,12 +601,28 @@ TEST_F(WebDevice, CommandsUseThreeSecondDeadlineAndKeepClientDeadline) {
     control.execute("/api/commands/submit", body, actor, context());
     body["expires_at_ms"] = after + 60000;
     EXPECT_THROW(control.execute("/api/commands/submit", body, actor, context()), ApiError);
-    server.stop();
-    ASSERT_EQ(payloads.size(), 2u);
-    const auto default_deadline = payloads[0].at("expires_at_ms").get<std::int64_t>();
+    auto reader = rtdb::CommandClient::open(realtime_config, {rtdb::ScopeKind::Station, "station"},
+                                            "", context());
+    ASSERT_TRUE(core::is_ok(reader));
+    auto first = core::value_of(reader)->readCommand("deadline-a", context());
+    auto second = core::value_of(reader)->readCommand("deadline-b", context());
+    ASSERT_TRUE(core::is_ok(first));
+    ASSERT_TRUE(core::is_ok(second));
+    const auto default_deadline = core::value_of(first).request.expires_at_ms;
     EXPECT_GE(default_deadline, before + 3000);
     EXPECT_LE(default_deadline, after + 3000);
-    EXPECT_EQ(payloads[1].at("expires_at_ms"), deadline);
+    EXPECT_EQ(core::value_of(second).request.expires_at_ms, deadline);
+    EXPECT_EQ(core::value_of(first).status, "Pending");
+    const auto query =
+        control.execute("/api/commands/query",
+                        {{"device_id", "hvac01"}, {"intent_id", "deadline-a"}}, actor, context());
+    EXPECT_EQ(query.data.at("status"), "Pending");
+    auto denied = actor;
+    denied.permissions = {"monitor.read"};
+    EXPECT_THROW(
+        control.execute("/api/commands/query",
+                        {{"device_id", "hvac01"}, {"intent_id", "deadline-a"}}, denied, context()),
+        ApiError);
 }
 #endif
 

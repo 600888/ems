@@ -1,7 +1,7 @@
 #pragma once
 
 #include <common/database/collector_commands.h>
-#include <common/messaging/zmq_command_channel.h>
+#include <rtdb/client/command_client.h>
 
 #include <atomic>
 #include <deque>
@@ -14,7 +14,7 @@
 
 namespace ems::net::collect {
 
-/** @brief 通用关系数据库上的命令 inbox、执行登记与结果查询，不依赖具体数据库驱动。 */
+/** @brief 从实时库认领控制命令，以关系数据库保留执行登记与重启对账。 */
 class CommandService {
    public:
     /**
@@ -23,10 +23,12 @@ class CommandService {
      * @param[in] repository 同一事务域的命令仓储。
      * @param[in,out] engine 命令所属采集引擎。
      * @param[in] scope 稳定采集作用域，每个作用域只部署一个命令执行实例。
+     * @param[in] realtime 同一作用域的实时库命令接口，须比全部在途任务存活更久。
      */
     CommandService(std::shared_ptr<database::IDatabase> database,
                    std::shared_ptr<database::ICollectorCommandRepository> repository,
-                   CommandRouter& engine, std::string scope);
+                   CommandRouter& engine, std::string scope,
+                   std::shared_ptr<rtdb::CommandClient> realtime);
     /** @brief 禁止后续入队；已发任务由通道线程收尾。 */
     ~CommandService();
     /** @brief 禁止复制服务及其受理开关。
@@ -40,26 +42,25 @@ class CommandService {
     CommandService& operator=(const CommandService& other) = delete;
 
     /**
-     * @brief 启动时把旧 Executing 记录变为 Unknown，绝不自动重发。
+     * @brief 启动时同步持久未决和既有实时记录，把旧 Executing 变为 Unknown，不重发。
      * @return 数据库记录成功扫描并收敛时为 true，失败时不得开放入口。
      */
     bool recover();
 
     /**
-     * @brief 校验并持久受理 submit，或处理 query/verify；不等待设备执行。
-     * @param[in] request 稳定 ID 和业务 JSON；同 ID 异载荷拒绝。
-     * @return 受理状态；Result/Accepted/Duplicate 的 reason 包含结果 JSON。
-     */
-    messaging::ZmqCommandReply handle(const messaging::ZmqCommandRequest& request);
-
-    /**
-     * @brief 分页调度持久待发命令及只读反馈核验；由主循环串行调用。
-     * @return 本次数据库扫描成功时为 true。
+     * @brief 扫描实时库命令、补同步持久结果并分页调度；由主循环串行调用。
+     * @return 实时库和数据库扫描及补同步成功时为 true。
      */
     bool poll();
 
     /**
-     * @brief 热加载/停机前暂停新命令；查询仍可用。
+     * @brief 订阅线程登记待检查的命令 ID；提示可重复或丢失，不在此处执行或读取载荷。
+     * @param[in] command_id 通知中的稳定命令 ID；非法或队列满时忽略，由扫描补偿。
+     */
+    void notify(const std::string& command_id);
+
+    /**
+     * @brief 热加载/停机前暂停命令调度与发送；生产者仍可写入实时库等待恢复。
      * @param[in] accepting true 恢复受理，false 暂停受理及物理发送。
      */
     void set_accepting(bool accepting);
@@ -114,11 +115,21 @@ class CommandService {
      */
     bool schedule(const database::CollectorCommandRow& row, bool verify);
 
+    /**
+     * @brief 将实时库中的 Pending 命令登记为持久待发记录，不执行设备 I/O。
+     * @param[in] command 从实时库读取的完整命令。
+     * @return 登记及状态同步成功时为 true。
+     */
+    bool ingest(const rtdb::CommandRecord& command);
+
     std::shared_ptr<Journal> journal_;
     std::shared_ptr<Active> active_{std::make_shared<Active>()};
     std::shared_ptr<std::atomic<bool>> accepting_{std::make_shared<std::atomic<bool>>(false)};
     CommandRouter& engine_;
     std::int64_t cursor_{0};
+    std::size_t realtime_cursor_{0};
+    std::mutex hint_mutex_;
+    std::set<std::string> hints_;
 
     // 北向控制：通道线程只入队，poll 线程受理。
     std::mutex peer_mutex_;

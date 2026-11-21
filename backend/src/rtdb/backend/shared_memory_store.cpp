@@ -234,6 +234,30 @@ Result<std::vector<RecordKey>> SharedMemoryStore::listDeviceStates(const Scope& 
     }
 }
 
+Result<std::vector<RecordKey>> SharedMemoryStore::listCommandStates(const Scope& scope,
+                                                                    const CallContext& ctx) {
+    constexpr auto effect = WriteEffect::NotApplicable;
+    if (!validate_record_key({scope, RecordKind::CommandState, {}, "probe"}).empty())
+        return error(ErrorCode::InvalidArgument, effect, "invalid scope");
+    try {
+        auto guard = impl_->lock(ctx, effect);
+        if (!core::is_ok(guard)) return core::error_of(guard);
+        std::vector<RecordKey> out;
+        for (const auto& item : *impl_->records) {
+            if (core::has_expired(ctx))
+                return error(ErrorCode::DeadlineExceeded, effect, "enumeration deadline exceeded");
+            auto key = command_state_key(scope, {item.first.data(), item.first.size()});
+            if (!key) continue;
+            if (out.size() == 65536)
+                return error(ErrorCode::ResourceExhausted, effect, "enumeration limit exceeded");
+            out.push_back(std::move(*key));
+        }
+        return out;
+    } catch (const bip::interprocess_exception& e) {
+        return boost_error(e, effect);
+    }
+}
+
 Result<WriteReceipt> SharedMemoryStore::compareExchange(const WriteRequest& req,
                                                         const CallContext& ctx) {
     constexpr auto effect = WriteEffect::NotApplied;

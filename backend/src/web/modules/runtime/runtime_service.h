@@ -1,10 +1,11 @@
 #pragma once
 
+#include <rtdb/client/command_client.h>
+
 #include <functional>
 
 #include "web/modules/device/application/device_service.h"
 #include "web/modules/history/history_service.h"
-#include "web/modules/runtime/command_submitter.h"
 
 namespace ems::web {
 
@@ -12,7 +13,7 @@ struct RuntimeOptions {
     std::string realtime_config;
     std::string scope_code{"station001"};
     std::string timeseries_config;
-    /// 采集侧命令通道端点（如 tcp://127.0.0.1:5558）；为空时遥控遥调提交不可用。
+    /// 命令就绪提示端点；空串时依靠采集侧扫描，命令目标和结果始终读写实时库。
     std::string command_endpoint;
 };
 
@@ -23,7 +24,7 @@ class RuntimeService {
     using ReadHistory = HistoryService::Reader;
 
     /**
-     * @brief 装配真实实时库和时序查询入口；测试可注入实时读者。
+     * @brief 装配实时库命令、测点与历史查询入口；测试可注入测点读者。
      * @param[in] database 共享数据库上下文。
      * @param[in] options 实时库部署配置。
      * @param[in] reader 可选实时读取函数，不持有设备执行权限。
@@ -47,6 +48,6 @@ class RuntimeService {
     RuntimeOptions options_;
     ReadPoint reader_;
     ReadHistory history_reader_;
-    CommandSubmitter command_submitter_;
+    std::shared_ptr<rtdb::CommandClient> command_client_;
 };
 }  // namespace ems::web

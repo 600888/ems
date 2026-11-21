@@ -67,6 +67,15 @@ class EMS_RTDB_API SharedMemoryStore final : public RealtimeStoreBase {
                                                     const CallContext& ctx) override;
 
     /**
+     * @brief 在段级锁内枚举指定作用域的独立命令记录。
+     * @param[in] scope 命令作用域。
+     * @param[in] ctx 扫描期限。
+     * @return 至多 65536 个键或明确错误。
+     */
+    Result<std::vector<RecordKey>> listCommandStates(const Scope& scope,
+                                                     const CallContext& ctx) override;
+
+    /**
      * @copydoc IRealtimeStore::compareExchange
      * @param[in] request 带预期修订号的写入请求。
      * @param[in] ctx 调用上下文，包含截止时间。

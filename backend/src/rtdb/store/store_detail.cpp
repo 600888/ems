@@ -118,6 +118,14 @@ std::uint64_t hash(std::string_view s) {
     return h;
 }
 
+std::optional<RecordKey> command_state_key(const Scope& scope, std::string_view physical) {
+    RecordKey key{scope, RecordKind::CommandState, {}, {}};
+    const auto prefix = "ems:" + hash_tag(key) + ":command:";
+    if (physical.substr(0, prefix.size()) != prefix) return std::nullopt;
+    key.name = std::string(physical.substr(prefix.size()));
+    return validate_record_key(key).empty() ? std::optional<RecordKey>{key} : std::nullopt;
+}
+
 std::uint32_t checksum(std::string_view s) {
     std::uint32_t crc = ~0u;
     for (unsigned char c : s) {

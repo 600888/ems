@@ -11,11 +11,6 @@
 
 namespace ems::web {
 namespace {
-std::string command_reason(const messaging::ZmqCommandReply& reply) {
-    const auto result = Json::parse(reply.reason, nullptr, false);
-    return result.is_object() ? result.value("reason", reply.reason) : reply.reason;
-}
-
 Json point_sample(const Json& point, const std::string& kind,
                   const RuntimeService::ReadPoint& reader, const core::CallContext& ctx,
                   bool device_enabled, int default_stale_ms) {
@@ -53,16 +48,12 @@ RuntimeService::RuntimeService(database::MySqlDatabaseContext database, RuntimeO
       options_(std::move(options)),
       reader_(std::move(reader)),
       history_reader_(std::move(history_reader)) {
-#if defined(EMS_WITH_ZEROMQ)
-    // 每次提交使用独立 REQ socket，可从业务线程池并发调用。
-    if (!options_.command_endpoint.empty()) {
-        auto config = std::make_shared<messaging::ZmqCommandConfig>();
-        config->endpoint = options_.command_endpoint;
-        command_submitter_ = [config](const messaging::ZmqCommandRequest& request) {
-            return messaging::ZmqCommandClient(*config).send(request);
-        };
+    if (!options_.realtime_config.empty()) {
+        auto opened = rtdb::CommandClient::open(
+            options_.realtime_config, {rtdb::ScopeKind::Station, options_.scope_code},
+            options_.command_endpoint, core::make_call_context(std::chrono::seconds(2)));
+        if (core::is_ok(opened)) command_client_ = core::value_of(opened);
     }
-#endif
 }
 
 DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
@@ -98,6 +89,14 @@ DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
             .execute(body, actor, ctx);
     DeviceRequest request(database_, actor, ctx, false);
     const auto owner = request.device(text(body, "device_id"));
+    auto commands = [&] {
+        if (command_client_) return command_client_;
+        auto opened = rtdb::CommandClient::open(options_.realtime_config,
+                                                {rtdb::ScopeKind::Station, options_.scope_code},
+                                                options_.command_endpoint, ctx);
+        if (!core::is_ok(opened)) fail(core::error_of(opened));
+        return core::value_of(opened);
+    };
     if (path == "/api/commands/submit") {
         fields(body, {"device_id", "point_id", "point_type", "value", "reason", "intent_id",
                       "expires_at_ms"});
@@ -112,55 +111,33 @@ DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
         const auto& intent = text(body, "intent_id", 128);
         if (!body.at("value").is_number() || !std::isfinite(body.at("value").get<double>()))
             throw ApiError(422, "InvalidArgument", "command_value");
-        if (!command_submitter_)
-            throw ApiError(503, "NotReady", "control_service_unavailable", "NotApplied");
         const auto now = core::now_utc_micros() / 1000;
         if (body.contains("expires_at_ms") && !body.at("expires_at_ms").is_number_integer())
             throw ApiError(422, "InvalidArgument", "invalid_command_deadline");
         const auto expires_at = body.value("expires_at_ms", now + 3000);
         if (expires_at <= 0 || expires_at > now + 3000)
             throw ApiError(422, "InvalidArgument", "invalid_command_deadline");
-        // 采集侧命令契约：载荷仅允许 op/point_id/value/config_revision/expires_at_ms。
-        const Json payload = {{"op", "submit"},
-                              {"point_id", point.at("point_id")},
-                              {"value", body.at("value")},
-                              {"config_revision", request.station.at("config_revision")},
-                              {"expires_at_ms", expires_at}};
-        const auto reply = command_submitter_({intent, payload.dump()});
-        using Code = messaging::ZmqCommandReplyCode;
-        if (reply.code == Code::Accepted || reply.code == Code::Duplicate ||
-            reply.code == Code::Unknown) {
-            // Duplicate 表示同 ID 已登记；Unknown 表示不能确认登记，调用方用同一 ID 对账查询。
-            return {{{"intent_id", intent}, {"status", "accepted"}}, Json::object(), 202};
-        }
-        if (reply.code == Code::Rejected)
-            throw ApiError(409, "Conflict", "command_rejected", "NotApplied",
-                           Json::array({{{"reason", command_reason(reply)}}}));
-        if (reply.code == Code::Invalid)
-            throw ApiError(422, "InvalidArgument", "command_invalid", "NotApplied",
-                           Json::array({{{"reason", command_reason(reply)}}}));
-        throw ApiError(503, "NotReady", "collector_not_ready", "NotApplied");
+        auto submitted = commands()->submitCommand(
+            {intent, point.at("point_id").get<std::string>(), body.at("value").get<double>(),
+             request.station.at("config_revision").get<std::int64_t>(), expires_at},
+            ctx);
+        if (!core::is_ok(submitted)) fail(core::error_of(submitted));
+        return {{{"intent_id", intent}, {"status", "accepted"}}, Json::object(), 202};
     }
     if (path == "/api/commands/query") {
         fields(body, {"device_id", "intent_id"});
         if (!request.principal.permissions.count("command.yk") &&
-            !request.principal.permissions.count("command.yt"))
+            !request.principal.permissions.count("command.yt") &&
+            !request.principal.permissions.count("*"))
             throw ApiError(403, "PermissionDenied", "command_read_denied");
         const auto& intent = text(body, "intent_id", 128);
-        if (!command_submitter_)
-            throw ApiError(503, "NotReady", "control_service_unavailable", "NotApplicable");
-        const auto reply = command_submitter_({intent, R"({"op":"query"})"});
-        using Code = messaging::ZmqCommandReplyCode;
-        if (reply.code == Code::Rejected)
-            throw ApiError(404, "NotFound", "intent_not_found", "NotApplicable");
-        if (reply.code == Code::RetryLater)
-            throw ApiError(503, "NotReady", "collector_not_ready", "NotApplicable");
-        if (reply.code == Code::Unknown)
-            throw ApiError(503, "NotReady", "collector_unreachable", "Unknown");
-        auto row = Json::parse(reply.reason, nullptr, false);
-        if (reply.code != Code::Result || row.is_discarded() || !row.is_object() ||
-            !row.contains("status"))
-            throw ApiError(503, "NotReady", "control_result_corrupt", "NotApplicable");
+        auto read = commands()->readCommand(intent, ctx);
+        if (!core::is_ok(read)) fail(core::error_of(read));
+        const auto& record = core::value_of(read);
+        const auto row = Json{{"point_id", record.request.point_id},
+                              {"status", record.status},
+                              {"reason", record.reason},
+                              {"updated_at_ms", record.updated_at_ms}};
         // 命令所属点必须属于请求可见的设备，避免越权探测其他设备的意图。
         const auto point_id = row.value("point_id", "");
         bool owned = false;
@@ -176,7 +153,7 @@ DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
         }
         if (!owned) throw ApiError(404, "NotFound", "intent_not_found", "NotApplicable");
         return {
-            {// 终态：Succeeded/Failed/Expired/Rejected；中间态：Queued/Executing/Acked/Unknown。
+            {// 终态：Succeeded/Failed/Expired/Rejected；中间态：Pending/Queued/Executing/Acked/Unknown。
              {"intent_id", intent},
              {"status", row.at("status")},
              {"reason", row.value("reason", "")},

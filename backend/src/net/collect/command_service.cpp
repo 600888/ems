@@ -9,8 +9,6 @@ namespace ems::net::collect {
 namespace {
 using Json = nlohmann::json;
 using Row = database::CollectorCommandRow;
-using Reply = messaging::ZmqCommandReply;
-using Code = messaging::ZmqCommandReplyCode;
 
 std::int64_t utc_ms() {
     return std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -18,30 +16,23 @@ std::int64_t utc_ms() {
         .count();
 }
 
-Json result_json(const Row& row) {
-    return {{"command_id", row.command_id},
-            {"point_id", row.point_id},
-            {"config_revision", row.config_revision},
-            {"status", row.status},
-            {"reason", row.reason},
-            {"sent_at_ms", row.sent_at_ms},
-            {"updated_at_ms", row.updated_at_ms}};
-}
-
-bool valid_id(const std::string& id) {
-    if (id.empty() || id.size() > 128) return false;
-    for (const unsigned char ch : id)
-        if (!((ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') || (ch >= '0' && ch <= '9') ||
-              ch == '-' || ch == '_'))
-            return false;
-    return true;
-}
 }  // namespace
 
 struct CommandService::Journal {
     std::shared_ptr<database::IDatabase> database;
     std::shared_ptr<database::ICollectorCommandRepository> repository;
     std::string scope;
+    std::shared_ptr<rtdb::CommandClient> realtime;
+    std::mutex sync_mutex;
+    std::set<std::string> dirty;
+
+    Journal(std::shared_ptr<database::IDatabase> db,
+            std::shared_ptr<database::ICollectorCommandRepository> repo, std::string scope_code,
+            std::shared_ptr<rtdb::CommandClient> client)
+        : database(std::move(db)),
+          repository(std::move(repo)),
+          scope(std::move(scope_code)),
+          realtime(std::move(client)) {}
 
     template <class T, class Op>
     core::Result<T> transaction(Op op) {
@@ -66,9 +57,75 @@ struct CommandService::Journal {
             [&](auto& tx, const auto& ctx) { return repository->pending(tx, scope, after, ctx); });
     }
 
+    // 持久事实优先：串行刷新当前数据库行，防止迟到的回调覆盖较新的实时状态。
+    bool sync_locked(const std::string& id) {
+        auto found = get(id);
+        if (!core::is_ok(found) || !core::value_of(found)) return false;
+        const auto& row = *core::value_of(found);
+        const auto ctx = core::make_call_context(std::chrono::seconds(2));
+        for (int attempt = 0; attempt < 4; ++attempt) {
+            auto current = realtime->readCommand(id, ctx);
+            rtdb::CommandRecord record;
+            if (core::is_ok(current)) {
+                record = core::value_of(current);
+                if (record.request.point_id != row.point_id || record.request.value != row.value ||
+                    record.request.config_revision != row.config_revision ||
+                    record.request.expires_at_ms != row.expires_at_ms) {
+                    // 共享段清理后仍须服从持久去重，不能让重用的 ID 改变原动作。
+                    if (record.status == "Rejected" &&
+                        record.reason == "command_id_payload_conflict")
+                        return true;
+                    record.status = "Rejected";
+                    record.reason = "command_id_payload_conflict";
+                    record.updated_at_ms = utc_ms();
+                    auto rejected = realtime->updateCommand(record, ctx);
+                    if (core::is_ok(rejected)) return true;
+                    if (core::error_of(rejected).code == core::ErrorCode::Conflict) continue;
+                    return false;
+                }
+            } else if (core::error_of(current).code != core::ErrorCode::NotFound) {
+                return false;
+            }
+            record.request = {row.command_id, row.point_id, row.value, row.config_revision,
+                              row.expires_at_ms};
+            if (record.status == row.status && record.reason == row.reason &&
+                record.sent_at_ms == row.sent_at_ms && record.updated_at_ms == row.updated_at_ms &&
+                !record.revision.empty())
+                return true;
+            record.status = row.status;
+            record.reason = row.reason;
+            record.sent_at_ms = row.sent_at_ms;
+            record.updated_at_ms = row.updated_at_ms;
+            auto updated = realtime->updateCommand(record, ctx);
+            if (core::is_ok(updated)) return true;
+            if (core::error_of(updated).code != core::ErrorCode::Conflict) return false;
+        }
+        return false;
+    }
+
+    bool sync(const std::string& id) {
+        std::lock_guard lock(sync_mutex);
+        dirty.insert(id);
+        if (!sync_locked(id)) return false;
+        dirty.erase(id);
+        return true;
+    }
+
+    bool flush() {
+        std::lock_guard lock(sync_mutex);
+        std::size_t remaining = 128;
+        for (auto it = dirty.begin(); it != dirty.end() && remaining--;) {
+            if (!sync_locked(*it)) return false;
+            it = dirty.erase(it);
+        }
+        return dirty.empty();
+    }
+
     core::Result<bool> change(const std::string& id, const std::string& expected,
                               const PointCommandResult& result, bool mark_send = false) {
-        return transaction<bool>([&](auto& tx, const auto& ctx) -> core::Result<bool> {
+        std::lock_guard lock(sync_mutex);
+        dirty.insert(id);
+        auto changed = transaction<bool>([&](auto& tx, const auto& ctx) -> core::Result<bool> {
             auto existing = repository->find(tx, scope, id, true, ctx);
             if (!core::is_ok(existing)) return core::error_of(existing);
             auto row = core::value_of(existing);
@@ -82,16 +139,28 @@ struct CommandService::Journal {
             if (!core::is_ok(saved)) return core::error_of(saved);
             return true;
         });
+        if (!core::is_ok(changed)) {
+            // CAS 已认领但持久登记失败：重新读取持久事实，不能保留虚假的执行中状态。
+            if (sync_locked(id)) dirty.erase(id);
+            return core::error_of(changed);
+        }
+        if (!sync_locked(id))
+            return core::make_error(core::ErrorCode::Unavailable, core::WriteEffect::Unknown,
+                                    "command state synchronization pending");
+        dirty.erase(id);
+        return changed;
     }
 };
 
 CommandService::CommandService(std::shared_ptr<database::IDatabase> database,
                                std::shared_ptr<database::ICollectorCommandRepository> repository,
-                               CommandRouter& engine, std::string scope)
-    : journal_(std::make_shared<Journal>(
-          Journal{std::move(database), std::move(repository), std::move(scope)})),
+                               CommandRouter& engine, std::string scope,
+                               std::shared_ptr<rtdb::CommandClient> realtime)
+    : journal_(std::make_shared<Journal>(std::move(database), std::move(repository),
+                                         std::move(scope), std::move(realtime))),
       engine_(engine) {
-    if (!journal_->database || !journal_->repository || journal_->scope.empty())
+    if (!journal_->database || !journal_->repository || !journal_->realtime ||
+        journal_->scope.empty())
         throw std::invalid_argument("command service requires database, repository and scope");
     // 前缀隔离不同进程实例；北向控制 ID 在插件内单调递增，重连后会从头开始。
     peer_prefix_ = "peer104-" + std::to_string(utc_ms()) + "-";
@@ -109,6 +178,7 @@ bool CommandService::recover() {
         if (!core::is_ok(page)) return false;
         for (const auto& row : core::value_of(page)) {
             after = row.id;
+            if (!journal_->sync(row.command_id)) return false;
             if (row.status != "Executing") continue;
             // 只能证明曾登记发送意图。核验需使用恢复后新收到的反馈，不重发。
             auto changed =
@@ -116,67 +186,38 @@ bool CommandService::recover() {
                                  {"Unknown", "collector_restarted_during_execution"}, true);
             if (!core::is_ok(changed)) return false;
         }
-        if (core::value_of(page).size() < 128) return true;
+        if (core::value_of(page).size() < 128) break;
     }
+    // 补齐上次已提交终态、尚未来得及写回实时库的记录；此类记录不在 pending 查询中。
+    const auto ctx = core::make_call_context(std::chrono::seconds(5));
+    auto ids = journal_->realtime->listCommands(ctx);
+    if (!core::is_ok(ids)) return false;
+    for (const auto& id : core::value_of(ids)) {
+        auto row = journal_->get(id);
+        if (!core::is_ok(row)) return false;
+        if (core::value_of(row) && !journal_->sync(id)) return false;
+    }
+    return true;
 }
 
-Reply CommandService::handle(const messaging::ZmqCommandRequest& request) {
-    try {
-        if (!valid_id(request.command_id) || request.payload_json.size() > 2048)
-            return {Code::Invalid, "invalid_command_id_or_payload_size"};
-        auto payload = Json::parse(request.payload_json);
-        if (!payload.is_object()) return {Code::Invalid, "command_payload_must_be_object"};
-        const auto operation = payload.value("op", std::string("submit"));
-        auto found = journal_->get(request.command_id);
-        if (!core::is_ok(found)) return {Code::Unknown, "command_database_unavailable"};
-        const auto& existing = core::value_of(found);
-        if (operation == "query" || operation == "verify") {
-            if (payload.size() != 1) return {Code::Invalid, "query_or_verify_accepts_only_op"};
-            if (!existing) return {Code::Rejected, "command_not_found"};
-            if (operation == "verify") {
-                if (!accepting_->load()) return {Code::RetryLater, "collector_not_ready"};
-                if (existing->status != "Unknown" && existing->status != "Acked")
-                    return {Code::Rejected, "command_does_not_require_verification"};
-                if (existing->config_revision != engine_.config_revision())
-                    return {Code::Rejected, "config_revision_changed"};
-                const auto channel = engine_.command_channel(existing->point_id);
-                const auto route =
-                    channel ? channel->command_route(existing->point_id) : std::nullopt;
-                if (!route || route->feedback_json.empty())
-                    return {Code::Rejected, "feedback_route_not_configured"};
-                if (!schedule(*existing, true)) return {Code::RetryLater, "verification_not_ready"};
-            }
-            return {Code::Result, result_json(*existing).dump()};
-        }
-        if (operation != "submit") return {Code::Invalid, "unsupported_command_operation"};
-        for (auto it = payload.begin(); it != payload.end(); ++it)
-            if (it.key() != "op" && it.key() != "point_id" && it.key() != "value" &&
-                it.key() != "config_revision" && it.key() != "expires_at_ms")
-                return {Code::Invalid, "unknown_command_field"};
-        if (!payload.at("point_id").is_string() || !payload.at("value").is_number() ||
-            !payload.at("config_revision").is_number_integer() ||
-            !payload.at("expires_at_ms").is_number_integer())
-            return {Code::Invalid, "invalid_command_field_type"};
+bool CommandService::ingest(const rtdb::CommandRecord& command) {
+    const auto& request = command.request;
+    auto found = journal_->get(request.command_id);
+    if (!core::is_ok(found)) return false;
+    if (!core::value_of(found)) {
         Row row;
         row.command_id = request.command_id;
         row.scope_code = journal_->scope;
-        row.point_id = payload.at("point_id").get<std::string>();
-        row.value = payload.at("value").get<double>();
-        row.config_revision = payload.at("config_revision").get<std::int64_t>();
-        row.expires_at_ms = payload.at("expires_at_ms").get<std::int64_t>();
-        if (row.point_id.empty() || row.point_id.size() > 64 || !std::isfinite(row.value) ||
-            row.config_revision < 0 || row.expires_at_ms <= 0 ||
-            row.expires_at_ms > utc_ms() + 3600000)
-            return {Code::Invalid, "invalid_command_value_or_deadline"};
-        payload["op"] = "submit";
-        payload["value"] = row.value;
-        row.payload_json = payload.dump();
-        if (existing) {
-            if (existing->payload_json != row.payload_json)
-                return {Code::Rejected, "command_id_payload_conflict"};
-            return {Code::Duplicate, result_json(*existing).dump()};
-        }
-        if (!accepting_->load()) return {Code::RetryLater, "collector_not_ready"};
+        row.point_id = request.point_id;
+        row.value = request.value;
+        row.config_revision = request.config_revision;
+        row.expires_at_ms = request.expires_at_ms;
+        row.payload_json = Json{{"op", "submit"},
+                                {"point_id", row.point_id},
+                                {"value", row.value},
+                                {"config_revision", row.config_revision},
+                                {"expires_at_ms", row.expires_at_ms}}
+                               .dump();
         row.updated_at_ms = utc_ms();
         row.status = "Queued";
         if (row.expires_at_ms <= row.updated_at_ms) {
@@ -191,16 +232,31 @@ Reply CommandService::handle(const messaging::ZmqCommandRequest& request) {
         }
         auto saved = journal_->transaction<core::Unit>(
             [&](auto& tx, const auto& ctx) { return journal_->repository->save(tx, row, ctx); });
-        if (!core::is_ok(saved)) {
-            // 并发唯一键冲突或提交回复丢失：调用方用相同 ID 查询，不能换 ID 重发。
-            return {Code::Unknown, "command_registration_not_confirmed"};
-        }
-        // 提交后直接入队，避免主循环配置读取延迟控制；队满时由持久扫描补入。
-        if (row.status == "Queued") schedule(row, false);
-        return {row.status == "Queued" ? Code::Accepted : Code::Rejected, result_json(row).dump()};
-    } catch (const Json::exception&) {
-        return {Code::Invalid, "invalid_command_json"};
+        if (!core::is_ok(saved)) return false;
     }
+    if (!journal_->sync(request.command_id)) return false;
+    const auto ctx = core::make_call_context(std::chrono::seconds(2));
+    auto current = journal_->realtime->readCommand(request.command_id, ctx);
+    if (!core::is_ok(current)) return false;
+    const auto& state = core::value_of(current);
+    if (state.status == "Queued") {
+        auto row = journal_->get(request.command_id);
+        if (!core::is_ok(row)) return false;
+        if (core::value_of(row)) schedule(*core::value_of(row), false);
+    }
+    if (state.status != "Queued" && state.status != "Executing") {
+        ChannelThread::PeerOutcomeHandler peer;
+        {
+            std::lock_guard lock(active_->mutex);
+            const auto it = active_->peers.find(request.command_id);
+            if (it != active_->peers.end()) {
+                peer = std::move(it->second);
+                active_->peers.erase(it);
+            }
+        }
+        if (peer) peer(state.status == "Acked" || state.status == "Succeeded", state.reason);
+    }
+    return true;
 }
 
 bool CommandService::schedule(const Row& row, bool verify) {
@@ -229,6 +285,18 @@ bool CommandService::schedule(const Row& row, bool verify) {
                        core::value_of(current)->status == row.status;
             }
             if (utc_ms() >= row.expires_at_ms) return false;
+            const auto ctx = core::make_call_context(std::chrono::seconds(2));
+            auto current = journal->realtime->readCommand(row.command_id, ctx);
+            if (!core::is_ok(current)) return false;
+            auto command = core::value_of(current);
+            if (command.status != "Queued" || command.request.point_id != row.point_id ||
+                command.request.value != row.value ||
+                command.request.config_revision != row.config_revision ||
+                command.request.expires_at_ms != row.expires_at_ms)
+                return false;
+            command.status = "Executing";
+            command.updated_at_ms = utc_ms();
+            if (!core::is_ok(journal->realtime->updateCommand(command, ctx))) return false;
             auto registered = journal->change(row.command_id, "Queued",
                                               {"Executing", "send_intent_registered"}, true);
             return core::is_ok(registered) && core::value_of(registered);
@@ -312,18 +380,17 @@ void CommandService::accept_peer(PeerRequest request) {
     auto done = std::move(request.done);
     const auto id = peer_prefix_ + std::to_string(request.channel_id) + "-" +
                     std::to_string(request.control.control_id);
-    const Json payload = {{"op", "submit"},
-                          {"point_id", request.control.point_id},
-                          {"value", request.control.value},
-                          {"config_revision", engine_.config_revision()},
-                          {"expires_at_ms", request.control.expires_at_ms}};
     // 先登记回执再受理：受理成功时完成回调可能在本函数返回前发生。
     {
         std::lock_guard lock(active_->mutex);
         active_->peers[id] = std::move(done);
     }
-    const auto reply = handle({id, payload.dump()});
-    if (reply.code == Code::Accepted) return;
+    const auto ctx = core::make_call_context(std::chrono::seconds(2));
+    const auto submitted = journal_->realtime->submitCommand(
+        {id, request.control.point_id, request.control.value, engine_.config_revision(),
+         request.control.expires_at_ms},
+        ctx);
+    if (core::is_ok(submitted) && !core::value_of(submitted).duplicate) return;
     ChannelThread::PeerOutcomeHandler peer;
     {
         std::lock_guard lock(active_->mutex);
@@ -334,12 +401,59 @@ void CommandService::accept_peer(PeerRequest request) {
         }
     }
     // Duplicate 说明同 ID 记录已存在且可能仍在执行，本次无法据其确认执行结果。
-    if (peer) peer(false, reply.code == Code::Duplicate ? "duplicate_peer_control" : reply.reason);
+    if (peer)
+        peer(false,
+             core::is_ok(submitted) ? "duplicate_peer_control" : core::error_of(submitted).message);
+}
+
+void CommandService::notify(const std::string& id) {
+    if (!rtdb::validate_record_key(
+             {{rtdb::ScopeKind::Station, journal_->scope}, rtdb::RecordKind::CommandState, {}, id})
+             .empty())
+        return;
+    std::lock_guard lock(hint_mutex_);
+    if (hints_.size() < 1024) hints_.insert(id);
 }
 
 bool CommandService::poll() {
     drain_peers();
+    if (!journal_->flush()) return false;
     if (!accepting_->load()) return true;
+    const auto ctx = core::make_call_context(std::chrono::seconds(2));
+    std::set<std::string> ready;
+    {
+        std::lock_guard lock(hint_mutex_);
+        ready.swap(hints_);
+    }
+    auto ids = journal_->realtime->listCommands(ctx);
+    if (!core::is_ok(ids)) return false;
+    const auto& keys = core::value_of(ids);
+    if (realtime_cursor_ >= keys.size()) realtime_cursor_ = 0;
+    const auto end = std::min(keys.size(), realtime_cursor_ + 128);
+    while (realtime_cursor_ < end) ready.insert(keys[realtime_cursor_++]);
+    for (const auto& id : ready) {
+        auto current = journal_->realtime->readCommand(id, ctx);
+        if (!core::is_ok(current)) {
+            if (core::error_of(current).code == core::ErrorCode::NotFound) continue;
+            return false;
+        }
+        auto command = core::value_of(current);
+        if (command.status == "Pending" && !ingest(command)) return false;
+        if (command.verify_requested) {
+            auto found = journal_->get(command.request.command_id);
+            if (!core::is_ok(found)) return false;
+            if (core::value_of(found)) {
+                const auto& row = *core::value_of(found);
+                if ((row.status == "Unknown" || row.status == "Acked") &&
+                    row.config_revision == engine_.config_revision())
+                    schedule(row, true);
+            }
+            command.verify_requested = false;
+            auto cleared = journal_->realtime->updateCommand(command, ctx);
+            if (!core::is_ok(cleared) && core::error_of(cleared).code != core::ErrorCode::Conflict)
+                return false;
+        }
+    }
     auto page = journal_->pending(cursor_);
     if (!core::is_ok(page)) return false;
     for (const auto& row : core::value_of(page)) {
@@ -361,6 +475,7 @@ bool CommandService::poll() {
             continue;
         }
         if (row.status == "Queued") {
+            if (!journal_->sync(row.command_id)) return false;
             if (row.config_revision != engine_.config_revision()) {
                 auto changed = journal_->change(row.command_id, "Queued",
                                                 {"Rejected", "config_revision_changed"});

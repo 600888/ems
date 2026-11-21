@@ -238,6 +238,37 @@ Result<std::vector<RecordKey>> RedisStore::listDeviceStates(const Scope& scope,
         });
 }
 
+Result<std::vector<RecordKey>> RedisStore::listCommandStates(const Scope& scope,
+                                                             const CallContext& ctx) {
+    constexpr auto effect = WriteEffect::NotApplicable;
+    if (!validate_record_key({scope, RecordKind::CommandState, {}, "probe"}).empty())
+        return error(ErrorCode::InvalidArgument, effect, "invalid scope");
+    return impl_->run<std::vector<RecordKey>>(
+        ctx, false, [&](redis::Redis& client) -> Result<std::vector<RecordKey>> {
+            const auto pattern =
+                "ems:" + hash_tag({scope, RecordKind::CommandState, {}, "probe"}) + ":command:*";
+            std::set<std::string> seen;
+            std::vector<RecordKey> out;
+            long long cursor = 0;
+            do {
+                if (core::has_expired(ctx))
+                    return error(ErrorCode::DeadlineExceeded, effect,
+                                 "enumeration deadline exceeded");
+                std::vector<std::string> page;
+                cursor = client.scan(cursor, pattern, 128, std::back_inserter(page));
+                for (const auto& physical : page) {
+                    auto key = command_state_key(scope, physical);
+                    if (!key || !seen.insert(physical).second) continue;
+                    if (out.size() == 65536)
+                        return error(ErrorCode::ResourceExhausted, effect,
+                                     "enumeration limit exceeded");
+                    out.push_back(std::move(*key));
+                }
+            } while (cursor != 0);
+            return out;
+        });
+}
+
 Result<WriteReceipt> RedisStore::compareExchange(const WriteRequest& req, const CallContext& ctx) {
     if (!validate_record_key(req.key).empty() ||
         (req.expected && (req.expected->empty() || req.expected->opaque.size() > 128)))
