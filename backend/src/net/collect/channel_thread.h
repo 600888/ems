@@ -30,19 +30,19 @@
 
 #include "command_types.h"
 #include "data_dispatcher.h"
+#include "net/channel_config.h"
 #include "net/collect/collect_defaults.h"
 #include "net/collect/collect_types.h"
 #include "net/handler/protocol_handler.h"
 #include "net/log.h"
 #include "net/para_loader/cfg_loader.h"
 #include "plugin_manager.h"
-#include "rtdb/model/rtdb_channel.h"
 
 namespace ems {
 namespace net {
 namespace collect {
 
-using rtdb::ChannelConfig;
+using ems::net::ChannelConfig;
 
 /**
  * @brief 设备上下文（通道路径下的设备及其测点列表）
@@ -165,30 +165,6 @@ class ChannelThread {
     // ============================================================
 
     /**
-     * @brief 下发遥控/遥调命令
-     *
-     * 命令进入队列，在采集循环中优先处理。
-     * 通过返回的 std::future<bool> 获取执行结果。
-     *
-     * @param[in] pointCode 测点编码
-     * @param[in] value     控制值
-     * @param[in] timeoutMs 入队至开始发送的期限，单位毫秒；不改变通道协议 I/O 超时。
-     * @return true 表示协议确认；拒绝、到期、取消或结果未知均为 false，不作为安全重发依据。
-     */
-    std::future<bool> post_command(const std::string& pointCode, double value,
-                                   int timeoutMs = enum_value(CollectDefaults::CommandTimeoutMs));
-
-    /**
-     * @brief 有界入队，唤醒空闲线程；不直接调用协议，停止后拒绝入队。
-     * @param[in] command 稳定命令及截止时间。
-     * @param[in] before_send 物理写入前的持久条件登记；失败不发送。
-     * @param[in] completion 恰好一次的完成回调；入队失败时不调用。
-     * @return true 已入队；false 队满、无回调或线程已停止。
-     */
-    bool enqueue_command(PointCommand command, BeforeCommand before_send,
-                         CommandCompletion completion);
-
-    /**
      * @brief 查找当前可控点，返回路由副本。
      * @param[in] point_id 稳定测点 ID。
      * @return 路由副本或空值。
@@ -228,6 +204,13 @@ class ChannelThread {
      * @return 对应对象的引用。
      */
     const ChannelConfig& channel_config() const { return channel_config_; }
+
+    /**
+     * @brief 登记共享物理连接中的逻辑通道，用于独立状态同步。
+     * @param[in] id 逻辑通道数字主键。
+     * @param[in] channel_id 稳定通道 ID。
+     */
+    void add_logical_channel(std::int64_t id, const std::string& channel_id);
 
     /**
      * @brief 获取通道编码（用于日志标识）
@@ -284,6 +267,17 @@ class ChannelThread {
     void set_error_callback(ErrorCallback cb) { error_cb_ = std::move(cb); }
 
    private:
+    friend class CommandService;
+    /**
+     * @brief 有界入队，唤醒空闲线程；不直接调用协议，停止后拒绝入队。
+     * @param[in] command 稳定命令及截止时间。
+     * @param[in] before_send 物理写入前的持久条件登记；失败不发送。
+     * @param[in] completion 恰好一次的完成回调；入队失败时不调用。
+     * @return true 已入队；false 队满、无回调或线程已停止。
+     */
+    bool enqueue_command(PointCommand command, BeforeCommand before_send,
+                         CommandCompletion completion);
+
     // ---- 线程主循环 ----
     /** @brief 运行采集循环，并在全部退出路径销毁处理器。 */
     void run();
@@ -348,6 +342,7 @@ class ChannelThread {
     int backoff_delay() const;
 
     const ChannelConfig channel_config_;
+    std::map<std::int64_t, std::string> logical_channels_;
     std::shared_ptr<DataDispatcher> dispatcher_;
     std::shared_ptr<std::thread> thread_;
 

@@ -169,6 +169,7 @@ class ConfigurationStore : public ConfigurationDatabase {
     std::shared_ptr<rtdb::CommandClient> realtime;
     std::unique_ptr<rtdb::RealtimeClient> realtime_owner;
     std::string realtime_config;
+    std::shared_ptr<ems::net::collect::DataDispatcher> dispatcher;
 
     static auto context() { return core::make_call_context(std::chrono::seconds(5)); }
 
@@ -201,6 +202,29 @@ class ConfigurationStore : public ConfigurationDatabase {
             realtime_config, {rtdb::ScopeKind::Station, "station"}, "", context());
         ASSERT_TRUE(core::is_ok(client));
         realtime = core::value_of(client);
+        auto catalog = std::make_shared<rtdb::RuntimeCatalog>(
+            rtdb::Scope{rtdb::ScopeKind::Station, "station"}, "7", "", 60000);
+        for (const auto& id : {"setpoint", "readback", "readback2", "stable-voltage"}) {
+            rtdb::RuntimePoint point;
+            point.point_id = core::PointId{id};
+            point.device_id = core::DeviceId{"pcs"};
+            point.address = {{rtdb::ScopeKind::Station, "station"}, {"pcs"}, id};
+            if (std::string(id) == "setpoint") {
+                point.point_type = model::PointType::YT;
+                point.kind = model::PointKind::Command;
+            }
+            ASSERT_TRUE(catalog->addPoint(point));
+        }
+        ASSERT_TRUE(catalog->addDevice(
+            {core::DeviceId{"pcs"}, "pcs", {rtdb::ScopeKind::Station, "station"}, {"pcs"}, true}));
+        ASSERT_TRUE(catalog->addChannel(
+            {core::ChannelId{"tcp"}, "tcp", {rtdb::ScopeKind::Station, "station"}, true}));
+        dispatcher = std::make_shared<ems::net::collect::DataDispatcher>();
+        ems::net::collect::DataDispatcherConfig config;
+        config.rtdbConfigPath_ = realtime_config;
+        config.rtdbScopeCode_ = "station";
+        ASSERT_TRUE(dispatcher->initialize(config));
+        ASSERT_TRUE(dispatcher->configure(catalog));
 #endif
         SqliteTestConnection::unknown_execution_commit = false;
         const auto file = (dir / "configuration.db").u8string();
@@ -276,6 +300,7 @@ class ConfigurationStore : public ConfigurationDatabase {
         repository.reset();
         database.reset();
         sqlite3_close(raw);
+        dispatcher.reset();
         realtime.reset();
         realtime_owner.reset();
         if (!realtime_config.empty()) rtdb::RealtimeClient::cleanup(realtime_config, context());
@@ -339,6 +364,7 @@ std::int64_t command_time() {
 struct ControlState {
     std::atomic<int> reads{0}, writes{0}, write_read_count{0};
     std::atomic<double> raw{0};
+    std::function<void()> on_write;
     std::atomic<bool> hold_read{false}, lost_reply{false}, stale{false};
     std::mutex mutex;
     std::condition_variable cv;
@@ -381,6 +407,7 @@ class ControlHandler final : public net::handler::ProtocolHandler {
         ++state_->writes;
         state_->write_read_count = state_->reads.load();
         state_->raw = value;  // 设备已执行；lost_reply 模拟响应丢失。
+        if (state_->on_write) state_->on_write();
         return !state_->lost_reply.load();
     }
 
@@ -399,16 +426,20 @@ class ControlRouter final : public collect::CommandRouter {
     std::shared_ptr<collect::ChannelThread> worker;
     std::atomic<std::int64_t> revision{7};
     bool running{true};
+    std::shared_ptr<collect::DataDispatcher> dispatcher;
 
-    explicit ControlRouter(bool feedback = false, bool hold = false, int inputs = 1) {
+    explicit ControlRouter(std::shared_ptr<collect::DataDispatcher> writer, bool feedback = false,
+                           bool hold = false, int inputs = 1)
+        : dispatcher(std::move(writer)) {
         state->hold_read = hold;
-        rtdb::ChannelConfig config;
+        net::ChannelConfig config;
         config.id_ = 1;
         config.name_ = "control-test";
+        config.channel_id = "tcp";
         config.protocol_ = ems::model::ProtocolType::ModbusTCP;
-        worker = std::make_shared<collect::ChannelThread>(config, nullptr, [state = state](auto&) {
-            return std::make_unique<ControlHandler>(state);
-        });
+        worker = std::make_shared<collect::ChannelThread>(
+            config, dispatcher,
+            [state = state](auto&) { return std::make_unique<ControlHandler>(state); });
         net::device::ConfiguredDevice device;
         device.deviceKey_ = "pcs";
         net::device::PointRoute route{"setpoint", "write", 2, 1, false, "scaled"};
@@ -454,6 +485,10 @@ class ControlRouter final : public collect::CommandRouter {
     std::int64_t config_revision() const override { return revision; }
 
     bool is_running() const override { return running; }
+
+    std::shared_ptr<rtdb::PointClient> point_client() const override {
+        return dispatcher->point_client();
+    }
 };
 
 Json submit_payload(std::int64_t expires = command_time() + 5000) {
@@ -489,7 +524,7 @@ bool wait_status(collect::CommandService& service, rtdb::CommandClient& client,
 }
 
 TEST_F(ConfigurationStore, CommandScalesWakesDeduplicatesAndPersistsQuery) {
-    ControlRouter router;
+    ControlRouter router(dispatcher);
     collect::CommandService service(database, commands, router, "station", realtime);
     ASSERT_TRUE(service.recover());
     service.set_accepting(true);
@@ -512,7 +547,7 @@ TEST_F(ConfigurationStore, CommandScalesWakesDeduplicatesAndPersistsQuery) {
 }
 
 TEST_F(ConfigurationStore, CommandRunsBetweenReadTransactions) {
-    ControlRouter router(false, true, 2);
+    ControlRouter router(dispatcher, false, true, 2);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     ASSERT_TRUE(core::is_ok(submit_command(*realtime, "insert", submit_payload())));
@@ -525,7 +560,7 @@ TEST_F(ConfigurationStore, CommandRunsBetweenReadTransactions) {
 }
 
 TEST_F(ConfigurationStore, QueuedCommandExpiresAndNeverWrites) {
-    ControlRouter router(false, true);
+    ControlRouter router(dispatcher, false, true);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     EXPECT_TRUE(
@@ -538,7 +573,7 @@ TEST_F(ConfigurationStore, QueuedCommandExpiresAndNeverWrites) {
 }
 
 TEST_F(ConfigurationStore, ControlInsertsAfterCurrentReadAndStopCancelsQueue) {
-    ControlRouter router(false, true);
+    ControlRouter router(dispatcher, false, true);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     ASSERT_TRUE(core::is_ok(submit_command(*realtime, "stopped", submit_payload())));
@@ -552,7 +587,7 @@ TEST_F(ConfigurationStore, ControlInsertsAfterCurrentReadAndStopCancelsQueue) {
 }
 
 TEST_F(ConfigurationStore, RevisionChangeRejectsQueuedCommand) {
-    ControlRouter router(false, true);
+    ControlRouter router(dispatcher, false, true);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     ASSERT_TRUE(core::is_ok(submit_command(*realtime, "old-route", submit_payload())));
@@ -564,7 +599,7 @@ TEST_F(ConfigurationStore, RevisionChangeRejectsQueuedCommand) {
 }
 
 TEST_F(ConfigurationStore, FailedExecutionRegistrationNeverSends) {
-    ControlRouter router(false, true);
+    ControlRouter router(dispatcher, false, true);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     ASSERT_TRUE(core::is_ok(submit_command(*realtime, "db-failed", submit_payload())));
@@ -581,7 +616,7 @@ TEST_F(ConfigurationStore, FailedExecutionRegistrationNeverSends) {
 }
 
 TEST_F(ConfigurationStore, LostWriteReplyIsUnknownAndOnlyFreshFeedbackCanVerify) {
-    ControlRouter router(true);
+    ControlRouter router(dispatcher, true);
     router.state->lost_reply = true;
     router.state->stale = true;
     collect::CommandService service(database, commands, router, "station", realtime);
@@ -599,11 +634,17 @@ TEST_F(ConfigurationStore, LostWriteReplyIsUnknownAndOnlyFreshFeedbackCanVerify)
     EXPECT_EQ(router.state->writes, 1);
     router.state->stale = false;
     ASSERT_TRUE(wait_status(service, *realtime, "lost", "Succeeded"));
+    auto feedback = dispatcher->point_client()->readPointJson("yc", "readback", context());
+    ASSERT_TRUE(core::is_ok(feedback));
+    EXPECT_EQ(Json::parse(core::value_of(feedback))["value"], 48);
+    auto projected = dispatcher->point_client()->readPointJson("yt", "setpoint", context());
+    ASSERT_TRUE(core::is_ok(projected));
+    EXPECT_EQ(Json::parse(core::value_of(projected))["command_status"], "Succeeded");
     EXPECT_EQ(router.state->writes, 1);
 }
 
 TEST_F(ConfigurationStore, RestartNeverReplaysExecutingCommand) {
-    ControlRouter router(true, true);
+    ControlRouter router(dispatcher, true, true);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     const auto payload = submit_payload();
@@ -620,7 +661,7 @@ TEST_F(ConfigurationStore, RestartNeverReplaysExecutingCommand) {
 }
 
 TEST_F(ConfigurationStore, InvalidValuesAreRejectedBeforeWrite) {
-    ControlRouter router(false, true);
+    ControlRouter router(dispatcher, false, true);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     auto payload = submit_payload();
@@ -633,26 +674,29 @@ TEST_F(ConfigurationStore, InvalidValuesAreRejectedBeforeWrite) {
 }
 
 TEST_F(ConfigurationStore, CommandQueueIsBoundedAndEveryCancellationCompletes) {
-    ControlRouter router(false, true);
-    std::atomic<int> cancelled{0};
-    collect::PointCommand command{"bounded", "setpoint", 48, command_time() + 5000, 7};
-    for (int i = 0; i < 128; ++i)
-        ASSERT_TRUE(router.worker->enqueue_command(
-            command, [] { return true; },
-            [&](const auto& result) {
-                if (result.status == "Rejected") ++cancelled;
-            }));
-    EXPECT_FALSE(router.worker->enqueue_command(command, [] { return true; }, [](const auto&) {}));
+    ControlRouter router(dispatcher, false, true);
+    collect::CommandService service(database, commands, router, "station", realtime);
+    service.set_accepting(true);
+    for (int i = 0; i < 130; ++i)
+        ASSERT_TRUE(core::is_ok(
+            submit_command(*realtime, "bounded" + std::to_string(i), submit_payload())));
+    ASSERT_TRUE(service.poll());
     router.worker->stop();
     router.release();
     router.worker->join();
-    EXPECT_EQ(cancelled, 128);
+    int rejected = 0, pending = 0;
+    for (int i = 0; i < 130; ++i) {
+        const auto status = command_status(*realtime, "bounded" + std::to_string(i));
+        if (status == "Rejected") ++rejected;
+        if (status == "Pending") ++pending;
+    }
+    EXPECT_EQ(rejected, 128);
+    EXPECT_EQ(pending, 2);
     EXPECT_EQ(router.state->writes, 0);
-    EXPECT_FALSE(router.worker->post_command("setpoint", 1).get());
 }
 
 TEST_F(ConfigurationStore, UnknownExecutionCommitNeverStartsPhysicalWrite) {
-    ControlRouter router(false, true);
+    ControlRouter router(dispatcher, false, true);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     const auto payload = submit_payload();
@@ -668,7 +712,7 @@ TEST_F(ConfigurationStore, UnknownExecutionCommitNeverStartsPhysicalWrite) {
 }
 
 TEST_F(ConfigurationStore, RealtimeSubmissionSurvivesLostNotificationAndKeepsIndependentCommands) {
-    ControlRouter router(false, true);
+    ControlRouter router(dispatcher, false, true);
     collect::CommandService service(database, commands, router, "station", realtime);
     ASSERT_TRUE(service.recover());
     service.set_accepting(true);
@@ -722,7 +766,7 @@ TEST_F(ConfigurationStore, ConcurrentRealtimeClaimsHaveOneWinner) {
 
 #ifdef EMS_TEST_ZEROMQ
 TEST_F(ConfigurationStore, MultipleProducersNotifyAfterRealtimeCommit) {
-    ControlRouter router;
+    ControlRouter router(dispatcher);
     collect::CommandService service(database, commands, router, "station", realtime);
     ASSERT_TRUE(service.recover());
     service.set_accepting(true);
@@ -764,7 +808,7 @@ TEST_F(ConfigurationStore, MultipleProducersNotifyAfterRealtimeCommit) {
 #endif
 
 TEST_F(ConfigurationStore, RecoveryRepairsStaleRealtimeTerminalWithoutResending) {
-    ControlRouter router;
+    ControlRouter router(dispatcher);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     ASSERT_TRUE(core::is_ok(submit_command(*realtime, "repair-terminal", submit_payload())));
@@ -780,8 +824,73 @@ TEST_F(ConfigurationStore, RecoveryRepairsStaleRealtimeTerminalWithoutResending)
     EXPECT_EQ(router.state->writes, 1);
 }
 
+TEST_F(ConfigurationStore, PeerSuccessWaitsForRealtimeAndPointSynchronization) {
+    ControlRouter router(dispatcher, false, true);
+    collect::CommandService service(database, commands, router, "station", realtime);
+    service.set_accepting(true);
+    std::atomic<int> replies{0};
+    std::atomic<bool> accepted{false};
+    auto opened = rtdb::RealtimeClient::open(realtime_config, context());
+    ASSERT_TRUE(core::is_ok(opened));
+    std::shared_ptr<rtdb::RealtimeClient> raw = std::move(std::get<0>(opened));
+    const rtdb::RecordKey key{
+        {rtdb::ScopeKind::Station, "station"}, rtdb::RecordKind::Point, {"pcs"}, "setpoint"};
+    std::promise<void> corrupted;
+    auto ready = corrupted.get_future();
+    router.state->on_write = [raw, key, &corrupted] {
+        auto current = raw->read(key, core::make_call_context(2s));
+        if (core::is_ok(current)) {
+            auto fields = core::value_of(current).fields;
+            fields["accepted_source_id"] = "unavailable";
+            raw->compareExchange({key, fields, core::value_of(current).revision},
+                                 core::make_call_context(2s));
+        }
+        corrupted.set_value();
+    };
+    collect::ChannelThread::PeerControl control;
+    control.control_id = 7;
+    control.point_id = "setpoint";
+    control.value = 48;
+    control.expires_at_ms = command_time() + 5000;
+    ASSERT_TRUE(service.submit_peer(1, control, [&](bool ok, const auto&) {
+        accepted = ok;
+        ++replies;
+    }));
+    ASSERT_TRUE(service.poll());
+    router.release();
+    ASSERT_EQ(ready.wait_for(2s), std::future_status::ready);
+    std::this_thread::sleep_for(50ms);
+    EXPECT_FALSE(service.poll());
+    EXPECT_EQ(replies, 0);
+    EXPECT_EQ(router.state->writes, 1);
+    ASSERT_TRUE(core::is_ok(dispatcher->point_client()->installWriter(context())));
+    ASSERT_TRUE(service.poll());
+    EXPECT_EQ(replies, 1);
+    EXPECT_TRUE(accepted);
+    EXPECT_EQ(router.state->writes, 1);
+    auto projected = dispatcher->point_client()->readPointJson("yt", "setpoint", context());
+    ASSERT_TRUE(core::is_ok(projected));
+    EXPECT_EQ(Json::parse(core::value_of(projected))["command_status"], "Acked");
+}
+
+TEST_F(ConfigurationStore, ChannelStateIsVisibleOutsideCollectorAndChangesOnStop) {
+    ControlRouter router(dispatcher);
+    auto opened = rtdb::RealtimeClient::open(realtime_config, context());
+    ASSERT_TRUE(core::is_ok(opened));
+    std::shared_ptr<rtdb::IRealtimeStore> store = std::move(std::get<0>(opened));
+    rtdb::RealtimeService reader(store, dispatcher->point_client()->catalog());
+    auto state = reader.getChannelState(core::ChannelId{"tcp"}, context());
+    ASSERT_TRUE(core::is_ok(state));
+    EXPECT_EQ(core::value_of(state).sample.state, rtdb::ChannelRunState::Connected);
+    router.worker->stop();
+    router.worker->join();
+    state = reader.getChannelState(core::ChannelId{"tcp"}, context());
+    ASSERT_TRUE(core::is_ok(state));
+    EXPECT_EQ(core::value_of(state).sample.state, rtdb::ChannelRunState::Disconnected);
+}
+
 TEST_F(ConfigurationStore, DurableDedupSurvivesRealtimeRecordCleanupAndPayloadConflict) {
-    ControlRouter router;
+    ControlRouter router(dispatcher);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     const auto payload = submit_payload();
@@ -815,7 +924,7 @@ TEST_F(ConfigurationStore, DurableDedupSurvivesRealtimeRecordCleanupAndPayloadCo
 }
 
 TEST_F(ConfigurationStore, NotificationChecksCommandBeforeItsRotatingScanPage) {
-    ControlRouter router(false, true);
+    ControlRouter router(dispatcher, false, true);
     collect::CommandService service(database, commands, router, "station", realtime);
     service.set_accepting(true);
     for (int i = 0; i < 128; ++i) {

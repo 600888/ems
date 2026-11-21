@@ -41,7 +41,11 @@ ChannelThread::ChannelThread(const ChannelConfig& channelConfig,
                              std::shared_ptr<DataDispatcher> dispatcher, HandlerFactory factory)
     : channel_config_(channelConfig),
       dispatcher_(std::move(dispatcher)),
-      handler_factory_(std::move(factory)) {}
+      handler_factory_(std::move(factory)) {
+    logical_channels_ = channelConfig.logical_channel_ids;
+    if (logical_channels_.empty() && !channelConfig.channel_id.empty())
+        logical_channels_[channelConfig.id_] = channelConfig.channel_id;
+}
 
 ChannelThread::~ChannelThread() {
     stop();
@@ -61,11 +65,11 @@ bool ChannelThread::start(PluginManager& plugin_manager) {
         handler_ = handler_factory_
                        ? handler_factory_(plugin_manager)
                        : handler::create_handler(
-                             plugin_manager, rtdb::protocolTypeToString(channel_config_.protocol_));
+                             plugin_manager, net::protocolTypeToString(channel_config_.protocol_));
         if (!handler_) throw std::runtime_error("Handler factory returned no instance");
         json config = {{"channel_id", channel_config_.id_},
                        {"name", channel_config_.name_},
-                       {"protocol", rtdb::protocolTypeToString(channel_config_.protocol_)},
+                       {"protocol", net::protocolTypeToString(channel_config_.protocol_)},
                        {"connection", channel_config_.connection_},
                        {"settings", channel_config_.settings_},
                        {"baud_rate", channel_config_.baudRate_},
@@ -141,12 +145,26 @@ void ChannelThread::set_devices(std::vector<DeviceContext> devices) {
     devices_ = std::move(devices);
 }
 
+void ChannelThread::add_logical_channel(std::int64_t id, const std::string& stable_id) {
+    std::lock_guard lock(device_mutex_);
+    logical_channels_[id] = stable_id;
+}
+
 void ChannelThread::remove_devices(int64_t channel_id) {
     std::lock_guard lock(device_mutex_);
     devices_.erase(
         std::remove_if(devices_.begin(), devices_.end(),
                        [&](const auto& device) { return device.channelId_ == channel_id; }),
         devices_.end());
+    const auto found = logical_channels_.find(channel_id);
+    if (found != logical_channels_.end()) {
+        if (dispatcher_)
+            if (auto client = dispatcher_->point_client())
+                client->reportChannel(found->second, rtdb::ChannelRunState::Disconnected,
+                                      "logical_channel_stopped",
+                                      core::make_call_context(std::chrono::seconds(2)));
+        logical_channels_.erase(found);
+    }
 }
 
 std::vector<DeviceContext> ChannelThread::devices() const {
@@ -157,23 +175,6 @@ std::vector<DeviceContext> ChannelThread::devices() const {
 // ============================================================
 // 命令下发
 // ============================================================
-
-std::future<bool> ChannelThread::post_command(const std::string& pointCode, double value,
-                                              int timeoutMs) {
-    auto promise = std::make_shared<std::promise<bool>>();
-    auto future = promise->get_future();
-    PointCommand command;
-    command.point_id = pointCode;
-    command.value = value;
-    command.expires_at_ms = static_cast<std::int64_t>(now_ms()) + std::max(0, timeoutMs);
-    if (!enqueue_command(
-            command, [] { return true; },
-            [promise](const auto& result) {
-                promise->set_value(result.status == "Acked" || result.status == "Succeeded");
-            }))
-        promise->set_value(false);
-    return future;
-}
 
 bool ChannelThread::enqueue_command(PointCommand command, BeforeCommand before_send,
                                     CommandCompletion completion) {
@@ -284,7 +285,7 @@ void ChannelThread::run() {
     }
     CHANNEL_LOG_INFO(
         this, fmt::format("开始运行, 名称={}, 协议={}, 连接={}, 周期={}ms", channel_config_.name_,
-                          ems::rtdb::protocolTypeToString(channel_config_.protocol_),
+                          ems::net::protocolTypeToString(channel_config_.protocol_),
                           channel_config_.connection_, poll_interval_ms_.load())
                   .c_str());
     // 2. 连接设备
@@ -374,7 +375,11 @@ void ChannelThread::run() {
 // 连接管理
 // ============================================================
 
-bool ChannelThread::check_connection() { return handler_ && handler_->is_connected(); }
+bool ChannelThread::check_connection() {
+    const bool connected = handler_ && handler_->is_connected();
+    set_state(state_.load());
+    return connected;
+}
 
 bool ChannelThread::reconnect() {
     if (!handler_) return false;
@@ -561,6 +566,16 @@ PointCommandResult ChannelThread::verify_command(const PointCommand& command,
         const double observed =
             discrete ? static_cast<double>((sample.value != 0) != feedback->invert)
                      : sample.value * feedback->scale_factor + feedback->offset_value;
+        if (dispatcher_) {
+            PointValue publication = sample;
+            publication.code = feedback->point_id;
+            publication.value = observed;
+            publication.details = {{"point_type", discrete ? "yx" : "yc"}};
+            if (dispatcher_->batch_update({publication}) != 1)
+                return {"Unknown", "feedback_realtime_update_failed"};
+        } else {
+            return {"Unknown", "feedback_realtime_unavailable"};
+        }
         const auto expected_value = rule.find("expected");
         const double expected = expected_value == rule.end() ? command.value
                                 : expected_value->is_boolean()
@@ -694,7 +709,24 @@ void ChannelThread::collect_points(const std::vector<device::PointRoute>& routes
 // 辅助方法
 // ============================================================
 
-void ChannelThread::set_state(ChannelState new_state) { state_.store(new_state); }
+void ChannelThread::set_state(ChannelState new_state) {
+    state_.store(new_state);
+    if (!dispatcher_) return;
+    auto client = dispatcher_->point_client();
+    if (!client) return;
+    const auto connected =
+        new_state == ChannelState::Running && handler_ && handler_->is_connected();
+    const auto state =
+        connected ? rtdb::ChannelRunState::Connected : rtdb::ChannelRunState::Disconnected;
+    std::lock_guard lock(device_mutex_);
+    auto ids = logical_channels_;
+    const auto reason = new_state == ChannelState::Stopping ? std::string("stopping") : last_err_;
+    for (const auto& [_, id] : ids) {
+        auto updated = client->reportChannel(id, state, reason,
+                                             core::make_call_context(std::chrono::seconds(2)));
+        if (!core::is_ok(updated)) LOG_WARN("Channel state synchronization failed: {}", id);
+    }
+}
 
 int ChannelThread::backoff_delay() const {
     int count = reconnect_count_.load();

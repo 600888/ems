@@ -48,15 +48,16 @@ ems::model::ProtocolType protocol(const CfgChannelRow& channel) {
     throw std::invalid_argument("collector does not support configured protocol");
 }
 
-ems::rtdb::ChannelConfig compile_channel(const CfgChannelRow& channel) {
+ems::net::ChannelConfig compile_channel(const CfgChannelRow& channel) {
     if (channel.id <= 0 || channel.endpoint.empty() || channel.timeout_ms <= 0 ||
         channel.poll_interval_ms <= 0 || channel.retry_times < 0 || channel.max_sessions < 1)
         throw std::invalid_argument("invalid channel endpoint, identity or timing");
     if (channel.conn_mode != "tcp_client" && channel.conn_mode != "tcp_server" &&
         channel.conn_mode != "serial")
         throw std::invalid_argument("collector channel mode is unsupported");
-    ems::rtdb::ChannelConfig result;
+    ems::net::ChannelConfig result;
     result.id_ = channel.id;
+    result.channel_id = channel.channel_id;
     result.name_ = channel.name;
     result.protocol_ = protocol(channel);
     if (result.protocol_ == ems::model::ProtocolType::IEC61850 &&
@@ -249,7 +250,7 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
         std::map<std::string, const CfgDeviceRow*> nodes;
         std::map<std::string, const CfgChannelRow*> channels;
         std::map<std::string, const CfgBindingRow*> bindings;
-        std::map<std::int64_t, ems::rtdb::ChannelConfig> compiled;
+        std::map<std::int64_t, ems::net::ChannelConfig> compiled;
         std::map<std::int64_t, ForwardingChannelConfig> forwarding;
         std::map<std::int64_t, std::map<std::string, json>> mms_points;
         std::map<std::int64_t, std::map<std::string, ConfiguredDevice>> routes;
@@ -537,7 +538,7 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
             for (auto& [_, point] : directory) points.push_back(std::move(point));
             channel.settings_ = settings.dump();
         }
-        std::vector<ems::rtdb::ChannelConfig> new_channels;
+        std::vector<ems::net::ChannelConfig> new_channels;
         std::map<std::int64_t, std::vector<ConfiguredDevice>> new_devices;
         std::map<std::int64_t, std::string> new_scopes;
         for (const auto& [id, owners] : connection_owners)
@@ -547,6 +548,10 @@ bool CfgLoader::configure(const ems::database::DeviceConfigRecords& records) {
             for (auto& [_, device] : devices) new_devices[id].push_back(std::move(device));
         std::vector<ForwardingChannelConfig> outputs;
         for (auto& [_, output] : forwarding) outputs.push_back(std::move(output));
+        auto catalog = ems::rtdb::configuration_catalog(records);
+        if (!ems::core::is_ok(catalog))
+            throw std::invalid_argument(ems::core::error_of(catalog).message);
+        catalog_ = ems::core::value_of(catalog);
         channels_ = std::move(new_channels);
         forwarding_ = std::move(outputs);
         devices_ = std::move(new_devices);

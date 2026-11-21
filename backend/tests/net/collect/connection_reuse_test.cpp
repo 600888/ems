@@ -20,12 +20,12 @@
 #include <stdexcept>
 #include <thread>
 
+#include "command_host.h"
 #include "common/log/process_logger.hpp"
 #include "net/collect/collect_engine.h"
 #include "net/para_loader/cfg_loader.h"
 #include "rtdb/backend/shared_memory_store.h"
 #include "rtdb/client/realtime_client.h"
-#include "rtdb/client/rtdb_manager.h"
 
 using namespace ems;
 using Json = nlohmann::json;
@@ -235,18 +235,21 @@ database::DeviceConfigRecords configuration(int port, bool iec = false) {
     database::CfgDeviceRow station;
     station.id = 1;
     station.device_id = "station";
+    station.code = "station001";
     station.node_kind = "station";
     rows.devices.push_back(station);
     for (int i = 1; i <= 2; ++i) {
         auto node = station;
         node.id = i + 1;
         node.device_id = "device-" + std::to_string(i);
+        node.code = "device_" + std::to_string(i);
         node.parent_device_id = i == 1 ? "station" : "device-1";
         node.node_kind = "device";
         rows.devices.push_back(node);
         database::CfgChannelRow channel;
         channel.id = 6 + i;
         channel.channel_id = "channel-" + std::to_string(i);
+        channel.code = "channel_" + std::to_string(i);
         channel.name = channel.channel_id;
         channel.protocol = iec ? "iec104" : "modbus";
         channel.conn_mode = "tcp_client";
@@ -265,6 +268,7 @@ database::DeviceConfigRecords configuration(int port, bool iec = false) {
         database::CfgPointYcRow point;
         point.id = i;
         point.point_id = "point-" + std::to_string(i);
+        point.code = "power";
         point.owner_device_id = node.device_id;
         point.binding_id = binding.binding_id;
         point.wire_type = iec ? "f32" : "u16";
@@ -278,6 +282,7 @@ database::DeviceConfigRecords configuration(int port, bool iec = false) {
             database::CfgPointYtRow command;
             command.id = i;
             command.point_id = "command-" + std::to_string(i);
+            command.code = "setpoint";
             command.owner_device_id = node.device_id;
             command.binding_id = binding.binding_id;
             command.wire_type = "u16";
@@ -294,14 +299,12 @@ void initialize(net::collect::CollectEngine& engine, Storage& storage) {
     net::collect::EngineConfig config;
     config.pluginDir_ = utf8(fs::path(EMS_REUSE_MODBUS_PLUGIN).parent_path());
     config.rtdbConfigPath_ = utf8(storage.path);
-    config.notificationBackend_ = net::collect::NotificationBackend::None;
     CHECK(engine.initialize(config));
 }
 
 bool sample(net::collect::CollectEngine& engine, const char* id, double expected) {
-    rtdb::YcPoint point;
-    return engine.data_dispatcher()->rtdb_manager()->getRtDb()->getYc(id, point) &&
-           point.quality_ == model::PointQuality::Good && point.value_ == expected;
+    auto read = engine.point_client()->readPointJson("yc", id, core::make_call_context(2s));
+    return core::is_ok(read) && Json::parse(core::value_of(read))["value"] == expected;
 }
 
 void modbus(const std::string& scenario) {
@@ -313,6 +316,7 @@ void modbus(const std::string& scenario) {
         auto unit = rows.devices[0];
         unit.id = 10;
         unit.device_id = "storage-unit";
+        unit.code = "storage_unit";
         unit.node_kind = "unit";
         unit.parent_device_id = scenario == "unit" ? "station" : "device-1";
         rows.devices.push_back(unit);
@@ -337,8 +341,9 @@ void modbus(const std::string& scenario) {
     if (shared) {
         std::this_thread::sleep_for(1100ms);
         CHECK(server.reads[1] > server.reads[2] * 2);
-        auto command = engine.find_channel(8)->post_command("command-2", 84);
-        CHECK(command.wait_for(2s) == std::future_status::ready && command.get());
+        CHECK(engine.command_channel("command-2") == engine.find_channel(8));
+        CommandHost commands(engine, utf8(storage.path), "station001");
+        CHECK(commands.execute("command-2", 84).status == "Acked");
         CHECK(server.value(2) == 42 && server.value(1) == 100);
         CHECK(engine.stop_channel(7));
         std::this_thread::sleep_for(150ms);

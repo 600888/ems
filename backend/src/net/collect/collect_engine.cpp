@@ -16,7 +16,6 @@
 
 #include "net/para_loader/cfg_loader.h"
 #include "net/protocol/protocol_types.h"
-#include "rtdb/client/rtdb_manager.h"
 
 namespace ems {
 namespace net {
@@ -26,14 +25,14 @@ using namespace ems::net::device;
 using json = nlohmann::json;
 
 namespace {
-json settings_of(const ems::rtdb::ChannelConfig& channel) {
+json settings_of(const ems::net::ChannelConfig& channel) {
     auto settings = channel.settings_.empty() ? json::object() : json::parse(channel.settings_);
     if (!settings.is_object()) throw std::invalid_argument("channel settings must be an object");
     return settings;
 }
 
-ems::rtdb::ChannelConfig connection_config(ems::rtdb::ChannelConfig channel,
-                                           const std::vector<ConfiguredDevice>& devices) {
+ems::net::ChannelConfig connection_config(ems::net::ChannelConfig channel,
+                                          const std::vector<ConfiguredDevice>& devices) {
     auto settings = settings_of(channel);
     if (channel.protocol_ == ems::model::ProtocolType::IEC104 &&
         settings.value("local_role", settings.value("role", std::string("client"))) == "client") {
@@ -61,7 +60,7 @@ ems::rtdb::ChannelConfig connection_config(ems::rtdb::ChannelConfig channel,
     return channel;
 }
 
-std::string connection_key(const ems::rtdb::ChannelConfig& channel, const std::string& scope) {
+std::string connection_key(const ems::net::ChannelConfig& channel, const std::string& scope) {
     using P = ems::model::ProtocolType;
     if (scope.empty()) return {};
     if (channel.protocol_ != P::ModbusTCP && channel.protocol_ != P::IEC104) return {};
@@ -76,7 +75,7 @@ std::string connection_key(const ems::rtdb::ChannelConfig& channel, const std::s
     return json::array({scope, static_cast<int>(channel.protocol_), endpoint, settings}).dump();
 }
 
-void merge_addresses(ems::rtdb::ChannelConfig& target, const ems::rtdb::ChannelConfig& source) {
+void merge_addresses(ems::net::ChannelConfig& target, const ems::net::ChannelConfig& source) {
     if (target.protocol_ != ems::model::ProtocolType::IEC104) return;
     auto settings = settings_of(target);
     auto addresses = settings.at("common_addresses").get<std::set<int>>();
@@ -119,19 +118,6 @@ bool CollectEngine::initialize(const EngineConfig& config) {
     DataDispatcherConfig dispatchConfig;
     dispatchConfig.rtdbConfigPath_ = config.rtdbConfigPath_;
     dispatchConfig.rtdbScopeCode_ = config.rtdbScopeCode_;
-    dispatchConfig.redisHost_ = config.redisHost_;
-    dispatchConfig.redisPort_ = config.redisPort_;
-    dispatchConfig.redisPassword_ = config.redisPassword_;
-    dispatchConfig.redisDb_ = config.redisDb_;
-    dispatchConfig.poolSize_ = config.redisPoolSize_;
-    dispatchConfig.timeoutMs_ = config.redisTimeoutMs_;
-    dispatchConfig.keyPrefix_ = config.redisPrefix_;
-    dispatchConfig.notificationBackend_ = config.notificationBackend_;
-    dispatchConfig.zmqEndpoint_ = config.zmqEndpoint_;
-    dispatchConfig.zmqQueueItems_ = config.zmqQueueItems_;
-    dispatchConfig.zmqMaxMessageBytes_ = config.zmqMaxMessageBytes_;
-    dispatchConfig.zmqHighWaterMark_ = config.zmqHighWaterMark_;
-
     dispatcher_ = std::make_shared<DataDispatcher>();
     if (!dispatcher_->initialize(dispatchConfig)) {
         LOG_ERROR(fmt::format("数据分发器初始化失败, RTDB配置={}", config.rtdbConfigPath_).c_str());
@@ -158,6 +144,7 @@ int CollectEngine::start_all(CfgLoader& loader) {
         LOG_ERROR("参数加载器未初始化");
         return enum_value(protocol::OperationResult::Failure);
     }
+    if (!dispatcher_ || !dispatcher_->configure(loader.runtime_catalog())) return -1;
     config_revision_ = loader.config_revision();
 
     // 1. 加载所有启用的通道配置
@@ -174,8 +161,8 @@ int CollectEngine::start_all(CfgLoader& loader) {
     LOG_INFO(fmt::format("从数据库加载了{}个通道配置", channels.size()).c_str());
 
     struct Connection {
-        ems::rtdb::ChannelConfig config;
-        std::vector<ems::rtdb::ChannelConfig> members;
+        ems::net::ChannelConfig config;
+        std::vector<ems::net::ChannelConfig> members;
         std::vector<ConfiguredDevice> devices;
         int interval;
         std::string scope;
@@ -217,9 +204,12 @@ int CollectEngine::start_all(CfgLoader& loader) {
     for (auto& connection : connections) {
         auto& chConfig = connection.config;
         LOG_INFO(fmt::format("启动连接[{}] {}, 协议={}, 连接={}, 复用逻辑通道数={}", chConfig.id_,
-                             chConfig.name_, ems::rtdb::protocolTypeToString(chConfig.protocol_),
+                             chConfig.name_, ems::net::protocolTypeToString(chConfig.protocol_),
                              chConfig.connection_, connection.members.size())
                      .c_str());
+        chConfig.logical_channel_ids.clear();
+        for (const auto& member : connection.members)
+            chConfig.logical_channel_ids[member.id_] = member.channel_id;
         auto channelThread = std::make_shared<ChannelThread>(chConfig, dispatcher_);
         channelThread->set_devices(std::move(connection.devices));
         channelThread->set_poll_interval(connection.interval);
@@ -253,7 +243,7 @@ int CollectEngine::start_all(CfgLoader& loader) {
     for (auto& output : outputs) {
         const auto id = output.channel.id_;
         auto thread = std::make_shared<ForwardingChannel>(
-            std::move(output), dispatcher_->rtdb_manager()->getRtDb(), plugin_manager_);
+            std::move(output), dispatcher_->point_client(), plugin_manager_);
         if (!thread->start()) {
             on_channel_error(id, thread->last_error());
             continue;
@@ -271,7 +261,7 @@ int CollectEngine::start_all(CfgLoader& loader) {
 // 启动/停止单个通道
 // ============================================================
 
-bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig,
+bool CollectEngine::start_channel(const ems::net::ChannelConfig& channelConfig,
                                   const std::string& connection_scope) {
     if (channelConfig.status_ == 0) return false;
     std::lock_guard lock(channels_mutex_);
@@ -308,6 +298,7 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig,
                     return false;
                 }
             }
+            worker->add_logical_channel(channelConfig.id_, channelConfig.channel_id);
             channels_[channelConfig.id_] = worker;
             connection_scopes_[channelConfig.id_] = connection_scope;
             LOG_INFO("通道[{}] {} 复用连接[{}] {}", channelConfig.id_, channelConfig.name_,
@@ -316,10 +307,9 @@ bool CollectEngine::start_channel(const ems::rtdb::ChannelConfig& channelConfig,
         }
     }
 
-    LOG_INFO(fmt::format("启动单个通道[{}] {}, 协议={}, 连接={}", channelConfig.id_,
-                         channelConfig.name_,
-                         ems::rtdb::protocolTypeToString(channelConfig.protocol_),
-                         channelConfig.connection_)
+    LOG_INFO(fmt::format(
+                 "启动单个通道[{}] {}, 协议={}, 连接={}", channelConfig.id_, channelConfig.name_,
+                 ems::net::protocolTypeToString(channelConfig.protocol_), channelConfig.connection_)
                  .c_str());
 
     auto channelThread = std::make_shared<ChannelThread>(config, dispatcher_);

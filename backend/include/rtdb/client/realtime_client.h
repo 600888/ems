@@ -9,10 +9,10 @@ namespace ems::rtdb {
 /**
  * @brief 配置驱动的动态库公共入口，封装第三方后端及本进程资源。
  *
- * 首批提供记录级 API，不替代尚未接入的类型化来源授权门面。
+ * 提供记录级 API；业务测点使用 PointClient / RealtimeService 校验目录与来源。
  * 调用者与动态库须使用兼容的编译器 ABI、架构和 CRT。
  */
-class EMS_RTDB_API RealtimeClient final {
+class EMS_RTDB_API RealtimeClient final : public RealtimeStoreBase {
    public:
     /**
      * @brief 按部署 JSON 打开统一客户端；共享内存仅允许挂接已有段。
@@ -42,7 +42,7 @@ class EMS_RTDB_API RealtimeClient final {
     static Result<bool> cleanup(const std::string& config_path, const CallContext& ctx);
 
     /** @brief 释放本进程资源；共享内存不随客户端销毁而删除。 */
-    ~RealtimeClient();
+    ~RealtimeClient() override;
 
     /**
      * @brief 读取同一版本的完整记录副本。
@@ -50,15 +50,16 @@ class EMS_RTDB_API RealtimeClient final {
      * @param[in] ctx 调用预算。
      * @return 记录副本或明确错误；不存在不等于零值。
      */
-    Result<Record> read(const RecordKey& key, const CallContext& ctx);
+    Result<Record> read(const RecordKey& key, const CallContext& ctx) override;
 
     /**
-     * @brief 枚举设备状态记录键，用于业务文档和测点目录；不保证并发快照。
+     * @brief 枚举设备状态记录键；不保证并发快照。
      * @param[in] scope 待枚举的作用域。
      * @param[in] ctx 调用预算。
      * @return 键集合；不可用、超时或超过 65536 个键时返回错误。
      */
-    Result<std::vector<RecordKey>> listDeviceStates(const Scope& scope, const CallContext& ctx);
+    Result<std::vector<RecordKey>> listDeviceStates(const Scope& scope,
+                                                    const CallContext& ctx) override;
 
     /**
      * @brief 枚举独立命令记录，用于补偿扫描；不保证并发快照。
@@ -66,7 +67,8 @@ class EMS_RTDB_API RealtimeClient final {
      * @param[in] ctx 扫描期限。
      * @return 至多 65536 个键或明确错误，不返回截断结果。
      */
-    Result<std::vector<RecordKey>> listCommandStates(const Scope& scope, const CallContext& ctx);
+    Result<std::vector<RecordKey>> listCommandStates(const Scope& scope,
+                                                     const CallContext& ctx) override;
 
     /**
      * @brief 按预期版本完整替换或条件创建记录。
@@ -74,7 +76,8 @@ class EMS_RTDB_API RealtimeClient final {
      * @param[in] ctx 调用预算。
      * @return 新 revision；冲突/结果未知保留写入确定性。
      */
-    Result<WriteReceipt> compareExchange(const WriteRequest& request, const CallContext& ctx);
+    Result<WriteReceipt> compareExchange(const WriteRequest& request,
+                                         const CallContext& ctx) override;
 
     /**
      * @brief 按预期版本删除记录。
@@ -82,7 +85,7 @@ class EMS_RTDB_API RealtimeClient final {
      * @param[in] ctx 调用预算。
      * @return 删除凭据或带写入确定性的错误。
      */
-    Result<EraseReceipt> erase(const EraseRequest& request, const CallContext& ctx);
+    Result<EraseReceipt> erase(const EraseRequest& request, const CallContext& ctx) override;
 
     /**
      * @brief 逐项批量读取，不保证整批快照。
@@ -106,10 +109,10 @@ class EMS_RTDB_API RealtimeClient final {
      * @brief 返回不进行网络探测的运维能力快照。
      * @return 后端能力与存储代次；业务算法不应据此选择后端分支。
      */
-    BackendInfo info() const;
+    BackendInfo info() const override;
 
     /** @brief 停止调用后幂等关闭本进程资源，不删除后端。 */
-    void close() noexcept;
+    void close() noexcept override;
 
    private:
     struct Impl;

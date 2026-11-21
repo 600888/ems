@@ -4,13 +4,14 @@
 #pragma once
 
 #include <common/database/mysql_database.h>
+#include <rtdb/model/configuration_catalog.h>
 
 #include <cstdint>
 #include <map>
 #include <string>
 #include <vector>
 
-#include "rtdb/model/rtdb_channel.h"
+#include "net/channel_config.h"
 
 namespace ems::net::device {
 
@@ -53,7 +54,7 @@ struct ForwardingPoint {
 
 /** @brief 与采集线程分开的只读 MMS 上送通道。 */
 struct ForwardingChannelConfig {
-    ems::rtdb::ChannelConfig channel;
+    ems::net::ChannelConfig channel;
     std::vector<ForwardingPoint> points;
 };
 
@@ -82,7 +83,7 @@ class CfgLoader {
     bool configure(const ems::database::DeviceConfigRecords& records);
 
     /** @brief 返回启用且有有效绑定的通道。 @return 通道配置副本。 */
-    std::vector<ems::rtdb::ChannelConfig> channels() const { return channels_; }
+    std::vector<ems::net::ChannelConfig> channels() const { return channels_; }
 
     /** @brief 返回授权启用的 IEC61850 上送通道。 @return 通道及已校验映射的副本。 */
     std::vector<ForwardingChannelConfig> forwarding_channels() const { return forwarding_; }
@@ -110,9 +111,13 @@ class CfgLoader {
     /** @brief 返回上次错误。 @return 脱敏配置错误。 */
     const std::string& last_error() const { return error_; }
 
+    /** @brief 返回当前统一实时目录。 @return 共享只读目录；未配置时为空。 */
+    std::shared_ptr<const ems::rtdb::RuntimeCatalog> runtime_catalog() const { return catalog_; }
+
    private:
+    std::shared_ptr<const ems::rtdb::RuntimeCatalog> catalog_;
     ems::database::MySqlDatabaseContext database_;
-    std::vector<ems::rtdb::ChannelConfig> channels_;
+    std::vector<ems::net::ChannelConfig> channels_;
     std::vector<ForwardingChannelConfig> forwarding_;
     std::map<std::int64_t, std::vector<ConfiguredDevice>> devices_;
     std::map<std::int64_t, std::string> connection_scopes_;

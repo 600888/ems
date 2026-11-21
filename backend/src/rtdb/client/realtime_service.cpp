@@ -259,9 +259,8 @@ void evaluateFreshness(core::UtcMicros now, core::UtcMicros source_time,
         clock_anomaly = true;
         return;
     }
-    const core::UtcMicros threshold =
-        static_cast<core::UtcMicros>(stale_after_ms == 0 ? 60000 : stale_after_ms) * 1000;
-    stale = now - baseline > threshold;
+    if (stale_after_ms > 0)
+        stale = now - baseline > static_cast<core::UtcMicros>(stale_after_ms) * 1000;
 }
 
 class PointRecordCodec {
@@ -335,6 +334,15 @@ class PointRecordCodec {
         snapshot.source_id = stringField(record.fields, "source_id");
         snapshot.config_version = stringField(record.fields, "config_version");
         snapshot.event_id = stringField(record.fields, "event_id");
+        snapshot.command_id = stringField(record.fields, "command_id");
+        snapshot.command_status = stringField(record.fields, "command_status");
+        snapshot.command_reason = stringField(record.fields, "command_reason");
+        if (hasField(record.fields, "command_order")) {
+            if (!parseI64(stringField(record.fields, "command_order"), snapshot.command_order) ||
+                !parseI64(stringField(record.fields, "command_updated_at_ms"),
+                          snapshot.command_updated_at_ms))
+                return readError(core::ErrorCode::CorruptData, "invalid command projection");
+        }
 
         std::uint64_t epoch = 0;
         std::uint64_t sequence = 0;
@@ -590,6 +598,64 @@ core::Result<SampleResult> RealtimeService::updatePoint(const PointAddress& addr
         // CAS 冲突：重新读取后再次校验来源与序号。
     }
     return writeError(core::ErrorCode::Conflict, "point update conflicted after retries");
+}
+
+Result<SampleResult> RealtimeService::projectCommand(
+    const PointAddress& address, const model::PointSample& sample, const std::string& command_id,
+    const std::string& status, const std::string& reason, std::int64_t order,
+    std::int64_t updated_at_ms, const CallContext& ctx) {
+    const auto* point = catalog_->findPoint(address);
+    if (!point || !model::is_command(point->point_type) || order <= 0 || command_id.empty())
+        return writeError(ErrorCode::InvalidArgument, "invalid command projection target");
+    for (unsigned attempt = 0; attempt < kMaxCasAttempts; ++attempt) {
+        auto current = store_->read(pointKey(address), ctx);
+        if (!core::is_ok(current)) return core::error_of(current);
+        const auto& record = core::value_of(current);
+        std::int64_t previous_order = 0, previous_time = 0;
+        if (hasField(record.fields, "command_order") &&
+            (!parseI64(stringField(record.fields, "command_order"), previous_order) ||
+             !parseI64(stringField(record.fields, "command_updated_at_ms"), previous_time)))
+            return writeError(ErrorCode::CorruptData, "invalid command projection ordering");
+        if (order < previous_order || (order == previous_order && updated_at_ms < previous_time))
+            return SampleResult::IgnoredOutOfOrder;
+        if (order == previous_order && stringField(record.fields, "command_id") == command_id &&
+            stringField(record.fields, "command_status") == status &&
+            stringField(record.fields, "command_reason") == reason &&
+            previous_time == updated_at_ms &&
+            stringField(record.fields, "source_epoch") ==
+                std::to_string(sample.source_epoch.value) &&
+            stringField(record.fields, "config_version") == sample.config_version &&
+            stringField(record.fields, "accepted_source_epoch") ==
+                std::to_string(sample.source_epoch.value) &&
+            stringField(record.fields, "accepted_source_id") == sample.source_id &&
+            stringField(record.fields, "accepted_config_version") == sample.config_version &&
+            stringField(record.fields, "write_enabled") == "1")
+            return SampleResult::Duplicate;
+        SourcePolicy installed{stringField(record.fields, "accepted_source_id"),
+                               sample.source_epoch,
+                               stringField(record.fields, "accepted_config_version"), true};
+        if (installed.source_id != sample.source_id ||
+            installed.config_version != sample.config_version ||
+            stringField(record.fields, "accepted_source_epoch") !=
+                std::to_string(sample.source_epoch.value) ||
+            stringField(record.fields, "write_enabled") != "1")
+            return writeError(ErrorCode::PermissionDenied,
+                              "command projection source not authorized");
+        auto encoded = PointRecordCodec::encode(*point, sample, installed,
+                                                clock_ ? clock_() : core::now_utc_micros());
+        if (!core::is_ok(encoded)) return core::error_of(encoded);
+        auto fields = core::value_of(encoded);
+        fields["command_id"] = command_id;
+        fields["command_status"] = status;
+        fields["command_reason"] = reason;
+        fields["command_order"] = std::to_string(order);
+        fields["command_updated_at_ms"] = std::to_string(updated_at_ms);
+        auto written =
+            store_->compareExchange({pointKey(address), std::move(fields), record.revision}, ctx);
+        if (core::is_ok(written)) return SampleResult::Applied;
+        if (core::error_of(written).code != ErrorCode::Conflict) return core::error_of(written);
+    }
+    return writeError(ErrorCode::Conflict, "command projection retry exhausted");
 }
 
 std::vector<core::Result<SampleResult>> RealtimeService::updatePoints(

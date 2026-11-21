@@ -67,6 +67,8 @@ struct PointSnapshot {
     core::UtcMicros ingest_time{core::kInvalidUtcMicros};
     std::string event_id;
     Revision revision;  ///< 读取时的存储版本
+    std::string command_id, command_status, command_reason;
+    std::int64_t command_order{0}, command_updated_at_ms{0};
 };
 
 /// 设备运行状态（与设计图“在线/告警/故障/离线/未配置”一致）。
@@ -367,6 +369,24 @@ class EMS_RTDB_API RealtimeService {
      * @return 目录引用。
      */
     const RuntimeCatalog& catalog() const noexcept { return *catalog_; }
+
+    /**
+     * @brief 原子投影命令目标与状态到对应四遥点；较旧命令不能覆盖较新命令。
+     * @param[in] address 命令点地址。
+     * @param[in] sample 已授权来源产生的目标值样本。
+     * @param[in] command_id 稳定命令 ID。
+     * @param[in] status 命令执行状态。
+     * @param[in] reason 状态原因。
+     * @param[in] order 持久命令记录的单调主键，用于比较不同命令的先后。
+     * @param[in] updated_at_ms 本条命令状态更新时间，UTC 毫秒。
+     * @param[in] ctx 写入预算。
+     * @return 写入、重复或忽略旧命令的结果；失败时保留原记录。
+     */
+    Result<SampleResult> projectCommand(const PointAddress& address,
+                                        const model::PointSample& sample,
+                                        const std::string& command_id, const std::string& status,
+                                        const std::string& reason, std::int64_t order,
+                                        std::int64_t updated_at_ms, const CallContext& ctx);
 
    private:
     std::shared_ptr<IRealtimeStore> store_;

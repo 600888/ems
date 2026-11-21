@@ -261,6 +261,9 @@ core::Result<ArchiveDirectory> ArchiveDirectorySource::refresh(const core::CallC
     if (!core::is_ok(records)) return core::error_of(records);
     auto built = build_archive_directory(core::value_of(records));
     if (!core::is_ok(built)) return core::error_of(built);
+    auto catalog = rtdb::configuration_catalog(core::value_of(records));
+    if (!core::is_ok(catalog)) return core::error_of(catalog);
+    std::get<0>(built).runtime_catalog = core::value_of(catalog);
     for (auto& point : std::get<0>(built).points) {
         auto existing =
             database_.history_catalog->find_series(*transaction, point.series.point_id, ctx);

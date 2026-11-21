@@ -15,7 +15,7 @@ target_include_directories(
 
 target_link_libraries(
     ems_storage_core
-    PUBLIC ems_common_core ems_messaging_api ems_database_api ems_timeseries_api
+    PUBLIC ems_common_core ems_messaging_api ems_database_api ems_timeseries_api ems::rtdb
     PRIVATE ems_common_codec
 )
 

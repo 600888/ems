@@ -36,7 +36,6 @@
 #include "net/collect/collect_defaults.h"
 #include "net/collect/collect_types.h"
 #include "plugin_manager.h"
-#include "rtdb/model/rtdb_device.h"
 
 namespace ems {
 namespace net {
@@ -54,23 +53,6 @@ struct EngineConfig {
 
     std::string rtdbConfigPath_{"conf/realtime.json"};
     std::string rtdbScopeCode_{"station001"};
-    // Redis 变更通知配置；与 RTDB 状态存储选择独立。
-    std::string redisHost_{"127.0.0.1"};
-    int redisPort_{enum_value(DispatchDefaults::RedisPort)};
-    std::string redisPassword_;
-    int redisDb_{0};
-    int redisPoolSize_{enum_value(DispatchDefaults::RedisPoolSize)};
-    int redisTimeoutMs_{enum_value(DispatchDefaults::RedisTimeoutMs)};
-    std::string redisPrefix_{"ems:"};
-
-    // 变更提示通道独立于 RTDB 存储选择。
-    DataDispatcherConfig::NotificationBackend notificationBackend_{
-        DataDispatcherConfig::NotificationBackend::Redis};
-    std::string zmqEndpoint_{"tcp://127.0.0.1:5557"};
-    std::size_t zmqQueueItems_{enum_value(DispatchDefaults::ZmqQueueItems)};
-    std::size_t zmqMaxMessageBytes_{enum_value(DispatchDefaults::ZmqMaxMessageBytes)};
-    int zmqHighWaterMark_{enum_value(DispatchDefaults::ZmqHighWaterMark)};
-
     // 默认采集周期
     int defaultPollIntervalMs_{enum_value(CollectDefaults::PollIntervalMs)};
 
@@ -135,7 +117,7 @@ class CollectEngine : public CommandRouter {
      * @param[in] connection_scope 加载器解析的实体设备子树根 device_id；空串表示独立连接。
      * @return true 成功
      */
-    bool start_channel(const ems::rtdb::ChannelConfig& channelConfig,
+    bool start_channel(const ems::net::ChannelConfig& channelConfig,
                        const std::string& connection_scope = {});
 
     /**
@@ -211,6 +193,11 @@ class CollectEngine : public CommandRouter {
      * @return true 表示条件成立；false 表示不成立。
      */
     bool is_running() const override { return state_.load() == EngineState::Running; }
+
+    /** @brief 返回当前统一点客户端。 @return 共享客户端；未就绪为空。 */
+    std::shared_ptr<rtdb::PointClient> point_client() const override {
+        return dispatcher_ ? dispatcher_->point_client() : nullptr;
+    }
 
     // ============================================================
     // 组件访问

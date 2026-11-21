@@ -176,7 +176,7 @@ RuntimeCatalog::RuntimeCatalog(Scope scope, std::string config_version,
     : scope_(std::move(scope)),
       config_version_(std::move(config_version)),
       activation_revision_(std::move(activation_revision)),
-      default_stale_after_ms_(default_stale_after_ms == 0 ? 60000 : default_stale_after_ms) {}
+      default_stale_after_ms_(default_stale_after_ms) {}
 
 bool RuntimeCatalog::addPoint(RuntimePoint point) {
     if (point.point_id.empty() || !validCode(point.address.code, false)) return false;
@@ -354,9 +354,7 @@ RuntimeCatalogBuildResult buildRuntimeCatalog(const DeviceTreeSnapshot& snapshot
         runtime.value_type = point.value_type;
         runtime.unit = point.unit;
         runtime.stale_after_ms =
-            point.stale_after_ms != 0
-                ? point.stale_after_ms
-                : (options.default_stale_after_ms == 0 ? 60000 : options.default_stale_after_ms);
+            point.stale_after_ms != 0 ? point.stale_after_ms : options.default_stale_after_ms;
         runtime.enabled = point.enabled;
         runtime.source = options.default_source;
         if (runtime.source.config_version.empty()) {

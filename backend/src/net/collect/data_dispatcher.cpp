@@ -1,513 +1,108 @@
-/**
- * @file data_dispatcher.cpp
- * @brief 将 handler 的统一采集结果分发到实时库。
- */
 #include "data_dispatcher.h"
 
-#include <common/messaging/zmq_change_channel.h>
-#include <spdlog/fmt/fmt.h>
+#include <rtdb/client/realtime_client.h>
 
-#include <algorithm>
-#include <chrono>
-#include <sstream>
-#include <unordered_map>
-#ifdef EMS_NOTIFICATION_WITH_REDIS
-#include <sw/redis++/redis++.h>
-#endif
-
-#include "net/log.h"
-#include "net/protocol/protocol_types.h"
-#include "rtdb/client/rtdb_manager.h"
-
-namespace ems {
-namespace net {
-namespace collect {
-
-namespace {
-uint64_t now_ms() {
-    return std::chrono::duration_cast<std::chrono::milliseconds>(
-               std::chrono::system_clock::now().time_since_epoch())
-        .count();
-}
-}  // namespace
-
-// ============================================================
-// 构造 / 析构
-// ============================================================
-
-struct DataDispatcher::RedisNotifier {
-#ifdef EMS_NOTIFICATION_WITH_REDIS
-    std::unique_ptr<sw::redis::Redis> client;
-#endif
-    bool configure(const DataDispatcherConfig& config) {
-#ifdef EMS_NOTIFICATION_WITH_REDIS
-        if (config.timeoutMs_ <= 0 || config.poolSize_ <= 0 || config.redisPort_ <= 0 ||
-            config.redisPort_ > 65535)
-            return false;
-        try {
-            sw::redis::ConnectionOptions options;
-            options.host = config.redisHost_;
-            options.port = config.redisPort_;
-            options.password = config.redisPassword_;
-            options.db = config.redisDb_;
-            options.socket_timeout = std::chrono::milliseconds(config.timeoutMs_);
-            options.connect_timeout = options.socket_timeout;
-            sw::redis::ConnectionPoolOptions pool;
-            pool.size = config.poolSize_;
-            pool.wait_timeout = options.socket_timeout;
-            client = std::make_unique<sw::redis::Redis>(options, pool);
-            return true;
-        } catch (const std::exception&) {
-            return false;
-        }
-#else
-        return false;
-#endif
-    }
-
-    bool publish(const std::string& channel, const std::string& message) {
-#ifdef EMS_NOTIFICATION_WITH_REDIS
-        try {
-            client->publish(channel, message);
-            return true;
-        } catch (const std::exception&) {
-            return false;
-        }
-#else
-        return false;
-#endif
-    }
-};
-
+namespace ems::net::collect {
 DataDispatcher::DataDispatcher() = default;
-
-DataDispatcher::~DataDispatcher() { shutdown(); }
-
-// ============================================================
-// 初始化 / 关闭
-// ============================================================
+DataDispatcher::~DataDispatcher() = default;
 
 bool DataDispatcher::initialize(const DataDispatcherConfig& config) {
-    if (initialized_.load()) {
-        LOG_INFO("数据分发器已初始化, 跳过");
-        return true;
-    }
-
-    LOG_INFO(fmt::format("初始化数据分发器: RTDB配置={}, 作用域={}", config.rtdbConfigPath_,
-                         config.rtdbScopeCode_)
-                 .c_str());
+    auto opened = rtdb::RealtimeClient::open(
+        config.rtdbConfigPath_,
+        core::make_call_context(std::chrono::milliseconds(config.timeoutMs_)));
+    if (!core::is_ok(opened)) return false;
+    std::lock_guard lock(mutex_);
     config_ = config;
+    initialized_ = true;
+    return true;
+}
 
-    ems::rtdb::RtDbConfig rtdbConfig;
-    rtdbConfig.config_path = config.rtdbConfigPath_;
-    rtdbConfig.scope_code = config.rtdbScopeCode_;
-    rtdbConfig.timeoutMs = config.timeoutMs_;
-    rtdbConfig.prefix = config.keyPrefix_;
-
-    rtdb_mgr_ = std::make_shared<ems::rtdb::RtDbManager>();
-    if (!rtdb_mgr_->initialize(rtdbConfig)) {
-        LOG_ERROR(fmt::format("RTDB客户端初始化失败: config={}", config.rtdbConfigPath_).c_str());
-        rtdb_mgr_.reset();
-        return false;
-    }
-
-    if (config.notificationBackend_ == DataDispatcherConfig::NotificationBackend::ZeroMQ) {
-#ifdef EMS_WITH_ZEROMQ
-        ems::messaging::ZmqChangeConfig zmqConfig;
-        zmqConfig.endpoint = config.zmqEndpoint_;
-        zmqConfig.max_queue_items = config.zmqQueueItems_;
-        zmqConfig.max_message_bytes = config.zmqMaxMessageBytes_;
-        zmqConfig.high_water_mark = config.zmqHighWaterMark_;
-        zmq_publisher_ = std::make_shared<ems::messaging::ZmqChangePublisher>();
-        if (!zmq_publisher_->start(zmqConfig)) {
-            LOG_ERROR("ZeroMQ 变更通知端点绑定失败");
-            zmq_publisher_.reset();
-            rtdb_mgr_->shutdown();
-            rtdb_mgr_.reset();
-            return false;
-        }
-#else
-        LOG_ERROR("当前构建未启用 EMS_WITH_ZEROMQ");
-        rtdb_mgr_->shutdown();
-        rtdb_mgr_.reset();
-        return false;
-#endif
-    }
-
-    if (config.notificationBackend_ == DataDispatcherConfig::NotificationBackend::Redis) {
-        redis_notifier_ = std::make_unique<RedisNotifier>();
-        if (!redis_notifier_->configure(config)) {
-            shutdown();
-            return false;
-        }
-    } else if (config.notificationBackend_ != DataDispatcherConfig::NotificationBackend::ZeroMQ &&
-               config.notificationBackend_ != DataDispatcherConfig::NotificationBackend::None) {
-        shutdown();
-        return false;
-    }
-    initialized_.store(true);
-    LOG_INFO("数据分发器初始化成功");
+bool DataDispatcher::configure(std::shared_ptr<const rtdb::RuntimeCatalog> catalog) {
+    if (!catalog || catalog->scope().code != config_.rtdbScopeCode_) return false;
+    const auto ctx = core::make_call_context(std::chrono::seconds(30));
+    auto opened = rtdb::PointClient::open(config_.rtdbConfigPath_, std::move(catalog), ctx);
+    if (!core::is_ok(opened)) return false;
+    auto client = core::value_of(opened);
+    if (!core::is_ok(client->installWriter(ctx))) return false;
+    std::lock_guard lock(mutex_);
+    client_ = std::move(client);
     return true;
 }
 
 void DataDispatcher::shutdown() {
-    LOG_INFO("关闭数据分发器");
-    initialized_.store(false);
-    redis_notifier_.reset();
-#ifdef EMS_WITH_ZEROMQ
-    if (zmq_publisher_) {
-        zmq_publisher_->stop();
-        zmq_publisher_.reset();
-    }
-#endif
-    if (rtdb_mgr_) {
-        rtdb_mgr_->shutdown();
-        rtdb_mgr_.reset();
-    }
+    std::lock_guard lock(mutex_);
+    client_.reset();
+    initialized_ = false;
 }
 
-std::shared_ptr<ems::rtdb::RtDbManager> DataDispatcher::rtdb_manager() const { return rtdb_mgr_; }
-
-bool DataDispatcher::is_connected() const { return rtdb_mgr_ && rtdb_mgr_->isConnected(); }
-
-// ============================================================
-// 单点更新
-// ============================================================
-
-bool DataDispatcher::update_yc(const std::string& pointCode, double value, int quality,
-                               uint64_t timestamp) {
-    if (!initialized_.load() || !rtdb_mgr_) return false;
-
-    auto point = make_yc_point(pointCode, value, quality, timestamp);
-    bool ok = rtdb_mgr_->updateYc(pointCode, point);
-
-    {
-        std::lock_guard lock(stats_mutex_);
-        stats_.totalUpdates++;
-        if (!ok) stats_.failedUpdates++;
-    }
-
-    if (ok) {
-        publish_change("YC", point.to_json().dump());
-    }
-    notify_callback("YC", pointCode, ok);
-    return ok;
+bool DataDispatcher::is_initialized() const {
+    std::lock_guard lock(mutex_);
+    return initialized_;
 }
 
-bool DataDispatcher::update_yx(const std::string& pointCode, int value, int quality,
-                               uint64_t timestamp) {
-    if (!initialized_.load() || !rtdb_mgr_) return false;
-
-    auto point = make_yx_point(pointCode, value, quality, timestamp);
-    bool ok = rtdb_mgr_->updateYx(pointCode, point);
-
-    {
-        std::lock_guard lock(stats_mutex_);
-        stats_.totalUpdates++;
-        if (!ok) stats_.failedUpdates++;
-    }
-
-    if (ok) {
-        publish_change("YX", point.to_json().dump());
-    }
-    notify_callback("YX", pointCode, ok);
-    return ok;
+std::shared_ptr<rtdb::PointClient> DataDispatcher::point_client() const {
+    std::lock_guard lock(mutex_);
+    return client_;
 }
 
-bool DataDispatcher::update_yk(const std::string& pointCode, int value, int quality, int ykStatus,
-                               uint64_t timestamp) {
-    if (!initialized_.load() || !rtdb_mgr_) return false;
-
-    model::YkPoint point;
-    point.code_ = pointCode;
-    point.name_ = pointCode;
-    point.value_ = value;
-    point.status_ = static_cast<model::YKStatus>(ykStatus);
-    point.timestamp_ = timestamp;
-
-    bool ok = rtdb_mgr_->updateYk(pointCode, point);
-
-    {
-        std::lock_guard lock(stats_mutex_);
-        stats_.totalUpdates++;
-        if (!ok) stats_.failedUpdates++;
-    }
-
-    if (ok) {
-        publish_change("YK", point.to_json().dump());
-    }
-    notify_callback("YK", pointCode, ok);
-    return ok;
-}
-
-bool DataDispatcher::update_yt(const std::string& pointCode, double value, int quality,
-                               uint64_t timestamp) {
-    if (!initialized_.load() || !rtdb_mgr_) return false;
-
-    model::YtPoint point;
-    point.code_ = pointCode;
-    point.value_ = value;
-    point.timestamp_ = timestamp;
-    point.quality_ = static_cast<model::PointQuality>(quality);
-
-    bool ok = rtdb_mgr_->updateYt(pointCode, point);
-
-    {
-        std::lock_guard lock(stats_mutex_);
-        stats_.totalUpdates++;
-        if (!ok) stats_.failedUpdates++;
-    }
-
-    if (ok) {
-        publish_change("YT", point.to_json().dump());
-    }
-    notify_callback("YT", pointCode, ok);
-    return ok;
-}
-
-// ============================================================
-// 批量更新
-// ============================================================
+bool DataDispatcher::is_connected() const { return point_client() != nullptr; }
 
 int DataDispatcher::batch_update(const std::vector<PointValue>& results) {
-    if (!initialized_.load() || !rtdb_mgr_) {
-        LOG_ERROR("数据分发器未初始化, 无法批量更新");
-        return enum_value(protocol::OperationResult::Failure);
-    }
-
-    std::map<std::string, model::YcPoint> ycBatch;
-    std::map<std::string, model::YxPoint> yxBatch;
-
-    for (const auto& r : results) {
-        const auto type = r.details.is_object() ? r.details.value("point_type", "yc") : "yc";
-        if (type == "yx")
-            yxBatch[r.code] =
-                make_yx_point(r.code, static_cast<int>(r.value), r.quality, r.timestamp);
-        else
-            ycBatch[r.code] = make_yc_point(r.code, r.value, r.quality, r.timestamp);
-    }
-
-    int total = 0;
-    if (!ycBatch.empty()) {
-        int n = batch_update_yc(ycBatch);
-        total += (n >= 0) ? n : 0;
-        LOG_DEBUG(fmt::format("批量更新YC: {}点, 成功{}点", ycBatch.size(), total).c_str());
-    }
-    if (!yxBatch.empty()) {
-        int n = batch_update_yx(yxBatch);
-        total += (n >= 0) ? n : 0;
-        LOG_DEBUG(
-            fmt::format("批量更新YX: {}点, 成功{}点", yxBatch.size(), n >= 0 ? n : 0).c_str());
-    }
-
-    return total;
-}
-
-int DataDispatcher::batch_update_yc(const std::map<std::string, model::YcPoint>& points) {
-    if (!initialized_.load() || !rtdb_mgr_ || points.empty()) return 0;
-
-    // 分批写入（防止一次写入数据量过大）
-    int updated = 0;
-    std::map<std::string, model::YcPoint> batch;
-    for (const auto& [code, pt] : points) {
-        batch[code] = pt;
-        if (batch.size() >= static_cast<size_t>(config_.batchMaxSize_)) {
-            if (rtdb_mgr_->batchUpdateYc(batch)) {
-                updated += static_cast<int>(batch.size());
-                for (const auto& [c, p] : batch) {
-                    publish_change("YC", p.to_json().dump());
-                    notify_callback("YC", c, true);
-                }
-            } else {
-                for (const auto& [c, _] : batch) {
-                    notify_callback("YC", c, false);
-                }
-            }
-            batch.clear();
+    auto client = point_client();
+    if (!client) return -1;
+    int count = 0;
+    for (const auto& sample : results) {
+        const auto quality = sample.quality == 0 ? model::Quality::Good : model::Quality::Invalid;
+        auto updated =
+            client->update(sample.code, sample.value, quality, sample.timestamp,
+                           core::make_call_context(std::chrono::milliseconds(config_.timeoutMs_)));
+        const bool ok = core::is_ok(updated);
+        if (ok) ++count;
+        DispatchCallback callback;
+        {
+            std::lock_guard lock(mutex_);
+            callback = callback_;
+            ++stats_.totalUpdates;
+            if (!ok) ++stats_.failedUpdates;
         }
+        if (callback)
+            callback((sample.details.is_object() ? sample.details.value("point_type", "yc") : "yc"),
+                     sample.code, ok);
     }
-
-    // 剩余批次
-    if (!batch.empty()) {
-        if (rtdb_mgr_->batchUpdateYc(batch)) {
-            updated += static_cast<int>(batch.size());
-            for (const auto& [c, p] : batch) {
-                publish_change("YC", p.to_json().dump());
-                notify_callback("YC", c, true);
-            }
-        } else {
-            for (const auto& [c, _] : batch) {
-                notify_callback("YC", c, false);
-            }
-        }
-    }
-
     {
-        std::lock_guard lock(stats_mutex_);
-        stats_.totalUpdates += updated;
-        stats_.batchCount++;
+        std::lock_guard lock(mutex_);
+        ++stats_.batchCount;
     }
-
-    return updated;
+    return count;
 }
 
-int DataDispatcher::batch_update_yx(const std::map<std::string, model::YxPoint>& points) {
-    if (!initialized_.load() || !rtdb_mgr_ || points.empty()) return 0;
-
-    int updated = 0;
-    std::map<std::string, model::YxPoint> batch;
-    for (const auto& [code, pt] : points) {
-        batch[code] = pt;
-        if (batch.size() >= static_cast<size_t>(config_.batchMaxSize_)) {
-            if (rtdb_mgr_->batchUpdateYx(batch)) {
-                updated += static_cast<int>(batch.size());
-                for (const auto& [c, p] : batch) {
-                    publish_change("YX", p.to_json().dump());
-                    notify_callback("YX", c, true);
-                }
-            } else {
-                for (const auto& [c, _] : batch) notify_callback("YX", c, false);
-            }
-            batch.clear();
-        }
-    }
-
-    if (!batch.empty()) {
-        if (rtdb_mgr_->batchUpdateYx(batch)) {
-            updated += static_cast<int>(batch.size());
-            for (const auto& [c, p] : batch) {
-                publish_change("YX", p.to_json().dump());
-                notify_callback("YX", c, true);
-            }
-        } else {
-            for (const auto& [c, _] : batch) notify_callback("YX", c, false);
-        }
-    }
-
-    {
-        std::lock_guard lock(stats_mutex_);
-        stats_.totalUpdates += updated;
-        stats_.batchCount++;
-    }
-
-    return updated;
+bool DataDispatcher::update_yc(const std::string& id, double value, int quality, uint64_t time) {
+    PointValue sample;
+    sample.code = id;
+    sample.value = value;
+    sample.quality = quality;
+    sample.timestamp = time;
+    sample.details = {{"point_type", "yc"}};
+    return batch_update({sample}) == 1;
 }
 
-int DataDispatcher::batch_update_yk(const std::map<std::string, model::YkPoint>& points) {
-    if (!initialized_.load() || !rtdb_mgr_ || points.empty()) return 0;
-
-    if (!rtdb_mgr_->batchUpdateYk(points)) return enum_value(protocol::OperationResult::Failure);
-    for (const auto& [code, point] : points) {
-        publish_change("YK", point.to_json().dump());
-        notify_callback("YK", code, true);
-    }
-    return static_cast<int>(points.size());
+bool DataDispatcher::update_yx(const std::string& id, int value, int quality, uint64_t time) {
+    PointValue sample;
+    sample.code = id;
+    sample.value = value;
+    sample.quality = quality;
+    sample.timestamp = time;
+    sample.details = {{"point_type", "yx"}};
+    return batch_update({sample}) == 1;
 }
 
-int DataDispatcher::batch_update_yt(const std::map<std::string, model::YtPoint>& points) {
-    if (!initialized_.load() || !rtdb_mgr_ || points.empty()) return 0;
-
-    if (!rtdb_mgr_->batchUpdateYt(points)) return enum_value(protocol::OperationResult::Failure);
-    for (const auto& [code, point] : points) {
-        publish_change("YT", point.to_json().dump());
-        notify_callback("YT", code, true);
-    }
-    return static_cast<int>(points.size());
+void DataDispatcher::set_dispatch_callback(DispatchCallback callback) {
+    std::lock_guard lock(mutex_);
+    callback_ = std::move(callback);
 }
-
-// ============================================================
-// Pub/Sub 通知
-// ============================================================
-
-bool DataDispatcher::publish_change(const std::string& pointType, const std::string& jsonData) {
-    if (!initialized_.load() || !rtdb_mgr_) {
-        LOG_ERROR("数据分发器未初始化, 无法发布变更");
-        return false;
-    }
-
-    // 选择对应的发布通道
-    std::string channel;
-    if (pointType == "YC")
-        channel = config_.pubsubChannelYc_;
-    else if (pointType == "YX")
-        channel = config_.pubsubChannelYx_;
-    else if (pointType == "YK")
-        channel = config_.pubsubChannelYk_;
-    else if (pointType == "YT")
-        channel = config_.pubsubChannelYt_;
-    else {
-        LOG_WARN(fmt::format("未知的测点类型: {}", pointType).c_str());
-        return false;
-    }
-
-    bool ok = false;
-    if (config_.notificationBackend_ == DataDispatcherConfig::NotificationBackend::ZeroMQ) {
-#ifdef EMS_WITH_ZEROMQ
-        ok = zmq_publisher_ && zmq_publisher_->publish(config_.keyPrefix_ + channel, jsonData);
-#endif
-    } else if (config_.notificationBackend_ == DataDispatcherConfig::NotificationBackend::Redis) {
-        ok = redis_notifier_ && redis_notifier_->publish(config_.keyPrefix_ + channel, jsonData);
-    } else if (config_.notificationBackend_ == DataDispatcherConfig::NotificationBackend::None) {
-        ok = true;
-    }
-
-    {
-        std::lock_guard lock(stats_mutex_);
-        stats_.totalPublishes++;
-        if (!ok) stats_.failedPublishes++;
-    }
-
-    if (!ok) {
-        LOG_ERROR(fmt::format("发布变更失败: type={}, channel={}", pointType, channel).c_str());
-    }
-
-    return ok;
-}
-
-// ============================================================
-// 统计信息
-// ============================================================
 
 DataDispatcher::Stats DataDispatcher::stats() const {
-    std::lock_guard lock(stats_mutex_);
+    std::lock_guard lock(mutex_);
     return stats_;
 }
-
-// ============================================================
-// 私有辅助方法
-// ============================================================
-
-model::YcPoint DataDispatcher::make_yc_point(const std::string& code, double value, int quality,
-                                             uint64_t timestamp) {
-    model::YcPoint pt;
-    pt.code_ = code;
-    pt.name_ = code;
-    pt.value_ = value;
-    pt.rawValue_ = static_cast<int64_t>(value);
-    pt.timestamp_ = timestamp ? timestamp : now_ms();
-    pt.quality_ = static_cast<model::PointQuality>(quality);
-    pt.decodeCode_ = model::DecodeCode::FLOAT;
-    return pt;
-}
-
-model::YxPoint DataDispatcher::make_yx_point(const std::string& code, int value, int quality,
-                                             uint64_t timestamp) {
-    model::YxPoint pt;
-    pt.code_ = code;
-    pt.name_ = code;
-    pt.value_ = value;
-    pt.timestamp_ = timestamp ? timestamp : now_ms();
-    pt.quality_ = static_cast<model::PointQuality>(quality);
-    pt.decodeCode_ = model::DecodeCode::BOOL;
-    return pt;
-}
-
-void DataDispatcher::notify_callback(const std::string& type, const std::string& code, bool ok) {
-    if (callback_) {
-        callback_(type, code, ok);
-    }
-}
-
-}  // namespace collect
-}  // namespace net
-}  // namespace ems
+}  // namespace ems::net::collect

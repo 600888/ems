@@ -149,7 +149,7 @@ class EMS_RTDB_API RuntimeCatalog {
      * @param[in] scope 作用域。
      * @param[in] config_version 精确配置版本。
      * @param[in] activation_revision 激活修订号，可为空。
-     * @param[in] default_stale_after_ms 默认陈旧阈值。
+     * @param[in] default_stale_after_ms 默认陈旧阈值；0 表示不判陈旧。
      */
     RuntimeCatalog(Scope scope, std::string config_version, std::string activation_revision,
                    std::uint32_t default_stale_after_ms);
@@ -260,6 +260,9 @@ class EMS_RTDB_API RuntimeCatalog {
      * @return 通道数量。
      */
     std::size_t channelCount() const noexcept { return channels_.size(); }
+
+    /** @brief 返回目录中的测点定义。 @return 只读定义集合，生命周期与目录一致。 */
+    const std::vector<RuntimePoint>& points() const noexcept { return points_; }
 
    private:
     Scope scope_;

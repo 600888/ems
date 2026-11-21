@@ -40,7 +40,6 @@ int main(int argc, char** argv) {
     config.rtdbConfigPath_ = argv[2];
     config.pluginDir_ = argv[3];
     config.rtdbScopeCode_ = argv[4];
-    config.notificationBackend_ = ems::net::collect::NotificationBackend::None;
     ems::net::collect::CollectEngine engine;
     if (!engine.initialize(config)) return 1;
     std::signal(SIGINT, stop);

@@ -19,10 +19,6 @@ target_include_directories(
 )
 
 target_link_libraries(net_collect PUBLIC ems::rtdb Threads::Threads net_handler)
-if(TARGET redis++)
-    target_link_libraries(net_collect PRIVATE redis++)
-    target_compile_definitions(net_collect PRIVATE EMS_NOTIFICATION_WITH_REDIS)
-endif()
 
 if(EMS_WITH_ZEROMQ)
     target_link_libraries(net_collect PUBLIC ems_zmq_messaging)

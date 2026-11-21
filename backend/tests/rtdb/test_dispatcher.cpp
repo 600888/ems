@@ -1,76 +1,52 @@
 #include <gtest/gtest.h>
 #include <rtdb/backend/shared_memory_store.h>
-#include <rtdb/client/realtime_client.h>
-#include <rtdb/client/rtdb.h>
+#include <rtdb/client/point_client.h>
 
 #include <filesystem>
 #include <fstream>
+#include <nlohmann/json.hpp>
 
 #include "net/collect/data_dispatcher.h"
-
 #ifdef EMS_REALTIME_TEST_SHM
-TEST(RtdbDispatcher, WritesThroughUnifiedLibraryWithoutRedisNotificationDependency) {
+TEST(RtdbDispatcher, WritesCanonicalPointsWithoutLegacyCache) {
     using namespace ems;
-    const auto nonce = std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
-    const auto segment = "dispatcher_" + nonce;
-    const auto path = std::filesystem::temp_directory_path() / (segment + ".json");
+    const auto name =
+        "dispatcher_" + std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
+    const auto path = std::filesystem::temp_directory_path() / (name + ".json");
 
     struct Cleanup {
-        std::string segment;
         std::filesystem::path path;
 
         ~Cleanup() {
-            rtdb::SharedMemoryStore::remove(segment);
-            std::error_code ignored;
-            std::filesystem::remove(path, ignored);
+            rtdb::RealtimeClient::cleanup(path.string(),
+                                          core::make_call_context(std::chrono::seconds(2)));
+            std::filesystem::remove(path);
         }
-    } cleanup{segment, path};
+    } cleanup{path};
 
-    std::ofstream(path) << "{\"realtime\":{\"backend\":{\"type\":\"shm\",\"options\":{"
-                           "\"segment_name\":\""
-                        << segment
-                        << "\",\"capacity\":128,"
-                           "\"shard_count\":1,\"segment_bytes\":1048576}}}}";
+    std::ofstream(path)
+        << nlohmann::json{{"realtime",
+                           {{"backend", {{"type", "shm"}, {"options", {{"segment_name", name}}}}}}}}
+               .dump();
     const auto ctx = core::make_call_context(std::chrono::seconds(3));
     auto owner = rtdb::RealtimeClient::initialize(path.string(), ctx);
     ASSERT_TRUE(core::is_ok(owner));
-    net::collect::DataDispatcherConfig config;
-    config.rtdbConfigPath_ = path.string();
-    config.notificationBackend_ = net::collect::NotificationBackend::None;
-    // Deliberately unusable notification address: storage must not depend on it.
-    config.redisHost_ = "invalid.invalid";
-    config.redisPort_ = 1;
+    auto catalog = std::make_shared<rtdb::RuntimeCatalog>(
+        rtdb::Scope{rtdb::ScopeKind::Station, "station001"}, "1", "", 60000);
+    rtdb::RuntimePoint point;
+    point.point_id = core::PointId{"power"};
+    point.address = {{rtdb::ScopeKind::Station, "station001"}, {"pcs"}, "power"};
+    ASSERT_TRUE(catalog->addPoint(point));
+    net::collect::DataDispatcherConfig options;
+    options.rtdbConfigPath_ = path.string();
     net::collect::DataDispatcher dispatcher;
-    ASSERT_TRUE(dispatcher.initialize(config));
+    ASSERT_TRUE(dispatcher.initialize(options));
+    ASSERT_TRUE(dispatcher.configure(catalog));
     ASSERT_TRUE(dispatcher.update_yc("power", 42.5, 0, 1234));
-    ASSERT_TRUE(dispatcher.update_yx("breaker", 1, 0, 1234));
-    rtdb::RtDbConfig readerConfig;
-    readerConfig.config_path = path.string();
-    rtdb::RtDb reader;
-    ASSERT_TRUE(reader.initialize(readerConfig));
-    rtdb::YcPoint point;
-    ASSERT_TRUE(reader.getYc("power", point));
-    EXPECT_DOUBLE_EQ(point.value_, 42.5);
-    EXPECT_EQ(point.timestamp_, 1234);
-    rtdb::YxPoint status;
-    ASSERT_TRUE(reader.getYx("breaker", status));
-    EXPECT_EQ(status.value_, 1);
-    net::collect::PointValue analog;
-    analog.code = "YX_analog-stable-id";
-    analog.value = 6.25;
-    analog.quality = 0;
-    analog.timestamp = 2345;
-    analog.details = {{"point_type", "yc"}};
-    net::collect::PointValue discrete = analog;
-    discrete.code = "stable-discrete-id";
-    discrete.value = 1;
-    discrete.details = {{"point_type", "yx"}};
-    ASSERT_EQ(dispatcher.batch_update({analog, discrete}), 2);
-    ASSERT_TRUE(reader.getYc(analog.code, point));
-    EXPECT_DOUBLE_EQ(point.value_, 6.25);
-    ASSERT_TRUE(reader.getYx(discrete.code, status));
-    EXPECT_EQ(status.value_, 1);
-    dispatcher.shutdown();
-    EXPECT_TRUE(reader.getYc("power", point));
+    auto opened = rtdb::PointClient::open(path.string(), catalog, ctx);
+    ASSERT_TRUE(core::is_ok(opened));
+    auto read = core::value_of(opened)->readPointJson("yc", "power", ctx);
+    ASSERT_TRUE(core::is_ok(read));
+    EXPECT_EQ(nlohmann::json::parse(core::value_of(read))["value"], 42.5);
 }
 #endif

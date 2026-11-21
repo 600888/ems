@@ -1,8 +1,8 @@
 # 实时数据库进程
 
-> 进程：`ems-rtdb`｜语言：C++17｜日期：2026-10-24｜状态：首批 ems_rtdb 动态库、记录级客户端、JSON 配置与常驻入口已实现；完整类型化门面与管理 RPC 待完成。
+> 进程：`ems-rtdb`｜语言：C++17｜状态：统一记录后端、类型化测点与命令客户端已接入业务，管理 RPC 待实现。
 
-`ems-rtdb` 在 Redis、共享内存及未来合格实时后端下均常驻，负责统一数据接入、配置、生命周期和维护。业务只使用 `RealtimeClient` 公共接口，不选择后端，也不创建连接或映射；实时数据库进程读取配置并发布描述，公共客户端在内部完成发现与适配器组装。配置切换后业务接口、数据模型和算法保持不变。
+`ems-rtdb` 在 Redis、共享内存及未来合格实时后端下均常驻，负责统一数据接入、配置、生命周期和维护。业务通过 `PointClient` 读取测点，通过 `CommandClient` 提交控制命令；底层使用 `RealtimeClient` 公共接口，不选择后端，也不创建连接或映射；实时数据库进程读取配置并发布描述，公共客户端在内部完成发现与适配器组装。配置切换后业务接口、数据模型和算法保持不变。
 
 共享内存由实时数据库进程创建并持有，客户端库内部直接挂接；Redis 模式由库内部建立各进程自己的连接池。正常实时读写不经管理 RPC 转发，具体后端只对公共实现和运维诊断可见。
 
@@ -45,6 +45,8 @@ flowchart TB
 
 先复用已有 `IRealtimeStore`、`SharedMemoryStore`、`RedisStore` 和 `BackendFactory`，再补统一客户端、配置发现、常驻管理及业务接入。验证相同业务代码与客户端配置在不同后端运行，以及直接访问、管理重启、并发初始化、崩溃恢复和容量维护。首期配置选择采用编译期内置适配器，切换通过维护窗口完成，未内置的新后端需要更新公共库并验收。
 
-共享内存使用系统 Boost.Interprocess（本机 Boost 1.89），Redis 使用仓库内 redis-plus-plus。源码、公共头和测试统一到 rtdb，四类测点、设备快照、拓扑及配置缓存复用同一动态库，采集分发器已接入。交付为 `ems_rtdb.dll/.lib` 或 SO、公共头及 CMake 包；调用方链接 `ems::rtdb`。真实 Redis 联调仍需专用实例。实际构建、接口与限制见[实现说明](https://github.com/600888/ems/blob/main/backend/src/rtdb/README.md)。
+共享内存使用系统 Boost.Interprocess（本机 Boost 1.89），Redis 使用仓库内 redis-plus-plus。源码、公共头和测试统一到 rtdb，采集、监控、归档和上送统一读写类型化 `Point` 记录，运行目录直接从当前设备配置投影。
+YK/YT 另投影命令目标及状态，反馈读取先回写 YC/YX；通道运行状态也写入实时库。
+旧 `RtDb`、`RtDbManager`、`RTDBEMS`、business 键映射及旧命令队列已经删除。交付为 `ems_rtdb.dll/.lib` 或 SO、公共头及 CMake 包；调用方链接 `ems::rtdb`。真实 Redis 联调仍需专用实例。实际构建、接口与限制见[实现说明](https://github.com/600888/ems/blob/main/backend/src/rtdb/README.md)。
 
 生命周期、管理接口、部署字段、故障矩阵和实施阶段见[实时数据库进程详细设计](design.md)。记录布局、CAS、错误与来源检查继续以[公共实时访问接口](../../common/realtime/access-design.md)为唯一契约；整体边界见[系统架构](../../architecture/system-design.md)。

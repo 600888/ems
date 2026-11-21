@@ -20,9 +20,7 @@ target_link_libraries(
             net_para_loader
             ems_database_mysql
             ems_database_configuration
-            rtdb
-            ems_models
-            redis++
+            ems::rtdb
             Threads::Threads
 )
 

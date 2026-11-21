@@ -26,15 +26,11 @@ add_library(
     client/realtime_client.cpp
     client/command_client.cpp
     client/realtime_service.cpp
-    client/rtdb.cpp
-    client/rtdb_manager.cpp
-    client/rtdb_ems.cpp
+    client/point_client.cpp
+    model/configuration_catalog.cpp
     model/runtime_catalog.cpp
-    model/rtdb_cache.cpp
-    model/rtdb_point.cpp
 )
 add_library(ems::rtdb ALIAS ems_rtdb)
-add_library(rtdb ALIAS ems_rtdb)
 target_include_directories(
     ems_rtdb
     PUBLIC $<BUILD_INTERFACE:${EMS_RTDB_BACKEND_DIR}/include>
@@ -114,11 +110,6 @@ if(EMS_REALTIME_WITH_REDIS)
         ems_copy_runtime_files(ems_rtdb "$<TARGET_RUNTIME_DLLS:ems_rtdb>")
     endif()
 endif()
-# 旧目标兼容入口，全部链接同一个动态库。
-foreach(compat IN ITEMS ems_realtime_core ems_realtime_shm ems_realtime_redis ems_realtime_client)
-    add_library(${compat} INTERFACE)
-    target_link_libraries(${compat} INTERFACE ems_rtdb)
-endforeach()
 if(EMS_REALTIME_BUILD_PROCESS)
     add_executable(ems-rtdb process/main.cpp)
     target_include_directories(ems-rtdb PRIVATE "${EMS_RTDB_THIRD_PARTY}")
@@ -169,28 +160,13 @@ install(
     COMPONENT EMSRTDB
 )
 install(
-    FILES "${EMS_RTDB_BACKEND_DIR}/src/common/models/base.h"
-          "${EMS_RTDB_BACKEND_DIR}/src/common/models/point_runtime.hpp"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/common/models"
-    COMPONENT EMSRTDB
-)
-install(
-    FILES "${EMS_RTDB_BACKEND_DIR}/include/net/protocol/modbus/modbus_types.h"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/net/protocol/modbus"
-    COMPONENT EMSRTDB
-)
-install(
-    FILES "${EMS_RTDB_BACKEND_DIR}/include/net/protocol/enum_value.h"
-    DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/net/protocol"
-    COMPONENT EMSRTDB
-)
-install(
     DIRECTORY "${EMS_RTDB_THIRD_PARTY}/libmodbuspp/3rdparty/json/single_include/nlohmann"
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
     COMPONENT EMSRTDB
 )
 install(
     DIRECTORY "${EMS_RTDB_BACKEND_DIR}/include/common/core"
+              "${EMS_RTDB_BACKEND_DIR}/include/common/model"
     DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}/common"
     COMPONENT EMSRTDB
 )

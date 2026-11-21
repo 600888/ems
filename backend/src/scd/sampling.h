@@ -2,6 +2,7 @@
 
 #include <common/database/mysql_database.h>
 #include <common/database/timeseries/store.h>
+#include <rtdb/model/configuration_catalog.h>
 
 #include <functional>
 #include <optional>
@@ -23,6 +24,7 @@ struct ArchiveDirectory {
     std::string station_id;
     std::int64_t config_revision{0};
     std::vector<ArchivePoint> points;
+    std::shared_ptr<const rtdb::RuntimeCatalog> runtime_catalog;
 };
 
 struct ArchiveReport {

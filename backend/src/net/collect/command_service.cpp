@@ -25,6 +25,33 @@ struct CommandService::Journal {
     std::shared_ptr<rtdb::CommandClient> realtime;
     std::mutex sync_mutex;
     std::set<std::string> dirty;
+    std::function<std::shared_ptr<rtdb::PointClient>()> point_client;
+    std::map<std::string, ChannelThread::PeerOutcomeHandler> deferred_peers;
+
+    bool project(const Row& row, const rtdb::CommandRecord& record) {
+        auto client = point_client();
+        if (!client) return false;
+        auto result = client->projectCommand(record, row.id,
+                                             core::make_call_context(std::chrono::seconds(2)));
+        if (!core::is_ok(result)) return false;
+        if (row.status == "Queued" || row.status == "Executing") return true;
+        const auto it = deferred_peers.find(row.command_id);
+        if (it != deferred_peers.end()) {
+            auto done = std::move(it->second);
+            deferred_peers.erase(it);
+            done(row.status == "Acked" || row.status == "Succeeded",
+                 row.status + ": " + row.reason);
+        }
+        return true;
+    }
+
+    void complete_peer(const std::string& id, ChannelThread::PeerOutcomeHandler peer) {
+        std::lock_guard lock(sync_mutex);
+        if (!peer) return;
+        deferred_peers[id] = std::move(peer);
+        dirty.insert(id);
+        if (sync_locked(id)) dirty.erase(id);
+    }
 
     Journal(std::shared_ptr<database::IDatabase> db,
             std::shared_ptr<database::ICollectorCommandRepository> repo, std::string scope_code,
@@ -91,13 +118,13 @@ struct CommandService::Journal {
             if (record.status == row.status && record.reason == row.reason &&
                 record.sent_at_ms == row.sent_at_ms && record.updated_at_ms == row.updated_at_ms &&
                 !record.revision.empty())
-                return true;
+                return project(row, record);
             record.status = row.status;
             record.reason = row.reason;
             record.sent_at_ms = row.sent_at_ms;
             record.updated_at_ms = row.updated_at_ms;
             auto updated = realtime->updateCommand(record, ctx);
-            if (core::is_ok(updated)) return true;
+            if (core::is_ok(updated)) return project(row, core::value_of(updated));
             if (core::error_of(updated).code != core::ErrorCode::Conflict) return false;
         }
         return false;
@@ -163,6 +190,7 @@ CommandService::CommandService(std::shared_ptr<database::IDatabase> database,
         journal_->scope.empty())
         throw std::invalid_argument("command service requires database, repository and scope");
     // 前缀隔离不同进程实例；北向控制 ID 在插件内单调递增，重连后会从头开始。
+    journal_->point_client = [&engine] { return engine.point_client(); };
     peer_prefix_ = "peer104-" + std::to_string(utc_ms()) + "-";
 }
 
@@ -327,10 +355,7 @@ bool CommandService::schedule(const Row& row, bool verify) {
                 }
             }
             // 北向控制回执：只有协议确认或反馈满足才算执行成功。
-            if (peer) {
-                const bool accepted = result.status == "Acked" || result.status == "Succeeded";
-                peer(accepted, result.status + (result.reason.empty() ? "" : ": " + result.reason));
-            }
+            if (peer) journal->complete_peer(row.command_id, std::move(peer));
         });
     if (!queued) {
         ChannelThread::PeerOutcomeHandler peer;
@@ -344,7 +369,10 @@ bool CommandService::schedule(const Row& row, bool verify) {
             }
         }
         // 入队失败不会有完成回调，必须在这里结束北向请求，不能留在待定状态。
-        if (peer) peer(false, "command_queue_full");
+        if (peer) {
+            journal_->change(row.command_id, "Queued", {"Rejected", "command_queue_full"});
+            journal_->complete_peer(row.command_id, std::move(peer));
+        }
         return false;
     }
     return queued;

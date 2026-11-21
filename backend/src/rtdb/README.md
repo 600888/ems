@@ -7,31 +7,31 @@
 负责共享段、allocator/string/map 和命名锁，redis-plus-plus 负责 Redis 连接池、Hash
 和 eval。自有代码不实现原生共享内存、socket、RESP 或跨进程分配器。
 
-旧 Redis 专用实现已移除。RtDb、RtDbManager、RTDBEMS 的四类测点、设备快照、拓扑和
-配置缓存编入同一动态库，底层只调用 RealtimeClient。采集分发器已接入统一接口。
+业务测点统一使用 `PointClient`，底层通过 `RealtimeService` 读写同一套 `Point` 记录。
+采集、Web 监控、归档和北向上送共用设备路径与测点编码，不再保留 business 命名空间映射、
+旧测点缓存或第二套控制队列。旧 `RtDb`、`RtDbManager`、`RTDBEMS` 及对应模型已删除。
 
 类型化门面 `ems::rtdb::RealtimeService`（`rtdb/client/realtime_service.h`）在同一动态库内
 提供测点/设备/通道状态、来源授权核对、序号与重复判断、新鲜度、作用域配置版本记录和
-能力运行条件。运行目录由 `buildRuntimeCatalog()` 从配置服务投影的设备树快照编译
-（只有设备树，没有资产概念）。管理 RPC、来源授权
-协调流程、可信部署发现和受控迁移编排仍待实现，业务锁不能代替控制授权。
+能力运行条件。`configuration_catalog()` 从当前设备配置编译运行目录，以站根
+`config_revision` 判断配置是否仍有效。采集启动与热加载时安装新的来源 epoch，旧样本保留，
+在新样本到达前按来源失效处理。管理 RPC、可信部署发现仍待实现。
 
 ```text
 backend/include/rtdb/         公共头，命名空间 ems::rtdb
-  client/                    记录客户端、测点/设备/拓扑业务门面
-  model/                     业务配置、类型别名和本进程配置缓存
+  client/                    记录、测点与命令客户端
+  model/                     运行目录与设备配置投影
   store/                     记录契约和后端工厂
   backend/                   后端打开与维护接口
 backend/src/rtdb/
   client/                    业务序列化与有界 CAS 更新
-  model/                     配置缓存
+  model/                     运行目录编译
   store/                     记录校验、编码与版本工具
   backend/                   系统 Boost.Interprocess / redis-plus-plus
   process/                   ems-rtdb 常驻入口
 backend/tests/rtdb/           后端、业务、采集分发器、安装包消费测试
 ```
 
-`rtdb` 构建名称仅为 `ems_rtdb` 的别名，不再生成第二个静态数据库库。
 原 realtime 公共头路径和命名空间已统一为 rtdb，调用方须重新编译。
 
 ## 控制命令接口
@@ -44,7 +44,10 @@ backend/tests/rtdb/           后端、业务、采集分发器、安装包消�
 
 Web、命令行、北向控制均使用这一入口，采集进程不再开放命令 REQ/REP 端点。
 采集侧接到提示后从实时库读取，并以有界扫描补偿丢通知；执行前保留 MySQL 条件登记，
-执行结果同步写回实时库，失败时重试补同步，重启后的未决动作只核验、不盲目重发。
+执行结果同步写回独立命令记录及 YK/YT 测点投影，失败时重试补同步，重启后的未决动作
+只核验、不盲目重发。YK/YT 值表示命令目标并附带命令状态；设备实际状态仍读取 YC/YX。
+反馈核验读取的新样本先写实时库，再判定命令成功。北向成功回执等待持久记录及实时投影
+均同步完成，避免上级已收到成功而监控仍显示旧状态。
 `Pending` 只保证实时库已写入，采集侧登记后才有持久记录；共享内存整体丢失可能丢掉
 尚未登记的 Pending。实时库容量耗尽时明确拒绝新提交，当前不自动清理命令记录。
 完整部署、命令行参数和故障边界见 `website/docs/processes/collector/commands.md`。
@@ -83,7 +86,7 @@ bin/                          ems-rtdb 可执行程序及 Windows 运行依赖 D
 lib/                          导入库或 Linux SO
 include/rtdb/                 公共接口，Boost/Redis 实现头不外露
 include/common/core/          Result、CallContext 等共享类型
-include/common/models/        共享枚举、解码工具与四遥运行时测点
+include/common/model/         四遥配置、类型化样本与质量码
 lib/cmake/ems_rtdb/            find_package 配置与 ems::rtdb 导出目标
 share/ems_rtdb/                配置示例和本文档
 ```
@@ -148,42 +151,33 @@ auto snapshot = client->read(point_key, ctx);
   不能强制清锁继续访问，须隔离使用者后维护重建。普通退出不自动清段。
 - Redis 目前只支持单个权威主节点。CallContext 在边界检查；第三方同步 I/O 不能硬取消，
   实际等待还受 transport_timeout_ms 与 pool_wait_timeout_ms 限制，可能超过剩余预算。
-- 验证环境为 MSVC 19.39、MinGW GCC 15.1 和系统 Boost 1.89。
-  后端、业务门面、配置缓存导入、采集分发器及安装包消费均纳入测试。
-  两套工具链各通过 45 项、跳过 4 项真实 Redis 用例；跳过不视为通过。
-  MSVC 后端主工程的 net_collect 及四个 RTDB 示例构建通过；安装包独立工程
-  仅 find_package 公共包，两个独立进程的记录 API 和业务 API 调用均成功。
+- 回归覆盖记录并发、来源授权、跨进程命令、统一测点读写、命令顺序投影、反馈回写、
+  北向回执补同步及通道状态发布；真实 Redis 用例需配置专用实例，跳过不视为通过。
 
 真实 Redis 联调设置 `EMS_TEST_REDIS_PORT` 为专用测试实例端口后运行 CTest。
 测试只清理随机作用域中的已知键，不执行 FLUSHDB。当前结果不代表 Linux/ARM、
 真实 Redis、控制授权或完整业务链路已验收。
 
-## 业务迁移约定
+## 测点接入
 
 ```cpp
-#include <rtdb/client/rtdb.h>
-ems::rtdb::RtDbConfig config;
-config.config_path = "conf/realtime.json";
-config.scope_code = "station001";
-auto client = ems::rtdb::createRtDb(config);
+#include <rtdb/client/point_client.h>
+
+// catalog 由当前设备配置编译；消费者不调用 installWriter。
+auto opened = ems::rtdb::PointClient::open(config_path, catalog, ctx);
+if (!ems::core::is_ok(opened)) return;
+auto client = ems::core::value_of(opened);
+auto sample = client->readPointJson("yc", point_id, ctx);
 ```
 
-业务配置只指定配置文件、作用域、逻辑命名空间 prefix 和调用预算。四类测点保留完整
-模型字段，以单记录 CAS 替换；批量逐项提交，有失败返回 false，已成功项不回滚。
-旧 bool 门面通过 getLastError 提供说明；需要结构化错误/WriteEffect 时使用记录 API。
-本进程配置缓存沿用原模型，不是跨进程配置发布服务。
+只有采集执行者安装 writer，普通测点客户端不能更新数值。采集样本带来源、epoch、
+递增序号及当前配置修订，读取统一计算品质和新鲜度。命令目标通过 `CommandClient`
+提交，执行者依据持久命令顺序投影 YK/YT，迟到结果不能覆盖后续命令。
 
-旧逻辑字符串、文档和测点包装存放在作用域内的 business 设备路径下，逻辑键以可逆
-十六进制路径编码，prefix+逻辑键总长最多 217 字节。这是兼容映射，不是来源授权门面。
-旧 Redis 原始键不会自动读入新布局，部署时须停写并显式迁移或重新采集，不能混跑旧写者。
-setHash 保留合并语义，replaceHash 和测点写入完整替换。文档 TTL 使用 expires_ms，
-访问时检查并惰性清理，不做后台回收；参与者依赖一致的系统时间。容量满时明确失败。
-keys 只支持 * 和 ?，按作用域枚举并筛选命名空间；不保证整体快照，错误不返回截断成功。
+`EngineConfig` / `DataDispatcherConfig` 只指定实时库配置文件、站作用域和预算。
+通道配置归属于 `net/channel_config.h`，不再依赖已删除的 RTDB 业务模型。
+共享内存缺失时业务报错，由 `ems-rtdb` 负责初始化。
 
-EngineConfig/DataDispatcherConfig 使用 rtdbConfigPath_、rtdbScopeCode_ 接入统一存储。
-原 Redis 地址字段仅用于通知；通知可选 Redis、ZeroMQ 或 None，与状态后端独立。
-存储接口不再负责 publish/subscribe。共享内存缺失时业务客户端报错，不自行创建资源。
-
-RTDBEMS 的旧命令队列和历史辅助接口不代表可靠投递或历史数据库；正式控制与历史链路
-仍由独立协调、消息和持久存储组件承担。业务锁使用 CAS 获取和完整 owner 比较释放，
-不提供来源 fencing 或控制授权。
+旧 business 键不再读写。开发部署需停止全部旧进程，重新初始化实时数据后重新采集；
+不要混跑旧客户端与新客户端。MySQL 配置和持久命令记录保留，配置直接修改现有表，
+热加载仅递增站根 `config_revision`。

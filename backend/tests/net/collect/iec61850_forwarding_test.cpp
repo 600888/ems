@@ -25,11 +25,11 @@
 #include <stdexcept>
 #include <thread>
 
+#include "command_host.h"
 #include "common/log/process_logger.hpp"
 #include "net/collect/collect_engine.h"
 #include "rtdb/backend/shared_memory_store.h"
 #include "rtdb/client/realtime_client.h"
-#include "rtdb/client/rtdb_manager.h"
 
 using Json = nlohmann::json;
 using namespace ems;
@@ -193,18 +193,21 @@ database::DeviceConfigRecords configuration(int source_port, int output_port) {
     database::CfgDeviceRow station;
     station.id = 1;
     station.device_id = "station";
+    station.code = "teststation";
     station.node_kind = "station";
     station.config_revision = 1;
     rows.devices.push_back(station);
     auto node = station;
     node.id = 2;
     node.device_id = "meter";
+    node.code = "meter";
     node.parent_device_id = "station";
     node.node_kind = "device";
     rows.devices.push_back(node);
     database::CfgChannelRow source;
     source.id = 7;
     source.channel_id = "source";
+    source.code = "source";
     source.name = "ForwardingSource";
     source.protocol = "iec61850_mms";
     source.conn_mode = "tcp_client";
@@ -216,6 +219,7 @@ database::DeviceConfigRecords configuration(int source_port, int output_port) {
     auto output = source;
     output.id = 8;
     output.channel_id = "output";
+    output.code = "output";
     output.conn_mode = "tcp_server";
     output.endpoint = "127.0.0.1:" + std::to_string(output_port);
     output.serial_json =
@@ -276,6 +280,7 @@ database::DeviceConfigRecords configuration(int source_port, int output_port) {
     rows.points_yx.push_back(state);
     database::CfgPointYtRow sp;
     sp.point_id = "sp-command";
+    sp.code = "setpoint";
     sp.owner_device_id = "meter";
     sp.binding_id = "input-binding";
     sp.wire_type = "f32";
@@ -288,6 +293,7 @@ database::DeviceConfigRecords configuration(int source_port, int output_port) {
     rows.points_yt.push_back(sp);
     database::CfgPointYkRow co;
     co.point_id = "co-command";
+    co.code = "command";
     co.owner_device_id = "meter";
     co.binding_id = "input-binding";
     co.wire_type = "bool";
@@ -319,26 +325,14 @@ void run() {
     options.rtdbConfigPath_ = utf8(storage.path);
     options.rtdbScopeCode_ = "teststation";
     options.pluginDir_ = utf8(fs::path(EMS_FORWARDING_PLUGIN).parent_path());
-    options.notificationBackend_ = net::collect::NotificationBackend::None;
     net::collect::CollectEngine engine;
     CHECK(engine.initialize(options));
     CHECK(engine.start_all(loader) == 2);
     CHECK(engine.channel_count() == 2);
     eventually([&] { return engine.command_channel("sp-command") != nullptr; });
+    CommandHost commands(engine, utf8(storage.path), "teststation");
     auto execute = [&](const std::string& id, double value, int lifetime = 3000) {
-        auto channel = engine.command_channel(id);
-        CHECK(channel);
-        net::collect::PointCommand command;
-        command.point_id = id;
-        command.value = value;
-        command.expires_at_ms = now_ms() + lifetime;
-        auto completion = std::make_shared<std::promise<net::collect::PointCommandResult>>();
-        auto result = completion->get_future();
-        CHECK(channel->enqueue_command(
-            command, [] { return true; },
-            [completion](const auto& value) { completion->set_value(value); }));
-        CHECK(result.wait_for(std::chrono::seconds(4)) == std::future_status::ready);
-        return result.get();
+        return commands.execute(id, value, lifetime);
     };
     auto command = execute("sp-command", 85);
     CHECK(command.status == "Acked" && command.reason == "protocol_acknowledged");
@@ -355,7 +349,7 @@ void run() {
     command = execute("sp-command", 7);
     CHECK(command.status == "Rejected" && command.reason.find("IEC61850 rejected:") == 0);
     CHECK(engine.command_channel("point-power") == nullptr);
-    auto writer = engine.data_dispatcher()->rtdb_manager()->getRtDb();
+    auto writer = engine.point_client();
     auto connection =
         std::shared_ptr<sIedConnection>(IedConnection_create(), [](IedConnection value) {
             IedConnection_close(value);
@@ -409,48 +403,47 @@ void run() {
     CHECK(reported()["timestamp"] == source.timestamp);
     CHECK(manager.release(subscriber));
     CHECK(engine.stop_channel(7));
-    model::YxPoint binary;
-    binary.code_ = "point-status";
-    binary.timestamp_ = now_ms();
-    binary.value_ = 2;
-    CHECK(writer->setYx(binary.code_, binary));
+    const auto ctx = core::make_call_context(std::chrono::seconds(3));
+    CHECK(!core::is_ok(writer->update("point-status", 2, model::Quality::Good, now_ms(), ctx)));
+    CHECK(core::is_ok(writer->update("point-status", 0, model::Quality::Invalid, now_ms(), ctx)));
     eventually([&] { return (status_quality() & 3) != 0; });
-    CHECK(status());
-    binary.value_ = 0;
-    CHECK(writer->setYx(binary.code_, binary));
+    CHECK(core::is_ok(writer->update("point-status", 0, model::Quality::Good, now_ms(), ctx)));
     eventually([&] { return !status() && status_quality() == 0; });
-    model::YcPoint sample;
-    sample.code_ = "point-power";
-    sample.value_ = 99;
-    sample.timestamp_ = now_ms() - 10000;
-    CHECK(writer->setYc(sample.code_, sample));
+    CHECK(core::is_ok(
+        writer->update("point-power", 99, model::Quality::Good, now_ms() - 10000, ctx)));
     eventually([&] { return (quality() & 129) == 129; });
-    sample.timestamp_ = now_ms();
-    sample.value_ = 101;
-    CHECK(writer->setYc(sample.code_, sample));
+    CHECK(core::is_ok(writer->update("point-power", 101, model::Quality::Good, now_ms(), ctx)));
     eventually([&] { return value() == 101 && quality() == 0; });
-    CHECK(writer->setHashField("rtdb:yc:point-power", "json", "broken"));
+    auto raw_open = rtdb::RealtimeClient::open(utf8(storage.path), ctx);
+    CHECK(core::is_ok(raw_open));
+    auto raw = std::move(std::get<0>(raw_open));
+    const auto address = writer->catalog()->findPoint(core::PointId{"point-power"})->address;
+    const rtdb::RecordKey key{address.scope, rtdb::RecordKind::Point, address.device_path,
+                              address.code};
+    auto saved = raw->read(key, ctx);
+    CHECK(core::is_ok(saved));
+    auto fields = core::value_of(saved).fields;
+    fields["value"] = "broken";
+    auto damaged = raw->compareExchange({key, fields, core::value_of(saved).revision}, ctx);
+    CHECK(core::is_ok(damaged));
     eventually([&] { return (quality() & 3) != 0; });
     CHECK(value() == 101);
-    CHECK(writer->deleteYc("point-power"));
+    CHECK(core::is_ok(raw->erase({key, core::value_of(damaged).revision}, ctx)));
     std::this_thread::sleep_for(std::chrono::milliseconds(60));
     CHECK((quality() & 3) != 0);
-    sample.timestamp_ = now_ms();
-    sample.value_ = 123;
-    sample.quality_ = model::PointQuality::Invalid;
-    CHECK(writer->setYc(sample.code_, sample));
+    CHECK(core::is_ok(writer->installWriter(ctx)));
+    CHECK(core::is_ok(writer->update("point-power", 123, model::Quality::Invalid, now_ms(), ctx)));
     eventually([&] { return value() == 123 && (quality() & 3) != 0; });
-    sample.quality_ = model::PointQuality::Good;
-    CHECK(writer->setYc(sample.code_, sample));
+    CHECK(core::is_ok(writer->update("point-power", 123, model::Quality::Good, now_ms(), ctx)));
     eventually([&] { return quality() == 0; });
     auto* denied = MmsValue_newFloat(999);
     IedConnection_writeObject(connection.get(), &error, "EMSLD0/MMXU1.TotW.mag.f", IEC61850_FC_MX,
                               denied);
     MmsValue_delete(denied);
     CHECK(error != IED_ERROR_OK);
-    model::YcPoint stored;
-    CHECK(writer->getYc("point-power", stored));
-    CHECK(stored.value_ == 123);
+    auto stored = writer->readPointJson("yc", "point-power", ctx);
+    CHECK(core::is_ok(stored));
+    CHECK(Json::parse(core::value_of(stored))["value"] == 123);
     connection.reset();
     engine.stop_all();
     CHECK(manager.loaded_library_count() == 0);

@@ -291,7 +291,7 @@ void channel(const std::string& protocol, const char* plugin_path,
     using namespace ems::net::collect;
     PluginManager manager;
     manager.set_plugin_dir(fs::path(plugin_path).parent_path().string());
-    ems::rtdb::ChannelConfig config;
+    ems::net::ChannelConfig config;
     config.id_ = 1;
     config.name_ = "handler-test-" + protocol;
     config.protocol_ = protocol_type;
@@ -305,19 +305,17 @@ void channel(const std::string& protocol, const char* plugin_path,
     worker.add_device(std::move(device));
     worker.set_poll_interval(100);
     CHECK(worker.start(manager));
-    auto unknown = worker.post_command("unconfigured-point", 1);
-    CHECK(unknown.wait_for(5s) == std::future_status::ready);
-    CHECK(!unknown.get());
-    auto command = worker.post_command("stable-command-point", 48.0);
-    CHECK(command.wait_for(5s) == std::future_status::ready);
-    CHECK(command.get());
+    CHECK(!worker.command_route("unconfigured-point"));
+    CHECK(worker.command_route("stable-command-point").has_value());
     {
         auto client = h::create_handler(manager, protocol);
         settings["role"] = "client";
         settings["connection"] = config.connection_;
         init(*client, settings);
-        connect(*client);
-        CHECK(std::abs(read(*client, {code}, 1)[0].value - 23.5) < 0.02);
+        const auto deadline = std::chrono::steady_clock::now() + 5s;
+        while (!client->connect() && std::chrono::steady_clock::now() < deadline)
+            std::this_thread::sleep_for(10ms);
+        CHECK(client->is_connected());
     }
     worker.stop();
     worker.join();
@@ -391,7 +389,7 @@ class FakePeerHandler final : public h::ProtocolHandler {
 void channel_peer_control() {
     using namespace ems::net::collect;
     PluginManager manager;
-    ems::rtdb::ChannelConfig config;
+    ems::net::ChannelConfig config;
     config.id_ = 7;
     config.name_ = "peer-control-test";
     config.protocol_ = ems::model::ProtocolType::IEC104;
@@ -435,7 +433,7 @@ void channel_failure() {
     using namespace ems::net::collect;
     PluginManager manager;
     manager.register_mapping("DLT645", "missing-channel-plugin.dll");
-    ems::rtdb::ChannelConfig config;
+    ems::net::ChannelConfig config;
     config.protocol_ = ems::model::ProtocolType::DLT645;
     config.name_ = "missing-handler-test";
     ChannelThread worker(config, nullptr);

@@ -33,14 +33,14 @@ if(NOT TARGET gtest)
 endif()
 
 add_executable(
-    test_realtime_backends test_backends.cpp test_business.cpp point_import_test.cpp
+    test_realtime_backends test_backends.cpp test_business.cpp
                            ../../src/rtdb/store/store_detail.cpp
 )
 set_target_properties(test_realtime_backends PROPERTIES CXX_STANDARD 17 CXX_STANDARD_REQUIRED YES)
 
 target_include_directories(test_realtime_backends PRIVATE ../../src/rtdb/store)
 
-target_link_libraries(test_realtime_backends PRIVATE ems_realtime_core gtest Threads::Threads)
+target_link_libraries(test_realtime_backends PRIVATE ems::rtdb gtest Threads::Threads)
 
 if(MSVC)
     target_compile_options(test_realtime_backends PRIVATE /utf-8)
@@ -50,8 +50,6 @@ if(WIN32)
 endif()
 
 if(EMS_REALTIME_WITH_SHM)
-    target_link_libraries(test_realtime_backends PRIVATE ems_realtime_shm)
-
     target_compile_definitions(test_realtime_backends PRIVATE EMS_REALTIME_TEST_SHM)
 
     cmake_policy(PUSH)
@@ -70,8 +68,6 @@ if(EMS_REALTIME_WITH_SHM)
 endif()
 
 if(EMS_REALTIME_WITH_REDIS)
-    target_link_libraries(test_realtime_backends PRIVATE ems_realtime_redis)
-
     target_compile_definitions(test_realtime_backends PRIVATE EMS_REALTIME_TEST_REDIS)
 endif()
 
@@ -85,10 +81,6 @@ if(EMS_REALTIME_WITH_SHM)
     target_compile_definitions(test_rtdb_dispatcher PRIVATE EMS_REALTIME_TEST_SHM)
     target_compile_definitions(test_rtdb_dispatcher PRIVATE FMT_HEADER_ONLY)
     set_target_properties(test_rtdb_dispatcher PROPERTIES CXX_STANDARD 20 CXX_STANDARD_REQUIRED YES)
-    if(TARGET redis++)
-        target_link_libraries(test_rtdb_dispatcher PRIVATE redis++)
-        target_compile_definitions(test_rtdb_dispatcher PRIVATE EMS_NOTIFICATION_WITH_REDIS)
-    endif()
     add_test(NAME rtdb_dispatcher COMMAND test_rtdb_dispatcher)
 endif()
 if(WIN32)

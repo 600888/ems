@@ -1,5 +1,5 @@
 #include <common/core/time.h>
-#include <rtdb/client/rtdb.h>
+#include <rtdb/client/point_client.h>
 
 #include <algorithm>
 #include <chrono>
@@ -110,14 +110,7 @@ int main(int argc, char** argv) {
     }
     const auto& database = ems::core::value_of(connected);
     ems::storage::ArchiveDirectorySource directory(database);
-    ems::rtdb::RtDb realtime;
-    ems::rtdb::RtDbConfig realtime_options;
-    realtime_options.config_path = options.realtime_config;
-    realtime_options.scope_code = options.scope_code;
-    if (!realtime.initialize(realtime_options)) {
-        LOG_ERROR("ems-storage: realtime backend unavailable");
-        return 1;
-    }
+    std::shared_ptr<ems::rtdb::PointClient> realtime;
     auto opened = ems::database::connect_time_series(options.timeseries);
     if (!ems::core::is_ok(opened)) {
         LOG_ERROR("ems-storage: time-series backend unavailable: {}",
@@ -126,7 +119,10 @@ int main(int argc, char** argv) {
     }
     auto series = std::move(std::get<0>(opened));
     const auto reader = [&](const auto& type, const auto& id, const auto& ctx) {
-        return realtime.readPointJson(type, id, ctx);
+        return realtime ? realtime->readPointJson(type, id, ctx)
+                        : ems::core::Result<std::string>{ems::core::make_error(
+                              ems::core::ErrorCode::NotReady, ems::core::WriteEffect::NotApplicable,
+                              "realtime not attached")};
     };
     auto sampler = std::make_unique<ems::storage::PeriodicArchiveSampler>(reader, *series);
     auto initial = directory.refresh(ems::core::make_call_context(std::chrono::seconds(30)));
@@ -177,6 +173,16 @@ int main(int argc, char** argv) {
         }
         auto current = directory.refresh(ctx);
         bool failed = false;
+        if (ems::core::is_ok(current) &&
+            (!realtime || realtime->catalog()->configVersion() !=
+                              std::to_string(ems::core::value_of(current).config_revision))) {
+            auto attached = ems::rtdb::PointClient::open(
+                options.realtime_config, ems::core::value_of(current).runtime_catalog, ctx);
+            if (ems::core::is_ok(attached))
+                realtime = ems::core::value_of(attached);
+            else
+                current = ems::core::error_of(attached);
+        }
         if (!ems::core::is_ok(current)) {
             failed = true;
             LOG_ERROR("ems-storage: directory refresh failed: {}",
@@ -208,7 +214,7 @@ int main(int argc, char** argv) {
     }
     stop_alarm_worker.set_value();
     if (alarm_worker.valid()) alarm_worker.get();
-    realtime.shutdown();
+    realtime.reset();
     LOG_INFO("ems-storage stopped");
     return 0;
 }

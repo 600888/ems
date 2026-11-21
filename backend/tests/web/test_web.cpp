@@ -1,5 +1,7 @@
 #include <common/core/time.h>
 #include <common/database/configuration/device_management_validation.h>
+#include <rtdb/client/point_client.h>
+#include <rtdb/model/configuration_catalog.h>
 #ifdef EMS_TEST_ZEROMQ
 #include <rtdb/client/command_client.h>
 #endif
@@ -566,6 +568,8 @@ TEST_F(WebDevice, CommandsUseThreeSecondDeadlineAndKeepClientDeadline) {
            {"enabled", true},
            {"address", {{"space", "holding_register"}, {"offset", 50}, {"register_count", 2}}}}}});
     sql("UPDATE cfg_device SET enabled=1 WHERE device_id='hvac01'");
+    sql("UPDATE cfg_channel SET enabled=1");
+    sql("UPDATE cfg_binding SET enabled=1");
     const auto realtime_config = (directory / "realtime.json").u8string();
     const auto segment = "web_command_" + random_token().substr(0, 32);
     std::ofstream(std::filesystem::u8path(realtime_config))
@@ -617,6 +621,25 @@ TEST_F(WebDevice, CommandsUseThreeSecondDeadlineAndKeepClientDeadline) {
         control.execute("/api/commands/query",
                         {{"device_id", "hvac01"}, {"intent_id", "deadline-a"}}, actor, context());
     EXPECT_EQ(query.data.at("status"), "Pending");
+    auto tx = take(db.database->begin(context()));
+    auto records = take(db.device_config->load_configuration(*tx, context()));
+    take(tx->commit(context()));
+    auto catalog = take(rtdb::configuration_catalog(records));
+    auto writer = take(rtdb::PointClient::open(realtime_config, catalog, context()));
+    take(writer->installWriter(context()));
+    auto confirmed = core::value_of(first);
+    confirmed.status = "Acked";
+    confirmed.updated_at_ms = core::now_utc_micros() / 1000;
+    EXPECT_EQ(take(writer->projectCommand(confirmed, 1, context())), rtdb::SampleResult::Applied);
+    const auto monitor = control.execute(
+        "/api/monitor/points", {{"device_id", "hvac01"}, {"point_type", "yt"}}, actor, context());
+    ASSERT_EQ(monitor.data.at("items").size(), 1u);
+    const auto& sample = monitor.data.at("items")[0].at("sample");
+    ASSERT_FALSE(sample.is_null()) << monitor.data;
+    EXPECT_EQ(sample.at("value"), 42);
+    EXPECT_EQ(sample.at("command_id"), "deadline-a");
+    EXPECT_EQ(sample.at("command_status"), "Acked");
+    EXPECT_EQ(sample.at("value_role"), "command_target");
     auto denied = actor;
     denied.permissions = {"monitor.read"};
     EXPECT_THROW(

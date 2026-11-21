@@ -4,7 +4,7 @@
 
 #include "net/para_loader/cfg_loader.h"
 #include "net/protocol/plugin_manager.h"
-#include "rtdb/client/rtdb.h"
+#include "rtdb/client/point_client.h"
 
 namespace ems::net::collect {
 /** @brief 独立工作线程将 RTDB 工程值同步至只读 MMS 映像，不回写实时库。 */
@@ -15,8 +15,8 @@ class ForwardingChannel final {
      * @param[in] realtime 借用同一 RTDB 客户端的共享所有权，停止后释放。
      * @param[in,out] manager 插件管理器，须比本对象存活更久。
      */
-    ForwardingChannel(device::ForwardingChannelConfig config, std::shared_ptr<rtdb::RtDb> realtime,
-                      PluginManager& manager);
+    ForwardingChannel(device::ForwardingChannelConfig config,
+                      std::shared_ptr<rtdb::PointClient> realtime, PluginManager& manager);
     /** @brief 唤醒并等待工作线程，停止监听后释放插件租约。 */
     ~ForwardingChannel();
     /** @brief 初始化无效映像、首次同步后监听并启动线程。

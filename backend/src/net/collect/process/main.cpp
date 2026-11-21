@@ -119,7 +119,6 @@ Options load_options(const std::string& file, const char* executable) {
     engine.defaultPollIntervalMs_ = positive("poll_interval_ms", 1000, 3600000);
     engine.maxChannels_ = positive("max_channels", 256, 65536);
     // 正式入口只写统一实时库，可选的旁路通知不作为启动依赖。
-    engine.notificationBackend_ = ems::net::collect::NotificationBackend::None;
     return options;
 }
 }  // namespace

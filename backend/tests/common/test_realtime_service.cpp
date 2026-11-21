@@ -337,6 +337,23 @@ TEST_F(RealtimeServiceTest, DisabledPointIsNotWritable) {
     EXPECT_EQ(core::ErrorCode::NotReady, core::error_of(rejected).code);
 }
 
+TEST_F(RealtimeServiceTest, ZeroFreshnessThresholdDisablesAgeCheck) {
+    auto options = makeOptions();
+    options.default_stale_after_ms = 0;
+    auto tree = makeTree();
+    for (auto& point : tree.points) point.stale_after_ms = 0;
+    auto built = buildRuntimeCatalog(tree, options);
+    ASSERT_TRUE(built.ok());
+    auto catalog = std::make_shared<const RuntimeCatalog>(built.catalog);
+    RealtimeService realtime(store_, catalog, [this] { return now_; });
+    ASSERT_TRUE(core::is_ok(realtime.createPoint(powerAddress(), ctx())));
+    ASSERT_TRUE(core::is_ok(realtime.updatePoint(powerAddress(), sample(5.0, 1, now_), ctx())));
+    now_ += 120LL * 1000 * 1000;
+    auto read = realtime.getPoint(powerAddress(), ctx());
+    ASSERT_TRUE(core::is_ok(read));
+    EXPECT_FALSE(core::value_of(read).stale);
+}
+
 TEST_F(RealtimeServiceTest, MarksStaleAfterConfiguredThreshold) {
     ASSERT_TRUE(core::is_ok(service().createPoint(powerAddress(), ctx())));
     ASSERT_TRUE(core::is_ok(service().updatePoint(powerAddress(), sample(5.0, 1, now_), ctx())));

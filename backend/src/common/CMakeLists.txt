@@ -5,8 +5,6 @@
 # 公共库自研目标统一 C++17；纯头接口使用 INTERFACE target；普通公共实现
 # 首期静态链接；不提供聚合 ems_common target（避免协议插件被动链接全部能力）。
 
-add_subdirectory(models)
-
 # ---------------------------------------------------------------------------
 # ems_common_core：结果/上下文/身份/时间（纯 C++17 标准库，无第三方依赖）
 # ---------------------------------------------------------------------------
@@ -134,7 +132,7 @@ target_link_libraries(ems_realtime_api INTERFACE ems_common_core)
 target_compile_features(ems_realtime_api INTERFACE cxx_std_17)
 
 # ---------------------------------------------------------------------------
-# ems_realtime_core：RecordKey 公共验证器
+# RecordKey 公共验证器
 # ---------------------------------------------------------------------------
 # 统一实现由 src/rtdb 构建，避免在 common 中另建一套存储目标。
 

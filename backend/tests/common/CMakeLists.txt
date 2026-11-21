@@ -33,7 +33,7 @@ target_link_libraries(
             ems_common_model
             ems_common_core
             ems_messaging_api
-            ems_realtime_core
+            ems::rtdb
             ems_config_core
             ems_excel
 )

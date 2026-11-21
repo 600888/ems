@@ -537,7 +537,7 @@ backend/src/rtdb/
 backend/tests/rtdb/             # 契约、业务迁移、采集分发器和安装包消费测试
 ```
 
-本批实际交付 `ems_rtdb` 动态库，统一包含 core、client 和所启用的第三方适配器；原 ems_realtime_core/shm/redis target 保留为链接同一动态库的兼容接口，避免多个库实例各自持有工厂与资源。业务链接安装包的 `ems::rtdb`，通过导出头调用 API。Boost Interprocess 与 redis-plus-plus 的包含路径仅在实现侧可见；使用公共 C++ STL API 要求调用者与库使用兼容工具链/CRT，不承诺跨编译器 ABI。
+本批实际交付 `ems_rtdb` 动态库，统一包含 core、client 和所启用的第三方适配器；旧兼容 target 已删除，业务统一链接同一动态库。业务链接安装包的 `ems::rtdb`，通过导出头调用 API。Boost Interprocess 与 redis-plus-plus 的包含路径仅在实现侧可见；使用公共 C++ STL API 要求调用者与库使用兼容工具链/CRT，不承诺跨编译器 ABI。
 
 自研 target 统一设置 `CXX_STANDARD 17`、`CXX_STANDARD_REQUIRED YES`、`CXX_EXTENSIONS NO`；`target_compile_features(cxx_std_17)` 可补充最低需求，同时确保上层构建没有将标准提升为 C++20。pthread/Windows 库按平台链接，Linux ARM 与目标桌面平台分别构建；只选共享内存后端时不得强制安装 redis++/hiredis，事件模块需要 Redis 是独立依赖。
 

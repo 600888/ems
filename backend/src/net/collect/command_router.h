@@ -18,5 +18,7 @@ class CommandRouter {
     virtual std::int64_t config_revision() const = 0;
     /** @brief 查询是否允许执行。 @return 引擎运行中时为 true。 */
     virtual bool is_running() const = 0;
+    /** @brief 返回当前实时库写入者。 @return 热加载后的统一客户端；未就绪为空。 */
+    virtual std::shared_ptr<rtdb::PointClient> point_client() const = 0;
 };
 }  // namespace ems::net::collect

@@ -1,7 +1,8 @@
 #include "runtime_service.h"
 
 #include <common/core/time.h>
-#include <rtdb/client/rtdb.h>
+#include <rtdb/client/point_client.h>
+#include <rtdb/model/configuration_catalog.h>
 
 #include <algorithm>
 #include <cmath>
@@ -37,6 +38,8 @@ Json point_sample(const Json& point, const std::string& kind,
     result["sample"] = {{"value", sample.at("value")},
                         {"timestamp", timestamp},
                         {"quality_code", sample.at("quality")}};
+    for (const auto* key : {"command_id", "command_status", "command_reason", "value_role"})
+        if (sample.contains(key)) result["sample"][key] = sample.at(key);
     result["quality"] = stale ? "stale" : sample.at("quality") == 0 ? "good" : "invalid";
     return result;
 }
@@ -171,14 +174,13 @@ DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
         device_enabled && std::any_of(result.at("items").begin(), result.at("items").end(),
                                       [](const auto& point) { return point.at("enabled") != 0; });
     auto reader = reader_;
-    std::shared_ptr<rtdb::RtDb> realtime;
+    std::shared_ptr<rtdb::PointClient> realtime;
     if (!reader && needs_samples) {
-        realtime = std::make_shared<rtdb::RtDb>();
-        rtdb::RtDbConfig options;
-        options.config_path = options_.realtime_config;
-        options.scope_code = options_.scope_code;
-        if (options.config_path.empty() || !realtime->initialize(options))
-            throw ApiError(503, "NotReady", "realtime_service_unavailable");
+        auto records = take(database_.device_config->load_configuration(*request.transaction, ctx));
+        auto catalog = take(rtdb::configuration_catalog(records));
+        if (catalog->scope().code != options_.scope_code)
+            throw ApiError(503, "NotReady", "realtime_scope_mismatch");
+        realtime = take(rtdb::PointClient::open(options_.realtime_config, catalog, ctx));
         reader = [realtime](const auto& kind, const auto& id, const auto& context) {
             return realtime->readPointJson(kind, id, context);
         };

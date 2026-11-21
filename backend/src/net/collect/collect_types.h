@@ -20,11 +20,5 @@ enum class ChannelState : int {
     Stopped = 4,
     Error = 5,
 };
-/** @brief 测点变更通知的传输后端。 */
-enum class NotificationBackend : int {
-    Redis = 0,
-    ZeroMQ = 1,
-    None = 2,
-};
 
 }  // namespace ems::net::collect

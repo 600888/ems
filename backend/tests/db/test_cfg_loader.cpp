@@ -14,12 +14,14 @@ DeviceConfigRecords configuration() {
     CfgDeviceRow station;
     station.id = 1;
     station.device_id = "station";
+    station.code = "station";
     station.node_kind = "station";
     station.config_revision = 7;
     result.devices.push_back(station);
     CfgDeviceRow source;
     source.id = 2;
     source.device_id = "source";
+    source.code = "source";
     source.parent_device_id = "station";
     source.node_kind = "device";
     source.name = "BMS";
@@ -27,6 +29,7 @@ DeviceConfigRecords configuration() {
     CfgDeviceRow component;
     component.id = 3;
     component.device_id = "rack";
+    component.code = "rack";
     component.parent_device_id = "source";
     component.node_kind = "component";
     component.source_device_id = "source";
@@ -35,6 +38,7 @@ DeviceConfigRecords configuration() {
     CfgChannelRow channel;
     channel.id = 7;
     channel.channel_id = "channel";
+    channel.code = "collection";
     channel.protocol = "modbus";
     channel.conn_mode = "tcp_client";
     channel.endpoint = "127.0.0.1:1502";
@@ -70,6 +74,7 @@ DeviceConfigRecords forwarding_configuration() {
     auto channel = records.channels[0];
     channel.id = 8;
     channel.channel_id = "mms-output";
+    channel.code = "output";
     channel.protocol = "iec61850_mms";
     channel.conn_mode = "tcp_server";
     channel.endpoint = "127.0.0.1:11002";
@@ -133,6 +138,23 @@ TEST(CfgLoader, RejectsInvalidForwardingMapsAndPreservesPreviousDirectory) {
     EXPECT_FALSE(loader.configure(records));
 }
 
+TEST(CfgLoader, RealtimeDirectoryUsesCurrentStationFreshnessPolicy) {
+    auto rows = configuration();
+    rows.devices[0].default_stale_after_ms = 12345;
+    CfgLoader loader;
+    ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
+    EXPECT_EQ(loader.runtime_catalog()
+                  ->findPoint(ems::core::PointId{"point-rack-voltage"})
+                  ->stale_after_ms,
+              12345u);
+    rows.devices[0].default_stale_after_ms = 0;
+    ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
+    EXPECT_EQ(loader.runtime_catalog()
+                  ->findPoint(ems::core::PointId{"point-rack-voltage"})
+                  ->stale_after_ms,
+              0u);
+}
+
 TEST(CfgLoader, ReadsNewBindingsAndPreservesComponentIdentityAndStablePointId) {
     CfgLoader loader;
     ASSERT_TRUE(loader.configure(configuration())) << loader.last_error();
@@ -155,6 +177,7 @@ TEST(CfgLoader, SupportsSharedChannelsWithPerBindingAddresses) {
     auto node = records.devices[1];
     node.id = 4;
     node.device_id = "second";
+    node.code = "second";
     records.devices.push_back(node);
     auto binding = records.bindings[0];
     binding.binding_id = "second-binding";
@@ -185,6 +208,7 @@ TEST(CfgLoader, ConnectionScopeUsesPhysicalDeviceAndComponentSource) {
     auto unit = rows.devices[0];
     unit.id = 10;
     unit.device_id = "unit";
+    unit.code = "unit";
     unit.node_kind = "unit";
     unit.parent_device_id = "station";
     rows.devices.push_back(unit);
@@ -344,6 +368,7 @@ TEST(CfgLoader, Dlt698UsesBindingAddressAndRejectsConflictingSharedChannelAddres
     auto source = rows.devices[1];
     source.id = 4;
     source.device_id = "other";
+    source.code = "other";
     rows.devices.push_back(source);
     auto binding = rows.bindings[0];
     binding.binding_id = "other-binding";
@@ -380,6 +405,7 @@ TEST(CfgLoader, Iec61850CompilesMmsDirectoryAndKeepsComponentIdentity) {
         R"({"object_ref":"SIMLD0/MMXU1.TotW.mag.f","fc":"MX","quality_ref":"SIMLD0/MMXU1.TotW.q"})";
     CfgPointYxRow yx;
     yx.point_id = "status";
+    yx.code = "status";
     yx.owner_device_id = "rack";
     yx.binding_id = "binding";
     yx.wire_type = "bool";
@@ -403,6 +429,7 @@ TEST(CfgLoader, Iec61850CompilesMmsDirectoryAndKeepsComponentIdentity) {
     ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
     rows.points_yc.push_back(rows.points_yc[0]);
     rows.points_yc.back().point_id = "same-source-alias";
+    rows.points_yc.back().code = "voltage_alias";
     ASSERT_TRUE(loader.configure(rows)) << loader.last_error();
     EXPECT_EQ(nlohmann::json::parse(loader.channels()[0].settings_)["iec61850"]["points"].size(),
               2u);
@@ -425,6 +452,7 @@ TEST(CfgLoader, Iec61850RejectsServerControlAndDirectoryOverrides) {
     rows.channels[0].serial_json.clear();
     CfgPointYkRow control;
     control.point_id = "command";
+    control.code = "command";
     control.owner_device_id = "source";
     control.binding_id = "binding";
     control.protocol_address_json =
@@ -443,6 +471,7 @@ TEST(CfgLoader, Iec61850CompilesSpAndCoCommandsSeparatelyFromReadPoints) {
         R"({"object_ref":"SIMLD0/MMXU1.TotW.mag.f","fc":"MX"})";
     CfgPointYtRow setpoint;
     setpoint.point_id = "setpoint";
+    setpoint.code = "setpoint";
     setpoint.owner_device_id = "rack";
     setpoint.binding_id = "binding";
     setpoint.wire_type = "f32";
@@ -453,6 +482,7 @@ TEST(CfgLoader, Iec61850CompilesSpAndCoCommandsSeparatelyFromReadPoints) {
     rows.points_yt.push_back(setpoint);
     CfgPointYkRow control;
     control.point_id = "command";
+    control.code = "command";
     control.owner_device_id = "rack";
     control.binding_id = "binding";
     control.wire_type = "bool";

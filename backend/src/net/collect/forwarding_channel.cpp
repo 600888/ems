@@ -34,7 +34,7 @@ bool fits(const std::string& type, double value) {
 class ForwardingChannel::Impl {
    public:
     device::ForwardingChannelConfig config;
-    std::shared_ptr<rtdb::RtDb> realtime;
+    std::shared_ptr<rtdb::PointClient> realtime;
     PluginManager& manager;
     PluginManager::PluginFunctions api;
     void* instance{nullptr};
@@ -47,13 +47,21 @@ class ForwardingChannel::Impl {
     int interval{1000}, timeout{3000};
     std::map<std::string, Json> applied;
 
-    Impl(device::ForwardingChannelConfig settings, std::shared_ptr<rtdb::RtDb> client,
+    Impl(device::ForwardingChannelConfig settings, std::shared_ptr<rtdb::PointClient> client,
          PluginManager& plugins)
         : config(std::move(settings)), realtime(std::move(client)), manager(plugins) {}
 
     void failure(const std::string& message) {
-        std::lock_guard<std::mutex> lock(mutex);
-        error = message;
+        {
+            std::lock_guard<std::mutex> lock(mutex);
+            error = message;
+        }
+        if (realtime && !config.channel.channel_id.empty())
+            realtime->reportChannel(config.channel.channel_id,
+                                    !running          ? rtdb::ChannelRunState::Disconnected
+                                    : message.empty() ? rtdb::ChannelRunState::Connected
+                                                      : rtdb::ChannelRunState::Degraded,
+                                    message, core::make_call_context(std::chrono::seconds(2)));
     }
 
     Json invalid(const device::ForwardingPoint& point) const {
@@ -119,7 +127,8 @@ class ForwardingChannel::Impl {
 };
 
 ForwardingChannel::ForwardingChannel(device::ForwardingChannelConfig config,
-                                     std::shared_ptr<rtdb::RtDb> realtime, PluginManager& manager)
+                                     std::shared_ptr<rtdb::PointClient> realtime,
+                                     PluginManager& manager)
     : impl_(std::make_unique<Impl>(std::move(config), std::move(realtime), manager)) {}
 
 ForwardingChannel::~ForwardingChannel() { stop(); }
@@ -179,6 +188,7 @@ bool ForwardingChannel::start() {
             }
             state->api.disconnect_fn(state->instance);
             state->running = false;
+            state->failure("MMS forwarding worker stopped");
         });
         return true;
     } catch (const std::exception& error) {
@@ -196,6 +206,7 @@ void ForwardingChannel::stop() {
     impl_->wake.notify_all();
     if (impl_->worker.joinable()) impl_->worker.join();
     impl_->running = false;
+    impl_->failure("stopped");
     if (impl_->instance && impl_->manager.release(impl_->instance)) impl_->instance = nullptr;
 }
 
