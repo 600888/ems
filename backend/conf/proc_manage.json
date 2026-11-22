@@ -45,20 +45,6 @@
             }
         },
         {
-            "name": "ems_strategy",
-            "cmd": "ems-strategy",
-            "args": ["--db-config", "conf/db.json", "--rtdb-config", "conf/realtime.json"],
-            "runDir": ".",
-            "env": {"TEMP": "tmp", "TMP": "tmp"},
-            "singleInstance": true,
-            "depends": ["ems_rtdb"],
-            "start": {
-                "cnt": -1,
-                "delay": 1,
-                "interval": 5
-            }
-        },
-        {
             "name": "ems_web",
             "cmd": "ems-web",
             "args": ["--config", "conf/web.json"],
