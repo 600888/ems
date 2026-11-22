@@ -1,30 +1,15 @@
 # 静态集成固定第三方源码，不引入上游的全局选项、示例和测试。
 set(EMS_DLT645_ROOT "${EMS_BACKEND_ROOT}/third_party/dlt645")
 
-# 只使用 Boost 头文件。优先安装包；也支持 BOOST_ROOT 指定的源码/头文件目录。
-cmake_policy(PUSH)
-
-if(POLICY CMP0144)
-    cmake_policy(SET CMP0144 NEW)
+add_library(ems_dlt645_asio INTERFACE)
+target_include_directories(ems_dlt645_asio SYSTEM INTERFACE "${EMS_DLT645_ROOT}/third/asio/include")
+target_compile_definitions(ems_dlt645_asio INTERFACE ASIO_STANDALONE ASIO_NO_DEPRECATED ASIO_HAS_THREADS)
+if(WIN32)
+    target_compile_definitions(ems_dlt645_asio INTERFACE _WIN32_WINNT=0x0A00)
+    target_link_libraries(ems_dlt645_asio INTERFACE ws2_32 mswsock)
 endif()
-
-find_package(Boost 1.83 QUIET CONFIG)
-
-if(NOT Boost_FOUND)
-    if(POLICY CMP0167)
-        cmake_policy(SET CMP0167 OLD)
-    endif()
-
-    find_package(Boost 1.83 REQUIRED MODULE)
-endif()
-
-cmake_policy(POP)
 
 file(GLOB_RECURSE EMS_DLT645_SOURCES CONFIGURE_DEPENDS "${EMS_DLT645_ROOT}/src/*.cpp")
-include("${EMS_BACKEND_ROOT}/cmake/TrafficSources.cmake")
-ems_dlt645_traffic_sources("${EMS_DLT645_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}")
-list(REMOVE_ITEM EMS_DLT645_SOURCES ${EMS_DLT645_REPLACED_SOURCES})
-list(APPEND EMS_DLT645_SOURCES ${EMS_DLT645_TRAFFIC_SOURCES})
 
 add_library(ems_dlt645_stack STATIC ${EMS_DLT645_SOURCES})
 target_include_directories(
@@ -39,10 +24,20 @@ set_property(
              "${EMS_DLT645_ROOT}/include;${EMS_DLT645_ROOT}/third;${EMS_DLT645_ROOT}/src"
 )
 
-target_link_libraries(ems_dlt645_stack PUBLIC Boost::headers Threads::Threads)
-target_include_directories(ems_dlt645_stack PRIVATE "${EMS_BACKEND_ROOT}/src"
-                                                  "${EMS_BACKEND_ROOT}/include")
-target_compile_definitions(ems_dlt645_stack PRIVATE BOOST_ASIO_NO_DEPRECATED)
+target_link_libraries(ems_dlt645_stack PUBLIC Threads::Threads PRIVATE ems_dlt645_asio)
+
+get_directory_property(log_definitions COMPILE_DEFINITIONS)
+if(WIN32 AND "SPDLOG_WCHAR_FILENAMES" IN_LIST log_definitions)
+    # 只调整构建副本，让上游日志初始化器适配统一的 spdlog 宽字符文件名。
+    set(log_header "${EMS_DLT645_ROOT}/include/log/log_init.hpp")
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${log_header}")
+    file(READ "${log_header}" log_source)
+    string(REPLACE "(directory / filename).string()" "(directory / filename).native()"
+                   log_source "${log_source}")
+    file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/include/log")
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/include/log/log_init.hpp" "${log_source}")
+    target_include_directories(ems_dlt645_stack BEFORE PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/include")
+endif()
 
 set_target_properties(
     ems_dlt645_stack
@@ -54,12 +49,7 @@ set_target_properties(
                VISIBILITY_INLINES_HIDDEN YES
 )
 
-if(WIN32)
-    target_link_libraries(ems_dlt645_stack PUBLIC ws2_32 mswsock)
-    target_compile_definitions(ems_dlt645_stack PUBLIC _WIN32_WINNT=0x0601)
-endif()
-
-# 公开 PIMPL API 与插件桥各自独立；Boost / 第三方类型不跨 ABI 边界。
+# PIMPL 隐藏协议栈类型，插件通过 C ABI 调用。
 add_library(ems_dlt645_core STATIC dlt645_protocol.cpp)
 # 避免上游 singleton.hpp 被主工程同名头替换，定义注册表的类型须保持一致。
 target_include_directories(
@@ -71,7 +61,7 @@ target_include_directories(
     ems_dlt645_core SYSTEM
     PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
 )
-target_link_libraries(ems_dlt645_core PRIVATE ems_dlt645_stack)
+target_link_libraries(ems_dlt645_core PRIVATE ems_dlt645_stack ems_dlt645_asio)
 
 set_target_properties(
     ems_dlt645_core
@@ -108,7 +98,7 @@ elseif(APPLE)
     set_target_properties(proto_dlt645 PROPERTIES SUFFIX ".so")
 endif()
 
-# 插件运行时不需要独立 dlt645 DLL 或 Boost 动态库。
+# 协议栈静态编入插件。
 install(
     TARGETS proto_dlt645
     LIBRARY DESTINATION plugins/dlt645/1.0.0

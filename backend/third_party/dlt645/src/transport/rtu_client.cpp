@@ -3,8 +3,8 @@
 #include <future>
 #include <memory>
 #include <thread>
-#include <boost/asio.hpp>
-#include <boost/system/error_code.hpp>
+#include <asio.hpp>
+#include <system_error>
 #include "dlt645/common/log.h"
 #include "dlt645/transport/client/client_api.h"
 #include "transport/read_frame.h"
@@ -14,22 +14,28 @@ namespace dlt645 {
     namespace transport {
         namespace client {
 
+            struct RtuClient::Io {
+                asio::io_context context;
+                std::shared_ptr<asio::serial_port> serialPort;
+                asio::executor_work_guard<asio::io_context::executor_type> workGuard { asio::make_work_guard(context) };
+                std::shared_ptr<const TrafficHandler> traffic;
+            };
+
             RtuClient::RtuClient()
-                : io_context_(nullptr)
+                : io_(std::make_unique<Io>())
                 , isConnected_(false)
             {
             }
 
             RtuClient::~RtuClient()
             {
-                // 只在连接时才尝试断开连接
-                if (isConnected_) {
-                    disconnect();
-                }
                 if (io_thread_.joinable()) {
-                    if (io_context_) {
-                        io_context_->stop();
+                    try {
+                        disconnect();
+                    } catch (...) {
+                        io_->context.stop();
                     }
+                    io_->workGuard.reset();
                     io_thread_.join();
                 }
             }
@@ -37,18 +43,16 @@ namespace dlt645 {
             bool RtuClient::configure(const RtuClientConfig& config)
             {
                 config_ = config;
+                io_->traffic = config_.traffic ? std::make_shared<const TrafficHandler>(std::move(config_.traffic)) : nullptr;
                 return true;
             }
 
             void RtuClient::ensureIoContextRunning()
             {
-                if (!io_context_) {
-                    io_context_ = std::make_shared<boost::asio::io_context>();
+                if (!io_thread_.joinable()) {
                     io_thread_ = std::thread([this]() {
                         try {
-                            boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard(
-                                io_context_->get_executor());
-                            io_context_->run();
+                            io_->context.run();
                         } catch (const std::exception& e) {
                             LOG_ERROR("IO Context thread exception: {}", e.what());
                         }
@@ -56,44 +60,46 @@ namespace dlt645 {
                 }
             }
 
-            bool RtuClient::configureSerialPort(boost::asio::serial_port& port, const RtuClientConfig& config)
+            bool RtuClient::configureSerialPort()
             {
+                auto& port = *io_->serialPort;
+                const auto& config = config_;
                 try {
                     // 设置波特率
-                    port.set_option(boost::asio::serial_port_base::baud_rate(config.baudRate));
+                    port.set_option(asio::serial_port_base::baud_rate(config.baudRate));
 
                     // 设置数据位
-                    port.set_option(boost::asio::serial_port_base::character_size(config.dataBits));
+                    port.set_option(asio::serial_port_base::character_size(config.dataBits));
 
                     // 设置停止位
                     if (config.stopBits == 1) {
-                        port.set_option(boost::asio::serial_port_base::stop_bits(boost::asio::serial_port_base::stop_bits::one));
+                        port.set_option(asio::serial_port_base::stop_bits(asio::serial_port_base::stop_bits::one));
                     } else if (config.stopBits == 2) {
-                        port.set_option(boost::asio::serial_port_base::stop_bits(boost::asio::serial_port_base::stop_bits::two));
+                        port.set_option(asio::serial_port_base::stop_bits(asio::serial_port_base::stop_bits::two));
                     } else {
-                        port.set_option(boost::asio::serial_port_base::stop_bits(boost::asio::serial_port_base::stop_bits::one));
+                        port.set_option(asio::serial_port_base::stop_bits(asio::serial_port_base::stop_bits::one));
                         LOG_WARN("Invalid stop bits value, using 1 stop bit");
                     }
 
                     // 设置校验位
                     if (config.parity == "even") {
-                        port.set_option(boost::asio::serial_port_base::parity(boost::asio::serial_port_base::parity::even));
+                        port.set_option(asio::serial_port_base::parity(asio::serial_port_base::parity::even));
                     } else if (config.parity == "odd") {
-                        port.set_option(boost::asio::serial_port_base::parity(boost::asio::serial_port_base::parity::odd));
+                        port.set_option(asio::serial_port_base::parity(asio::serial_port_base::parity::odd));
                     } else {
-                        port.set_option(boost::asio::serial_port_base::parity(boost::asio::serial_port_base::parity::none));
+                        port.set_option(asio::serial_port_base::parity(asio::serial_port_base::parity::none));
                     }
 
                     // 设置流控制
                     if (config.flowControl == 1) {
                         port.set_option(
-                            boost::asio::serial_port_base::flow_control(boost::asio::serial_port_base::flow_control::software));
+                            asio::serial_port_base::flow_control(asio::serial_port_base::flow_control::software));
                     } else if (config.flowControl == 2) {
                         port.set_option(
-                            boost::asio::serial_port_base::flow_control(boost::asio::serial_port_base::flow_control::hardware));
+                            asio::serial_port_base::flow_control(asio::serial_port_base::flow_control::hardware));
                     } else {
                         port.set_option(
-                            boost::asio::serial_port_base::flow_control(boost::asio::serial_port_base::flow_control::none));
+                            asio::serial_port_base::flow_control(asio::serial_port_base::flow_control::none));
                     }
 
                     return true;
@@ -111,21 +117,21 @@ namespace dlt645 {
                 try {
                     ensureIoContextRunning();
 
-                    serial_port_ = std::make_unique<boost::asio::serial_port>(*io_context_);
+                    io_->serialPort = std::make_shared<asio::serial_port>(io_->context);
 
                     // 异步打开串口
-                    boost::asio::post(*io_context_, [this, promise]() {
+                    asio::post(io_->context, [this, promise]() {
                         try {
-                            serial_port_->open(config_.port);
+                            io_->serialPort->open(config_.port);
 
                             // 配置串口参数
-                            if (configureSerialPort(*serial_port_, config_)) {
+                            if (configureSerialPort()) {
                                 isConnected_ = true;
                                 LOG_INFO("RTU client connected to port {}", config_.port);
                                 promise->set_value(true);
                             } else {
                                 LOG_ERROR("Failed to configure serial port: {}", config_.port);
-                                serial_port_->close();
+                                io_->serialPort->close();
                                 isConnected_ = false;
                                 promise->set_value(false);
                             }
@@ -147,17 +153,22 @@ namespace dlt645 {
             {
                 auto promise = std::make_shared<std::promise<void>>();
                 auto future = promise->get_future();
+                if (!io_thread_.joinable()) {
+                    promise->set_value();
+                    return future;
+                }
 
                 try {
-                    boost::asio::post(*io_context_, [this, promise]() {
+                    asio::post(io_->context, [this, promise]() {
                         try {
-                            if (serial_port_ && serial_port_->is_open()) {
-                                boost::system::error_code ec;
-                                serial_port_->close(ec);
+                            if (io_->serialPort && io_->serialPort->is_open()) {
+                                std::error_code ec;
+                                io_->serialPort->close(ec);
                                 if (ec) {
                                     LOG_WARN("Error closing serial port: {}", ec.message());
                                 }
                             }
+                            decoder_.clear();
                             isConnected_ = false;
                             LOG_INFO("RTU client disconnected from port {}", config_.port);
                             promise->set_value();
@@ -181,19 +192,26 @@ namespace dlt645 {
                 auto future = promise->get_future();
 
                 try {
-                    if (!isConnected_ || !serial_port_ || !serial_port_->is_open()) {
+                    if (!isConnected_ || !io_->serialPort || !io_->serialPort->is_open()) {
                         LOG_ERROR("RTU client not connected");
                         promise->set_value({});
                         return future;
                     }
 
                     auto buffer = std::make_shared<std::vector<uint8_t>>(frame);
+                    auto serialPort = io_->serialPort;
+                    auto traffic = io_->traffic;
+                    const auto timeout = config_.timeout;
 
                     // 发送数据
-                    boost::asio::async_write(
-                        *serial_port_,
-                        boost::asio::buffer(*buffer),
-                        [this, promise, buffer](const boost::system::error_code& error, std::size_t /*bytes_transferred*/) {
+                    asio::async_write(
+                        *serialPort,
+                        asio::buffer(*buffer),
+                        [this, promise, buffer, serialPort, traffic, timeout](const std::error_code& error, std::size_t) {
+                            if (traffic) {
+                                observeTraffic(*traffic, TrafficDirection::send,
+                                               { buffer->data(), buffer->size() }, error);
+                            }
                             if (error) {
                                 LOG_ERROR("RTU send failed: {}", error.message());
                                 isConnected_ = false;
@@ -201,8 +219,8 @@ namespace dlt645 {
                                 return;
                             }
 
-                            std::make_shared<transport::FrameReadOperation<boost::asio::serial_port>>(
-                                *serial_port_, decoder_, *io_context_, config_.timeout, promise)
+                            std::make_shared<transport::FrameReadOperation<asio::serial_port>>(
+                                serialPort, decoder_, io_->context, timeout, promise, traffic)
                                 ->start();
                         });
                 } catch (const std::exception& e) {
@@ -217,18 +235,23 @@ namespace dlt645 {
             {
                 auto promise = std::make_shared<std::promise<bool>>();
                 auto future = promise->get_future();
-                if (!isConnected_ || !serial_port_ || !serial_port_->is_open()) {
+                if (!isConnected_ || !io_->serialPort || !io_->serialPort->is_open()) {
                     promise->set_value(false);
                     return future;
                 }
                 auto buffer = std::make_shared<std::vector<uint8_t>>(frame);
-                boost::asio::async_write(*serial_port_,
-                                         boost::asio::buffer(*buffer),
-                                         [this, promise, buffer](const boost::system::error_code& error, size_t) {
-                                             if (error)
-                                                 isConnected_ = false;
-                                             promise->set_value(!error);
-                                         });
+                auto serialPort = io_->serialPort;
+                auto traffic = io_->traffic;
+                asio::async_write(*serialPort, asio::buffer(*buffer),
+                                  [this, promise, buffer, serialPort, traffic](const std::error_code& error, size_t) {
+                                      if (traffic) {
+                                          observeTraffic(*traffic, TrafficDirection::send,
+                                                         { buffer->data(), buffer->size() }, error);
+                                      }
+                                      if (error)
+                                          isConnected_ = false;
+                                      promise->set_value(!error);
+                                  });
                 return future;
             }
 

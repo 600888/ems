@@ -21,9 +21,15 @@ elseif(CMAKE_CXX_COMPILER_ID MATCHES "MSVC")
     add_compile_options(/W4 /WX /utf-8)
 endif()
 
-# Boost 可通过 BOOST_ROOT 或 CMAKE_PREFIX_PATH 指定
-find_package(Boost 1.83.0 REQUIRED)
 find_package(Threads REQUIRED)
+
+add_library(dlt645_asio INTERFACE)
+target_include_directories(dlt645_asio SYSTEM INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/third/asio/include")
+target_compile_definitions(dlt645_asio INTERFACE ASIO_STANDALONE ASIO_NO_DEPRECATED ASIO_HAS_THREADS)
+if(WIN32)
+    target_compile_definitions(dlt645_asio INTERFACE _WIN32_WINNT=0x0A00)
+    target_link_libraries(dlt645_asio INTERFACE ws2_32 mswsock)
+endif()
 
 # 自动查找所有cpp文件
 file(GLOB_RECURSE SOURCES CONFIGURE_DEPENDS "src/*.cpp")
@@ -48,16 +54,7 @@ target_include_directories(dlt645
     PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/src
 )
 
-# 添加编译定义
-target_compile_definitions(dlt645 PRIVATE BOOST_ASIO_NO_DEPRECATED)
-
-# 链接库
-target_link_libraries(dlt645 PUBLIC Threads::Threads Boost::headers)
-
-# Windows平台需要链接的网络库
-if(WIN32)
-    target_link_libraries(dlt645 PUBLIC ws2_32 mswsock)
-endif()
+target_link_libraries(dlt645 PUBLIC Threads::Threads PRIVATE dlt645_asio)
 
 # 安装后的示例程序从相邻 lib 目录加载动态库
 if(APPLE)
@@ -81,6 +78,8 @@ install(TARGETS dlt645 EXPORT dlt645Targets
 
 install(DIRECTORY include/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
 install(DIRECTORY third/spdlog DESTINATION ${CMAKE_INSTALL_INCLUDEDIR})
+install(FILES third/asio/LICENSE_1_0.txt DESTINATION ${CMAKE_INSTALL_DATADIR}/dlt645
+    RENAME ASIO_LICENSE_1_0.txt)
 
 set(dlt645_package_dir ${CMAKE_INSTALL_LIBDIR}/cmake/dlt645)
 configure_package_config_file(

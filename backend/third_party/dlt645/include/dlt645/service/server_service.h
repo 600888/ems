@@ -15,6 +15,8 @@
 namespace dlt645 {
     namespace service {
 
+        using ServerOptions = transport::server::ServerOptions;
+
         class ServerService : public transport::server::ConnectionHandler, public std::enable_shared_from_this<ServerService> {
         public:
             // 构造函数
@@ -103,6 +105,8 @@ namespace dlt645 {
         // 创建TCP服务端服务
         std::shared_ptr<ServerService>
         createTcpServer(const std::string& ip, uint16_t port, std::chrono::milliseconds timeout = std::chrono::seconds(5));
+        std::shared_ptr<ServerService>
+        createTcpServer(const std::string& ip, uint16_t port, const ServerOptions& options);
 
         // 创建RTU服务端服务
         std::shared_ptr<ServerService> createRtuServer(const std::string& port,
@@ -111,6 +115,12 @@ namespace dlt645 {
                                                        int stopbits = 1,
                                                        const std::string& parity = "none",
                                                        std::chrono::milliseconds timeout = std::chrono::seconds(5));
+        std::shared_ptr<ServerService> createRtuServer(const std::string& port,
+                                                       int baudrate,
+                                                       int databits,
+                                                       int stopbits,
+                                                       const std::string& parity,
+                                                       const ServerOptions& options);
 
     } // namespace service
 } // namespace dlt645

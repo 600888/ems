@@ -195,7 +195,9 @@ if(TARGET proto_dlt645)
         test_dlt645_runtime SYSTEM
         PRIVATE "${EMS_BACKEND_ROOT}/third_party/libmodbuspp/3rdparty/json/single_include"
     )
-    target_link_libraries(test_dlt645_runtime PRIVATE ems_protocol_runtime ems_dlt645_stack)
+    target_link_libraries(
+        test_dlt645_runtime PRIVATE ems_protocol_runtime ems_dlt645_stack ems_dlt645_asio
+    )
     target_compile_definitions(
         test_dlt645_runtime PRIVATE EMS_DLT645_PLUGIN="$<TARGET_FILE:proto_dlt645>"
     )

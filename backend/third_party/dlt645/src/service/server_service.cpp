@@ -491,13 +491,18 @@ namespace dlt645 {
 
         std::shared_ptr<ServerService> createTcpServer(const std::string& ip, uint16_t port, std::chrono::milliseconds timeout)
         {
+            return createTcpServer(ip, port, ServerOptions { timeout, {} });
+        }
+
+        std::shared_ptr<ServerService> createTcpServer(const std::string& ip, uint16_t port, const ServerOptions& options)
+        {
             DIManager::preInit();
             // 1. 先创建TcpServer
             auto tcpServer = std::make_shared<transport::server::TcpServer>();
             transport::server::TcpServerConfig config;
             config.ip = ip;
             config.port = port;
-            config.timeout = timeout;
+            static_cast<ServerOptions&>(config) = options;
 
             if (!tcpServer->configure(config)) {
                 LOG_ERROR("Failed to configure TCP server");
@@ -520,6 +525,16 @@ namespace dlt645 {
                                                        const std::string& parity,
                                                        std::chrono::milliseconds timeout)
         {
+            return createRtuServer(port, baudrate, databits, stopbits, parity, ServerOptions { timeout, {} });
+        }
+
+        std::shared_ptr<ServerService> createRtuServer(const std::string& port,
+                                                       int baudrate,
+                                                       int databits,
+                                                       int stopbits,
+                                                       const std::string& parity,
+                                                       const ServerOptions& options)
+        {
             DIManager::preInit();
             // 1. 先创建RtuServer
             auto rtuServer = std::make_shared<transport::server::RtuServer>();
@@ -529,7 +544,7 @@ namespace dlt645 {
             config.dataBits = databits;
             config.stopBits = stopbits;
             config.parity = parity;
-            config.timeout = timeout;
+            static_cast<ServerOptions&>(config) = options;
 
             if (!rtuServer->configure(config)) {
                 LOG_ERROR("Failed to configure RTU server");

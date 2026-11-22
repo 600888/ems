@@ -59,7 +59,7 @@ cmake --build build/handlers
 ctest --test-dir build/handlers --output-on-failure
 ```
 
-启用 Modbus 或 DLT645 时，分别提供同工具链 libmodbus 或 Boost 1.83+ 头文件；依赖参数见 [Windows 构建](https://github.com/600888/ems/blob/main/README.md#windows-构建) 和 [DLT645 文档](dlt645.md)。多配置生成器编译、测试需指定相同配置，例如 `--config Release` / `-C Release`。
+Modbus 使用同工具链编译的 libmodbus，DLT645 使用仓库内的 standalone Asio。多配置生成器编译、测试需指定相同配置，例如 `--config Release` / `-C Release`。依赖参数见 [Windows 构建](https://github.com/600888/ems/blob/main/README.md#windows-构建) 和 [DLT645 构建说明](dlt645.md#构建与验证)。
 
 Modbus 统一通过 `ModbusProtoHandler` 调用 `proto_modbus`，插件直接依赖 libmodbus。
 旧的 `ems::net::device` 处理器、C++ 包装器及其专用测试和示例已移除，应用调用统一使用上述协议无关接口。

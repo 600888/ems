@@ -1,221 +1,188 @@
-#include <cstring>
-#include <thread>
-#include <vector>
-#include "dlt645/common/log.h"
-#include "dlt645/common/transform.h"
 #include "dlt645/transport/server/server_api.h"
+#include <asio.hpp>
+#include <array>
+#include <unordered_map>
+#include "dlt645/common/log.h"
+#include "transport/observe_traffic.h"
 
-namespace dlt645 {
-    namespace transport {
-        namespace server {
+namespace dlt645::transport::server {
 
-            TcpServer::TcpServer()
-                : io_context_(std::make_shared<boost::asio::io_context>())
-                , isRunning_(false)
-            {
-            }
+    struct TcpServer::ClientSession {
+        explicit ClientSession(asio::io_context& context) : socket(context) {}
 
-            TcpServer::~TcpServer()
-            {
-                stop();
-                if (io_thread_.joinable()) {
-                    io_thread_.join();
-                }
-            }
+        asio::ip::tcp::socket socket;
+        protocol::FrameStreamDecoder decoder;
+        std::array<uint8_t, 1024> input {};
+        uint64_t id = 0;
+    };
 
-            bool TcpServer::configure(const TcpServerConfig& config)
-            {
-                config_ = config;
-                return true;
-            }
+    struct TcpServer::Io {
+        explicit Io(const asio::ip::tcp::endpoint& endpoint) : acceptor(context, endpoint) {}
 
-            bool TcpServer::start()
-            {
-                if (isRunning_) {
-                    LOG_WARN("TCP server is already running");
-                    return true;
-                }
+        asio::io_context context;
+        asio::ip::tcp::acceptor acceptor;
+        asio::executor_work_guard<asio::io_context::executor_type> workGuard { asio::make_work_guard(context) };
+        std::unordered_map<uint64_t, std::shared_ptr<ClientSession>> clients;
+        uint64_t nextId = 1;
+    };
 
+    TcpServer::TcpServer() : isRunning_(false) {}
+
+    TcpServer::~TcpServer() { stop(); }
+
+    bool TcpServer::configure(const TcpServerConfig& config)
+    {
+        if (isRunning_)
+            return false;
+        config_ = config;
+        return true;
+    }
+
+    bool TcpServer::start()
+    {
+        if (isRunning_) {
+            LOG_WARN("TCP server is already running");
+            return true;
+        }
+
+        try {
+            const asio::ip::tcp::endpoint endpoint(asio::ip::make_address(config_.ip), config_.port);
+            io_ = std::make_unique<Io>(endpoint);
+            isRunning_ = true;
+            acceptConnection();
+            io_thread_ = std::thread([this]() {
                 try {
-                    // 创建acceptor
-                    boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address(config_.ip), config_.port);
+                    io_->context.run();
+                } catch (const std::exception& e) {
+                    LOG_ERROR("TCP server IO context exception: {}", e.what());
+                }
+            });
+            LOG_INFO("TCP server started on {}:{}", config_.ip, config_.port);
+            return true;
+        } catch (const std::exception& e) {
+            LOG_ERROR("Failed to start TCP server: {}", e.what());
+            stop();
+            return false;
+        }
+    }
 
-                    acceptor_ = std::make_unique<boost::asio::ip::tcp::acceptor>(*io_context_, endpoint);
+    void TcpServer::stop()
+    {
+        if (!io_)
+            return;
+        isRunning_ = false;
+        if (io_thread_.joinable()) {
+            asio::post(io_->context, [this]() {
+                std::error_code ignored;
+                io_->acceptor.close(ignored);
+                for (const auto& entry : io_->clients)
+                    entry.second->socket.close(ignored);
+                io_->workGuard.reset();
+            });
+            io_thread_.join();
+        }
+        io_.reset();
+        LOG_INFO("TCP server stopped");
+    }
 
-                    // 启动io_context线程
-                    isRunning_ = true;
-                    // 创建工作保护，防止io_context在没有异步操作时退出
-                    work_guard_.emplace(boost::asio::make_work_guard(*io_context_));
+    bool TcpServer::isRunning() const { return isRunning_; }
 
-                    // 开始接受连接（先创建异步操作）
-                    acceptConnection();
+    void TcpServer::setConnectionHandler(std::shared_ptr<ConnectionHandler> handler) { connectionHandler_ = std::move(handler); }
 
-                    // 然后启动io_context线程
-                    io_thread_ = std::thread([this]() {
+    void TcpServer::acceptConnection()
+    {
+        auto client = std::make_shared<ClientSession>(io_->context);
+        io_->acceptor.async_accept(client->socket, [this, client](const std::error_code& error) {
+            if (!isRunning_)
+                return;
+            if (!error) {
+                try {
+                    std::error_code remoteError;
+                    const auto remote = client->socket.remote_endpoint(remoteError);
+                    if (!remoteError)
+                        LOG_INFO("New TCP connection from {}", remote.address().to_string());
+                    client->id = io_->nextId++;
+                    io_->clients.emplace(client->id, client);
+                    handleClient(client);
+                } catch (const std::exception& e) {
+                    LOG_ERROR("Failed to handle new TCP connection: {}", e.what());
+                    closeClient(client->id);
+                }
+            } else {
+                LOG_ERROR("Failed to accept TCP connection: {}", error.message());
+            }
+            if (isRunning_)
+                acceptConnection();
+        });
+    }
+
+    void TcpServer::closeClient(uint64_t id)
+    {
+        io_->clients.erase(id);
+        if (isRunning_ && connectionHandler_) {
+            try {
+                connectionHandler_->onConnectionClosed();
+            } catch (const std::exception& e) {
+                LOG_ERROR("Exception in onConnectionClosed: {}", e.what());
+            }
+        }
+    }
+
+    void TcpServer::handleClient(std::shared_ptr<ClientSession> client)
+    {
+        client->socket.async_read_some(
+            asio::buffer(client->input),
+            [this, client](const std::error_code& error, size_t bytesRead) {
+                if (error) {
+                    if (isRunning_)
+                        LOG_INFO("TCP client disconnected: {}", error.message());
+                    closeClient(client->id);
+                    return;
+                }
+                if (bytesRead != 0) {
+                    observeTraffic(config_.traffic, TrafficDirection::receive,
+                                   { client->input.data(), bytesRead }, {}, client->id);
+                }
+                if (!isRunning_)
+                    return;
+                try {
+                    client->decoder.append(client->input.data(), bytesRead);
+                    std::vector<uint8_t> responses;
+                    while (auto frame = client->decoder.nextFrame()) {
+                        if (!connectionHandler_)
+                            continue;
                         try {
-                            io_context_->run();
+                            auto response = connectionHandler_->handleRequest(*frame);
+                            responses.insert(responses.end(), response.begin(), response.end());
                         } catch (const std::exception& e) {
-                            LOG_ERROR("TCP server IO context exception: {}", e.what());
-                        }
-                    });
-
-                    LOG_INFO("TCP server started on {}:{}", config_.ip, config_.port);
-                    return true;
-                } catch (const std::exception& e) {
-                    LOG_ERROR("Failed to start TCP server: {}", e.what());
-                    isRunning_ = false;
-                    return false;
-                }
-            }
-
-            void TcpServer::stop()
-            {
-                if (!isRunning_) {
-                    return;
-                }
-
-                try {
-                    isRunning_ = false;
-
-                    // 关闭acceptor，停止接受新连接
-                    if (acceptor_) {
-                        boost::system::error_code ec;
-                        acceptor_->close(ec);
-                        if (ec) {
-                            LOG_WARN("Failed to close acceptor: {}", ec.message());
+                            LOG_ERROR("Failed to handle TCP frame: {}", e.what());
                         }
                     }
-
-                    // 移除工作保护，允许io_context退出
-                    if (work_guard_) {
-                        work_guard_->reset();
-                        work_guard_.reset(); // 释放optional
+                    if (responses.empty()) {
+                        if (isRunning_)
+                            handleClient(client);
+                        return;
                     }
-
-                    // 停止io_context
-                    io_context_->stop();
-
-                    // 等待io_thread_退出
-                    if (io_thread_.joinable()) {
-                        io_thread_.join();
-                    }
-
-                    LOG_INFO("TCP server stopped");
-                } catch (const std::exception& e) {
-                    LOG_ERROR("Failed to stop TCP server: {}", e.what());
-                    // 确保在异常情况下也能正确清理
-                    isRunning_ = false;
-                    if (io_thread_.joinable()) {
-                        try {
-                            io_thread_.join();
-                        } catch (...) {
-                            // 忽略join异常
-                        }
-                    }
-                }
-            }
-
-            bool TcpServer::isRunning() const { return isRunning_; }
-
-            void TcpServer::setConnectionHandler(std::shared_ptr<ConnectionHandler> handler) { connectionHandler_ = handler; }
-
-            void TcpServer::acceptConnection()
-            {
-                if (!isRunning_ || !acceptor_) {
-                    return;
-                }
-
-                auto socket = std::make_shared<boost::asio::ip::tcp::socket>(*io_context_);
-
-                acceptor_->async_accept(*socket, [this, socket](const boost::system::error_code& error) {
-                    try {
-                        if (!error) {
-                            LOG_INFO("New TCP connection from {}", socket->remote_endpoint().address().to_string());
-
-                            // 处理客户端连接
-                            handleClient(socket, std::make_shared<protocol::FrameStreamDecoder>());
-                        } else {
-                            if (isRunning_) {
-                                LOG_ERROR("Failed to accept TCP connection: {}", error.message());
-                            }
-                        }
-
-                        // 继续接受下一个连接
-                        if (isRunning_) {
-                            acceptConnection();
-                        }
-                    } catch (const std::exception& e) {
-                        if (isRunning_) {
-                            LOG_ERROR("Exception in accept callback: {}", e.what());
-                            // 继续接受下一个连接
-                            if (isRunning_) {
-                                acceptConnection();
-                            }
-                        }
-                    } catch (...) {
-                        if (isRunning_) {
-                            LOG_ERROR("Unknown exception in accept callback");
-                            // 继续接受下一个连接
-                            if (isRunning_) {
-                                acceptConnection();
-                            }
-                        }
-                    }
-                });
-            }
-
-            void TcpServer::handleClient(std::shared_ptr<boost::asio::ip::tcp::socket> socket,
-                                         std::shared_ptr<protocol::FrameStreamDecoder> decoder)
-            {
-                auto buffer = std::make_shared<std::vector<uint8_t>>(1024);
-                socket->async_read_some(
-                    boost::asio::buffer(*buffer),
-                    [this, socket, decoder, buffer](const boost::system::error_code& error, size_t bytesRead) {
-                        if (error) {
-                            LOG_INFO("TCP client disconnected: {}", error.message());
-                            if (connectionHandler_)
-                                connectionHandler_->onConnectionClosed();
-                            return;
-                        }
-                        try {
-                            decoder->append(buffer->data(), bytesRead);
-                            std::vector<uint8_t> responses;
-                            while (auto frame = decoder->nextFrame()) {
-                                if (!connectionHandler_)
-                                    continue;
-                                try {
-                                    auto response = connectionHandler_->handleRequest(*frame);
-                                    responses.insert(responses.end(), response.begin(), response.end());
-                                } catch (const std::exception& e) {
-                                    LOG_ERROR("Failed to handle TCP frame: {}", e.what());
-                                }
-                            }
-                            if (responses.empty()) {
+                    auto output = std::make_shared<std::vector<uint8_t>>(std::move(responses));
+                    asio::async_write(
+                        client->socket, asio::buffer(*output),
+                        [this, client, output](const std::error_code& writeError, size_t) {
+                            observeTraffic(config_.traffic, TrafficDirection::send,
+                                           { output->data(), output->size() }, writeError, client->id);
+                            if (writeError) {
                                 if (isRunning_)
-                                    handleClient(socket, decoder);
-                                return;
+                                    LOG_ERROR("Failed to send TCP response: {}", writeError.message());
+                                closeClient(client->id);
+                            } else if (isRunning_) {
+                                handleClient(client);
                             }
-                            auto output = std::make_shared<std::vector<uint8_t>>(std::move(responses));
-                            boost::asio::async_write(
-                                *socket,
-                                boost::asio::buffer(*output),
-                                [this, socket, decoder, output](const boost::system::error_code& writeError, size_t) {
-                                    if (writeError) {
-                                        LOG_ERROR("Failed to send TCP response: {}", writeError.message());
-                                        if (connectionHandler_)
-                                            connectionHandler_->onConnectionClosed();
-                                    } else if (isRunning_) {
-                                        handleClient(socket, decoder);
-                                    }
-                                });
-                        } catch (const std::exception& e) {
-                            LOG_ERROR("Failed to process TCP input: {}", e.what());
-                            if (isRunning_)
-                                handleClient(socket, decoder);
-                        }
-                    });
-            }
+                        });
+                } catch (const std::exception& e) {
+                    LOG_ERROR("Failed to process TCP input: {}", e.what());
+                    if (isRunning_)
+                        handleClient(client);
+                }
+            });
+    }
 
-        } // namespace server
-    } // namespace transport
-} // namespace dlt645
+} // namespace dlt645::transport::server

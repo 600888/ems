@@ -9,8 +9,8 @@
 #include <chrono>
 #include <string>
 #include <future>
-#include <boost/asio.hpp>
 #include "dlt645/protocol/protocol.h"
+#include "dlt645/transport/traffic.h"
 
 namespace dlt645 {
     namespace transport {
@@ -67,9 +67,11 @@ namespace dlt645 {
             };
 
             // 客户端配置基类
-            struct ClientConfig {
+            struct ClientOptions {
                 std::chrono::milliseconds timeout = std::chrono::seconds(5); // 默认超时时间5秒
+                TrafficHandler traffic {};
             };
+            using ClientConfig = ClientOptions;
 
             // TCP客户端配置
             struct TcpClientConfig : public ClientConfig {
@@ -105,9 +107,9 @@ namespace dlt645 {
                 void setTimeout(std::chrono::milliseconds timeout) override;
 
             private:
+                struct Io;
                 TcpClientConfig config_;
-                std::shared_ptr<boost::asio::io_context> io_context_;
-                std::unique_ptr<boost::asio::ip::tcp::socket> socket_;
+                std::unique_ptr<Io> io_;
                 std::atomic<bool> isConnected_;
                 std::thread io_thread_;
                 protocol::FrameStreamDecoder decoder_;
@@ -134,9 +136,9 @@ namespace dlt645 {
                 void setTimeout(std::chrono::milliseconds timeout) override;
 
             private:
+                struct Io;
                 RtuClientConfig config_;
-                std::shared_ptr<boost::asio::io_context> io_context_;
-                std::unique_ptr<boost::asio::serial_port> serial_port_;
+                std::unique_ptr<Io> io_;
                 std::atomic<bool> isConnected_;
                 std::thread io_thread_;
                 protocol::FrameStreamDecoder decoder_;
@@ -145,7 +147,7 @@ namespace dlt645 {
                 void ensureIoContextRunning();
 
                 // 配置串口参数
-                bool configureSerialPort(boost::asio::serial_port& port, const RtuClientConfig& config);
+                bool configureSerialPort();
             };
 
         } // namespace client

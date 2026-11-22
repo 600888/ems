@@ -467,7 +467,7 @@ void run() {
     engine.shutdown();
     CHECK(manager.loaded_library_count() == 0);
     const auto name = rows.channels[1].name;
-    const auto logfile = fs::u8path(logPath()) / "net/channels" / name /
+    const auto logfile = fs::u8path(logPath()) / "ems-collector/channels" / name /
 #ifdef DEBUG
                          (name + "-debug.log");
 #else

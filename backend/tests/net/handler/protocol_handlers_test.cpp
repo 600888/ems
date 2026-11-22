@@ -325,7 +325,7 @@ void channel(const std::string& protocol, const char* plugin_path,
     CHECK(worker.state() == ChannelState::Stopped);
     // 仍保留通道对象也必须释放插件实例，避免拖延库卸载。
     CHECK(manager.loaded_library_count() == 0);
-    const auto path = fs::u8path(logPath()) / "net/channels" / config.name_ /
+    const auto path = fs::u8path(logPath()) / "ems-collector/channels" / config.name_ /
 #ifdef DEBUG
                       (config.name_ + "-debug.log");
 #else

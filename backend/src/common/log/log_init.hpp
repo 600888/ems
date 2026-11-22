@@ -38,6 +38,20 @@
 
 using LV = spdlog::level::level_enum;
 
+/**
+ * @brief 将 UTF-8 日志路径转换为 spdlog 使用的原生文件名。
+ * @param[in] path UTF-8 日志文件路径。
+ * @return Windows 宽字符文件名或其他平台的 UTF-8 文件名。
+ * @throws std::filesystem::filesystem_error 路径编码转换失败。
+ */
+inline spdlog::filename_t logFilename(const std::string& path) {
+#if defined(_WIN32) && defined(SPDLOG_WCHAR_FILENAMES)
+    return std::filesystem::u8path(path).native();
+#else
+    return path;
+#endif
+}
+
 struct LogInfo {
     LV level = LV::debug;
     long long fileSize = 10;
@@ -163,7 +177,7 @@ class LogInitializer {
 
             // 日志路径
             std::string logDir = logPath() + defaultLoggerName;
-            std::filesystem::create_directories(logDir);
+            std::filesystem::create_directories(std::filesystem::u8path(logDir));
 
             std::string logFilePath = logDir + "/" + defaultLoggerName;
             if (logLevel == LV::debug) {
@@ -175,7 +189,7 @@ class LogInitializer {
             // 设置为滚动模式
             // 当程序重启时，如果希望将之前的日志文件立即归档为备份文件，并开始写入新的日志文件，而不是继续写入之前的文件直到达到最大大小才旋转，就可以将 rotate_on_open 设置为 true 。
             auto rotating_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-                logFilePath, fileSize, count, false);
+                logFilename(logFilePath), fileSize, count, false);
             sinks.push_back(rotating_sink);
 
             // 设置为异步模式

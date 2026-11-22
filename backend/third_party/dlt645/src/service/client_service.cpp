@@ -37,13 +37,19 @@ namespace dlt645 {
         std::shared_ptr<ClientService>
         ClientService::createTcpClient(const std::string& ip, uint16_t port, std::chrono::milliseconds timeout)
         {
+            return createTcpClient(ip, port, ClientOptions { timeout, {} });
+        }
+
+        std::shared_ptr<ClientService>
+        ClientService::createTcpClient(const std::string& ip, uint16_t port, const ClientOptions& options)
+        {
             // 创建TCP客户端
             auto tcpClient = std::make_shared<transport::client::TcpClient>();
             transport::client::TcpClientConfig config;
             config.ip = ip;
             config.port = port;
-            config.timeout = timeout;
-            LOG_INFO("Creating TCP client with IP: {}, port: {}, timeout: {} ms", ip, port, timeout.count());
+            static_cast<ClientOptions&>(config) = options;
+            LOG_INFO("Creating TCP client with IP: {}, port: {}, timeout: {} ms", ip, port, options.timeout.count());
 
             if (!tcpClient->configure(config)) {
                 LOG_ERROR("Failed to configure TCP client");
@@ -60,6 +66,16 @@ namespace dlt645 {
                                                                       const std::string& parity,
                                                                       std::chrono::milliseconds timeout)
         {
+            return createRtuClient(port, baudrate, databits, stopbits, parity, ClientOptions { timeout, {} });
+        }
+
+        std::shared_ptr<ClientService> ClientService::createRtuClient(const std::string& port,
+                                                                      int baudrate,
+                                                                      int databits,
+                                                                      int stopbits,
+                                                                      const std::string& parity,
+                                                                      const ClientOptions& options)
+        {
             // 创建RTU客户端
             auto rtuClient = std::make_shared<transport::client::RtuClient>();
             transport::client::RtuClientConfig config;
@@ -68,7 +84,7 @@ namespace dlt645 {
             config.dataBits = databits;
             config.stopBits = stopbits;
             config.parity = parity;
-            config.timeout = timeout;
+            static_cast<ClientOptions&>(config) = options;
 
             if (!rtuClient->configure(config)) {
                 LOG_ERROR("Failed to configure RTU client");

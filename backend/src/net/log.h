@@ -4,7 +4,7 @@
 
 #include "common/log/log_base.h"
 
-static constexpr const char* LOGGER_NAME = "net";
+static constexpr const char* LOGGER_NAME = "ems-collector";
 
 /** @brief 通道报文日志；进程入口须先创建 ProcessLogger，初始化默认日志器及异步线程池。 */
 class ChannelMsgLogger {
@@ -17,15 +17,15 @@ class ChannelMsgLogger {
     ChannelMsgLogger(const ChannelMsgLogger& other) = delete;
 
     /**
-     * @brief 将通道名称编码为不依赖系统代码页的单个日志路径分量。
+     * @brief 将通道名称转换为单个日志路径分量，保留 UTF-8 中文和空格。
      * @param[in] channelCode UTF-8 通道名称。
-     * @return ASCII 路径分量；非 ASCII 字节及特殊字符使用百分号编码。
+     * @return UTF-8 路径分量；路径分隔符等特殊字符使用百分号编码。
      */
     static inline std::string fileComponent(const std::string& channelCode) {
         static constexpr char hex[] = "0123456789ABCDEF";
         std::string result;
         for (const unsigned char byte : channelCode) {
-            if ((byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
+            if (byte >= 0x80 || (byte >= 'a' && byte <= 'z') || (byte >= 'A' && byte <= 'Z') ||
                 (byte >= '0' && byte <= '9') || byte == '-' || byte == '_' || byte == ' ') {
                 result += static_cast<char>(byte);
             } else {
@@ -66,7 +66,7 @@ class ChannelMsgLogger {
     }
 
     /**
-     * @brief 创建并注册通道报文日志器。
+     * @brief 创建并注册通道报文日志器，写入 log/ems-collector/channels 下的通道目录。
      * @param[in] channelCode 通道编码。
      * @param[in] log_level 日志级别。
      * @return 通道日志器；创建失败时回退到进程默认日志器，默认日志器缺失时为空。
@@ -87,7 +87,7 @@ class ChannelMsgLogger {
             logFilePath += ".log";
             std::vector<spdlog::sink_ptr> sinks;
             auto rotating_sink = std::make_shared<spdlog::sinks::rotating_file_sink_mt>(
-                logFilePath, 1024 * 1024 * 10, 10);
+                logFilename(logFilePath), 1024 * 1024 * 10, 10);
             sinks.push_back(rotating_sink);
 
             std::shared_ptr<spdlog::logger> logger = std::make_shared<spdlog::async_logger>(

@@ -46,9 +46,9 @@ ems-db check
 ## 依赖安装
 
 项目使用 redis-plus-plus 作为 Redis 客户端库，已集成在 `backend/third_party/` 目录下。
-DLT645 默认启用，需要 **Boost 1.83+ 头文件**；协议栈源码已集成在 `backend/third_party/dlt645/`。
-可通过 `-DBOOST_ROOT=<Boost 根目录>` 指定头文件，或用 `-DEMS_BUILD_DLT645=OFF` 关闭该插件。
-发行版提供的 Boost 版本较旧时，需要单独准备 1.83+；仅使用头文件，无需编译 Boost 库。
+DLT645 默认启用，使用协议栈自带的 standalone Asio，位于 `backend/third_party/dlt645/third/asio/`。
+可通过 `-DEMS_BUILD_DLT645=OFF` 关闭该插件。
+实时数据库的共享内存后端需要 **Boost 1.83+ 头文件**，可通过 `-DBOOST_ROOT=<Boost 根目录>` 指定。
 
 ### Ubuntu 24.04
 
@@ -99,7 +99,7 @@ make
 Modbus 协议插件需要 `libmodbus >= 3.1.6`；Windows 缺少安装库时默认下载并使用当前工具链
 编译固定的 3.1.10，共享库随插件部署。旧处理器仍需预装 libmodbus 和 pkg-config。
 `redis-plus-plus`、GoogleTest 和 IEC104 C 栈使用仓库内版本。
-DLT645 还需要 Boost 1.83+；其头文件可跨 MSVC / MinGW 使用。
+实时数据库共享内存后端所用的 Boost 头文件可跨 MSVC / MinGW 使用。
 MSVC 构建需要 Ninja，并在 **x64 Native Tools Command Prompt / Developer PowerShell** 中执行；
 MinGW 构建需要将 MinGW-w64 的 `bin` 目录加入 `PATH`。
 

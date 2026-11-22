@@ -65,6 +65,11 @@ include(Dependencies)
 # 先定义第三方目标，再开启自有代码的警告，避免给第三方追加项目警告。
 add_subdirectory(third_party)
 
+# 自有日志及协议集成统一使用 Windows 宽字符文件接口，保留中文路径。
+if(WIN32)
+    add_compile_definitions(SPDLOG_WCHAR_FILENAMES)
+endif()
+
 if(MSVC)
     add_compile_options(/W4 /we4715)
 else()

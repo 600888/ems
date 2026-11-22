@@ -1,16 +1,15 @@
 #ifndef DLT645_SERVER_API_H
 #define DLT645_SERVER_API_H
 
-#include <boost/asio.hpp>
 #include <atomic>
 #include <chrono>
 #include <cstdint>
 #include <memory>
-#include <optional>
 #include <string>
 #include <thread>
 #include <vector>
 #include "dlt645/protocol/protocol.h"
+#include "dlt645/transport/traffic.h"
 
 namespace dlt645 {
     namespace transport {
@@ -33,9 +32,11 @@ namespace dlt645 {
             };
 
             // 服务器配置基类
-            struct ServerConfig {
+            struct ServerOptions {
                 std::chrono::milliseconds timeout = std::chrono::seconds(5); // 默认超时时间5秒
+                ServerTrafficHandler traffic {};
             };
+            using ServerConfig = ServerOptions;
 
             // TCP服务器配置
             struct TcpServerConfig : public ServerConfig {
@@ -88,20 +89,20 @@ namespace dlt645 {
                 void setConnectionHandler(std::shared_ptr<ConnectionHandler> handler) override;
 
             private:
+                struct Io;
+                struct ClientSession;
                 TcpServerConfig config_;
-                std::shared_ptr<boost::asio::io_context> io_context_;
-                std::unique_ptr<boost::asio::ip::tcp::acceptor> acceptor_;
+                std::unique_ptr<Io> io_;
                 std::atomic<bool> isRunning_;
                 std::shared_ptr<ConnectionHandler> connectionHandler_;
                 std::thread io_thread_;
-                std::optional<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_guard_;
 
                 // 接受连接
                 void acceptConnection();
 
                 // 处理客户端连接
-                void handleClient(std::shared_ptr<boost::asio::ip::tcp::socket> socket,
-                                  std::shared_ptr<protocol::FrameStreamDecoder> decoder);
+                void handleClient(std::shared_ptr<ClientSession> client);
+                void closeClient(uint64_t id);
             };
 
             // RTU服务器实现
@@ -120,24 +121,24 @@ namespace dlt645 {
                 void setConnectionHandler(std::shared_ptr<ConnectionHandler> handler) override;
 
             private:
+                struct Io;
                 RtuServerConfig config_;
-                std::shared_ptr<boost::asio::io_context> io_context_;
-                std::unique_ptr<boost::asio::serial_port> serial_port_;
+                std::unique_ptr<Io> io_;
                 std::atomic<bool> isRunning_;
                 std::shared_ptr<ConnectionHandler> connectionHandler_;
                 std::thread io_thread_;
                 std::vector<uint8_t> receiveBuffer_;
                 protocol::FrameStreamDecoder decoder_;
-                std::optional<boost::asio::executor_work_guard<boost::asio::io_context::executor_type>> work_guard_;
 
                 // 配置串口参数
-                bool configureSerialPort(boost::asio::serial_port& port, const RtuServerConfig& config);
+                bool configureSerialPort();
 
                 // 开始接收数据
                 void startReceive();
 
                 // 处理接收到的数据
-                void handleReceive(const boost::system::error_code& error, size_t bytes_transferred);
+                void handleReceive(const std::error_code& error, size_t bytes_transferred);
+                void writeResponses();
             };
 
         } // namespace server

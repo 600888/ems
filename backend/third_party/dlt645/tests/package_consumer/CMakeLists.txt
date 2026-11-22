@@ -3,7 +3,7 @@ project(dlt645_package_consumer LANGUAGES CXX)
 
 find_package(dlt645 1 CONFIG REQUIRED)
 
-add_executable(dlt645_package_consumer ../core_test.cpp)
+add_executable(dlt645_package_consumer ../service_test.cpp)
 target_link_libraries(dlt645_package_consumer PRIVATE dlt645::dlt645)
 if(MSVC)
     target_compile_options(dlt645_package_consumer PRIVATE /utf-8)

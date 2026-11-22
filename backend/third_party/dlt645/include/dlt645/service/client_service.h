@@ -15,6 +15,8 @@
 namespace dlt645 {
     namespace service {
 
+        using ClientOptions = transport::client::ClientOptions;
+
         class ClientService {
         public:
             // 构造函数
@@ -26,6 +28,8 @@ namespace dlt645 {
                                                                   uint16_t port,
                                                                   std::chrono::milliseconds timeout
                                                                   = std::chrono::milliseconds(5000));
+            static std::shared_ptr<ClientService>
+            createTcpClient(const std::string& ip, uint16_t port, const ClientOptions& options);
 
             // 创建RTU客户端服务
             static std::shared_ptr<ClientService> createRtuClient(const std::string& port,
@@ -35,6 +39,12 @@ namespace dlt645 {
                                                                   const std::string& parity = "none",
                                                                   std::chrono::milliseconds timeout
                                                                   = std::chrono::milliseconds(5000));
+            static std::shared_ptr<ClientService> createRtuClient(const std::string& port,
+                                                                  int baudrate,
+                                                                  int databits,
+                                                                  int stopbits,
+                                                                  const std::string& parity,
+                                                                  const ClientOptions& options);
 
             // 设置设备地址
             bool setAddress(const std::array<uint8_t, 6>& address);

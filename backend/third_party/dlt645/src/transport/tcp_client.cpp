@@ -1,4 +1,4 @@
-#include <boost/asio/steady_timer.hpp>
+#include <asio.hpp>
 #include "dlt645/common/log.h"
 #include "dlt645/common/transform.h"
 #include "dlt645/transport/client/client_api.h"
@@ -9,22 +9,28 @@ namespace dlt645 {
     namespace transport {
         namespace client {
 
+            struct TcpClient::Io {
+                asio::io_context context;
+                std::shared_ptr<asio::ip::tcp::socket> socket;
+                asio::executor_work_guard<asio::io_context::executor_type> workGuard { asio::make_work_guard(context) };
+                std::shared_ptr<const TrafficHandler> traffic;
+            };
+
             TcpClient::TcpClient()
-                : io_context_(nullptr)
+                : io_(std::make_unique<Io>())
                 , isConnected_(false)
             {
             }
 
             TcpClient::~TcpClient()
             {
-                // 只在连接时才尝试断开连接
-                if (isConnected_) {
-                    disconnect();
-                }
                 if (io_thread_.joinable()) {
-                    if (io_context_) {
-                        io_context_->stop();
+                    try {
+                        disconnect();
+                    } catch (...) {
+                        io_->context.stop();
                     }
+                    io_->workGuard.reset();
                     io_thread_.join();
                 }
             }
@@ -32,18 +38,16 @@ namespace dlt645 {
             bool TcpClient::configure(const TcpClientConfig& config)
             {
                 config_ = config;
+                io_->traffic = config_.traffic ? std::make_shared<const TrafficHandler>(std::move(config_.traffic)) : nullptr;
                 return true;
             }
 
             void TcpClient::ensureIoContextRunning()
             {
-                if (!io_context_) {
-                    io_context_ = std::make_shared<boost::asio::io_context>();
+                if (!io_thread_.joinable()) {
                     io_thread_ = std::thread([this]() {
                         try {
-                            boost::asio::executor_work_guard<boost::asio::io_context::executor_type> work_guard(
-                                io_context_->get_executor());
-                            io_context_->run();
+                            io_->context.run();
                         } catch (const std::exception& e) {
                             LOG_ERROR("IO Context thread exception: {}", e.what());
                         }
@@ -59,28 +63,27 @@ namespace dlt645 {
                 try {
                     ensureIoContextRunning();
 
-                    socket_ = std::make_unique<boost::asio::ip::tcp::socket>(*io_context_);
-                    boost::asio::ip::tcp::endpoint endpoint(boost::asio::ip::make_address(config_.ip), config_.port);
+                    asio::ip::tcp::endpoint endpoint(asio::ip::make_address(config_.ip), config_.port);
+                    auto socket = std::make_shared<asio::ip::tcp::socket>(io_->context);
+                    io_->socket = socket;
 
                     LOG_INFO(
                         "Attempting to connect to {}:{} with timeout {} ms", config_.ip, config_.port, config_.timeout.count());
 
                     // 使用steady_timer实现连接超时
-                    auto timer = std::make_shared<boost::asio::steady_timer>(*io_context_);
+                    auto timer = std::make_shared<asio::steady_timer>(io_->context);
                     timer->expires_after(config_.timeout);
 
                     // 创建一个标志来跟踪哪个操作先完成
                     auto completed = std::make_shared<std::atomic<bool>>(false);
 
                     // 设置定时器回调
-                    timer->async_wait([this, promise, completed](const boost::system::error_code& ec) {
+                    timer->async_wait([this, promise, completed, socket](const std::error_code& ec) {
                         if (!completed->exchange(true)) { // 如果是第一个完成的操作
-                            if (ec != boost::asio::error::operation_aborted) {
+                            if (ec != asio::error::operation_aborted) {
                                 // 超时，取消连接操作
-                                if (socket_) {
-                                    boost::system::error_code ignore_ec;
-                                    socket_->cancel(ignore_ec);
-                                }
+                                std::error_code ignored;
+                                socket->cancel(ignored);
                                 LOG_WARN("TCP connection timeout after {} ms", config_.timeout.count());
                                 isConnected_ = false;
                                 promise->set_value(false);
@@ -88,7 +91,7 @@ namespace dlt645 {
                         }
                     });
 
-                    socket_->async_connect(endpoint, [this, promise, timer, completed](const boost::system::error_code& error) {
+                    socket->async_connect(endpoint, [this, promise, timer, completed, socket](const std::error_code& error) {
                         // 取消定时器
                         timer->cancel();
 
@@ -118,17 +121,22 @@ namespace dlt645 {
             {
                 auto promise = std::make_shared<std::promise<void>>();
                 auto future = promise->get_future();
+                if (!io_thread_.joinable()) {
+                    promise->set_value();
+                    return future;
+                }
 
                 try {
-                    boost::asio::post(*io_context_, [this, promise]() {
+                    asio::post(io_->context, [this, promise]() {
                         try {
-                            if (socket_ && socket_->is_open()) {
-                                boost::system::error_code ec;
-                                socket_->close(ec);
+                            if (io_->socket && io_->socket->is_open()) {
+                                std::error_code ec;
+                                io_->socket->close(ec);
                                 if (ec) {
                                     LOG_WARN("Error closing TCP socket: {}", ec.message());
                                 }
                             }
+                            decoder_.clear();
                             isConnected_ = false;
                             LOG_INFO("TCP client disconnected");
                             promise->set_value();
@@ -152,17 +160,24 @@ namespace dlt645 {
                 auto future = promise->get_future();
 
                 try {
-                    if (!isConnected_ || !socket_ || !socket_->is_open()) {
+                    if (!isConnected_ || !io_->socket || !io_->socket->is_open()) {
                         LOG_ERROR("TCP client not connected");
                         promise->set_value({});
                         return future;
                     }
 
                     auto buffer = std::make_shared<std::vector<uint8_t>>(frame);
-                    boost::asio::async_write(
-                        *socket_,
-                        boost::asio::buffer(*buffer),
-                        [this, promise, buffer](const boost::system::error_code& error, std::size_t /*bytes_transferred*/) {
+                    auto socket = io_->socket;
+                    auto traffic = io_->traffic;
+                    const auto timeout = config_.timeout;
+                    asio::async_write(
+                        *socket,
+                        asio::buffer(*buffer),
+                        [this, promise, buffer, socket, traffic, timeout](const std::error_code& error, std::size_t) {
+                            if (traffic) {
+                                observeTraffic(*traffic, TrafficDirection::send,
+                                               { buffer->data(), buffer->size() }, error);
+                            }
                             if (error) {
                                 LOG_ERROR("TCP send failed: {}", error.message());
                                 isConnected_ = false;
@@ -170,8 +185,8 @@ namespace dlt645 {
                                 return;
                             }
 
-                            std::make_shared<transport::FrameReadOperation<boost::asio::ip::tcp::socket>>(
-                                *socket_, decoder_, *io_context_, config_.timeout, promise)
+                            std::make_shared<transport::FrameReadOperation<asio::ip::tcp::socket>>(
+                                socket, decoder_, io_->context, timeout, promise, traffic)
                                 ->start();
                         });
                 } catch (const std::exception& e) {
@@ -186,18 +201,23 @@ namespace dlt645 {
             {
                 auto promise = std::make_shared<std::promise<bool>>();
                 auto future = promise->get_future();
-                if (!isConnected_ || !socket_ || !socket_->is_open()) {
+                if (!isConnected_ || !io_->socket || !io_->socket->is_open()) {
                     promise->set_value(false);
                     return future;
                 }
                 auto buffer = std::make_shared<std::vector<uint8_t>>(frame);
-                boost::asio::async_write(*socket_,
-                                         boost::asio::buffer(*buffer),
-                                         [this, promise, buffer](const boost::system::error_code& error, size_t) {
-                                             if (error)
-                                                 isConnected_ = false;
-                                             promise->set_value(!error);
-                                         });
+                auto socket = io_->socket;
+                auto traffic = io_->traffic;
+                asio::async_write(*socket, asio::buffer(*buffer),
+                                  [this, promise, buffer, socket, traffic](const std::error_code& error, size_t) {
+                                      if (traffic) {
+                                          observeTraffic(*traffic, TrafficDirection::send,
+                                                         { buffer->data(), buffer->size() }, error);
+                                      }
+                                      if (error)
+                                          isConnected_ = false;
+                                      promise->set_value(!error);
+                                  });
                 return future;
             }
 

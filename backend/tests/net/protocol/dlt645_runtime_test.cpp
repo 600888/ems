@@ -1,6 +1,8 @@
 #include <dlt645/service/client_service.h>
 #include <dlt645/service/server_service.h>
 
+#include <asio/io_context.hpp>
+#include <asio/ip/tcp.hpp>
 #include <atomic>
 #include <chrono>
 #include <cmath>
@@ -36,8 +38,8 @@ constexpr std::uint32_t kParameter = 0x04000105;
 std::array<std::uint8_t, 6> address() { return {0x12, 0x90, 0x78, 0x56, 0x34, 0x12}; }
 
 int unused_port() {
-    boost::asio::io_context io;
-    boost::asio::ip::tcp::acceptor acceptor(io, {boost::asio::ip::tcp::v4(), 0});
+    asio::io_context io;
+    asio::ip::tcp::acceptor acceptor(io, {asio::ip::tcp::v4(), 0});
     return acceptor.local_endpoint().port();
 }
 
@@ -118,9 +120,10 @@ void invalid_config() {
     for (const auto& invalid :
          {Json::array(), Json{{"role", "invalid"}}, Json{{"transport", "udp"}},
           Json{{"meter_address", "123A"}}, Json{{"password", "123"}}, Json{{"port", 0}},
-          Json{{"port", 65536}}, Json{{"port", 1.2}}, Json{{"timeout_ms", 0}},
-          Json{{"timeout", 61}}, Json{{"bcd_endian", "invalid"}}, Json{{"allow_writes", 1}},
-          Json{{"settings", "[]"}}, Json{{"points", Json::object()}}, Json{{"transport", "rtu"}},
+          Json{{"ip", "invalid"}}, Json{{"port", 65536}}, Json{{"port", 1.2}},
+          Json{{"timeout_ms", 0}}, Json{{"timeout", 61}}, Json{{"bcd_endian", "invalid"}},
+          Json{{"allow_writes", 1}}, Json{{"settings", "[]"}}, Json{{"points", Json::object()}},
+          Json{{"transport", "rtu"}},
           Json{{"transport", "rtu"}, {"serial_port", "COM99"}, {"parity", "bad"}}}) {
         CHECK(plugin.f.init_fn(plugin.instance, invalid.dump().c_str()) == -1);
         CHECK(std::string(plugin.f.last_error_fn(plugin.instance)).size() > 0);

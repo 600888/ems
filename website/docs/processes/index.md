@@ -54,7 +54,7 @@ Redis 数据也不参与该清理。详见[实时数据库进程详细设计](da
 Web 的 Drogon/Trantor 框架日志也写入 `ems-web` 文件，沿用相同等级和滚动配置。
 默认日志器及异步线程池由各进程入口的 `ProcessLogger` 初始化，`net` 库不在全局初始化阶段创建
 默认日志器。正式采集入口为 `ems-collector`，采集示例使用自己的可执行文件名作为日志器名；
-通道报文日志继续写入 `<EMS_ROOT>/log/net/channels/<通道编码>/`。
+通道报文日志写入 `<EMS_ROOT>/log/ems-collector/channels/<通道编码>/`。
 
 ## 守护进程启动
 

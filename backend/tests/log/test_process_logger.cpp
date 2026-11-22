@@ -48,7 +48,7 @@ void verify(const std::filesystem::path& root, const std::string& scenario) {
         require(logger == spdlog::default_logger(), "process logger is not the default");
         require(logger->level() == expected_level, "configured or fallback level is incorrect");
         if (scenario == "channel_failure") {
-            const auto channels = root / "log/net/channels";
+            const auto channels = root / "log/ems-collector/channels";
             std::filesystem::create_directories(channels);
             std::ofstream(channels / "blocked") << "not a directory";
             ChannelMsgLogger::logChannelInfo("blocked", "channel marker");
@@ -74,6 +74,10 @@ void verify(const std::filesystem::path& root, const std::string& scenario) {
         } else if (scenario == "channel_unicode") {
             ChannelMsgLogger::logChannelInfo("BMS-01 \xE6\x80\xBB\xE6\x8E\xA7", "channel marker {}",
                                              104);
+            ChannelMsgLogger::logChannelInfo(
+                "../BMS-03 \xE7\xB0\x87"
+                "09",
+                "escaped channel marker");
             ChannelTrafficLog traffic("BMS-01 \xE6\x80\xBB\xE6\x8E\xA7", "DLT645");
             std::vector<uint8_t> bytes(2050, 0xA5);
             ChannelTrafficLog::callback(&traffic, EMS_TRAFFIC_TX, bytes.data(), bytes.size(),
@@ -106,19 +110,31 @@ void verify(const std::filesystem::path& root, const std::string& scenario) {
         LOG_ERROR("error marker");
     }
 
+    require(!std::filesystem::exists(root / "log/net"), "legacy net log directory was created");
     const auto directory = root / "log" / name;
     if (scenario == "channel_unicode") {
-        const auto channel_path = root / "log/net/channels/BMS-01 %E6%80%BB%E6%8E%A7" /
+        const auto channel_path =
+            root /
+            std::filesystem::u8path("log/ems-collector/channels/BMS-01 \xE6\x80\xBB\xE6\x8E\xA7") /
 #ifdef DEBUG
-                                  "BMS-01 %E6%80%BB%E6%8E%A7-debug.log";
+            std::filesystem::u8path("BMS-01 \xE6\x80\xBB\xE6\x8E\xA7-debug.log");
 #else
-                                  "BMS-01 %E6%80%BB%E6%8E%A7.log";
+            std::filesystem::u8path("BMS-01 \xE6\x80\xBB\xE6\x8E\xA7.log");
 #endif
         std::ifstream channel_file(channel_path);
         const std::string channel_contents{std::istreambuf_iterator<char>(channel_file),
                                            std::istreambuf_iterator<char>()};
         require(channel_contents.find("channel marker 104") != std::string::npos,
                 "Unicode channel file or formatted message was not written");
+        require(
+            !std::filesystem::exists(root / "log/ems-collector/channels/BMS-01 %E6%80%BB%E6%8E%A7"),
+            "Unicode channel name was percent-encoded");
+        const auto escaped_path =
+            root / std::filesystem::u8path(
+                       "log/ems-collector/channels/%2E%2E%2FBMS-03 \xE7\xB0\x87"
+                       "09");
+        require(std::filesystem::is_directory(escaped_path),
+                "path separators in Unicode channel name were not escaped");
         require(channel_contents.find("[DLT645][TX] A5 A5") != std::string::npos &&
                     channel_contents.find("A5 A5 (length=2050,offset=0)") != std::string::npos &&
                     channel_contents.find("A5 A5 (length=2050,offset=1024)") != std::string::npos &&

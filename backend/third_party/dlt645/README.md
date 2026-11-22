@@ -76,7 +76,7 @@
 
 - C++17 标准
 - CMake 3.20+
-- Boost >=1.83（用于Asio网络编程）
+- standalone Asio（随源码提供，位于 `third/asio/include`）
 - spdlog 日志库（已包含在third目录）
 - 数据项定义编译在 C++ 静态表中；维护时从 Python 版定义重新生成（见下文）
 - 默认构建动态库；安装包包含库文件、头文件和 CMake 包配置
@@ -98,13 +98,13 @@ python cpp/tools/generate_type_definitions.py
 1. 确保已安装必要的依赖：
    ```bash
    # Ubuntu/Debian
-   sudo apt-get install cmake libboost-all-dev
+   sudo apt-get install cmake g++
    
    # CentOS/RHEL
-   sudo yum install cmake boost-devel
+   sudo yum install cmake gcc-c++
    
    # macOS
-   brew install cmake boost
+   brew install cmake
    ```
 
 2. 创建构建目录并编译项目：
@@ -122,7 +122,7 @@ python cpp/tools/generate_type_definitions.py
 
 ## 在其他 C++ 项目中使用动态库
 
-先构建并安装本库，或从 GitHub Release 下载与目标系统、架构匹配的 C++ 安装包。`cpp-v*` 标签会在四个平台的构建和测试全部通过后自动创建 Release，并上传 `dlt645-<平台>.zip`。安装目录包含 `include/` 头文件、`lib/` 链接库与 CMake 包配置；Windows DLL 位于 `bin/`。调用方还需要 Boost 1.83 或更新版本的头文件。
+先构建并安装本库，或从 GitHub Release 下载与目标系统、架构匹配的 C++ 安装包。`cpp-v*` 标签会在四个平台的构建和测试全部通过后自动创建 Release，并上传 `dlt645-<平台>.zip`。安装目录包含 `include/` 头文件、`lib/` 链接库与 CMake 包配置；Windows DLL 位于 `bin/`。
 
 在调用方项目中新建 `main.cpp`：
 
@@ -157,7 +157,7 @@ cmake -S . -B build -DCMAKE_PREFIX_PATH="<安装目录>"
 cmake --build build --config Release
 ```
 
-如果 Boost 不在系统默认位置，再向配置命令添加 `-DBoost_ROOT=<Boost目录>`。Linux 和 macOS 可直接运行构建目录中的 `./build/meter_demo`；CMake 会为构建目录配置动态库搜索路径。
+Linux 和 macOS 可直接运行构建目录中的 `./build/meter_demo`。CMake 会为构建目录配置动态库搜索路径。
 
 运行时系统必须能找到动态库：
 
@@ -267,7 +267,7 @@ client->disconnect();
 #include "dlt645/service/server_service.h"
 
 // 创建TCP服务端
-auto server = service::ServerService::createTcpServer("0.0.0.0", 10521);
+auto server = service::createTcpServer("0.0.0.0", 10521);
 
 // 注册设备
 std::array<uint8_t, 6> deviceAddr = {0x12, 0x34, 0x56, 0x78, 0x9A, 0xBC};
@@ -290,6 +290,56 @@ server->start();
 // 当需要停止服务时
 server->stop();
 ```
+
+### 观察原始收发报文
+
+```cpp
+#include "dlt645/service/client_service.h"
+#include "dlt645/service/server_service.h"
+#include "log/log_init.hpp"
+#include <iostream>
+
+using namespace dlt645;
+
+void printTraffic(const transport::TrafficEvent& event)
+{
+    const auto* direction = event.direction == transport::TrafficDirection::send ? "TX" : "RX";
+    std::cout << direction << ' ' << event.bytes.size() << " bytes";
+    if (!event.result)
+        std::cout << ' ' << event.result.error().message();
+    std::cout << '\n';
+}
+
+int main()
+{
+    LogInitializer logger("dlt645_traffic", LV::info, false);
+    service::ClientOptions clientOptions;
+    clientOptions.traffic = printTraffic;
+    auto client = service::ClientService::createTcpClient("127.0.0.1", 10521, clientOptions);
+
+    service::ServerOptions serverOptions;
+    serverOptions.traffic = [](uint64_t connectionId, const transport::TrafficEvent& event) {
+        std::cout << "connection=" << connectionId << ' ';
+        printTraffic(event);
+    };
+    auto server = service::createTcpServer("127.0.0.1", 10521, serverOptions);
+    if (!server || !server->start())
+        return 1;
+    const bool connected = client && client->connect();
+    const bool received = connected && static_cast<bool>(client->readAddress());
+    if (connected)
+        client->disconnect();
+    server->stop();
+    return received ? 0 : 1;
+}
+```
+
+RTU 创建函数同样可以在串口参数之后接收对应的选项。直接使用传输层时，可在 `TcpClientConfig`、`RtuClientConfig`、`TcpServerConfig` 和 `RtuServerConfig` 中设置 `traffic`。
+
+- RX 上报解析前成功读取的字节块，保留分片、粘包、前导字节、噪声及坏帧。
+- TX 在写入完成时上报整块提交数据，包含提交时已有的 FE 前导字节。写入失败时，`event.result.error()` 提供系统错误。
+- `event.timestamp` 使用 I/O 完成时的系统时钟。TCP 连接 ID 从 1 开始，在一次服务端运行内唯一。RTU 的连接 ID 为 1。
+- 回调在 I/O 线程执行，异常会被隔离。事件和字节视图在回调期间有效，需留存时请复制。回调应尽快返回，避免在其中同步连接、收发、断开或停止同一端。
 
 ## 接口说明
 

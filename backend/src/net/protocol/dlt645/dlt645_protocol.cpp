@@ -2,9 +2,11 @@
 
 #include <dlt645/service/client_service.h>
 #include <dlt645/service/server_service.h>
+#include <dlt645/transport/traffic.h>
 
 #include <algorithm>
 #include <array>
+#include <asio/ip/address.hpp>
 #include <cctype>
 #include <charconv>
 #include <chrono>
@@ -25,7 +27,6 @@
 #include "net/protocol/serial_types.h"
 #include "net/protocol/time_units.h"
 #include "net/protocol/traffic_observer.h"
-#include "net/protocol/traffic_registry.h"
 
 namespace ems::net::protocol {
 using ems::net::dlt645::ControlCode;
@@ -40,9 +41,21 @@ using Json = nlohmann::json;
 using Item = ::dlt645::model::DataItem;
 using Meter = ::dlt645::service::ServerService;
 using Frame = ::dlt645::protocol::Frame;
-namespace client = ::dlt645::transport::client;
-namespace server = ::dlt645::transport::server;
+namespace transport = ::dlt645::transport;
+namespace client = transport::client;
+namespace server = transport::server;
 using Clock = std::chrono::system_clock;
+
+void emit_traffic(TrafficObserver& observer, const transport::TrafficEvent& event,
+                  std::uint64_t connection_id = 0) {
+    const auto direction = event.direction == transport::TrafficDirection::receive
+                               ? EMS_TRAFFIC_RX
+                               : (event.result ? EMS_TRAFFIC_TX : EMS_TRAFFIC_TX_FAILED);
+    const auto timestamp =
+        std::chrono::duration_cast<std::chrono::microseconds>(event.timestamp.time_since_epoch());
+    observer.emit(direction, event.bytes.data(), event.bytes.size(), connection_id,
+                  timestamp.count());
+}
 
 // 上游单例用裸 new 保存定义；插件承担其生命周期，在库卸载时释放只读注册表。
 ::dlt645::model::DataItemManager& definitions() {
@@ -296,7 +309,6 @@ void set_numeric(MeterImage& image, std::uint32_t di, double value) {
 class Dlt645Protocol::Impl {
    public:
     std::shared_ptr<TrafficObserver> traffic{std::make_shared<TrafficObserver>()};
-    std::unique_ptr<TrafficBinding> traffic_binding;
     Json config;
     std::string error;
     std::string meter{"000000000000"};
@@ -431,7 +443,7 @@ int Dlt645Protocol::initialize(const std::string& text) {
         if (next->tcp) {
             const auto ip =
                 config.value("ip", std::string(next->server_role ? "0.0.0.0" : "127.0.0.1"));
-            (void)boost::asio::ip::make_address(ip);
+            (void)asio::ip::make_address(ip);
             config["ip"] = ip;
             config["port"] = integer(config, "port", enum_value(Defaults::TcpPort), 1,
                                      enum_value(Limits::MaxTcpPort));
@@ -508,12 +520,17 @@ int Dlt645Protocol::connect() {
         auto& cfg = impl_->config;
         const auto timeout = std::chrono::milliseconds(cfg.at("timeout_ms").get<int>());
         if (impl_->server_role) {
+            auto observe = [observer = impl_->traffic](std::uint64_t id,
+                                                       const transport::TrafficEvent& event) {
+                emit_traffic(*observer, event, id);
+            };
             if (impl_->tcp) {
                 auto transport = std::make_shared<server::TcpServer>();
                 server::TcpServerConfig config;
                 config.ip = cfg.at("ip");
                 config.port = cfg.at("port");
                 config.timeout = timeout;
+                config.traffic = observe;
                 if (!transport->configure(config))
                     throw std::runtime_error("Cannot configure TCP server");
                 impl_->listener = transport;
@@ -526,21 +543,24 @@ int Dlt645Protocol::connect() {
                 config.stopBits = cfg.at("stop_bits");
                 config.parity = cfg.at("parity");
                 config.timeout = timeout;
+                config.traffic = observe;
                 if (!transport->configure(config))
                     throw std::runtime_error("Cannot configure RTU server");
                 impl_->listener = transport;
             }
-            impl_->traffic_binding =
-                std::make_unique<TrafficBinding>(impl_->listener.get(), impl_->traffic);
             impl_->listener->setConnectionHandler(impl_->image);
             if (!impl_->listener->start()) throw std::runtime_error("Cannot start DLT645 server");
         } else {
+            auto observe = [observer = impl_->traffic](const transport::TrafficEvent& event) {
+                emit_traffic(*observer, event);
+            };
             if (impl_->tcp) {
                 auto transport = std::make_shared<client::TcpClient>();
                 client::TcpClientConfig config;
                 config.ip = cfg.at("ip");
                 config.port = cfg.at("port");
                 config.timeout = timeout;
+                config.traffic = observe;
                 if (!transport->configure(config))
                     throw std::runtime_error("Cannot configure TCP client");
                 impl_->connection = transport;
@@ -553,14 +573,13 @@ int Dlt645Protocol::connect() {
                 config.stopBits = cfg.at("stop_bits");
                 config.parity = cfg.at("parity");
                 config.timeout = timeout;
+                config.traffic = observe;
                 if (!transport->configure(config))
                     throw std::runtime_error("Cannot configure RTU client");
                 impl_->connection = transport;
             }
             // 在首次使用上游单例前注册卸载清理，所有实例销毁后才卸载库。
             (void)definitions();
-            impl_->traffic_binding =
-                std::make_unique<TrafficBinding>(impl_->connection.get(), impl_->traffic);
             impl_->service = std::make_shared<::dlt645::service::ClientService>(impl_->connection);
             impl_->service->setAddress(
                 bcd<enum_value(Layout::MeterBytes)>(impl_->meter, impl_->little_endian));
@@ -589,7 +608,6 @@ int Dlt645Protocol::disconnect() {
         if (impl_->connection && impl_->connection->isConnected()) impl_->connection->disconnect();
         impl_->service.reset();
         impl_->connection.reset();
-        impl_->traffic_binding.reset();
         impl_->error.clear();
         return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {

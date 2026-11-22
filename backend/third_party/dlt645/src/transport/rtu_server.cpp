@@ -1,54 +1,55 @@
-#include <cstring>
-#include <thread>
-#include <vector>
+#include <asio.hpp>
 #include "dlt645/common/log.h"
-#include "dlt645/common/transform.h"
 #include "dlt645/transport/server/server_api.h"
+#include "transport/observe_traffic.h"
 
 namespace dlt645 {
     namespace transport {
         namespace server {
 
+            constexpr uint64_t serialConnectionId = 1;
+
+            struct RtuServer::Io {
+                asio::io_context context;
+                asio::serial_port port { context };
+                asio::executor_work_guard<asio::io_context::executor_type> workGuard { asio::make_work_guard(context) };
+            };
+
             RtuServer::RtuServer()
-                : config_()
-                , io_context_(std::make_shared<boost::asio::io_context>())
-                , serial_port_()
-                , isRunning_(false)
-                , connectionHandler_()
-                , io_thread_()
-                , receiveBuffer_()
+                : isRunning_(false)
+                , receiveBuffer_(1024)
             {
-                receiveBuffer_.resize(1024);
             }
 
             RtuServer::~RtuServer()
             {
                 stop();
-                if (io_thread_.joinable()) {
-                    io_thread_.join();
-                }
             }
 
             bool RtuServer::configure(const RtuServerConfig& config)
             {
+                if (isRunning_)
+                    return false;
                 config_ = config;
                 return true;
             }
 
-            bool RtuServer::configureSerialPort(boost::asio::serial_port& port, const RtuServerConfig& config)
+            bool RtuServer::configureSerialPort()
             {
+                auto& port = io_->port;
+                const auto& config = config_;
                 try {
                     // 设置波特率
-                    port.set_option(boost::asio::serial_port_base::baud_rate(config.baudRate));
+                    port.set_option(asio::serial_port_base::baud_rate(config.baudRate));
 
                     // 设置数据位
-                    port.set_option(boost::asio::serial_port_base::character_size(config.dataBits));
+                    port.set_option(asio::serial_port_base::character_size(config.dataBits));
 
                     // 设置停止位
                     if (config.stopBits == 1) {
-                        port.set_option(boost::asio::serial_port_base::stop_bits(boost::asio::serial_port_base::stop_bits::one));
+                        port.set_option(asio::serial_port_base::stop_bits(asio::serial_port_base::stop_bits::one));
                     } else if (config.stopBits == 2) {
-                        port.set_option(boost::asio::serial_port_base::stop_bits(boost::asio::serial_port_base::stop_bits::two));
+                        port.set_option(asio::serial_port_base::stop_bits(asio::serial_port_base::stop_bits::two));
                     } else {
                         LOG_WARN("Invalid stop bits value: {}", config.stopBits);
                         return false;
@@ -56,11 +57,11 @@ namespace dlt645 {
 
                     // 设置校验位
                     if (config.parity == "none") {
-                        port.set_option(boost::asio::serial_port_base::parity(boost::asio::serial_port_base::parity::none));
+                        port.set_option(asio::serial_port_base::parity(asio::serial_port_base::parity::none));
                     } else if (config.parity == "even") {
-                        port.set_option(boost::asio::serial_port_base::parity(boost::asio::serial_port_base::parity::even));
+                        port.set_option(asio::serial_port_base::parity(asio::serial_port_base::parity::even));
                     } else if (config.parity == "odd") {
-                        port.set_option(boost::asio::serial_port_base::parity(boost::asio::serial_port_base::parity::odd));
+                        port.set_option(asio::serial_port_base::parity(asio::serial_port_base::parity::odd));
                     } else {
                         LOG_WARN("Invalid parity value: {}", config.parity);
                         return false;
@@ -69,13 +70,13 @@ namespace dlt645 {
                     // 设置流控制
                     if (config.flowControl == 0) {
                         port.set_option(
-                            boost::asio::serial_port_base::flow_control(boost::asio::serial_port_base::flow_control::none));
+                            asio::serial_port_base::flow_control(asio::serial_port_base::flow_control::none));
                     } else if (config.flowControl == 1) {
                         port.set_option(
-                            boost::asio::serial_port_base::flow_control(boost::asio::serial_port_base::flow_control::software));
+                            asio::serial_port_base::flow_control(asio::serial_port_base::flow_control::software));
                     } else if (config.flowControl == 2) {
                         port.set_option(
-                            boost::asio::serial_port_base::flow_control(boost::asio::serial_port_base::flow_control::hardware));
+                            asio::serial_port_base::flow_control(asio::serial_port_base::flow_control::hardware));
                     } else {
                         LOG_WARN("Invalid flow control value: {}", config.flowControl);
                         return false;
@@ -96,28 +97,21 @@ namespace dlt645 {
                 }
 
                 try {
-                    // 创建串口
-                    serial_port_ = std::make_unique<boost::asio::serial_port>(*io_context_, config_.port);
+                    io_ = std::make_unique<Io>();
+                    io_->port.open(config_.port);
 
-                    // 配置串口参数
-                    if (!configureSerialPort(*serial_port_, config_)) {
+                    if (!configureSerialPort()) {
                         LOG_ERROR("Failed to configure serial port: {}", config_.port);
-                        serial_port_->close();
+                        io_.reset();
                         return false;
                     }
 
-                    // 启动io_context线程
                     isRunning_ = true;
-                    // 创建工作保护，防止io_context在没有异步操作时退出
-                    work_guard_.emplace(boost::asio::make_work_guard(*io_context_));
-
-                    // 开始接收数据（先创建异步操作）
                     startReceive();
 
-                    // 然后启动io_context线程
                     io_thread_ = std::thread([this]() {
                         try {
-                            io_context_->run();
+                            io_->context.run();
                         } catch (const std::exception& e) {
                             LOG_ERROR("RTU server IO context exception: {}", e.what());
                         }
@@ -127,55 +121,27 @@ namespace dlt645 {
                     return true;
                 } catch (const std::exception& e) {
                     LOG_ERROR("Failed to start RTU server: {}", e.what());
-                    isRunning_ = false;
+                    stop();
                     return false;
                 }
             }
 
             void RtuServer::stop()
             {
-                if (!isRunning_) {
+                if (!io_)
                     return;
+                isRunning_ = false;
+                if (io_thread_.joinable()) {
+                    asio::post(io_->context, [this]() {
+                        std::error_code ignored;
+                        io_->port.close(ignored);
+                        io_->workGuard.reset();
+                    });
+                    io_thread_.join();
                 }
-
-                try {
-                    isRunning_ = false;
-
-                    if (serial_port_ && serial_port_->is_open()) {
-                        boost::system::error_code ec;
-                        serial_port_->close(ec);
-                        if (ec) {
-                            LOG_WARN("Failed to close serial port: {}", ec.message());
-                        }
-                    }
-
-                    // 移除工作保护，允许io_context退出
-                    if (work_guard_) {
-                        work_guard_->reset();
-                        work_guard_.reset(); // 释放optional
-                    }
-
-                    // 停止io_context
-                    io_context_->stop();
-
-                    // 等待io_thread_退出
-                    if (io_thread_.joinable()) {
-                        io_thread_.join();
-                    }
-
-                    LOG_INFO("RTU server stopped");
-                } catch (const std::exception& e) {
-                    LOG_ERROR("Failed to stop RTU server: {}", e.what());
-                    // 确保在异常情况下也能正确清理
-                    isRunning_ = false;
-                    if (io_thread_.joinable()) {
-                        try {
-                            io_thread_.join();
-                        } catch (...) {
-                            // 忽略join异常
-                        }
-                    }
-                }
+                io_.reset();
+                decoder_.clear();
+                LOG_INFO("RTU server stopped");
             }
 
             bool RtuServer::isRunning() const { return isRunning_; }
@@ -184,47 +150,30 @@ namespace dlt645 {
 
             void RtuServer::startReceive()
             {
-                if (!isRunning_ || !serial_port_ || !serial_port_->is_open()) {
+                if (!isRunning_ || !io_->port.is_open()) {
                     return;
                 }
 
-                serial_port_->async_read_some(boost::asio::buffer(receiveBuffer_),
-                                              [this](const boost::system::error_code& error, size_t bytes_transferred) {
-                                                  handleReceive(error, bytes_transferred);
-                                              });
+                io_->port.async_read_some(asio::buffer(receiveBuffer_),
+                                          [this](const std::error_code& error, size_t bytes_transferred) {
+                                              handleReceive(error, bytes_transferred);
+                                          });
             }
 
-            void RtuServer::handleReceive(const boost::system::error_code& error, size_t bytes_transferred)
+            void RtuServer::handleReceive(const std::error_code& error, size_t bytes_transferred)
             {
                 if (!error) {
+                    if (bytes_transferred != 0) {
+                        observeTraffic(config_.traffic, TrafficDirection::receive,
+                                       { receiveBuffer_.data(), bytes_transferred }, {}, serialConnectionId);
+                    }
+                    if (!isRunning_)
+                        return;
                     decoder_.append(receiveBuffer_.data(), bytes_transferred);
-
-                    // 处理数据
-                    if (connectionHandler_) {
-                        try {
-                            while (auto frame = decoder_.nextFrame()) {
-                                try {
-                                    auto response = connectionHandler_->handleRequest(*frame);
-                                    if (!response.empty()) {
-                                        boost::asio::write(*serial_port_, boost::asio::buffer(response));
-                                    }
-                                } catch (const std::exception& e) {
-                                    LOG_ERROR("Failed to handle RTU frame: {}", e.what());
-                                }
-                            }
-                        } catch (const std::exception& e) {
-                            LOG_ERROR("Exception in RTU connection handler: {}", e.what());
-                        }
-                    }
-
-                    // 继续接收数据
+                    writeResponses();
+                } else if (isRunning_) {
+                    LOG_ERROR("RTU receive error: {}", error.message());
                     startReceive();
-                } else {
-                    if (isRunning_) {
-                        LOG_ERROR("RTU receive error: {}", error.message());
-                        // 尝试重新开始接收
-                        startReceive();
-                    }
 
                     // 通知连接关闭
                     if (connectionHandler_) {
@@ -235,6 +184,33 @@ namespace dlt645 {
                         }
                     }
                 }
+            }
+
+            void RtuServer::writeResponses()
+            {
+                while (isRunning_ && connectionHandler_) {
+                    auto frame = decoder_.nextFrame();
+                    if (!frame)
+                        break;
+                    try {
+                        auto response = connectionHandler_->handleRequest(*frame);
+                        if (response.empty())
+                            continue;
+                        auto output = std::make_shared<std::vector<uint8_t>>(std::move(response));
+                        asio::async_write(io_->port, asio::buffer(*output),
+                                          [this, output](const std::error_code& error, size_t) {
+                                              observeTraffic(config_.traffic, TrafficDirection::send,
+                                                             { output->data(), output->size() }, error, serialConnectionId);
+                                              if (error && isRunning_)
+                                                  LOG_ERROR("Failed to send RTU response: {}", error.message());
+                                              writeResponses();
+                                          });
+                        return;
+                    } catch (const std::exception& e) {
+                        LOG_ERROR("Failed to handle RTU frame: {}", e.what());
+                    }
+                }
+                startReceive();
             }
 
         } // namespace server
