@@ -28,6 +28,8 @@
 
 using Json = nlohmann::json;
 using ems::net::collect::PluginManager;
+#include "traffic_capture.h"
+
 namespace fs = std::filesystem;
 using namespace std::chrono_literals;
 
@@ -82,6 +84,7 @@ int unused_port() {
 }
 
 struct Plugin {
+    TrafficCapture traffic;
     PluginManager& manager;
     void* instance{nullptr};
     PluginManager::PluginFunctions functions;
@@ -90,6 +93,7 @@ struct Plugin {
         instance = manager.load("IEC104");
         if (!instance) throw std::runtime_error(manager.last_error());
         functions = manager.get_instance_functions(instance);
+        traffic.attach(functions.set_traffic_handler_fn, instance);
     }
 
     ~Plugin() { manager.release(instance); }
@@ -510,6 +514,7 @@ void monitoring_types() {
             CHECK(rows.at(i).at("timestamp_source") == "device_cp56");
         }
     }
+    client.traffic.expect_duplex();
     CHECK(simulator.interrogations == 2);
     CHECK(simulator.reads == 0);
 }

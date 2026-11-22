@@ -19,6 +19,8 @@ add_library(
 )
 
 target_include_directories(net_handler PUBLIC "${EMS_BACKEND_ROOT}/src")
+target_include_directories(net_handler PRIVATE "${EMS_BACKEND_ROOT}/third_party")
+target_compile_definitions(net_handler PRIVATE FMT_HEADER_ONLY)
 
 target_include_directories(
     net_handler SYSTEM

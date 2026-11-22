@@ -28,6 +28,7 @@
 #include "command_host.h"
 #include "common/log/process_logger.hpp"
 #include "net/collect/collect_engine.h"
+#include "net/log.h"
 #include "rtdb/backend/shared_memory_store.h"
 #include "rtdb/client/realtime_client.h"
 
@@ -220,6 +221,8 @@ database::DeviceConfigRecords configuration(int source_port, int output_port) {
     output.id = 8;
     output.channel_id = "output";
     output.code = "output";
+    output.name = "ForwardingOutput-" +
+                  std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     output.conn_mode = "tcp_server";
     output.endpoint = "127.0.0.1:" + std::to_string(output_port);
     output.serial_json =
@@ -463,6 +466,20 @@ void run() {
     fresh.reset();
     engine.shutdown();
     CHECK(manager.loaded_library_count() == 0);
+    const auto name = rows.channels[1].name;
+    const auto logfile = fs::u8path(logPath()) / "net/channels" / name /
+#ifdef DEBUG
+                         (name + "-debug.log");
+#else
+                         (name + ".log");
+#endif
+    eventually([&] {
+        std::ifstream input(logfile);
+        const std::string contents{std::istreambuf_iterator<char>(input),
+                                   std::istreambuf_iterator<char>()};
+        return contents.find("[IEC61850][RX]") != std::string::npos &&
+               contents.find("[IEC61850][TX]") != std::string::npos;
+    });
 }
 }  // namespace
 

@@ -16,6 +16,7 @@
 
 #include "dlt698_join_queue.h"
 #include "net/protocol/protocol_types.h"
+#include "net/protocol/traffic_observer.h"
 
 namespace ems::net::protocol {
 namespace {
@@ -198,6 +199,7 @@ void sample(Json& result, const ObjectValue& value) {
 
 class Dlt698Protocol::Impl {
    public:
+    std::shared_ptr<TrafficObserver> traffic{std::make_shared<TrafficObserver>()};
     Json config;
     std::string error;
     bool configured{false};
@@ -230,10 +232,15 @@ Dlt698Protocol::~Dlt698Protocol() {
     if (--instances == 0) ::dlt698::app::detail::JoinQueue::shutdown_idle();
 }
 
+void Dlt698Protocol::set_traffic_handler(ems_plugin_traffic_callback callback, void* user) {
+    impl_->traffic->set(callback, user);
+}
+
 int Dlt698Protocol::initialize(const std::string& text) {
     try {
         if (is_connected()) throw std::invalid_argument("Disconnect before reinitializing");
         auto next = std::make_unique<Impl>();
+        next->traffic = impl_->traffic;
         auto config = Json::parse(text);
         if (!config.is_object()) throw std::invalid_argument("Config must be object");
         if (config.contains("settings")) {
@@ -389,6 +396,15 @@ int Dlt698Protocol::connect() {
         if (impl_->server_role) {
             app::ServerOptions options;
             options.protocol = impl_->options;
+            options.traffic = [observer = impl_->traffic](uint64_t id, const auto& event) {
+                observer->emit(event.direction == ::dlt698::session::TrafficDirection::receive
+                                   ? EMS_TRAFFIC_RX
+                                   : (event.result ? EMS_TRAFFIC_TX : EMS_TRAFFIC_TX_FAILED),
+                               event.bytes.data(), event.bytes.size(), id,
+                               std::chrono::duration_cast<std::chrono::microseconds>(
+                                   event.timestamp.time_since_epoch())
+                                   .count());
+            };
             options.max_connections = cfg.at("max_connections").get<std::size_t>();
             options.heartbeat_seconds = cfg.at("heartbeat_seconds").get<std::uint16_t>();
             impl_->server = std::make_unique<app::Server>(impl_->device, options);
@@ -402,6 +418,15 @@ int Dlt698Protocol::connect() {
         } else {
             app::ClientOptions options;
             options.protocol = impl_->options;
+            options.traffic = [observer = impl_->traffic](const auto& event) {
+                observer->emit(event.direction == ::dlt698::session::TrafficDirection::receive
+                                   ? EMS_TRAFFIC_RX
+                                   : (event.result ? EMS_TRAFFIC_TX : EMS_TRAFFIC_TX_FAILED),
+                               event.bytes.data(), event.bytes.size(), 0,
+                               std::chrono::duration_cast<std::chrono::microseconds>(
+                                   event.timestamp.time_since_epoch())
+                                   .count());
+            };
             options.transport_timeout = options.login_timeout = impl_->options.request_timeout;
             impl_->client = std::make_unique<app::Client>(options);
             if (impl_->tcp)

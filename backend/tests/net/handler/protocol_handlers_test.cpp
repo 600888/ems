@@ -9,6 +9,7 @@
 #include <chrono>
 #include <cmath>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -293,7 +294,8 @@ void channel(const std::string& protocol, const char* plugin_path,
     manager.set_plugin_dir(fs::path(plugin_path).parent_path().string());
     ems::net::ChannelConfig config;
     config.id_ = 1;
-    config.name_ = "handler-test-" + protocol;
+    config.name_ = "handler-test-" + protocol + "-" +
+                   std::to_string(std::chrono::steady_clock::now().time_since_epoch().count());
     config.protocol_ = protocol_type;
     config.connection_ = "127.0.0.1:" + std::to_string(unused_port());
     settings["role"] = "server_readonly";
@@ -316,12 +318,35 @@ void channel(const std::string& protocol, const char* plugin_path,
         while (!client->connect() && std::chrono::steady_clock::now() < deadline)
             std::this_thread::sleep_for(10ms);
         CHECK(client->is_connected());
+        CHECK(read(*client, {code}, 1).size() == 1);
     }
     worker.stop();
     worker.join();
     CHECK(worker.state() == ChannelState::Stopped);
     // 仍保留通道对象也必须释放插件实例，避免拖延库卸载。
     CHECK(manager.loaded_library_count() == 0);
+    const auto path = fs::u8path(logPath()) / "net/channels" / config.name_ /
+#ifdef DEBUG
+                      (config.name_ + "-debug.log");
+#else
+                      (config.name_ + ".log");
+#endif
+    std::string contents;
+    const auto deadline = std::chrono::steady_clock::now() + 2s;
+    do {
+        std::ifstream file(path);
+        contents.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+        if (contents.find("[" + protocol + "][RX]") != std::string::npos &&
+            contents.find("[" + protocol + "][TX]") != std::string::npos)
+            break;
+        std::this_thread::sleep_for(10ms);
+    } while (std::chrono::steady_clock::now() < deadline);
+    CHECK(contents.find("[" + protocol + "][RX]") != std::string::npos);
+    CHECK(contents.find("[" + protocol + "][TX]") != std::string::npos);
+    CHECK(contents.find("(length=") != std::string::npos);
+    CHECK(contents.find("[time_us=") == std::string::npos);
+    CHECK(contents.find("[connection=") == std::string::npos);
+    CHECK(contents.find("[offset=") == std::string::npos);
     CHECK(worker.start(manager));
     worker.stop();  // 覆盖刚启动即停止，包括重连等待中的取消。
     worker.join();

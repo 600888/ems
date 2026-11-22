@@ -6,6 +6,7 @@
 #include "net/protocol/protocol_types.h"
 #include "net/protocol/serial_types.h"
 #include "net/protocol/time_units.h"
+#include "net/protocol/traffic_observer.h"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -19,6 +20,9 @@
 #endif
 
 #include <modbus.h>
+#ifdef EMS_MODBUS_TRAFFIC_ENABLED
+#include "modbus_traffic.h"
+#endif
 
 #if !LIBMODBUS_VERSION_CHECK(3, 1, 6)
 #error "EMS requires libmodbus >= 3.1.6"
@@ -271,6 +275,7 @@ void close_socket(int socket) {
 
 class ModbusProtocol::Impl {
    public:
+    std::shared_ptr<TrafficObserver> traffic{std::make_shared<TrafficObserver>()};
     mutable std::mutex mutex;
     Context context;
     std::map<int, Mapping> mappings;
@@ -291,6 +296,15 @@ class ModbusProtocol::Impl {
         Context result(rtu ? modbus_new_rtu(endpoint.c_str(), baud, parity, data_bits, stop_bits)
                            : modbus_new_tcp(endpoint.c_str(), port));
         if (!result) throw std::runtime_error(modbus_strerror(errno));
+#ifdef EMS_MODBUS_TRAFFIC_ENABLED
+        ems_modbus_set_traffic(
+            result.get(),
+            [](void* user, int sent, const uint8_t* bytes, int size, uintptr_t connection) {
+                static_cast<TrafficObserver*>(user)->emit(sent ? EMS_TRAFFIC_TX : EMS_TRAFFIC_RX,
+                                                          bytes, size, connection);
+            },
+            traffic.get());
+#endif
         modbus_set_slave(result.get(), slave);
         modbus_set_response_timeout(result.get(),
                                     timeout / enum_value(TimeUnits::MillisecondsPerSecond),
@@ -432,6 +446,10 @@ class ModbusProtocol::Impl {
 ModbusProtocol::ModbusProtocol() : impl_(std::make_unique<Impl>()) {}
 
 ModbusProtocol::~ModbusProtocol() { disconnect(); }
+
+void ModbusProtocol::set_traffic_handler(ems_plugin_traffic_callback callback, void* user) {
+    impl_->traffic->set(callback, user);
+}
 
 int ModbusProtocol::initialize(const std::string& text) {
     std::lock_guard<std::mutex> lock(impl_->mutex);

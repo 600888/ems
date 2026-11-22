@@ -72,5 +72,6 @@ install(
     FILES "${EMS_BACKEND_ROOT}/include/net/protocol/plugin_manager.h"
           "${EMS_BACKEND_ROOT}/include/net/protocol/dynamic_library.h"
           "${EMS_BACKEND_ROOT}/include/net/protocol/protocol_plugin_api.h"
+          "${EMS_BACKEND_ROOT}/include/net/protocol/traffic_observer.h"
     DESTINATION include/net/protocol
 )

@@ -4,6 +4,8 @@
 #include <string>
 #include <vector>
 
+#include "net/protocol/traffic_observer.h"
+
 namespace ems::net::protocol {
 /** @brief 插件内部的固定模型只读服务器，所有协议对象由本对象独占。 */
 class MmsReadOnlyServer final {
@@ -12,8 +14,10 @@ class MmsReadOnlyServer final {
      * @param[in] options_json iec61850 配置对象的 JSON 文本。
      * @param[in] host 监听 IPv4 地址。
      * @param[in] port 监听端口。
+     * @param[in] observer 与协议实例共享的字节观察器，空表示关闭。
      */
-    MmsReadOnlyServer(const std::string& options_json, const std::string& host, int port);
+    MmsReadOnlyServer(const std::string& options_json, const std::string& host, int port,
+                      std::shared_ptr<TrafficObserver> observer = {});
     /** @brief 停止所有会话和回调，再销毁服务器及模型。 */
     ~MmsReadOnlyServer();
     /** @brief 启动监听，重复调用幂等；失败清理部分监听资源。

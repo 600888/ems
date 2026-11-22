@@ -18,6 +18,8 @@
                                      ": " + #condition);                                      \
     } while (0)
 
+#include "traffic_capture.h"
+
 namespace {
 using Json = nlohmann::json;
 using ems::net::collect::PluginManager;
@@ -25,6 +27,7 @@ using namespace std::chrono_literals;
 namespace d = dlt698;
 
 struct Plugin {
+    TrafficCapture traffic;
     PluginManager& manager;
     void* instance;
     PluginManager::PluginFunctions f;
@@ -34,6 +37,7 @@ struct Plugin {
           instance(owner.load("DLT698")),
           f(owner.get_instance_functions(instance)) {
         CHECK(instance);
+        traffic.attach(f.set_traffic_handler_fn, instance);
     }
 
     ~Plugin() { manager.release(instance); }
@@ -121,6 +125,7 @@ void client_read(PluginManager& manager) {
     plugin.connect();
     const auto values = plugin.read(
         {"F001/2/0", "F0010300", "0xF0010401", "F0010400", "F0010500", "F0020200", "invalid"}, 3);
+    plugin.traffic.expect_duplex();
     CHECK(values[0]["value"] == -123);
     CHECK(values[1]["value"] == 1);
     CHECK(values[2]["value"] == 2200);

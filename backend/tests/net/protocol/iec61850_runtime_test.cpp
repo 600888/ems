@@ -36,6 +36,8 @@
 
 using Json = nlohmann::json;
 using ems::net::collect::PluginManager;
+#include "traffic_capture.h"
+
 namespace fs = std::filesystem;
 
 // 故障帧夹具直接调用固定入库 C 栈的内部发送原语；生产插件不依赖这些接口。
@@ -340,6 +342,7 @@ void manager_config(PluginManager& manager) {
 }
 
 struct Plugin {
+    TrafficCapture traffic;
     PluginManager manager;
     void* instance;
     PluginManager::PluginFunctions api;
@@ -349,6 +352,7 @@ struct Plugin {
         instance = manager.load("IEC61850");
         if (!instance) throw std::runtime_error(manager.last_error());
         api = manager.get_instance_functions(instance);
+        traffic.attach(api.set_traffic_handler_fn, instance);
     }
 
     ~Plugin() { manager.release(instance); }
@@ -666,6 +670,7 @@ void run_server(const std::string& scenario) {
                                              IEC61850_FC_MX) == QUALITY_TEST);
         IedConnection_close(connection);
         IedConnection_destroy(connection);
+        server.traffic.expect_duplex();
     } else if (scenario == "server_image") {
         CHECK(server.api.update_image_fn);
         auto update = [&](const Json& value) {
@@ -1078,6 +1083,7 @@ void run(const std::string& scenario) {
     p.connect();
     if (scenario == "scalar" || scenario == "dataset") {
         const auto result = p.read({"status", "power", "unknown", "power", "large", "array"});
+        p.traffic.expect_duplex();
         CHECK(result.size() == 6);
         CHECK(result[0]["value"] == 1);
         CHECK(result[1]["value"] == 125.5);

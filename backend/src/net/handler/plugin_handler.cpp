@@ -8,6 +8,7 @@
 
 #include "net/protocol/plugin_manager.h"
 #include "net/protocol/protocol_types.h"
+#include "net/traffic_log.h"
 
 namespace ems::net::handler {
 using protocol::ConnectionState;
@@ -60,6 +61,7 @@ class PluginHandler::Impl {
     void* instance{nullptr};
     collect::PluginManager::PluginFunctions functions;
     std::string error;
+    std::unique_ptr<ChannelTrafficLog> traffic_context;
 
     Impl(collect::PluginManager& owner, std::string name)
         : manager(owner), protocol(std::move(name)) {
@@ -68,7 +70,11 @@ class PluginHandler::Impl {
 
     ~Impl() {
         // 释放失败由管理器继续持有资源，不能提前卸载可能还有回调的库。
-        if (instance) manager.release(instance);
+        if (instance) {
+            if (functions.set_traffic_handler_fn)
+                functions.set_traffic_handler_fn(instance, nullptr, nullptr);
+            manager.release(instance);
+        }
     }
 
     void plugin_error() {
@@ -89,8 +95,16 @@ bool PluginHandler::initialize(const json& config) {
                                    enum_value(ConnectionState::Connected))
             throw std::invalid_argument("Disconnect before reconfiguring handler");
         const auto text = normalized_config(config, impl_->protocol).dump();
+        auto channel = config.value("name", std::string{});
+        if (channel.empty()) channel = config.value("channel_id", json(0)).dump();
+        auto traffic = std::make_unique<ChannelTrafficLog>(channel, impl_->protocol);
         // 新配置使用临时实例验证；失败不破坏之前已校验的配置。
-        auto release = [&](void* instance) { impl_->manager.release(instance); };
+        auto release = [&](void* instance) {
+            const auto functions = impl_->manager.get_instance_functions(instance);
+            if (functions.set_traffic_handler_fn)
+                functions.set_traffic_handler_fn(instance, nullptr, nullptr);
+            impl_->manager.release(instance);
+        };
         std::unique_ptr<void, decltype(release)> candidate(impl_->manager.load(impl_->protocol),
                                                            release);
         if (!candidate) throw std::runtime_error(impl_->manager.last_error());
@@ -100,10 +114,23 @@ bool PluginHandler::initialize(const json& config) {
             const char* error = functions.last_error_fn(candidate.get());
             throw std::runtime_error(error ? error : "Plugin initialization failed");
         }
-        if (impl_->instance && !impl_->manager.release(impl_->instance))
-            throw std::runtime_error(impl_->manager.last_error());
+        if (functions.set_traffic_handler_fn &&
+            functions.set_traffic_handler_fn(candidate.get(), ChannelTrafficLog::callback,
+                                             traffic.get()) != 0)
+            throw std::runtime_error("Cannot attach channel traffic observer");
+        if (impl_->instance) {
+            if (impl_->functions.set_traffic_handler_fn)
+                impl_->functions.set_traffic_handler_fn(impl_->instance, nullptr, nullptr);
+            if (!impl_->manager.release(impl_->instance)) {
+                if (impl_->functions.set_traffic_handler_fn && impl_->traffic_context)
+                    impl_->functions.set_traffic_handler_fn(
+                        impl_->instance, ChannelTrafficLog::callback, impl_->traffic_context.get());
+                throw std::runtime_error(impl_->manager.last_error());
+            }
+        }
         impl_->instance = candidate.release();
         impl_->functions = functions;
+        impl_->traffic_context = std::move(traffic);
         impl_->error.clear();
         return true;
     } catch (const std::exception& error) {

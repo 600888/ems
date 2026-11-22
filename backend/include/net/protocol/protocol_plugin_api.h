@@ -42,6 +42,33 @@ extern "C" {
 #define EMS_PLUGIN_BUFFER_TOO_SMALL (-2)
 #define EMS_PLUGIN_RESULT_BUF_SIZE (64 * 1024)  // 64KB 结果缓冲区
 
+/** @brief 相对于插件实例的收发方向；失败发送单独标记，不能当作成功发送。 */
+enum EmPluginTrafficDirection { EMS_TRAFFIC_RX = 0, EMS_TRAFFIC_TX = 1, EMS_TRAFFIC_TX_FAILED = 2 };
+
+/**
+ * @brief 观察协议栈收发的字节；缓冲区仅在回调期间借用，回调不得抛异常或重入插件。
+ * @param[in,out] user 宿主注册的上下文。
+ * @param[in] direction EmPluginTrafficDirection，TX 表示栈发送观察点，不表示远端确认。
+ * @param[in] data 原始字节，可能是分片、粘帧或 MMS PDU，不保证一条事件对应一帧。
+ * @param[in] size 原始字节数。
+ * @param[in] timestamp_us 观察时的 UTC 微秒时标。
+ * @param[in] connection_id 服务端连接标识；0 表示未区分连接。
+ */
+typedef void(EMS_PLUGIN_CALL* ems_plugin_traffic_callback)(void* user, int direction,
+                                                           const uint8_t* data, size_t size,
+                                                           int64_t timestamp_us,
+                                                           uint64_t connection_id);
+
+/**
+ * @brief 可选收发观察扩展，不改变必需 ABI；注销返回前等待在途回调结束。
+ * @param[in,out] instance 插件实例，调用方须串行管理其生命周期。
+ * @param[in] callback 回调，传空注销；回调中禁止调用本函数。
+ * @param[in,out] user 借用的宿主上下文，注销返回后可释放。
+ * @return 0 成功；-1 参数错误。
+ */
+typedef int(EMS_PLUGIN_CALL* ems_plugin_set_traffic_handler_fn)(
+    void* instance, ems_plugin_traffic_callback callback, void* user);
+
 /* ============================================================
  * 插件信息结构体
  * ============================================================ */
@@ -221,6 +248,7 @@ typedef const char*(EMS_PLUGIN_CALL* ems_plugin_last_error_fn)(void* instance);
 #define EMS_PLUGIN_RESOLVE_CONTROL_SYMBOL "ems_plugin_resolve_control"
 #define EMS_PLUGIN_IS_CONNECTED_SYMBOL "ems_plugin_is_connected"
 #define EMS_PLUGIN_LAST_ERROR_SYMBOL "ems_plugin_last_error"
+#define EMS_PLUGIN_SET_TRAFFIC_HANDLER_SYMBOL "ems_plugin_set_traffic_handler"
 
 #ifdef __cplusplus
 }

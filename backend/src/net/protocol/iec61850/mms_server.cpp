@@ -12,6 +12,7 @@
 #include <stdexcept>
 
 #include "mms_server_runtime.h"
+#include "mms_traffic.h"
 #include "net/protocol/protocol_types.h"
 
 namespace ems::net::protocol {
@@ -136,6 +137,8 @@ struct Lock {
 
 class MmsReadOnlyServer::Impl {
    public:
+    std::shared_ptr<TrafficObserver> observer;
+
     struct Point {
         std::string code, ref, name, quality_ref, timestamp_ref, quality_code;
         FunctionalConstraint constraint;
@@ -483,13 +486,24 @@ class MmsReadOnlyServer::Impl {
     }
 };
 
-MmsReadOnlyServer::MmsReadOnlyServer(const std::string& options, const std::string& host, int port)
-    : impl_(std::make_unique<Impl>(options, host, port)) {}
+MmsReadOnlyServer::MmsReadOnlyServer(const std::string& options, const std::string& host, int port,
+                                     std::shared_ptr<TrafficObserver> observer)
+    : impl_(std::make_unique<Impl>(options, host, port)) {
+    impl_->observer = std::move(observer);
+}
 
 MmsReadOnlyServer::~MmsReadOnlyServer() = default;
 
 int MmsReadOnlyServer::connect() {
     if (is_connected()) return 0;
+    if (impl_->observer)
+        ems_mms_set_traffic(
+            IedServer_getMmsServer(impl_->server),
+            [](void* user, int sent, const uint8_t* bytes, int size, uintptr_t connection) {
+                static_cast<TrafficObserver*>(user)->emit(sent ? EMS_TRAFFIC_TX : EMS_TRAFFIC_RX,
+                                                          bytes, size, connection);
+            },
+            impl_->observer.get());
     IedServer_start(impl_->server, impl_->port);
     if (!MmsServer_isRunning(IedServer_getMmsServer(impl_->server))) {
         IedServer_stop(impl_->server);

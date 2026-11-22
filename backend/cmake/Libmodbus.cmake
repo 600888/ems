@@ -30,12 +30,18 @@ function(ems_add_libmodbus)
         "${ems_libmodbus_BINARY_DIR}/include/modbus-version.h" @ONLY
     )
 
+    include("${CMAKE_CURRENT_FUNCTION_LIST_DIR}/TrafficSources.cmake")
+    ems_modbus_traffic_sources("${ems_libmodbus_SOURCE_DIR}" "${ems_libmodbus_BINARY_DIR}")
+
     add_library(
         ems_libmodbus_vendor SHARED
-        "${ems_libmodbus_SOURCE_DIR}/src/modbus.c" "${ems_libmodbus_SOURCE_DIR}/src/modbus-data.c"
-        "${ems_libmodbus_SOURCE_DIR}/src/modbus-rtu.c"
-        "${ems_libmodbus_SOURCE_DIR}/src/modbus-tcp.c"
+        "${ems_libmodbus_BINARY_DIR}/traffic/modbus.c"
+        "${ems_libmodbus_BINARY_DIR}/traffic/modbus-data.c"
+        "${ems_libmodbus_BINARY_DIR}/traffic/modbus-rtu.c"
+        "${ems_libmodbus_BINARY_DIR}/traffic/modbus-tcp.c"
     )
+    target_include_directories(ems_libmodbus_vendor PRIVATE
+        "${CMAKE_CURRENT_FUNCTION_LIST_DIR}/../src/net/protocol/modbus")
     target_include_directories(
         ems_libmodbus_vendor SYSTEM PUBLIC "${ems_libmodbus_SOURCE_DIR}/src"
                                            "${ems_libmodbus_BINARY_DIR}/include"

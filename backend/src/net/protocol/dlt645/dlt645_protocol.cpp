@@ -24,6 +24,8 @@
 #include "net/protocol/protocol_types.h"
 #include "net/protocol/serial_types.h"
 #include "net/protocol/time_units.h"
+#include "net/protocol/traffic_observer.h"
+#include "net/protocol/traffic_registry.h"
 
 namespace ems::net::protocol {
 using ems::net::dlt645::ControlCode;
@@ -293,6 +295,8 @@ void set_numeric(MeterImage& image, std::uint32_t di, double value) {
 
 class Dlt645Protocol::Impl {
    public:
+    std::shared_ptr<TrafficObserver> traffic{std::make_shared<TrafficObserver>()};
+    std::unique_ptr<TrafficBinding> traffic_binding;
     Json config;
     std::string error;
     std::string meter{"000000000000"};
@@ -360,10 +364,15 @@ Dlt645Protocol::Dlt645Protocol() : impl_(std::make_unique<Impl>()) {}
 
 Dlt645Protocol::~Dlt645Protocol() { disconnect(); }
 
+void Dlt645Protocol::set_traffic_handler(ems_plugin_traffic_callback callback, void* user) {
+    impl_->traffic->set(callback, user);
+}
+
 int Dlt645Protocol::initialize(const std::string& text) {
     try {
         if (is_connected()) throw std::invalid_argument("Cannot initialize an active instance");
         auto next = std::make_unique<Impl>();
+        next->traffic = impl_->traffic;
         auto config = Json::parse(text);
         if (!config.is_object()) throw std::invalid_argument("Config must be an object");
         if (config.contains("settings")) {
@@ -521,6 +530,8 @@ int Dlt645Protocol::connect() {
                     throw std::runtime_error("Cannot configure RTU server");
                 impl_->listener = transport;
             }
+            impl_->traffic_binding =
+                std::make_unique<TrafficBinding>(impl_->listener.get(), impl_->traffic);
             impl_->listener->setConnectionHandler(impl_->image);
             if (!impl_->listener->start()) throw std::runtime_error("Cannot start DLT645 server");
         } else {
@@ -548,6 +559,8 @@ int Dlt645Protocol::connect() {
             }
             // 在首次使用上游单例前注册卸载清理，所有实例销毁后才卸载库。
             (void)definitions();
+            impl_->traffic_binding =
+                std::make_unique<TrafficBinding>(impl_->connection.get(), impl_->traffic);
             impl_->service = std::make_shared<::dlt645::service::ClientService>(impl_->connection);
             impl_->service->setAddress(
                 bcd<enum_value(Layout::MeterBytes)>(impl_->meter, impl_->little_endian));
@@ -576,6 +589,7 @@ int Dlt645Protocol::disconnect() {
         if (impl_->connection && impl_->connection->isConnected()) impl_->connection->disconnect();
         impl_->service.reset();
         impl_->connection.reset();
+        impl_->traffic_binding.reset();
         impl_->error.clear();
         return enum_value(OperationResult::Success);
     } catch (const std::exception& error) {

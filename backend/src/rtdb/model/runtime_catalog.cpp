@@ -27,7 +27,9 @@ constexpr std::size_t kMaxCodeLength = 64;  ///< 与 RecordKey 校验一致
  */
 bool validCode(std::string_view text, bool device_segment) {
     if (text.empty() || text.size() > kMaxCodeLength) return false;
-    const auto alnum = [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'); };
+    const auto alnum = [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+    };
     if (!alnum(text.front())) return false;
     for (std::size_t i = 0; i < text.size(); ++i) {
         const char c = text[i];

@@ -54,7 +54,9 @@ bool utf8(std::string_view s) {
 
 bool valid_code(std::string_view s, bool device) {
     if (s.empty() || s.size() > 64) return false;
-    auto alnum = [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'); };
+    auto alnum = [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9');
+    };
     if (!alnum(s.front())) return false;
     for (std::size_t i = 0; i < s.size(); ++i) {
         if (!alnum(s[i]) && s[i] != '_' && s[i] != '-') return false;

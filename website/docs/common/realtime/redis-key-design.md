@@ -35,7 +35,7 @@
 | point_code | 同一个所属资产节点下 | `point(asset_id, code)` 唯一索引，原始点与派生点不得重名 |
 | channel_code / resource_code | 同一 station 内 | 各自的 `(station_id, code)` 唯一索引 |
 
-本版 code 采用 `^[a-z0-9][a-z0-9_-]{0,63}$`，只接受小写 ASCII；禁止空白、冒号、花括号、斜杠及通配符。显示名称独立存放，可使用中文和自由格式。新建接口遇到不合规 code 直接拒绝，不静默转小写；已有编码先生成规范化映射并检查冲突再导入。
+code 采用 `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$`，接受大小写 ASCII 字母并保留原始大小写；禁止空白、冒号、花括号、斜杠及通配符。显示名称独立存放，可使用中文和自由格式。新建接口遇到不合规 code 直接拒绝，不静默转小写。运行目录和实时记录键按原始编码区分大小写，配置导入仍需遵守数据库唯一约束。
 
 数字编号直接接在名称后面，例如 `ess000001`、`station001`、`pcs01`、`rack01`、`rs48501`；名称与编号之间不加连字符。code 校验在上述字符规则外拒绝 `-[0-9]` 片段；名称内部的单词连接仍可保留连字符，例如 `pcc-meter01`。编号位数由对应编码规则确定，code 按完整字符串处理，不能将数字部分转为整数后丢失前导零；已有 code 的调整仍按迁移流程执行。
 
@@ -107,7 +107,7 @@ ems:{station:station001}:channel:rs48501:rt:state
 | `S:resource:<resource_code>:owner` | String（JSON） | 物理资源 owner_id、owner_epoch、租约身份；指定所有权协调器维护，带租约 TTL |
 | `S:process:<role>:<instance_id>:heartbeat` | String（JSON） | 本实例心跳、启动代次、时间；各进程自行更新并设 TTL |
 
-instance_id、资源 ID、命令 ID 等动态后缀统一使用 `^[a-z0-9][a-z0-9_-]{0,63}$`，role 来自固定枚举，owner_shard 使用同样的安全标识格式；由 KeyBuilder 校验，不拼接用户任意输入。配置版本与资产目录由 MySQL 查询，不能凭 Redis 键推断完整配置。
+instance_id、资源 ID 等动态后缀使用 `^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$` 并保留大小写，role 来自固定枚举，owner_shard 使用同样的安全标识格式；命令 ID 按命令接口契约校验。由 KeyBuilder 校验，不拼接用户任意输入。配置与设备目录由 MySQL 查询，不能凭 Redis 键推断完整配置。
 
 树形配置查询通过 MySQL 的版本化目录完成。Redis 键本身不是配置目录，前缀不会自动产生父子索引。业务请求不使用 `KEYS` 或全库 `SCAN` 拼资产树；运维遍历允许限速 SCAN，处理重复项，不能把遍历视为一致性快照。见 [Redis SCAN 说明](https://redis.io/docs/latest/commands/scan/)。
 

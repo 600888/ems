@@ -10,6 +10,8 @@
 #include <nlohmann/json.hpp>
 #include <thread>
 
+#include "net/traffic_log.h"
+
 namespace ems::net::collect {
 namespace {
 using Json = nlohmann::json;
@@ -38,6 +40,7 @@ class ForwardingChannel::Impl {
     PluginManager& manager;
     PluginManager::PluginFunctions api;
     void* instance{nullptr};
+    std::unique_ptr<ChannelTrafficLog> traffic_log;
     std::thread worker;
     std::atomic<bool> running{false};
     mutable std::mutex mutex;
@@ -157,6 +160,12 @@ bool ForwardingChannel::start() {
                           {"settings", settings}};
         if (impl_->api.init_fn(impl_->instance, config.dump().c_str()) != 0)
             throw std::runtime_error("invalid MMS server model");
+        impl_->traffic_log =
+            std::make_unique<ChannelTrafficLog>(impl_->config.channel.name_, "IEC61850");
+        if (impl_->api.set_traffic_handler_fn &&
+            impl_->api.set_traffic_handler_fn(impl_->instance, ChannelTrafficLog::callback,
+                                              impl_->traffic_log.get()) != 0)
+            throw std::runtime_error("cannot attach MMS traffic observer");
         impl_->applied.clear();
         if (!impl_->sync(true) || !impl_->sync() || impl_->api.connect_fn(impl_->instance) != 0)
             throw std::runtime_error("cannot start MMS forwarding server");
@@ -207,7 +216,12 @@ void ForwardingChannel::stop() {
     if (impl_->worker.joinable()) impl_->worker.join();
     impl_->running = false;
     impl_->failure("stopped");
-    if (impl_->instance && impl_->manager.release(impl_->instance)) impl_->instance = nullptr;
+    if (impl_->instance) {
+        if (impl_->api.set_traffic_handler_fn)
+            impl_->api.set_traffic_handler_fn(impl_->instance, nullptr, nullptr);
+        if (impl_->manager.release(impl_->instance)) impl_->instance = nullptr;
+    }
+    impl_->traffic_log.reset();
 }
 
 bool ForwardingChannel::is_running() const { return impl_->running; }

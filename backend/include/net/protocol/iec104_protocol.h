@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "net/protocol/protocol_plugin_api.h"
+
 namespace ems::net::protocol {
 
 /** @brief 每实例一个客户端连接或只读上送服务端；生命周期和 API 调用须串行。
@@ -90,6 +92,13 @@ class Iec104Protocol final {
     int interrogate(int common_address = 0);
     /** @brief 返回诊断副本。 @return 最近一次错误文本。 */
     std::string last_error() const;
+
+    /**
+     * @brief 安装或注销收发字节观察器；注销会等待在途回调结束。
+     * @param[in] callback 回调，空表示关闭观察；不得重入插件。
+     * @param[in,out] user 宿主上下文，注销返回后可释放。
+     */
+    void set_traffic_handler(ems_plugin_traffic_callback callback, void* user);
 
    private:
     class Impl;

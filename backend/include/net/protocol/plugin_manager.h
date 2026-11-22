@@ -58,6 +58,7 @@ class PluginManager {
         ems_plugin_resolve_control_fn resolve_control_fn{nullptr};  ///< 可选服务端控制回执扩展。
         ems_plugin_is_connected_fn is_connected_fn{nullptr};
         ems_plugin_last_error_fn last_error_fn{nullptr};
+        ems_plugin_set_traffic_handler_fn set_traffic_handler_fn{nullptr};  ///< 可选收发观察扩展。
 
         /** @brief 判断必需工厂入口是否可用。 @return true 表示入口存在。 */
         explicit operator bool() const { return create_fn != nullptr && destroy_fn != nullptr; }

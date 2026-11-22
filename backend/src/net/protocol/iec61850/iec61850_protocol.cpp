@@ -1,6 +1,7 @@
 #include "net/protocol/iec61850_protocol.h"
 
 #include <iec61850_client.h>
+#include <mms_client_connection.h>
 #include <mms_type_spec.h>
 
 #include <algorithm>
@@ -23,6 +24,7 @@
 
 #include "mms_server_runtime.h"
 #include "net/protocol/protocol_types.h"
+#include "net/protocol/traffic_observer.h"
 
 namespace ems::net::protocol {
 namespace {
@@ -582,6 +584,7 @@ bool explicit_rejection(IedClientError error) {
 
 class Iec61850Protocol::Impl {
    public:
+    std::shared_ptr<TrafficObserver> traffic{std::make_shared<TrafficObserver>()};
     Config config;
     bool initialized{false};
     IedConnection connection{nullptr};
@@ -1402,6 +1405,10 @@ Iec61850Protocol::Iec61850Protocol() : impl_(std::make_unique<Impl>()) {}
 
 Iec61850Protocol::~Iec61850Protocol() = default;
 
+void Iec61850Protocol::set_traffic_handler(ems_plugin_traffic_callback callback, void* user) {
+    impl_->traffic->set(callback, user);
+}
+
 int Iec61850Protocol::initialize(const std::string& text) {
     impl_->write_lock_timeout = false;
     try {
@@ -1410,7 +1417,7 @@ int Iec61850Protocol::initialize(const std::string& text) {
         std::unique_ptr<MmsReadOnlyServer> server;
         if (candidate.server)
             server = std::make_unique<MmsReadOnlyServer>(candidate.server_options, candidate.host,
-                                                         candidate.port);
+                                                         candidate.port, impl_->traffic);
         impl_->close();
         impl_->server = std::move(server);
         impl_->config = std::move(candidate);
@@ -1436,6 +1443,13 @@ int Iec61850Protocol::connect() {
         impl_->close();
         impl_->connection = IedConnection_create();
         require(impl_->connection != nullptr, "cannot allocate IedConnection");
+        MmsConnection_setRawMessageHandler(
+            IedConnection_getMmsConnection(impl_->connection),
+            [](void* user, uint8_t* bytes, int size, bool received) {
+                static_cast<TrafficObserver*>(user)->emit(
+                    received ? EMS_TRAFFIC_RX : EMS_TRAFFIC_TX, bytes, size);
+            },
+            impl_->traffic.get());
         IedConnection_setConnectTimeout(impl_->connection, impl_->config.connect_timeout);
         IedConnection_setRequestTimeout(impl_->connection, impl_->config.timeout);
         IedClientError code = IED_ERROR_OK;

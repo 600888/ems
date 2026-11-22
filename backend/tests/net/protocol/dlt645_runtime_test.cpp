@@ -16,6 +16,8 @@
 using Json = nlohmann::json;
 using ems::net::collect::PluginManager;
 using namespace std::chrono_literals;
+#include "traffic_capture.h"
+
 namespace fs = std::filesystem;
 #define CHECK(condition)                                                                      \
     do {                                                                                      \
@@ -57,6 +59,7 @@ Json points() {
 }
 
 struct Plugin {
+    TrafficCapture traffic;
     PluginManager& manager;
     void* instance;
     PluginManager::PluginFunctions f;
@@ -64,6 +67,7 @@ struct Plugin {
     explicit Plugin(PluginManager& m)
         : manager(m), instance(m.load("DLT645")), f(m.get_instance_functions(instance)) {
         if (!instance) throw std::runtime_error(m.last_error());
+        traffic.attach(f.set_traffic_handler_fn, instance);
     }
 
     ~Plugin() { manager.release(instance); }
@@ -155,6 +159,8 @@ void client_classes() {
     CHECK(result[4]["quality"] == 1);  // 成对事件不伪装为单值。
     CHECK(client.read({"0x0201FFFF", "bad", "0x05000000", "0x04000105:99"}, 0).size() == 4);
     CHECK(client.read({}, 0).empty());
+    client.traffic.expect_duplex();
+    server.traffic.expect_duplex();
 }
 
 void multi_meter() {

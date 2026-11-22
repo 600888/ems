@@ -57,6 +57,17 @@ extern "C" {
 
 EMS_PLUGIN_EXPORT const EmPluginInfo* EMS_PLUGIN_CALL ems_plugin_info(void) { return &kInfo; }
 
+EMS_PLUGIN_EXPORT int EMS_PLUGIN_CALL
+ems_plugin_set_traffic_handler(void* opaque, ems_plugin_traffic_callback callback, void* user) {
+    if (!opaque) return -1;
+    try {
+        static_cast<Instance*>(opaque)->protocol.set_traffic_handler(callback, user);
+        return 0;
+    } catch (...) {
+        return -1;
+    }
+}
+
 EMS_PLUGIN_EXPORT void* EMS_PLUGIN_CALL ems_plugin_create(void) {
     try {
         return new Instance();

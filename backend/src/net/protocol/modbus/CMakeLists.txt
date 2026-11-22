@@ -63,6 +63,11 @@ target_include_directories(
 )
 
 target_link_libraries(ems_modbus_core PRIVATE ems_libmodbus Threads::Threads)
+if(TARGET ems_libmodbus_vendor)
+    target_compile_definitions(ems_modbus_core PRIVATE EMS_MODBUS_TRAFFIC_ENABLED)
+else()
+    message(WARNING "External libmodbus has no EMS raw traffic hook; Modbus packet logging requires the bundled libmodbus build")
+endif()
 
 set_target_properties(
     ems_modbus_core

@@ -10,6 +10,7 @@
 #include "common/log/default_logger.hpp"
 #include "common/log/process_logger.hpp"
 #include "net/log.h"
+#include "net/traffic_log.h"
 
 namespace {
 
@@ -73,6 +74,14 @@ void verify(const std::filesystem::path& root, const std::string& scenario) {
         } else if (scenario == "channel_unicode") {
             ChannelMsgLogger::logChannelInfo("BMS-01 \xE6\x80\xBB\xE6\x8E\xA7", "channel marker {}",
                                              104);
+            ChannelTrafficLog traffic("BMS-01 \xE6\x80\xBB\xE6\x8E\xA7", "DLT645");
+            std::vector<uint8_t> bytes(2050, 0xA5);
+            ChannelTrafficLog::callback(&traffic, EMS_TRAFFIC_TX, bytes.data(), bytes.size(),
+                                        123456789, 7);
+            std::fill(bytes.begin(), bytes.end(), 0);
+            ChannelTrafficLog::callback(&traffic, EMS_TRAFFIC_RX, bytes.data(), 4, 123456790, 7);
+            ChannelTrafficLog::callback(&traffic, EMS_TRAFFIC_TX_FAILED, bytes.data(), 4, 123456791,
+                                        7);
             require(spdlog::default_logger() == logger,
                     "Unicode channel name removed the process logger");
         } else if (scenario == "format_failure") {
@@ -110,6 +119,21 @@ void verify(const std::filesystem::path& root, const std::string& scenario) {
                                            std::istreambuf_iterator<char>()};
         require(channel_contents.find("channel marker 104") != std::string::npos,
                 "Unicode channel file or formatted message was not written");
+        require(channel_contents.find("[DLT645][TX] A5 A5") != std::string::npos &&
+                    channel_contents.find("A5 A5 (length=2050,offset=0)") != std::string::npos &&
+                    channel_contents.find("A5 A5 (length=2050,offset=1024)") != std::string::npos &&
+                    channel_contents.find("[DLT645][TX] A5 A5 (length=2050,offset=2048)") !=
+                        std::string::npos,
+                "long traffic bytes were not copied and chunked before buffer reuse");
+        require(channel_contents.find("[DLT645][RX] 00 00 00 00 (length=4,offset=0)") !=
+                        std::string::npos &&
+                    channel_contents.find("[DLT645][TX_FAILED] 00 00 00 00 (length=4,offset=0)") !=
+                        std::string::npos,
+                "traffic direction or failed send marker was lost");
+        require(channel_contents.find("[time_us=") == std::string::npos &&
+                    channel_contents.find("[connection=") == std::string::npos &&
+                    channel_contents.find("[offset=") == std::string::npos,
+                "traffic log still contains removed metadata blocks");
     }
     const auto path = directory / (name + ".log");
     require(std::filesystem::exists(path), "independent log file was not created");

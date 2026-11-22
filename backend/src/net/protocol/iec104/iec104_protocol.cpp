@@ -21,6 +21,7 @@
 #include "net/protocol/protocol_types.h"
 #include "net/protocol/serial_types.h"
 #include "net/protocol/time_units.h"
+#include "net/protocol/traffic_observer.h"
 
 namespace ems::net::protocol {
 using iec104::AsduType;
@@ -441,6 +442,7 @@ int option_int(const Json& config, const char* key, int fallback, int low, int h
 
 class Iec104Protocol::Impl {
    public:
+    std::shared_ptr<TrafficObserver> traffic{std::make_shared<TrafficObserver>()};
     mutable std::mutex mutex;
     std::condition_variable cv;
     CS104_Connection connection{nullptr};
@@ -807,6 +809,10 @@ Iec104Protocol::Iec104Protocol() : impl_(std::make_unique<Impl>()) {}
 
 Iec104Protocol::~Iec104Protocol() { impl_->stop(); }
 
+void Iec104Protocol::set_traffic_handler(ems_plugin_traffic_callback callback, void* user) {
+    impl_->traffic->set(callback, user);
+}
+
 int Iec104Protocol::initialize(const std::string& text) {
     try {
         if (impl_->connection || impl_->server)
@@ -1012,6 +1018,14 @@ int Iec104Protocol::connect() {
             CS104_Slave_setASDUHandler(impl_->server, Impl::server_control, impl_.get());
             CS104_Slave_setConnectionEventHandler(impl_->server, Impl::server_connection,
                                                   impl_.get());
+            CS104_Slave_setRawMessageHandler(
+                impl_->server,
+                [](void* user, IMasterConnection connection, uint8_t* bytes, int size, bool sent) {
+                    static_cast<TrafficObserver*>(user)->emit(
+                        sent ? EMS_TRAFFIC_TX : EMS_TRAFFIC_RX, bytes, size,
+                        reinterpret_cast<uintptr_t>(connection));
+                },
+                impl_->traffic.get());
             CS104_Slave_start(impl_->server);
             if (!CS104_Slave_isRunning(impl_->server))
                 throw std::runtime_error("IEC104 listen failed");
@@ -1035,6 +1049,13 @@ int Iec104Protocol::connect() {
             impl_->closed = false;
         }
         const auto deadline = Clock::now() + std::chrono::milliseconds(impl_->timeout_ms);
+        CS104_Connection_setRawMessageHandler(
+            impl_->connection,
+            [](void* user, uint8_t* bytes, int size, bool sent) {
+                static_cast<TrafficObserver*>(user)->emit(sent ? EMS_TRAFFIC_TX : EMS_TRAFFIC_RX,
+                                                          bytes, size);
+            },
+            impl_->traffic.get());
         CS104_Connection_connectAsync(impl_->connection);
         {
             std::unique_lock<std::mutex> lock(impl_->mutex);

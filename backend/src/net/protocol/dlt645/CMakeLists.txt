@@ -21,6 +21,10 @@ endif()
 cmake_policy(POP)
 
 file(GLOB_RECURSE EMS_DLT645_SOURCES CONFIGURE_DEPENDS "${EMS_DLT645_ROOT}/src/*.cpp")
+include("${EMS_BACKEND_ROOT}/cmake/TrafficSources.cmake")
+ems_dlt645_traffic_sources("${EMS_DLT645_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}")
+list(REMOVE_ITEM EMS_DLT645_SOURCES ${EMS_DLT645_REPLACED_SOURCES})
+list(APPEND EMS_DLT645_SOURCES ${EMS_DLT645_TRAFFIC_SOURCES})
 
 add_library(ems_dlt645_stack STATIC ${EMS_DLT645_SOURCES})
 target_include_directories(
@@ -36,6 +40,8 @@ set_property(
 )
 
 target_link_libraries(ems_dlt645_stack PUBLIC Boost::headers Threads::Threads)
+target_include_directories(ems_dlt645_stack PRIVATE "${EMS_BACKEND_ROOT}/src"
+                                                  "${EMS_BACKEND_ROOT}/include")
 target_compile_definitions(ems_dlt645_stack PRIVATE BOOST_ASIO_NO_DEPRECATED)
 
 set_target_properties(

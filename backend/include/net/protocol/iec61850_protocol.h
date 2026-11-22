@@ -9,6 +9,8 @@
 #include <string>
 #include <vector>
 
+#include "net/protocol/protocol_plugin_api.h"
+
 namespace ems::net::protocol {
 /** @brief 独占客户端 association 或固定模型服务器；公开调用串行，不跨动态库传递本对象。 */
 class Iec61850Protocol final {
@@ -71,6 +73,13 @@ class Iec61850Protocol final {
      * @return 错误说明；成功操作后可为空。
      */
     std::string last_error() const;
+
+    /**
+     * @brief 安装或注销收发字节观察器；注销会等待在途回调结束。
+     * @param[in] callback 回调，空表示关闭观察；不得重入插件。
+     * @param[in,out] user 宿主上下文，注销返回后可释放。
+     */
+    void set_traffic_handler(ems_plugin_traffic_callback callback, void* user);
 
    private:
     class Impl;

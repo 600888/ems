@@ -9,3 +9,4 @@ EXPORTS
     ems_plugin_write
     ems_plugin_is_connected
     ems_plugin_last_error
+    ems_plugin_set_traffic_handler

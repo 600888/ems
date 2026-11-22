@@ -85,15 +85,15 @@ class PointIntegration : public ::testing::Test {
         ASSERT_TRUE(core::is_ok(opened));
         owner = std::move(std::get<0>(opened));
         auto definitions =
-            std::make_shared<RuntimeCatalog>(Scope{ScopeKind::Station, "station"}, "7", "", 60000);
+            std::make_shared<RuntimeCatalog>(Scope{ScopeKind::Station, "STATION"}, "7", "", 60000);
         for (auto type : {model::PointType::YC, model::PointType::YX, model::PointType::YK,
                           model::PointType::YT}) {
             RuntimePoint point;
             point.point_id =
                 core::PointId{std::string("point") + std::to_string(static_cast<int>(type))};
-            point.address = {{ScopeKind::Station, "station"},
-                             {"pcs"},
-                             std::string("code") + std::to_string(static_cast<int>(type))};
+            point.address = {{ScopeKind::Station, "STATION"},
+                             {"PCS01"},
+                             std::string("PCS_POINT_") + std::to_string(static_cast<int>(type))};
             point.point_type = type;
             point.kind = model::to_point_kind(type);
             point.value_type = (type == model::PointType::YX || type == model::PointType::YK)
@@ -127,6 +127,16 @@ TEST_F(PointIntegration, CollectorReaderAndTypedFacadeUseOneRecord) {
     ASSERT_TRUE(core::is_ok(observed));
     const auto json = nlohmann::json::parse(core::value_of(observed));
     EXPECT_EQ(json["value"], 42.5);
+    const RecordKey key{
+        {ScopeKind::Station, "STATION"}, RecordKind::Point, {"PCS01"}, "PCS_POINT_0"};
+    auto stored = owner->read(key, context());
+    ASSERT_TRUE(core::is_ok(stored)) << core::error_of(stored).message;
+    EXPECT_EQ(detail::physical_key(key), "ems:rt:point:{station:STATION}:PCS01:PCS_POINT_0");
+    auto lower = key;
+    lower.name = "pcs_point_0";
+    auto missing = owner->read(lower, context());
+    ASSERT_FALSE(core::is_ok(missing));
+    EXPECT_EQ(core::error_of(missing).code, ErrorCode::NotFound);
     auto connection = RealtimeClient::open(path.u8string(), context());
     ASSERT_TRUE(core::is_ok(connection));
     std::shared_ptr<IRealtimeStore> store = std::move(std::get<0>(connection));

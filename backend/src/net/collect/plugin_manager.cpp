@@ -56,6 +56,8 @@ struct LibraryEntry {
                 library.symbol(EMS_PLUGIN_TAKE_CONTROLS_SYMBOL));
             functions.resolve_control_fn = reinterpret_cast<ems_plugin_resolve_control_fn>(
                 library.symbol(EMS_PLUGIN_RESOLVE_CONTROL_SYMBOL));
+            functions.set_traffic_handler_fn = reinterpret_cast<ems_plugin_set_traffic_handler_fn>(
+                library.symbol(EMS_PLUGIN_SET_TRAFFIC_HANDLER_SYMBOL));
             ready = true;
         });
     }

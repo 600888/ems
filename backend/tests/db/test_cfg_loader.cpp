@@ -91,6 +91,27 @@ DeviceConfigRecords forwarding_configuration() {
     return records;
 }
 
+TEST(CfgLoader, PreservesUppercaseCodesInRuntimeCatalog) {
+    auto records = configuration();
+    records.devices[0].code = "STATION";
+    records.devices[1].code = "PCS01";
+    records.devices[2].code = "Rack01";
+    records.channels[0].code = "RS48501";
+    records.points_yc[0].code = "PCS_YC_4001";
+    CfgLoader loader;
+    ASSERT_TRUE(loader.configure(records)) << loader.last_error();
+    const auto catalog = loader.runtime_catalog();
+    const ems::rtdb::PointAddress address{
+        {ems::rtdb::ScopeKind::Station, "STATION"}, {"PCS01", "Rack01"}, "PCS_YC_4001"};
+    const auto* point = catalog->findPoint(address);
+    ASSERT_NE(point, nullptr);
+    EXPECT_EQ(point->point_id.value(), "point-rack-voltage");
+    EXPECT_EQ(catalog->findChannel(ems::core::ChannelId{"channel"})->code, "RS48501");
+    EXPECT_TRUE(ems::rtdb::validate_record_key({address.scope, ems::rtdb::RecordKind::Point,
+                                                address.device_path, address.code})
+                    .empty());
+}
+
 TEST(CfgLoader, CompilesForwardingSeparatelyAndKeepsDisabledSourcesInvalid) {
     auto records = forwarding_configuration();
     CfgLoader loader;

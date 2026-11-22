@@ -16,6 +16,7 @@
 #include <cmath>
 #include <cstring>
 #include <filesystem>
+#include <future>
 #include <iostream>
 #include <nlohmann/json.hpp>
 #include <stdexcept>
@@ -25,9 +26,12 @@
 #include "net/collect/plugin_manager.h"
 #include "net/protocol/dynamic_library.h"
 #include "net/protocol/modbus_protocol.h"
+#include "net/protocol/traffic_observer.h"
 
 using ems::net::collect::PluginManager;
 using Json = nlohmann::json;
+#include "traffic_capture.h"
+
 namespace fs = std::filesystem;
 
 #define CHECK(condition)                                                                      \
@@ -136,6 +140,7 @@ void configure(PluginManager& manager, const char* file) {
 }
 
 struct Session {
+    TrafficCapture traffic;
     PluginManager& manager;
     void* instance;
     PluginManager::PluginFunctions functions;
@@ -145,6 +150,8 @@ struct Session {
         CHECK(instance);
         functions = manager.get_instance_functions(instance);
         CHECK(functions);
+        if (functions.set_traffic_handler_fn)
+            traffic.attach(functions.set_traffic_handler_fn, instance);
         const auto text = config.dump();
         CHECK(functions.init_fn(instance, text.c_str()) == 0);
         CHECK(functions.connect_fn(instance) == 0);
@@ -286,6 +293,38 @@ void instance_routing() {
 }
 
 void client_types() {
+    ems::net::protocol::TrafficObserver observer;
+
+    struct BlockedCallback {
+        std::promise<void> entered;
+        std::atomic<bool> release{false};
+    } blocked;
+
+    auto entered = blocked.entered.get_future();
+    observer.set(
+        [](void* user, int, const uint8_t*, size_t, int64_t, uint64_t) {
+            auto& state = *static_cast<BlockedCallback*>(user);
+            state.entered.set_value();
+            while (!state.release) std::this_thread::yield();
+        },
+        &blocked);
+    const uint8_t byte = 0x68;
+    auto emitted = std::async(std::launch::async, [&] { observer.emit(EMS_TRAFFIC_RX, &byte, 1); });
+    const bool started = entered.wait_for(std::chrono::seconds(2)) == std::future_status::ready;
+    auto detached = std::async(std::launch::async, [&] { observer.set(nullptr, nullptr); });
+    const bool waited =
+        detached.wait_for(std::chrono::milliseconds(20)) == std::future_status::timeout;
+    blocked.release = true;
+    emitted.get();
+    detached.get();
+    CHECK(started && waited);
+    observer.set(
+        [](void*, int, const uint8_t*, size_t, int64_t, uint64_t) {
+            throw std::runtime_error("observer failure must not stop communication");
+        },
+        nullptr);
+    observer.emit(EMS_TRAFFIC_RX, &byte, 1);
+
     Simulator simulator;
     PluginManager manager;
     configure(manager, EMS_REAL_PLUGIN);
@@ -307,6 +346,12 @@ void client_types() {
         CHECK(point["quality"] == 0);
         CHECK(point["timestamp"] > 1000000000000LL);
     }
+    session.traffic.expect_duplex();
+    CHECK(session.functions.set_traffic_handler_fn(session.instance, nullptr, nullptr) == 0);
+    const auto bytes_before_detach = session.traffic.rx.load() + session.traffic.tx.load();
+    CHECK(session.read({"1:3:0"}, 1)[0]["value"] == 0x1234);
+    CHECK(session.traffic.rx + session.traffic.tx == bytes_before_detach);
+    session.traffic.attach(session.functions.set_traffic_handler_fn, session.instance);
     const auto before = simulator.reads.load();
     std::array<char, 1024> output{};
     const char* bad[] = {"invalid"};
@@ -359,6 +404,9 @@ void server_readonly() {
     CHECK(second.read({"2:3:1:1"}, 1)[0]["value"] == -12);
     CHECK(first.write("2:6:1:1", 7) == -1);
     CHECK(second.read({"2:3:1:1"}, 1)[0]["value"] == -12);
+    server.traffic.expect_duplex();
+    first.traffic.expect_duplex();
+    second.traffic.expect_duplex();
     CHECK(manager.loaded_library_count() == 1);
     CHECK(manager.release(first.instance));
     first.instance = nullptr;
