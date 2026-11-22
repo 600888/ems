@@ -28,42 +28,60 @@ after(async () => {
 })
 const response = (data, revision = '1') =>
   Response.json({ data, meta: { config_revision: revision } })
-test('设备树逐层分页读取真实接口并映射稳定 ID', async () => {
+test('设备树在一次请求中读取整站并按稳定 ID 还原层级', async () => {
   api.clearEngineeringSession()
   const calls = []
   globalThis.fetch = async (path, options) => {
     const body = JSON.parse(options.body)
     calls.push([path, body])
     return response({
-      items: body.parent_device_id
-        ? [
-            {
-              device_id: 'pcs',
-              name: 'PCS',
-              code: 'pcs',
-              node_kind: 'device',
-              child_count: 0,
-              has_children: false,
-            },
-          ]
-        : [
-            {
-              device_id: 'station',
-              name: 'Station',
-              code: 's',
-              node_kind: 'station',
-              child_count: 1,
-              has_children: true,
-            },
-          ],
-      total: 1,
+      items: [
+        {
+          device_id: 'station',
+          name: 'Station',
+          code: 's',
+          node_kind: 'station',
+          child_count: 1,
+        },
+        {
+          device_id: 'pcs',
+          parent_device_id: 'station',
+          name: 'PCS',
+          code: 'pcs',
+          node_kind: 'device',
+          child_count: 0,
+        },
+      ],
+      total: 2,
     })
   }
   const tree = await api.deviceApi.tree()
   assert.equal(tree[0].children[0].id, 'pcs')
   assert.equal(tree[0].children[0].isDevice, true)
-  assert.equal(calls[1][1].parent_device_id, 'station')
-  assert.equal(calls[0][0], '/api/devices/tree')
+  assert.deepEqual(calls, [['/api/devices/tree', { recursive: true, page: 1, page_size: 500 }]])
+})
+test('旧 Web 后端不接受递归参数时仍能加载设备树', async () => {
+  api.clearEngineeringSession()
+  const calls = []
+  globalThis.fetch = async (_path, options) => {
+    const body = JSON.parse(options.body)
+    calls.push(body)
+    if (body.recursive)
+      return Response.json(
+        { error: { reason: 'unknown_field', details: [{ field: 'recursive' }] } },
+        { status: 400 },
+      )
+    return response({
+      items: body.parent_device_id
+        ? [{ device_id: 'pcs', node_kind: 'device', child_count: 0, has_children: false }]
+        : [{ device_id: 'station', node_kind: 'station', child_count: 1, has_children: true }],
+      total: 1,
+    })
+  }
+  const tree = await api.deviceApi.tree()
+  assert.equal(tree[0].children[0].id, 'pcs')
+  assert.equal(calls.length, 3)
+  assert.equal(calls[2].parent_device_id, 'station')
 })
 test('编辑保留读取时的修订号，后台查询不能覆盖过期表单', async () => {
   api.clearEngineeringSession()
@@ -280,14 +298,22 @@ test('实时服务故障不伪造样本，历史仍可按配置点位查询', as
       return response({
         items: [
           {
+            device_id: 'station',
+            node_kind: 'station',
+            name: 'Station',
+            code: 's',
+            child_count: 1,
+          },
+          {
             device_id: 'device',
+            parent_device_id: 'station',
             node_kind: 'device',
             name: 'Device',
             code: 'd',
-            has_children: false,
+            child_count: 0,
           },
         ],
-        total: 1,
+        total: 2,
       })
     if (path === '/api/devices/detail') return response({ device_id: 'device', name: 'Device' })
     if (path === '/api/monitor/points')

@@ -59,6 +59,28 @@ RuntimeService::RuntimeService(database::MySqlDatabaseContext database, RuntimeO
     }
 }
 
+std::shared_ptr<const rtdb::RuntimeCatalog> RuntimeService::catalog(const DeviceRequest& request) {
+    const auto& ctx = request.context;
+    const auto station_id = request.station.at("device_id").get<std::string>();
+    const auto revision = std::to_string(request.station.at("config_revision").get<std::int64_t>());
+    std::unique_lock lock(catalog_mutex_, std::defer_lock);
+    if (!lock.try_lock_until(ctx.deadline) || core::has_expired(ctx))
+        throw ApiError(504, "DeadlineExceeded", "deadline_exceeded", "NotApplicable");
+
+    if (catalog_ && catalog_station_id_ == station_id && catalog_->configVersion() == revision &&
+        catalog_->scope().code == request.station.at("code"))
+        return catalog_;
+
+    auto records = take(database_.device_config->load_configuration(*request.transaction, ctx));
+    auto current = take(rtdb::configuration_catalog(records));
+    if (current->scope().code != options_.scope_code)
+        throw ApiError(503, "NotReady", "realtime_scope_mismatch");
+
+    catalog_station_id_ = station_id;
+    catalog_ = std::move(current);
+    return catalog_;
+}
+
 DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
                                      const Principal& actor, const core::CallContext& ctx) {
     if (path == "/api/audit/list") {
@@ -174,14 +196,11 @@ DeviceResult RuntimeService::execute(const std::string& path, const Json& body,
         device_enabled && std::any_of(result.at("items").begin(), result.at("items").end(),
                                       [](const auto& point) { return point.at("enabled") != 0; });
     auto reader = reader_;
-    std::shared_ptr<rtdb::PointClient> realtime;
     if (!reader && needs_samples) {
-        auto records = take(database_.device_config->load_configuration(*request.transaction, ctx));
-        auto catalog = take(rtdb::configuration_catalog(records));
-        if (catalog->scope().code != options_.scope_code)
-            throw ApiError(503, "NotReady", "realtime_scope_mismatch");
-        realtime = take(rtdb::PointClient::open(options_.realtime_config, catalog, ctx));
-        reader = [realtime](const auto& kind, const auto& id, const auto& context) {
+        auto realtime =
+            take(rtdb::PointClient::open(options_.realtime_config, catalog(request), ctx));
+        reader = [realtime = std::move(realtime)](const auto& kind, const auto& id,
+                                                  const auto& context) {
             return realtime->readPointJson(kind, id, context);
         };
     }

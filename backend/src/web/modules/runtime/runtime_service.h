@@ -3,9 +3,14 @@
 #include <rtdb/client/command_client.h>
 
 #include <functional>
+#include <mutex>
 
 #include "web/modules/device/application/device_service.h"
 #include "web/modules/history/history_service.h"
+
+namespace ems::rtdb {
+class RuntimeCatalog;
+}
 
 namespace ems::web {
 
@@ -44,10 +49,20 @@ class RuntimeService {
                          const core::CallContext& ctx);
 
    private:
+    /**
+     * @brief 复用站根当前配置计数对应的运行目录，首次访问时在站根共享锁下重建。
+     * @param[in] request 已授权且持有站根共享锁的读事务。
+     * @return 当前站的运行目录；读取失败或超时时抛出 ApiError。
+     */
+    std::shared_ptr<const rtdb::RuntimeCatalog> catalog(const DeviceRequest& request);
+
     database::MySqlDatabaseContext database_;
     RuntimeOptions options_;
     ReadPoint reader_;
     ReadHistory history_reader_;
     std::shared_ptr<rtdb::CommandClient> command_client_;
+    std::timed_mutex catalog_mutex_;
+    std::string catalog_station_id_;
+    std::shared_ptr<const rtdb::RuntimeCatalog> catalog_;
 };
 }  // namespace ems::web

@@ -1,4 +1,4 @@
-import { requestResponse } from './http'
+import { ApiError, requestResponse } from './http'
 import { toRaw } from 'vue'
 import type { DeviceNode } from '@/types/domain'
 import type {
@@ -75,6 +75,46 @@ async function allPages<T>(path: string, body: object = {}): Promise<Page<T>> {
   }
   throw new Error('结果过多，请缩小查询范围')
 }
+
+type TreeRow = Pick<
+  EngineeringRecord,
+  'device_id' | 'parent_device_id' | 'name' | 'code' | 'node_kind'
+> & {
+  child_count: number
+  has_children: boolean
+}
+
+const treePageSize = 500
+const treePage = (page: number, fields: object) =>
+  call<Page<TreeRow>>('/api/devices/tree', { ...fields, page, page_size: treePageSize })
+
+function deviceNode(row: TreeRow): DeviceNode & { children: DeviceNode[] } {
+  return {
+    id: row.device_id,
+    name: row.name,
+    code: row.code,
+    kind: row.node_kind,
+    icon: nodeIcon(row.node_kind),
+    isDevice: row.node_kind === 'device',
+    count: row.child_count,
+    children: [],
+  }
+}
+
+async function loadTreeLevel(parentId?: string): Promise<DeviceNode[]> {
+  const nodes: DeviceNode[] = []
+  for (let page = 1; ; page++) {
+    const result = await treePage(page, parentId ? { parent_device_id: parentId } : {})
+    for (const row of result.items) {
+      const node = deviceNode(row)
+      if (row.has_children) node.children = await loadTreeLevel(node.id)
+      nodes.push(node)
+    }
+    if (page * treePageSize >= result.total) return nodes
+    if (!result.items.length) throw new Error('设备树已变化，请重新加载')
+  }
+}
+
 export const deviceApi = {
   configuration: () =>
     call<{ station_device_id: string; config_revision: string }>(
@@ -88,31 +128,40 @@ export const deviceApi = {
       max_upload_bytes: number
     }>('/api/device-management/capabilities'),
   async tree(): Promise<DeviceNode[]> {
-    const load = async (parent?: string): Promise<DeviceNode[]> => {
-      const items: DeviceNode[] = []
-      for (let page = 1; ; page++) {
-        const result = await call<
-          Page<EngineeringRecord & { has_children: boolean; child_count: number }>
-        >('/api/devices/tree', {
-          ...(parent ? { parent_device_id: parent } : {}),
-          page,
-          page_size: 500,
-        })
-        for (const row of result.items)
-          items.push({
-            id: row.device_id,
-            name: row.name,
-            code: row.code,
-            kind: row.node_kind,
-            icon: nodeIcon(row.node_kind),
-            isDevice: row.node_kind === 'device',
-            count: row.child_count,
-            children: row.has_children ? await load(row.device_id) : [],
-          })
-        if (page * 500 >= result.total) return items
-      }
+    const roots: DeviceNode[] = []
+    const nodes = new Map<string, ReturnType<typeof deviceNode>>()
+    let result: Page<TreeRow>
+    try {
+      result = await treePage(1, { recursive: true })
+    } catch (error) {
+      // 前端更新后可能仍在使用尚未重启的 Web 后端。
+      if (
+        error instanceof ApiError &&
+        error.status === 400 &&
+        error.reason === 'unknown_field' &&
+        Array.isArray(error.details) &&
+        error.details.some((detail) => detail?.field === 'recursive')
+      )
+        return loadTreeLevel()
+      throw error
     }
-    return load()
+    const treeRevision = revisionOf(result)
+    for (let page = 1; ; page++) {
+      if (page > 1) result = await treePage(page, { recursive: true })
+      if (treeRevision !== revisionOf(result)) throw new Error('设备树已变化，请重新加载')
+      for (const row of result.items) {
+        const node = deviceNode(row)
+        if (row.node_kind === 'station') roots.push(node)
+        else {
+          const parent = nodes.get(row.parent_device_id)
+          if (!parent) throw new Error('设备树缺少父节点，请重新加载')
+          parent.children.push(node)
+        }
+        nodes.set(node.id, node)
+      }
+      if (page * treePageSize >= result.total) return roots
+      if (!result.items.length) throw new Error('设备树已变化，请重新加载')
+    }
   },
   list: (filters = {}, page = 1, page_size = 200) =>
     call<Page<EngineeringRecord>>('/api/devices/list', { filters, page, page_size }),

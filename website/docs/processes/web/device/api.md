@@ -69,12 +69,14 @@ flowchart LR
 
 | 方法 | 固定路径 | JSON 业务参数 | 权限 |
 | --- | --- | --- | --- |
-| POST | /api/devices/tree | parent_device_id、page、page_size | device.read |
+| POST | /api/devices/tree | parent_device_id、page、page_size、recursive | device.read |
 | POST | /api/devices/list | filters、page、page_size、sort、order | device.read |
 | POST | /api/devices/detail | device_id | device.read |
 | POST | /api/devices/create | device_id、expected_config_revision、fields | device.write |
 | POST | /api/devices/update | device_id、expected_config_revision、fields | device.write |
 | POST | /api/devices/delete | device_id、expected_config_revision | device.write |
+
+`recursive: true` 从站根分页返回完整可见树，父节点排在子节点之前，不能同时传入 `parent_device_id`。`child_count` 统计当前账号可见的直接子节点，响应的 `meta.config_revision` 可用于检查多页是否来自同一次配置。省略 `recursive` 时仍按单层查询。
 
 ### 类型与模板
 

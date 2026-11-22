@@ -640,6 +640,10 @@ TEST_F(WebDevice, CommandsUseThreeSecondDeadlineAndKeepClientDeadline) {
     EXPECT_EQ(sample.at("command_id"), "deadline-a");
     EXPECT_EQ(sample.at("command_status"), "Acked");
     EXPECT_EQ(sample.at("value_role"), "command_target");
+    sql("UPDATE cfg_device SET config_revision=config_revision+1 WHERE node_kind='station'");
+    const auto after_change = control.execute(
+        "/api/monitor/points", {{"device_id", "hvac01"}, {"point_type", "yt"}}, actor, context());
+    EXPECT_EQ(after_change.data.at("items").at(0).at("quality"), "invalid");
     auto denied = actor;
     denied.permissions = {"monitor.read"};
     EXPECT_THROW(
@@ -1212,6 +1216,15 @@ TEST_F(WebDevice, ScopeFilteringDoesNotLeakTotalOrDetails) {
     EXPECT_EQ(tree.data.at("total"), 1);
     auto children = execute("/api/devices/tree", {{"parent_device_id", "station"}});
     EXPECT_EQ(children.data.at("total"), 1);
+    const auto recursive = execute("/api/devices/tree", {{"recursive", true}, {"page_size", 1}});
+    EXPECT_EQ(recursive.data.at("total"), 2);
+    ASSERT_EQ(recursive.data.at("items").size(), 1);
+    EXPECT_EQ(recursive.data.at("items").at(0).at("device_id"), "station");
+    EXPECT_EQ(recursive.data.at("items").at(0).at("child_count"), 1);
+    const auto second =
+        execute("/api/devices/tree", {{"recursive", true}, {"page_size", 1}, {"page", 2}});
+    ASSERT_EQ(second.data.at("items").size(), 1);
+    EXPECT_EQ(second.data.at("items").at(0).at("device_id"), "hvac01");
     auto page = execute("/api/devices/list", {{"page_size", 1}});
     EXPECT_EQ(page.data.at("total"), 1);
     EXPECT_EQ(page.data.at("items").size(), 1u);

@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <map>
 #include <set>
 
 #include "device_service.h"
@@ -40,6 +41,67 @@ Json summary(DeviceRequest& request, Json row) {
     row["config_completeness"] = (enabled + disabled >= total) ? "complete" : "incomplete";
     return row;
 }
+
+Json tree_node(const Json& row) {
+    Json node = Json::object();
+    for (auto key : {"device_id", "parent_device_id", "node_kind", "code", "name"})
+        node[key] = row.at(key);
+    node["enabled"] = row.at("enabled").get<int>() != 0;
+    return node;
+}
+
+DeviceResult recursive_tree(DeviceRequest& request, const Json& body) {
+    if (body.contains("parent_device_id"))
+        throw ApiError(400, "InvalidArgument", "recursive_tree_requires_station_root");
+    const auto page = page_query(DeviceTable::Device, body, {}, 500);
+
+    // 一次扫描设备表，按真实父子关系计算数据权限与导航权限。
+    std::map<std::string, std::vector<Json>> children;
+    DeviceQuery q;
+    q.order_by = "sort_order";
+    q.limit = 1000;
+    for (;; q.offset += q.limit) {
+        auto batch = request.rows(q);
+        for (auto& row : batch) {
+            if (row.at("node_kind") == "station") continue;
+            const auto parent = row.at("parent_device_id").get<std::string>();
+            children[parent].push_back(std::move(row));
+        }
+        if (batch.size() < q.limit) break;
+    }
+
+    Json visible = Json::array();
+    const auto& roots = request.principal.device_roots;
+    auto visit = [&](const auto& self, const Json& row, bool allowed, int depth) -> bool {
+        if (depth > 8) throw ApiError(500, "CorruptData", "device_depth");
+        const auto& id = row.at("device_id").get_ref<const std::string&>();
+        allowed = allowed || roots.count(id) != 0;
+        const auto index = visible.size();
+        visible.push_back(tree_node(row));
+        std::size_t count = 0;
+        if (const auto found = children.find(id); found != children.end()) {
+            for (const auto& child : found->second) {
+                if (self(self, child, allowed, depth + 1)) ++count;
+            }
+        }
+        if (!allowed && count == 0) {
+            visible.erase(index);
+            return false;
+        }
+        visible[index]["child_count"] = count;
+        visible[index]["has_children"] = count != 0;
+        return true;
+    };
+    visit(visit, request.station, roots.count("*") != 0, 0);
+
+    Json items = Json::array();
+    for (auto i = page.offset; i < visible.size() && items.size() < page.limit; ++i)
+        items.push_back(std::move(visible[i]));
+    return {{{"items", std::move(items)},
+             {"total", visible.size()},
+             {"page", body.value("page", 1)},
+             {"page_size", page.limit}}};
+}
 }  // namespace
 
 DeviceResult device_action(DeviceRequest& request, const std::string& path, const Json& body) {
@@ -53,10 +115,12 @@ DeviceResult device_action(DeviceRequest& request, const std::string& path, cons
     }
 
     if (action == "tree" || action == "list") {
-        if (action == "tree")
-            fields(body, {"parent_device_id", "page", "page_size"});
-        else
+        if (action == "tree") {
+            fields(body, {"parent_device_id", "page", "page_size", "recursive"});
+            if (body.value("recursive", false)) return recursive_tree(request, body);
+        } else {
             fields(body, {"filters", "page", "page_size", "sort", "order"});
+        }
         auto normalized = body;
         auto filter = normalized.value("filters", Json::object());
         bool recursive = false;
@@ -117,19 +181,16 @@ DeviceResult device_action(DeviceRequest& request, const std::string& path, cons
                         throw;
                     }
                 }
-                Json item = Json::object();
-                if (action == "tree") {
-                    for (auto key : {"device_id", "parent_device_id", "node_kind", "code", "name"})
-                        item[key] = candidate.at(key);
-                    item["enabled"] = candidate.at("enabled").get<int>() != 0;
-                } else
+                Json item;
+                if (!completeness.empty()) {
                     item = summary(request, candidate);
-                if (!completeness.empty() && item.at("config_completeness") != completeness)
-                    continue;
+                    if (item.at("config_completeness") != completeness) continue;
+                }
                 if (static_cast<std::size_t>(total++) < requested_offset ||
                     result.size() >= requested_limit)
                     continue;
                 if (action == "tree") {
+                    item = tree_node(candidate);
                     DeviceQuery children;
                     children.filters = {{"parent_device_id", candidate.at("device_id")}};
                     children.limit = 100000;
@@ -139,6 +200,8 @@ DeviceResult device_action(DeviceRequest& request, const std::string& path, cons
                     }
                     item["child_count"] = count;
                     item["has_children"] = count != 0;
+                } else if (item.is_null()) {
+                    item = summary(request, candidate);
                 }
                 result.push_back(std::move(item));
             }
