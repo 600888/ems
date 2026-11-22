@@ -5,12 +5,12 @@
 <title>采集进程构建与运行 - EMS 设计文档</title>
 <script>{;const saved = localStorage.getItem('rspress-theme-appearance');const preferDark = window.matchMedia('(prefers-color-scheme: dark)').matches;const defaultTheme = 'light';const theme = saved === 'light' || saved === 'dark' || saved === 'auto' ? saved : defaultTheme;const isDark = theme === 'auto' ? preferDark : theme === 'dark';document.documentElement.classList.toggle('dark', isDark);document.documentElement.classList.toggle('rp-dark', isDark);document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';}</script>
 <link href="/ems/static/css/styles.585e4389a2.css" rel="stylesheet">
-<link rel="preload" href="/ems/static/js/async/route-c015b6577933.e31b232c15.js" as="script">
+<link rel="preload" href="/ems/static/js/async/route-c015b6577933.810e02798c.js" as="script">
 <script defer src="/ems/static/js/styles.f9beeb2743.js"></script>
 <script defer src="/ems/static/js/lib-react.fddcf45baa.js"></script>
 <script defer src="/ems/static/js/lib-router.c8836941cc.js"></script>
 <script defer src="/ems/static/js/zm.b51e94f1f1.js"></script>
-<script defer src="/ems/static/js/index.52f643777c.js"></script>
+<script defer src="/ems/static/js/index.05303f3260.js"></script>
 <meta http-equiv="X-UA-Compatible" content="IE=edge">
 <meta name="generator" content="Rspress v2.0.21">
 <link rel="icon" href="/ems/logo.svg" type="image/svg+xml">
@@ -66,6 +66,20 @@ CMake 从客户端库附近自动查找认证插件，也可用 <code>EMS_DATABA
 正常启动读取数据库已有配置并启动启用通道，持续运行直到收到 Ctrl+C / SIGTERM，再等待通道线程退出并释放插件。
 任一通道无法初始化时清理已启动通道并返回非零退出码；设备暂时离线由原通道重连逻辑处理。
 进程使用 <code>conf/log.json</code> 中的 <code>ems-collector</code> 模块记录日志。</p>
+<p>通道状态及原始收发日志写入 <code>&lt;EMS_ROOT&gt;/log/net/channels/&lt;通道名称&gt;/&lt;通道名称&gt;.log</code>，
+中文及特殊字符在文件名中使用 UTF-8 百分号编码；Debug 构建的文件名带 <code>-debug</code>。
+报文默认以 info 等级记录，与进程日志等级独立，格式为
+<code>[时间][协议][方向] 十六进制字节 (length=总长度,offset=偏移)</code>，
+方向为 <code>RX</code>、<code>TX</code> 或 <code>TX_FAILED</code>，不再输出微秒观察时标和连接标识。
+超过 1024 字节的事件拆成多行，<code>length</code> 为本次收发事件的总字节数，<code>offset</code> 为当前行
+字节在事件中的起始偏移。每个通道文件按 10 MiB 滚动，保留 10 个归档文件。</p>
+<p>收发观察通过可选的 <code>ems_plugin_set_traffic_handler</code> 插件扩展接入，旧插件不提供时仍能
+正常采集。Modbus TCP/RTU 和 DLT645 TCP/RTU 观察传输字节，接收可能分片或粘帧；
+IEC104 观察链路报文；DLT698 使用会话流量事件，串行 TX 不含底层后来添加的 FE 前导字节；
+IEC61850 客户端和服务端记录 MMS PDU，不包含 TCP/COTP 头。TX 表示到达协议栈发送观察点，
+不等同于远端确认；DLT698 失败写入标为 TX_FAILED，可能已发出部分字节。
+Modbus 使用项目集成的 libmodbus 构建副本提供观察点；外部 libmodbus 安装不提供该扩展时，
+构建会提示 Modbus 原始报文日志不可用。观察器不重建报文，也不改变现场读写和重试行为。</p>
 <h2 class="rp-toc-include" id="当前边界"><a href="#当前边界" class="rp-header-anchor rp-link" aria-hidden="true">#</a>当前边界</h2>
 <p>该入口已接入配置加载、YC/YX 采集、实时库写入、站根 config_revision 轮询重建，
 以及 IEC61850 只读服务端从 RTDB 自动上送。配置须使用启用的 <code>can_forward</code> 绑定与
@@ -74,7 +88,7 @@ CMake 从客户端库附近自动查找认证插件，也可用 <code>EMS_DATABA
 Modbus/IEC104 命令入口、持久去重、插队、过期及结果查询见 <a href="/ems/processes/collector/commands" class="rp-link">遥控与遥调</a>。
 历史遥测发布仍需后续接入。
 可选的旁路变更通知默认关闭，启动不依赖通知 Redis 或 ZeroMQ。
-真实 MySQL schema、实时库作用域与现场协议连接仍需按部署环境验证，构建成功不代表现场已就绪。</p><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/collector/running.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/11/15 08:32:03</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/processes/collector/" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>进程职责与模块</span></span></a><a href="/ems/processes/collector/commands" class="rp-prev-next-page__item rp-prev-next-page__next rp-link"><span class="rp-prev-next-page__item__desc">下一页</span><span class="rp-prev-next-page__item__title"><span>遥控与遥调</span><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></span></a></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#构建" class="rp-toc-item rp-link" title="构建" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">构建</span></a><a href="#配置与启动" class="rp-toc-item rp-link" title="配置与启动" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">配置与启动</span></a><a href="#当前边界" class="rp-toc-item rp-link" title="当前边界" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">当前边界</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/collector/running.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
+真实 MySQL schema、实时库作用域与现场协议连接仍需按部署环境验证，构建成功不代表现场已就绪。</p><!--/$--></div><footer class="rp-doc-footer"><div class="rp-doc-footer__edit"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/collector/running.md" target="_blank" rel="noopener noreferrer" class="rp-edit-link rp-link">编辑此页面</a><div class="rp-last-updated"><p>最后更新于<!-- -->: <span>2026/11/22 01:01:30</span></p></div></div><div class="rp-doc-footer__divider"></div><div class="rp-prev-next-page"><a href="/ems/processes/collector/" class="rp-prev-next-page__item rp-prev-next-page__prev rp-link"><span class="rp-prev-next-page__item__desc">上一页</span><span class="rp-prev-next-page__item__title"><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon rp-prev-next-page__rotate_180"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg><span>进程职责与模块</span></span></a><a href="/ems/processes/collector/commands" class="rp-prev-next-page__item rp-prev-next-page__next rp-link"><span class="rp-prev-next-page__item__desc">下一页</span><span class="rp-prev-next-page__item__title"><span>遥控与遥调</span><svg width="1em" height="1em" viewBox="0 0 32 32" class="rp-prev-next-page__icon"><path fill="currentColor" d="M22 16 12 26l-1.4-1.4 8.6-8.6-8.6-8.6L12 6z"></path></svg></span></a></div></footer></main></div><aside class="rp-doc-layout__outline rp-scrollbar"><div class="rp-outline"><div class="rp-outline__title">目录<svg width="14" height="14" class="rp-progress-circle"><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-divider-light)" stroke-width="2"></circle><circle cx="7" cy="7" r="6" stroke-linecap="round" fill="none" stroke="var(--rp-c-brand)" stroke-width="2" stroke-dasharray="37.69911184307752" stroke-dashoffset="37.69911184307752" transform="rotate(-90 7 7)" style="transition:stroke-dashoffset 0.3s"></circle></svg></div><nav class="rp-outline__toc rp-scrollbar"><a href="#构建" class="rp-toc-item rp-link" title="构建" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">构建</span></a><a href="#配置与启动" class="rp-toc-item rp-link" title="配置与启动" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">配置与启动</span></a><a href="#当前边界" class="rp-toc-item rp-link" title="当前边界" style="padding-left:0" data-depth="0"><span class="rp-toc-item__text rp-doc">当前边界</span></a></nav><div class="rp-outline__divider"></div><div class="rp-outline__bottom"><a href="https://github.com/600888/ems/tree/main/website/docs/processes/collector/running.md" target="_blank" rel="noopener noreferrer" class="rp-outline__action-row rp-edit-link rp-link"><svg width="16" height="16" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z"></path></svg><span>编辑此页面</span></a></div></div></aside></div></div>
     <div id="__rspress_modal_container"></div>
   </body>
 </html>
