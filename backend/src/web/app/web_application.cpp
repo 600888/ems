@@ -7,6 +7,7 @@
 #include <unordered_map>
 
 #include "module_registry.h"
+#include "web/modules/alarm/alarm_service.h"
 #include "web/modules/device/application/device_service.h"
 #include "web/modules/health/api/health_service.h"
 #include "web/modules/identity/module.h"
@@ -65,6 +66,7 @@ struct State {
     std::shared_ptr<SessionService> identity;
     std::unique_ptr<UserService> users;
     DeviceService device;
+    AlarmService alarms;
     RuntimeService runtime;
     BoundedExecutor business;
     BoundedExecutor imports;
@@ -79,6 +81,7 @@ struct State {
                              database, load_identity_key(o.identity_key_file)))
                        : std::make_shared<SessionService>(Json::array(), 1000, 3600)),
           device(database, o.workspace),
+          alarms(database, o.timeseries_config, o.realtime_config),
           runtime(std::move(database), {o.realtime_config, o.realtime_scope_code,
                                         o.timeseries_config, o.command_endpoint}),
           business(o.workers, o.queue_size),
@@ -121,7 +124,7 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
                        action == "reset-password" || action == "unlock" || action == "revoke" ||
                        action == "complete" || action == "change-password" || action == "login" ||
                        action == "logout" || action == "logout-all" || action == "reauthenticate" ||
-                       action == "activity";
+                       action == "activity" || action == "acknowledge";
 
     // 完成与期限竞争只回复一次；开始后的写超时不能宣称确定未保存。
     std::weak_ptr<Reply> weak_reply = reply;
@@ -277,7 +280,9 @@ void dispatch(const std::shared_ptr<State>& state, const drogon::HttpRequestPtr&
             const bool runtime_route =
                 path.rfind("/api/monitor/", 0) == 0 || path.rfind("/api/history/", 0) == 0 ||
                 path.rfind("/api/audit/", 0) == 0 || path.rfind("/api/commands/", 0) == 0;
-            auto result = runtime_route
+            auto result = path.rfind("/api/alarms/", 0) == 0
+                              ? state->alarms.execute(path, body, session.principal, context)
+                          : runtime_route
                               ? state->runtime.execute(path, body, session.principal, context)
                               : state->device.execute(path, body, session.principal, context, file);
             result.meta["request_id"] = reply->trace;

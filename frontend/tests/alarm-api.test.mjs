@@ -344,13 +344,25 @@ test('接口未实现时显示服务未接通，非法历史范围不发送请�
   let calls = 0
   globalThis.fetch = async () => {
     calls++
-    return Response.json({ error: { reason: 'not_found' } }, { status: 404 })
+    return Response.json({ error: { reason: 'route_not_found' } }, { status: 404 })
   }
   await store.query()
   assert.match(store.error, /告警服务尚未接通/)
   await store.applyFilters({ ...store.filters, view: 'history', start_ms: 2, end_ms: 1 })
   assert.equal(calls, 1)
   assert.match(store.error, /不得晚于/)
+})
+
+test('列表保留归档进度，详情资源不存在时显示真实原因', async () => {
+  const store = useAlarmStore()
+  globalThis.fetch = async (path) =>
+    path.endsWith('detail')
+      ? Response.json({ error: { reason: 'alarm_not_found' } }, { status: 404 })
+      : Response.json({ data: page([row('a')]), meta: { alarm_archive: { pending: 2 } } })
+  await store.query()
+  assert.equal(store.archivePending, 2)
+  await store.openDetail('a')
+  assert.match(store.detailError, /告警不存在/)
 })
 
 test('导出使用已提交条件、行数上限并忽略退出后的响应', async () => {

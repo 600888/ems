@@ -1,6 +1,6 @@
 #pragma once
 
-#include <common/database/alarm/repositories.h>
+#include <common/database/timeseries/store.h>
 
 #include <nlohmann/json.hpp>
 #include <stdexcept>
@@ -8,6 +8,53 @@
 
 namespace ems::database::detail {
 constexpr std::size_t kMaxAlarmPayload = 50000;
+
+/** @brief 校验时序读取条件。 @param[in] query 固定归档查询。
+ * @return 条件有效时为 true。 */
+inline bool valid_alarm_query(const AlarmArchiveQuery& query) {
+    return !query.station_id.empty() && query.station_id.value().size() <= 64 &&
+           query.alarm_id.value().size() <= 64 && query.archived_seq >= 0 &&
+           (!query.alarm_id.empty() ||
+            (!query.events && query.start_us >= 0 && query.end_us >= query.start_us &&
+             query.end_us <= kMaxAlarmArchiveTimeUs));
+}
+
+/** @brief 获取查询预算。 @param[in] query 已校验条件。 @return 最大有效行数。 */
+inline std::uint32_t alarm_read_budget(const AlarmArchiveQuery& query) {
+    return query.alarm_id.empty() ? kMaxArchivedAlarmRows : 3;
+}
+
+/** @brief 获取原始行并核对归档身份。 @param[in] query 已校验条件。
+ * @param[in] seq 时序顺序。 @param[in] payload 时序原始 JSON。
+ * @return 公共行或数据损坏错误。 */
+inline core::Result<ArchivedAlarmRow> read_alarm_row(const AlarmArchiveQuery& query,
+                                                     std::int64_t seq, std::string payload) {
+    const auto invalid =
+        core::make_error(core::ErrorCode::CorruptData, core::WriteEffect::NotApplicable,
+                         "invalid archived alarm payload");
+    if (seq <= 0 || seq > query.archived_seq || payload.size() > kMaxAlarmPayload) return invalid;
+    try {
+        const auto value = nlohmann::json::parse(payload);
+        auto alarm_id = value.at("alarm_id").get<std::string>();
+        auto device_id = value.at("device_id").get<std::string>();
+        if (value.at("station_id") != query.station_id.value() || alarm_id.empty() ||
+            device_id.empty() || (!query.alarm_id.empty() && alarm_id != query.alarm_id.value()))
+            return invalid;
+        if (query.alarm_id.empty()) {
+            const auto& occurred = value.at("occurred_at_us");
+            if (!occurred.is_number_integer() || occurred < 0 ||
+                (occurred.is_number_unsigned()
+                     ? occurred.get<std::uint64_t>() > static_cast<std::uint64_t>(query.end_us)
+                     : occurred.get<std::int64_t>() > query.end_us) ||
+                occurred < query.start_us)
+                return invalid;
+        }
+        return ArchivedAlarmRow{model::AlarmId(std::move(alarm_id)),
+                                core::DeviceId(std::move(device_id)), seq, std::move(payload)};
+    } catch (const nlohmann::json::exception&) {
+        return invalid;
+    }
+}
 
 struct AlarmStateColumns {
     std::int64_t occurred_at_us{0};

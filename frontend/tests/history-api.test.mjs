@@ -87,11 +87,31 @@ test('完整分页加载测点，保留子设备；并发展开共用请求，�
   assert.equal(target.children.length, 203)
 })
 
+test('五档采样间隔按毫秒提交，默认和重置都是30秒', async () => {
+  const store = useHistoryStore()
+  store.selected = [point('power')]
+  const intervals = ['5s', '30s', '1分钟', '5分钟', '30分钟']
+  assert.deepEqual(Object.keys(domain.HISTORY_INTERVAL_MS), intervals)
+  assert.equal(store.interval, '30s')
+  const calls = []
+  globalThis.fetch = async (_path, options) => {
+    calls.push(JSON.parse(options.body).interval_ms)
+    return response({ items: [], truncated: false })
+  }
+  for (const interval of intervals) {
+    store.interval = interval
+    await store.query()
+  }
+  assert.deepEqual(calls, [5000, 30000, 60000, 300000, 1800000])
+  store.resetFilters()
+  assert.equal(store.interval, '30s')
+})
+
 test('按设备和四遥分类请求30天数据，服务端间隔作用于图表和明细；质量异常断线', async () => {
   const store = useHistoryStore()
   store.selected = [point('power'), point('state', 'yx'), point('other', 'yc', 'device2')]
   store.quickRange = '30d'
-  store.interval = '1 小时'
+  store.interval = '30分钟'
   const calls = []
   globalThis.fetch = async (path, options) => {
     assert.equal(path, '/api/history/query')
@@ -110,7 +130,7 @@ test('按设备和四遥分类请求30天数据，服务端间隔作用于图表
   await store.query()
   assert.equal(calls.length, 3)
   assert.ok(calls.every((body) => body.end_ms - body.start_ms === 30 * 86400000))
-  assert.ok(calls.every((body) => body.interval_ms === 3600000 && body.max_rows === 10000))
+  assert.ok(calls.every((body) => body.interval_ms === 1800000 && body.max_rows === 10000))
   assert.deepEqual(
     calls.map((body) => body.point_type),
     ['yc', 'yx', 'yc'],
@@ -145,6 +165,84 @@ test('较慢的旧查询不能覆盖新结果或清除新查询的busy状态', a
   assert.equal(store.chartSeries[0].values[0], 2)
   assert.equal(store.busy, false)
   assert.equal(store.truncated, false)
+})
+
+test('按间隔绘图使用归档时间，缺失时间桶断线，空响应清除旧曲线', async () => {
+  const store = useHistoryStore()
+  const start = 1700000000000
+  const step = 60000
+  store.customRange = [start, start + 5 * step]
+  store.interval = '1分钟'
+  store.selected = [point('power'), point('empty')]
+  let items = [
+    { ...sample('power', 0, start), sample_timestamp: start + 5000 },
+    { ...sample('power', 4, start + step), sample_timestamp: start + step + 5000 },
+    { ...sample('power', 9, start + 3 * step), sample_timestamp: start + 3 * step + 5000 },
+  ]
+  globalThis.fetch = async () => response({ items, truncated: false })
+  await store.query()
+  assert.deepEqual(store.range, store.customRange)
+  assert.deepEqual(store.chartSeries[0].timestamps, [
+    start + 5000,
+    start + step + 5000,
+    start + 2 * step,
+    start + 3 * step + 5000,
+  ])
+  assert.deepEqual(store.chartSeries[0].values, [0, 4, null, 9])
+  assert.deepEqual(store.chartSeries[1].values, [])
+  assert.deepEqual(
+    store.tableRows.map((row) => row.timestamp),
+    [start, start + step, start + 3 * step],
+  )
+
+  items = []
+  await store.query()
+  assert.equal(store.hasChartData, false)
+  assert.deepEqual(store.tableRows, [])
+})
+
+test('定期刷新会话保留正在加载的设备目录以及已完成的查询', async () => {
+  const auth = useAuthStore()
+  const session = {
+    ...auth.session,
+    permissions: ['history.read', 'device.read'],
+    scope_mode: 'selected',
+    scopes: [
+      { station_id: 'station', device_root_id: 'device' },
+      { station_id: 'station', device_root_id: 'other' },
+    ],
+  }
+  auth.apply(session)
+  const store = useHistoryStore()
+  let finishTree
+  globalThis.fetch = () => new Promise((done) => (finishTree = done))
+  const pending = store.load()
+  auth.apply({
+    ...session,
+    permissions: [...session.permissions].reverse(),
+    scopes: [...session.scopes].reverse(),
+    idle_expires_at: '2030-01-01T00:00:00Z',
+  })
+  assert.equal(store.loading, true)
+  finishTree(
+    response({
+      items: [{ device_id: 'station', name: 'Station', code: 's', node_kind: 'station' }],
+      total: 1,
+    }),
+  )
+  await pending
+  store.selected = [point('power')]
+  globalThis.fetch = async () => response({ items: [sample('power', 5)], truncated: false })
+  await store.query()
+  auth.apply({ ...session, idle_expires_at: '2030-01-01T00:01:00Z' })
+  assert.equal(store.tree[0].id, 'station')
+  assert.equal(store.selected[0].pointId, 'power')
+  assert.equal(store.chartSeries[0].values[0], 5)
+
+  auth.apply({ ...session, scopes: [session.scopes[1]] })
+  assert.equal(store.tree.length, 0)
+  assert.equal(store.selected.length, 0)
+  assert.equal(store.tableRows.length, 0)
 })
 
 test('账号退出时清空目录并阻止未完成的查询和测点加载写回', async () => {
@@ -183,7 +281,7 @@ test('部分失败保留成功数据并提示，变更条件立即取消旧结�
   assert.equal(store.chartSeries[0].values[0], 5)
   assert.match(store.queryError, /遥信/)
   assert.equal(store.truncated, true)
-  store.interval = '原始数据'
+  store.interval = '5s'
   assert.equal(store.tableRows.length, 0)
   assert.equal(store.truncated, false)
   assert.equal(store.queryError, '')

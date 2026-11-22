@@ -1,6 +1,8 @@
 # 策略进程
 
-> 进程：`ems-strategy`｜语言：C++17｜状态：目标设计。
+> 进程 `ems-strategy` 已接入标准故障遥信告警。
+
+随 `ems-daemon` 启动，使用 `conf/db.json` 和 `conf/realtime.json`。在设备点表中启用并绑定布尔遥信 `fault_active` 后，策略读取实时值并持久化发生和恢复事件。告警确认与历史读取见[告警](../web/alarms.md)。
 
 防逆流、需量保护、计划曲线、手动模式、光伏协同和站级功率分配的参数、算法、冲突处理与验收场景见[策略进程详细设计](design.md)。
 

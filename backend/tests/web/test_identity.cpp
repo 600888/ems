@@ -14,6 +14,7 @@
 #include "common/db/runtime/transaction_database.h"
 #include "scd/alarm_archiver.h"
 #include "web/app/web_options.h"
+#include "web/modules/alarm/alarm_service.h"
 #include "web/modules/device/application/device_service.h"
 #include "web/modules/identity/api/identity_codec.h"
 #include "web/modules/identity/module.h"
@@ -265,6 +266,128 @@ class AlarmRepository : public PersistentIdentity {
         return take(db.alarms->progress(*tx, station, ctx));
     }
 };
+
+class AlarmSeriesFixture final : public ITimeSeriesDatabase {
+   public:
+    explicit AlarmSeriesFixture(std::vector<AlarmArchiveItem>& rows) : rows_(rows) {}
+
+    core::Status check_alarm_schema(const core::CallContext&) override { return core::ok_status(); }
+
+    core::Status write_alarm(const AlarmArchiveItem& row, const core::CallContext&) override {
+        rows_.push_back(row);
+        return core::ok_status();
+    }
+
+    core::Result<std::vector<ArchivedAlarmRow>> read_alarms(const AlarmArchiveQuery& query,
+                                                            const core::CallContext&) override {
+        std::vector<ArchivedAlarmRow> result;
+        for (const auto& row : rows_) {
+            if (query.station_id != row.station_id || row.stream_seq > query.archived_seq ||
+                (!query.alarm_id.empty() && query.alarm_id != row.alarm_id))
+                continue;
+            if (query.alarm_id.empty()) {
+                const auto time = Json::parse(row.state_json).at("occurred_at_us");
+                if (time < query.start_us || time > query.end_us) continue;
+            }
+            result.push_back({row.alarm_id, row.device_id, row.stream_seq,
+                              query.events ? row.event_json : row.state_json});
+        }
+        return result;
+    }
+
+    core::Status write(const Sample&, const core::CallContext&) override {
+        return core::ok_status();
+    }
+
+    core::Result<std::vector<Sample>> scan(const HistoryQuery&, const std::vector<SeriesMapping>&,
+                                           std::uint32_t, const core::CallContext&) override {
+        return std::vector<Sample>{};
+    }
+
+   private:
+    std::vector<AlarmArchiveItem>& rows_;
+};
+
+TEST_F(AlarmRepository, WebMergesArchiveBeforeFilteringAndPreservesFirstConfirmation) {
+    auto first = occurrence();
+    first.event_time_us += 321;
+    EXPECT_EQ(apply(first), AlarmChangeResult::Applied);
+    auto other = first;
+    other.alarm_id = model::AlarmId("alarm-b");
+    other.event_id = core::EventId("occurred-b");
+    other.device_id = core::DeviceId("device-b");
+    std::get<AlarmOccurrence>(other.change).active_key = "other";
+    EXPECT_EQ(apply(other), AlarmChangeResult::Applied);
+
+    std::vector<AlarmArchiveItem> archived;
+    AlarmSeriesFixture archive(archived);
+    auto ctx = call().context;
+    ASSERT_EQ(take(storage::archive_alarm_batch(*db.database, *db.alarms, archive, station, ctx)),
+              2u);
+    AlarmService service(db, {}, {}, [&]() -> core::Result<std::unique_ptr<ITimeSeriesDatabase>> {
+        return std::unique_ptr<ITimeSeriesDatabase>(std::make_unique<AlarmSeriesFixture>(archived));
+    });
+    auto admin = sessions->get(admin_token, call()).principal;
+    const auto operator_call = [&](const auto& path, const Json& body) {
+        return service.execute(path, body, admin, call().context);
+    };
+    const Json ack = {{"alarm_ids", {"alarm-a", "missing"}}, {"remark", "　现场确认　"}};
+    const auto receipt = operator_call("/api/alarms/acknowledge", ack).data.at("items");
+    ASSERT_EQ(receipt.size(), 2u);
+    EXPECT_EQ(receipt.at(0).at("status"), "acknowledged");
+    EXPECT_EQ(receipt.at(1).at("status"), "failed");
+    EXPECT_EQ(operator_call("/api/alarms/acknowledge", ack).data.at("items").at(0).at("status"),
+              "already_acknowledged");
+
+    auto cleared = first;
+    cleared.event_id = core::EventId("cleared-a");
+    cleared.event_time_us += 1;
+    cleared.change = AlarmRecovery{};
+    EXPECT_EQ(apply(cleared), AlarmChangeResult::Applied);
+
+    const auto millis = first.event_time_us / 1000;
+    Json filters = {{"view", "history"},
+                    {"start_ms", millis},
+                    {"end_ms", millis},
+                    {"recovery", "cleared"},
+                    {"acknowledgement", "acknowledged"},
+                    {"page", 1},
+                    {"page_size", 8}};
+    const auto result = operator_call("/api/alarms/query", filters);
+    ASSERT_EQ(result.data.at("total"), 1);
+    EXPECT_EQ(result.data.at("summary").at("cleared"), 1);
+    EXPECT_EQ(result.data.at("device_counts"),
+              (Json{{"station-main", 1}, {"unit-b", 1}, {"device-b", 1}}));
+    EXPECT_EQ(result.meta.at("alarm_archive").at("pending"), 2);
+    const auto detail = operator_call("/api/alarms/detail", {{"alarm_id", "alarm-a"}}).data;
+    ASSERT_EQ(detail.at("events").size(), 3u);
+    EXPECT_EQ(detail.at("events").at(1).at("kind"), "acknowledged");
+    EXPECT_EQ(detail.at("events").at(2).at("kind"), "cleared");
+    EXPECT_EQ(detail.at("acknowledgement").at("remark"), "现场确认");
+    EXPECT_EQ(detail.at("acknowledgement").at("display_name"), "管理员");
+
+    filters.erase("page");
+    filters.erase("page_size");
+    filters["max_rows"] = 1;
+    EXPECT_EQ(operator_call("/api/alarms/export", filters).data.at("items").size(), 1u);
+    Principal scoped;
+    scoped.subject_id = admin_id;
+    scoped.permissions = {"alarm.read"};
+    scoped.station_ids = {station.value()};
+    scoped.device_roots = {"unit-a"};
+    filters["device_root_id"] = "station-main";
+    const auto authorized = service.execute("/api/alarms/export", filters, scoped, call().context);
+    EXPECT_EQ(authorized.data.at("items").size(), 1u);
+    EXPECT_FALSE(authorized.meta.contains("alarm_archive"));
+    error(
+        [&] {
+            service.execute("/api/alarms/detail", {{"alarm_id", "alarm-b"}}, scoped,
+                            call().context);
+        },
+        404, "alarm_not_found");
+    error([&] { service.execute("/api/alarms/acknowledge", ack, scoped, call().context); }, 403,
+          "permission_denied");
+}
 
 TEST_F(AlarmRepository, PersistsIndependentLifecycleAndContiguousArchive) {
     const auto first = occurrence();
@@ -779,6 +902,19 @@ TEST_F(PersistentIdentity, HttpPersistentUserLifecycleAndCsrf) {
             EXPECT_EQ(data(signed_in).at("kind"), "full");
             EXPECT_EQ(admin.csrf.size(), 43u);
             EXPECT_EQ(signed_in->getHeader("cache-control"), "no-store");
+            const Json alarms = {{"view", "active"}, {"page", 1}, {"page_size", 8}};
+            EXPECT_EQ(request("/api/alarms/query", drogon::Get, {}, admin)->statusCode(), 405);
+            EXPECT_EQ(
+                request("/api/alarms/query", drogon::Post, alarms, admin, false)->statusCode(),
+                403);
+            const auto alarm_page = request("/api/alarms/query", drogon::Post, alarms, admin);
+            ASSERT_EQ(alarm_page->statusCode(), 200);
+            EXPECT_EQ(data(alarm_page).at("total"), 0);
+            const auto missing_alarm =
+                request("/api/alarms/detail", drogon::Post, {{"alarm_id", "missing"}}, admin);
+            EXPECT_EQ(missing_alarm->statusCode(), 404);
+            EXPECT_EQ(Json::parse(missing_alarm->body()).at("error").at("reason"),
+                      "alarm_not_found");
             EXPECT_EQ(request("/api/users/list", drogon::Post, Json::object(), admin, false)
                           ->statusCode(),
                       403);

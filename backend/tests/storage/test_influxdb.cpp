@@ -121,6 +121,21 @@ TEST_F(InfluxDbTest, ArchivesEventAndStateWithStableIdentityAndRetriesPartialWri
     ASSERT_TRUE(core::is_ok(alarm_store->write_alarm(occurred, context())));
     ASSERT_TRUE(core::is_ok(alarm_store->write_alarm(cleared, context())));
     ASSERT_TRUE(core::is_ok(alarm_store->write_alarm(occurred, context())));
+    AlarmArchiveQuery query{
+        occurred.station_id, 1, {}, occurred.event_time_us, occurred.event_time_us};
+    const auto states = alarm_store->read_alarms(query, context());
+    ASSERT_TRUE(core::is_ok(states));
+    ASSERT_EQ(core::value_of(states).size(), 1u);
+    EXPECT_EQ(core::value_of(states).front().payload, occurred.state_json);
+
+    query.archived_seq = 2;
+    query.alarm_id = occurred.alarm_id;
+    query.events = true;
+    const auto events = alarm_store->read_alarms(query, context());
+    ASSERT_TRUE(core::is_ok(events));
+    ASSERT_EQ(core::value_of(events).size(), 2u);
+    EXPECT_EQ(core::value_of(events).at(0).payload, occurred.event_json);
+    EXPECT_EQ(core::value_of(events).at(1).payload, cleared.event_json);
 }
 
 TEST_F(InfluxDbTest, CursorOrdersEqualTimestampEventsAcrossPoints) {

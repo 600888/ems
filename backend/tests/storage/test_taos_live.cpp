@@ -64,6 +64,18 @@ TEST(TaosLive, AlarmWritesRetainEqualTimeEventsAndReplayWithoutDuplicates) {
         ASSERT_TRUE(core::is_ok(status))
             << (core::is_ok(status) ? "" : core::error_of(status).message);
     }
+    AlarmArchiveQuery query{occurred.station_id, 1, {}, now, now};
+    const auto snapshots = store->read_alarms(query, ctx);
+    ASSERT_TRUE(core::is_ok(snapshots))
+        << (core::is_ok(snapshots) ? "" : core::error_of(snapshots).message);
+    ASSERT_EQ(core::value_of(snapshots).size(), 1u);
+    EXPECT_EQ(core::value_of(snapshots).front().payload, occurred.state_json);
+    query.archived_seq = 2;
+    query.alarm_id = occurred.alarm_id;
+    query.events = true;
+    const auto events = store->read_alarms(query, ctx);
+    ASSERT_TRUE(core::is_ok(events)) << (core::is_ok(events) ? "" : core::error_of(events).message);
+    EXPECT_EQ(core::value_of(events).size(), 2u);
     for (const auto* prefix : {"alarm_event_", "alarm_state_"}) {
         const bool state = std::string_view(prefix) == "alarm_state_";
         const auto sql = "SELECT event_id,payload FROM ems_history." + std::string(prefix) +

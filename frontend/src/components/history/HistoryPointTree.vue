@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, shallowRef, watch } from 'vue'
 
 import AppIcon from '@/components/common/AppIcon.vue'
 import { errorMessage } from '@/api/http'
@@ -12,6 +12,26 @@ import {
 
 const history = useHistoryStore()
 const tree = computed(() => history.filteredTree)
+const defaultExpandedKeys = shallowRef<string[]>([])
+
+type TreeNode = { expanded: boolean; collapse: () => void; expand: () => void }
+
+watch(
+  () => history.tree,
+  (nodes) => {
+    const keys: string[] = []
+    function collect(children: HistoryTreeChild[]) {
+      for (const child of children) {
+        if (child.isPoint || !child.children?.some((item) => !item.isPoint)) continue
+        keys.push(child.id)
+        collect(child.children)
+      }
+    }
+    collect(nodes)
+    defaultExpandedKeys.value = keys
+  },
+  { immediate: true },
+)
 
 function isPoint(data: HistoryTreeChild): data is HistoryPointNode {
   return data.isPoint === true
@@ -26,27 +46,24 @@ function checkClass(data: HistoryTreeChild) {
   return checkIcon(data) === 'square-check' ? 'text-accent' : 'text-subtle'
 }
 
-function hasChildren(data: HistoryTreeChild) {
-  if (isPoint(data)) return false
-  return true
+function canLoadPoints(data: HistoryTreeChild) {
+  return (
+    !isPoint(data) && !data.pointsLoaded && (data.kind === 'device' || data.kind === 'component')
+  )
 }
 
-/** 展开设备节点前懒加载测点子节点 */
-async function onExpand(
-  node: { expanded: boolean; collapse: () => void; expand: () => void },
-  data: HistoryTreeChild,
-) {
+function hasChildren(data: HistoryTreeChild) {
+  return !isPoint(data) && (Boolean(data.children?.length) || canLoadPoints(data))
+}
+
+function onExpand(node: TreeNode, data: HistoryTreeChild) {
+  if (!hasChildren(data)) return
   if (node.expanded) {
     node.collapse()
     return
   }
-  if (isPoint(data)) return
-  try {
-    await history.ensurePoints(data as HistoryDeviceNode)
-    node.expand()
-  } catch (error) {
-    history.error = errorMessage(error)
-  }
+  node.expand()
+  void loadExpanded(data)
 }
 
 function onCheck(data: HistoryTreeChild) {
@@ -54,14 +71,14 @@ function onCheck(data: HistoryTreeChild) {
   else void history.toggleDevice(data as HistoryDeviceNode)
 }
 
-function onNodeClick(data: unknown, node: unknown) {
-  const d = data as HistoryTreeChild
-  if (isPoint(d)) return
-  void onExpand(node as { expanded: boolean; collapse: () => void; expand: () => void }, d)
+function onNodeClick(data: HistoryTreeChild, node: TreeNode) {
+  if (isPoint(data)) history.togglePoint(data)
+  else if (node.expanded && canLoadPoints(data)) void loadExpanded(data)
+  else onExpand(node, data)
 }
 
 async function loadExpanded(data: HistoryTreeChild) {
-  if (isPoint(data)) return
+  if (isPoint(data) || !canLoadPoints(data)) return
   try {
     await history.ensurePoints(data)
   } catch (error) {
@@ -109,6 +126,7 @@ function dotClass(status?: string) {
         node-key="id"
         :props="{ label: 'name', children: 'children' }"
         :indent="13"
+        :default-expanded-keys="defaultExpandedKeys"
         highlight-current
         :expand-on-click-node="false"
         @node-click="onNodeClick"
@@ -120,6 +138,8 @@ function dotClass(status?: string) {
               v-if="hasChildren(data as HistoryTreeChild)"
               type="button"
               class="flex shrink-0 items-center text-muted"
+              :aria-label="node.expanded ? '收起' : '展开'"
+              :aria-expanded="node.expanded"
               @click.stop="onExpand(node, data as HistoryTreeChild)"
             >
               <AppIcon :name="node.expanded ? 'chevron-down' : 'chevron-right'" :size="12" />

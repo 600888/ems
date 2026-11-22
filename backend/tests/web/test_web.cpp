@@ -974,6 +974,7 @@ TEST_F(WebHistory, BucketsMergeScopesAndCarryLatestQualityAcrossPages) {
     auto result = history.execute("/api/history/query", query, actor, context()).data;
     ASSERT_EQ(result.at("items").size(), 2u);
     EXPECT_EQ(result.at("items")[0].at("timestamp"), 0);
+    EXPECT_EQ(result.at("items")[0].at("sample_timestamp"), 1500);
     EXPECT_EQ(result.at("items")[0].at("value"), 1500);
     EXPECT_EQ(result.at("items")[0].at("quality_code"), 4);
     EXPECT_EQ(result.at("items")[1].at("timestamp"), 60000);
@@ -982,6 +983,27 @@ TEST_F(WebHistory, BucketsMergeScopesAndCarryLatestQualityAcrossPages) {
     result = history.execute("/api/history/query", query, actor, context()).data;
     EXPECT_EQ(result.at("items").size(), 1u);
     EXPECT_TRUE(result.at("truncated"));
+}
+
+TEST_F(WebHistory, SkipsEmptyBucketsAndKeepsStoredSampleTimes) {
+    add(1600, 1);
+    add(121700, 2);
+    RuntimeService history(db, {}, {}, reader());
+    auto query = body();
+    query["interval_ms"] = 60000;
+    const auto result = history.execute("/api/history/query", query, actor, context()).data;
+    const auto& items = result.at("items");
+    ASSERT_EQ(items.size(), 2u);
+    EXPECT_EQ(items[0].at("timestamp"), 0);
+    EXPECT_EQ(items[0].at("sample_timestamp"), 1600);
+    EXPECT_EQ(items[1].at("timestamp"), 120000);
+    EXPECT_EQ(items[1].at("sample_timestamp"), 121700);
+
+    query["start_ms"] = 60000;
+    query["end_ms"] = 120000;
+    const auto empty = history.execute("/api/history/query", query, actor, context()).data;
+    EXPECT_TRUE(empty.at("items").empty());
+    EXPECT_FALSE(empty.at("truncated"));
 }
 
 TEST_F(WebHistory, BooleanHistoryUsesYxTableAndSupportsThirtyDays) {
@@ -995,7 +1017,7 @@ TEST_F(WebHistory, BooleanHistoryUsesYxTableAndSupportsThirtyDays) {
     }
     RuntimeService history(db, {}, {}, reader());
     auto query = body("yx");
-    for (const auto interval : {0, 60000, 300000, 900000, 3600000}) {
+    for (const auto interval : {0, 5000, 30000, 60000, 300000, 900000, 1800000, 3600000}) {
         query["interval_ms"] = interval;
         const auto result = history.execute("/api/history/query", query, actor, context()).data;
         ASSERT_EQ(result.at("items").size(), 2u);

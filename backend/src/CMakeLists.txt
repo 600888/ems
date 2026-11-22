@@ -8,6 +8,7 @@ add_subdirectory(rtdb)
 add_subdirectory(net)
 
 add_subdirectory(scd)
+add_subdirectory(stgy)
 
 # 守护进程跨平台：Linux 走 POSIX 进程接口，Windows 走 CreateProcess/控制台事件。
 if(EMS_BUILD_DAEMON AND (WIN32 OR CMAKE_SYSTEM_NAME STREQUAL "Linux"))

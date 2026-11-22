@@ -6,8 +6,8 @@ import { historyApi, type HistorySample } from '@/api/history'
 import {
   HISTORY_INTERVAL_MS,
   HISTORY_MAX_RANGE_MS,
-  chartValue,
   csvCell,
+  historyChartSamples,
   sampleTime,
 } from '@/domain/history'
 import { errorMessage } from '@/api/http'
@@ -59,6 +59,7 @@ export const HISTORY_LIMIT = 6
 /** 曲线配色，与设备监视 · 曲线分析画板一致 */
 export const HISTORY_COLORS = ['#55d9ef', '#287bff', '#48d8ad', '#f5bc62', '#ff7883', '#a6a0ff']
 export const HISTORY_INTERVALS = Object.keys(HISTORY_INTERVAL_MS)
+const DEFAULT_HISTORY_INTERVAL = '30s'
 const QUICK_SPANS: Record<QuickRangeKey, number> = {
   '1h': 3600_000,
   '24h': 86_400_000,
@@ -68,14 +69,27 @@ const QUICK_SPANS: Record<QuickRangeKey, number> = {
 
 const pad = (n: number) => String(n).padStart(2, '0')
 /** 与画板一致的时间文案：MM-dd HH:mm */
-function fmtTime(ts: number, withDate = true) {
+function fmtTime(ts: number) {
   const d = new Date(ts)
-  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`
-  return withDate ? `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${hm}` : hm
+  return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
 
 export const useHistoryStore = defineStore('history', () => {
   const auth = useAuthStore()
+  const accessKey = computed(() => {
+    const session = auth.session
+    return session
+      ? JSON.stringify([
+          session.user.user_id,
+          session.kind,
+          session.scope_mode,
+          [...(session.permissions ?? [])].sort(),
+          (session.scopes ?? [])
+            .map(({ station_id, device_root_id }) => JSON.stringify([station_id, device_root_id]))
+            .sort(),
+        ])
+      : ''
+  })
   const tree = ref<HistoryDeviceNode[]>([])
   const keyword = ref('')
   const loading = ref(false)
@@ -88,7 +102,8 @@ export const useHistoryStore = defineStore('history', () => {
   const quickRange = ref<QuickRangeKey>('24h')
   /** 自定义时间范围（ms），设置后快捷范围取消高亮 */
   const customRange = ref<[number, number] | null>(null)
-  const interval = ref('5 分钟')
+  const interval = ref(DEFAULT_HISTORY_INTERVAL)
+  const intervalMs = computed(() => HISTORY_INTERVAL_MS[interval.value])
 
   const busy = ref(false)
   const queryError = ref('')
@@ -139,8 +154,10 @@ export const useHistoryStore = defineStore('history', () => {
 
   /** 设备勾选态：all 全选（square-check）/ 其余（square） */
   function deviceCheckState(node: HistoryDeviceNode): 'all' | 'some' | 'none' {
-    const pts = (node.children ?? []).filter((c): c is HistoryPointNode => c.isPoint === true)
-    if (!pts.length || !node.pointsLoaded) return 'none'
+    const device = keyword.value.trim() ? findDevice(node.id) : node
+    if (!device?.pointsLoaded) return 'none'
+    const pts = (device.children ?? []).filter((c): c is HistoryPointNode => c.isPoint === true)
+    if (!pts.length) return 'none'
     const hits = pts.filter((p) => isSelected(p.pointId)).length
     return hits === pts.length ? 'all' : hits ? 'some' : 'none'
   }
@@ -178,8 +195,8 @@ export const useHistoryStore = defineStore('history', () => {
 
   /** 一次加载完整点位分页；任意分类失败时不缓存残缺目录，允许重试。 */
   async function ensurePoints(input: HistoryDeviceNode): Promise<HistoryPointNode[]> {
-    const node = findDevice(input.id) ?? input
-    if (node.kind !== 'device' && node.kind !== 'component') return []
+    const node = findDevice(input.id)
+    if (!node || (node.kind !== 'device' && node.kind !== 'component')) return []
     if (node.pointsLoaded)
       return (node.children ?? []).filter(
         (child): child is HistoryPointNode => child.isPoint === true,
@@ -287,7 +304,7 @@ export const useHistoryStore = defineStore('history', () => {
   function resetFilters() {
     quickRange.value = '24h'
     customRange.value = null
-    interval.value = '5 分钟'
+    interval.value = DEFAULT_HISTORY_INTERVAL
     kindFilter.value = 'all'
     notice.value = ''
   }
@@ -339,13 +356,14 @@ export const useHistoryStore = defineStore('history', () => {
     }
     rangeAnchor.value = Date.now()
     const [start, end] = range.value
+    const samplingInterval = intervalMs.value
     if (
       !Number.isSafeInteger(start) ||
       !Number.isSafeInteger(end) ||
       start < 0 ||
       end <= start ||
       end - start > HISTORY_MAX_RANGE_MS ||
-      HISTORY_INTERVAL_MS[interval.value] === undefined
+      samplingInterval === undefined
     ) {
       queryError.value = '请选择有效时间范围（开始时间早于结束时间，跨度不超过 30 天）和采样间隔。'
       return
@@ -370,7 +388,7 @@ export const useHistoryStore = defineStore('history', () => {
               point_ids: points.map((p) => p.pointId),
               start_ms: start,
               end_ms: end,
-              interval_ms: HISTORY_INTERVAL_MS[interval.value]!,
+              interval_ms: samplingInterval,
             },
             controller.signal,
           ),
@@ -420,8 +438,7 @@ export const useHistoryStore = defineStore('history', () => {
           HISTORY_COLORS[
             selected.value.findIndex((point) => point.pointId === p.pointId) % HISTORY_COLORS.length
           ]!,
-        timestamps: samples.map((s) => s.timestamp),
-        values: samples.map(chartValue),
+        ...historyChartSamples(samples, intervalMs.value ?? 0),
       }
     }),
   )
@@ -442,18 +459,6 @@ export const useHistoryStore = defineStore('history', () => {
     const top = hi + span * 0.1,
       bottom = lo - span * 0.1
     return [0, 1, 2, 3, 4].map((i) => bottom + ((top - bottom) * (4 - i)) / 4)
-  })
-
-  const xLabels = computed(() => {
-    const times = chartSeries.value.flatMap((s) => s.timestamps ?? [])
-    if (times.length < 2) return []
-    const lo = Math.min(...times),
-      hi = Math.max(...times),
-      span = hi - lo
-    return Array.from({ length: 6 }, (_, i) => {
-      const t = lo + (span * i) / 5
-      return fmtTime(t, span > 6 * 3600_000)
-    })
   })
 
   /** 明细行：按时间戳对齐各测点 */
@@ -523,7 +528,7 @@ export const useHistoryStore = defineStore('history', () => {
   })
 
   watch(
-    () => auth.session,
+    accessKey,
     () => {
       sessionEpoch++
       loadOwner = null
@@ -541,6 +546,7 @@ export const useHistoryStore = defineStore('history', () => {
   )
 
   return {
+    accessKey,
     tree,
     keyword,
     loading,
@@ -551,6 +557,7 @@ export const useHistoryStore = defineStore('history', () => {
     quickRange,
     customRange,
     interval,
+    intervalMs,
     busy,
     queryError,
     truncated,
@@ -562,6 +569,7 @@ export const useHistoryStore = defineStore('history', () => {
     filteredTree,
     visiblePoints,
     isSelected,
+    findDevice,
     deviceCheckState,
     ensurePoints,
     toggleDevice,
@@ -574,7 +582,6 @@ export const useHistoryStore = defineStore('history', () => {
     chartSeries,
     hasChartData,
     yTicks,
-    xLabels,
     tableRows,
     pagedRows,
     exportCsv,

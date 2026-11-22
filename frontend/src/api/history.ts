@@ -3,7 +3,10 @@ import { request } from './http'
 export type HistoryPointType = 'yc' | 'yx'
 export interface HistorySample {
   point_id: string
+  /** 原始查询的采样时间，或按间隔查询的时间桶起点。 */
   timestamp: number
+  /** 所选样本在时序库中的时间，旧服务可能省略。 */
+  sample_timestamp?: number
   value: number | string | boolean | null
   quality_code: number
 }

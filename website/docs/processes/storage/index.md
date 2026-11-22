@@ -46,7 +46,7 @@ influx v1 dbrp create --org YOUR_ORG --bucket-id YOUR_BUCKET_ID --db ems_history
 
 ## 告警时序归档
 
-部署工程库协调表和时序库后，在 `storage.json` 中设 `"archive_alarms": true`。默认关闭，启用后使用相同的时序配置和独立连接处理本站告警。TDengine 执行现有 `backend/data/tdengine_history.sql` 补建告警超级表。InfluxDB 使用配置中的 bucket，首次写入产生两个 measurement。
+仓库的 `storage.json` 已设置 `"archive_alarms": true`，使用共享时序配置和独立连接处理本站告警。部署时先初始化工程库告警表和时序库。TDengine 执行现有 `backend/data/tdengine_history.sql` 补建告警超级表。InfluxDB 使用配置中的 bucket，首次写入产生两个 measurement。
 
 ```mermaid
 flowchart LR
@@ -58,7 +58,7 @@ flowchart LR
 
 每轮最多处理 32 项。失败后退避重试，同一事件沿用原时间、ID 和载荷。TDengine 使用复合主键，InfluxDB 使用 measurement、标签与时间共同确定写入身份。[TDengine 写入文档](https://docs.tdengine.com/tdengine-sql/data-write/insert/) · [InfluxDB 写入文档](https://docs.influxdata.com/influxdb/v2/reference/syntax/line-protocol/)
 
-归档保留期沿用所选时序库的配置。部署时需要让保留期覆盖预期告警生命周期和补写窗口。过期事件导致写入失败时，队列会保留该项并记录故障。Web 历史查询仍处于接入计划中。
+归档保留期沿用所选时序库的配置。部署时需要让保留期覆盖预期告警生命周期和补写窗口。过期事件导致写入失败时，队列会保留该项并记录故障。Web 历史查询从时序库读取已归档数据，并合并读取边界内的待归档事件。
 
 ## 构建与启动
 

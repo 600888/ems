@@ -154,6 +154,25 @@ class OrmAlarmRepository final : public IAlarmRepository {
         });
     }
 
+    /** @brief 单次读取活动快照。 @param[in,out] tx 事务。 @param[in] station_id 站 ID。
+     * @param[in] ctx 期限。 @return 快照或超出预算错误。 */
+    core::Result<std::vector<AlarmState>> active_snapshot(ITransaction& tx,
+                                                          const core::StationId& station_id,
+                                                          const core::CallContext& ctx) override {
+        return run<std::vector<AlarmState>>(tx, ctx, [&](auto& db) {
+            const auto rows = db.template query_s<AlarmControlRow>(
+                "station_id=? AND cleared_at_us IS NULL LIMIT " +
+                    std::to_string(kMaxActiveAlarmRows + 1),
+                station_id.value());
+            if (rows.size() > kMaxActiveAlarmRows)
+                reject(core::ErrorCode::ResourceExhausted, "active alarm query budget exceeded");
+            std::vector<AlarmState> states;
+            states.reserve(rows.size());
+            for (const auto& row : rows) states.push_back(state_of(row));
+            return states;
+        });
+    }
+
     /** @brief 读取已提交及已归档位置。 @param[in,out] tx 事务。 @param[in] station_id 站 ID。
      * @param[in] ctx 期限。 @return 两个位置或错误。 */
     core::Result<AlarmArchiveProgress> progress(ITransaction& tx, const core::StationId& station_id,
@@ -162,6 +181,39 @@ class OrmAlarmRepository final : public IAlarmRepository {
             auto row = get_progress(db, station_id.value(), false);
             if (!row) return AlarmArchiveProgress{};
             return AlarmArchiveProgress{row->committed_seq, row->archived_seq};
+        });
+    }
+
+    /** @brief 读取固定边界内的尾部。 @param[in,out] tx 事务。 @param[in] station_id 站 ID。
+     * @param[in] bounds 固定边界。 @param[in] alarm_id 可选实例 ID。
+     * @param[in] ctx 期限。 @return 有界事件列表或错误。 */
+    core::Result<std::vector<AlarmArchiveItem>> pending(ITransaction& tx,
+                                                        const core::StationId& station_id,
+                                                        const AlarmArchiveProgress& bounds,
+                                                        const model::AlarmId& alarm_id,
+                                                        const core::CallContext& ctx) override {
+        return run<std::vector<AlarmArchiveItem>>(tx, ctx, [&](auto& db) {
+            if (bounds.archived_seq < 0 || bounds.committed_seq < bounds.archived_seq)
+                reject(core::ErrorCode::InvalidArgument, "invalid alarm archive bounds");
+            const auto size = bounds.committed_seq - bounds.archived_seq;
+            if (alarm_id.empty() && size > kMaxPendingAlarmRows)
+                reject(core::ErrorCode::ResourceExhausted, "alarm archive backlog exceeds budget");
+            if (size == 0) return std::vector<AlarmArchiveItem>{};
+            const std::string where = "station_id=? AND stream_seq>? AND stream_seq<=?";
+            auto rows =
+                alarm_id.empty()
+                    ? db.template query_s<AlarmOutboxRow>(
+                          where + " ORDER BY stream_seq LIMIT " +
+                              std::to_string(kMaxPendingAlarmRows + 1),
+                          station_id.value(), bounds.archived_seq, bounds.committed_seq)
+                    : db.template query_s<AlarmOutboxRow>(
+                          where + " AND alarm_id=? ORDER BY stream_seq LIMIT 4", station_id.value(),
+                          bounds.archived_seq, bounds.committed_seq, alarm_id.value());
+            if (alarm_id.empty() ? rows.size() != static_cast<std::size_t>(size) : rows.size() > 3)
+                reject(core::ErrorCode::CorruptData, "invalid alarm outbox range");
+            std::vector<AlarmArchiveItem> items;
+            for (auto& row : rows) items.push_back(archive_item(std::move(row)));
+            return items;
         });
     }
 
@@ -176,17 +228,8 @@ class OrmAlarmRepository final : public IAlarmRepository {
                 if (!position || position->archived_seq == position->committed_seq)
                     return std::nullopt;
                 auto row = get_delivery(db, station_id.value(), position->archived_seq + 1);
-                if (!row || row->kind < 0 || row->kind > 2)
-                    reject(core::ErrorCode::CorruptData, "invalid alarm outbox entry");
-                return AlarmArchiveItem{core::EventId(row->event_id),
-                                        model::AlarmId(row->alarm_id),
-                                        station_id,
-                                        core::DeviceId(row->device_id),
-                                        static_cast<model::AlarmLifecycle>(row->kind),
-                                        row->event_time_us,
-                                        row->stream_seq,
-                                        std::move(row->event_json),
-                                        std::move(row->state_json)};
+                if (!row) reject(core::ErrorCode::CorruptData, "invalid alarm outbox entry");
+                return archive_item(std::move(*row));
             });
     }
 
@@ -272,6 +315,16 @@ class OrmAlarmRepository final : public IAlarmRepository {
                                   {"device_name", data->device_name},
                                   {"device_path", data->device_path},
                                   {"trigger_summary", data->trigger_summary}};
+            for (const auto& [key, value] :
+                 std::initializer_list<std::pair<const char*, const std::string&>>{
+                     {"point_id", data->point_id},
+                     {"point_name", data->point_name},
+                     {"trigger_condition", data->trigger_condition},
+                     {"recovery_condition", data->recovery_condition},
+                     {"trigger_value", data->trigger_value}}) {
+                bounded(value, std::string_view(key) == "point_id" ? 64 : 512);
+                if (!value.empty()) json["occurrence"][key] = value;
+            }
         }
         if (const auto* ack = std::get_if<AlarmAcknowledgement>(&event.change)) {
             bounded(ack->user_id, 64, true);
@@ -298,6 +351,21 @@ class OrmAlarmRepository final : public IAlarmRepository {
                 row.cleared_at_us,
                 row.acknowledged_at_us,
                 row.state_json};
+    }
+
+    /** @brief 映射原始归档载荷。 @param[in] row 待移动的队列行。 @return 公共事件。 */
+    static AlarmArchiveItem archive_item(AlarmOutboxRow row) {
+        if (row.kind < 0 || row.kind > 2)
+            reject(core::ErrorCode::CorruptData, "invalid alarm outbox entry");
+        return {core::EventId(std::move(row.event_id)),
+                model::AlarmId(std::move(row.alarm_id)),
+                core::StationId(std::move(row.station_id)),
+                core::DeviceId(std::move(row.device_id)),
+                static_cast<model::AlarmLifecycle>(row.kind),
+                row.event_time_us,
+                row.stream_seq,
+                std::move(row.event_json),
+                std::move(row.state_json)};
     }
 
     /** @brief 读取并验证站进度。 @param[in,out] db 受检连接。 @param[in] station_id 站 ID。

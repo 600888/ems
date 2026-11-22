@@ -25,6 +25,7 @@ export const useAlarmStore = defineStore('alarm', () => {
   const page = ref(1),
     pageSize = ref(8),
     result = ref<AlarmPage | null>(null)
+  const archivePending = ref(0)
   const loading = ref(false),
     error = ref(''),
     receivedAt = ref(0)
@@ -114,7 +115,7 @@ export const useAlarmStore = defineStore('alarm', () => {
     queryController = controller
     loading.value = true
     try {
-      const next = await alarmApi.query(
+      const { data: next, meta } = await alarmApi.query(
         { ...filters.value },
         page.value,
         pageSize.value,
@@ -135,6 +136,15 @@ export const useAlarmStore = defineStore('alarm', () => {
         return await query()
       }
       result.value = next
+      const archive = meta.alarm_archive
+      archivePending.value =
+        archive &&
+        typeof archive === 'object' &&
+        'pending' in archive &&
+        typeof archive.pending === 'number' &&
+        archive.pending > 0
+          ? archive.pending
+          : 0
       receivedAt.value = Date.now()
       error.value = ''
       selectedIds.value = selectedIds.value.filter((id) =>
@@ -369,6 +379,7 @@ export const useAlarmStore = defineStore('alarm', () => {
     page,
     pageSize,
     result,
+    archivePending,
     loading,
     error,
     receivedAt,

@@ -3,5 +3,6 @@
   "rtdb_config": "realtime.json",
   "timeseries_config": "timeseries.json",
   "scope_code": "station",
-  "interval_ms": 5000
+  "interval_ms": 5000,
+  "archive_alarms": true
 }

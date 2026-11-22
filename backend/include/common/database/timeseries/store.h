@@ -58,6 +58,24 @@ class ITimeSeriesReader {
                                                    const core::CallContext& ctx) = 0;
 };
 
+constexpr std::uint32_t kMaxArchivedAlarmRows = 30000;
+
+struct AlarmArchiveQuery {
+    core::StationId station_id;
+    std::int64_t archived_seq{0};  ///< 仅可读取已确认完整写入的连续前缀。
+    model::AlarmId alarm_id;       ///< 详情使用实例 ID，列表使用发生时间闭区间。
+    core::UtcMicros start_us{0};
+    core::UtcMicros end_us{0};
+    bool events{false};  ///< true 读取生命周期，false 读取完整状态。
+};
+
+struct ArchivedAlarmRow {
+    model::AlarmId alarm_id;
+    core::DeviceId device_id;
+    std::int64_t stream_seq{0};
+    std::string payload;
+};
+
 class IAlarmTimeSeriesStore {
    public:
     /** @brief 销毁告警时序写入接口。 */
@@ -86,6 +104,15 @@ class ITimeSeriesDatabase : public ITimeSeriesStore,
    public:
     /** @brief 销毁可读写时序库接口。 */
     ~ITimeSeriesDatabase() override = default;
+
+    /**
+     * @brief 从时序库读取固定归档边界内的告警快照或生命周期。
+     * @param[in] query 查询范围；只允许按站和实例或发生时间读取。
+     * @param[in] ctx 调用期限。
+     * @return 有界结果；超出预算时返回错误，不返回部分结果。
+     */
+    virtual core::Result<std::vector<ArchivedAlarmRow>> read_alarms(
+        const AlarmArchiveQuery& query, const core::CallContext& ctx) = 0;
 };
 
 }  // namespace ems::database

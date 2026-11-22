@@ -401,6 +401,11 @@ onBeforeUnmount(() => {
         </div>
       </form>
       <InfoBar v-if="alarm.notice" :text="alarm.notice" :tone="alarm.noticeTone" />
+      <InfoBar
+        v-if="alarm.result && alarm.archivePending"
+        :text="`还有 ${alarm.archivePending} 条告警事件待归档。`"
+        tone="info"
+      />
       <div v-if="alarm.unresolvedIds.length" class="flex shrink-0 flex-wrap items-center gap-2">
         <InfoBar
           class="flex-1"

@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { errorMessage } from '@/api/http'
-import type { HistoryDeviceNode, HistoryTreeChild } from '@/stores/history'
+import { chartAxisTime, sampleTime } from '@/domain/history'
 import { useAuthStore } from '@/stores/auth'
 
 import HistoryPointTree from '@/components/history/HistoryPointTree.vue'
@@ -20,10 +20,17 @@ import {
 const history = useHistoryStore()
 const route = useRoute()
 const auth = useAuthStore()
-let disposed = false
-onBeforeUnmount(() => {
-  disposed = true
+const chartDialogOpen = ref(false)
+const chartDialogPlot = ref<HTMLElement | null>(null)
+const yTickFormatter = new Intl.NumberFormat('zh-CN', {
+  maximumFractionDigits: 1,
+  useGrouping: false,
 })
+
+function formatYTick(value: number) {
+  const label = yTickFormatter.format(value)
+  return label === '-0' ? '0' : label
+}
 
 const quickRanges: { key: QuickRangeKey; label: string }[] = [
   { key: '1h', label: '近 1 小时' },
@@ -72,9 +79,13 @@ function chipColor(index: number) {
   return HISTORY_COLORS[index % HISTORY_COLORS.length]!
 }
 
-function legendName(name: string, unit: string) {
-  return unit ? `${name} (${unit})` : name
-}
+const legend = computed(() =>
+  history.visiblePoints.map((point, index) => ({
+    id: point.pointId,
+    label: point.unit ? `${point.name} (${point.unit})` : point.name,
+    color: history.chartSeries[index]!.color,
+  })),
+)
 
 const unitSummary = computed(() => {
   const units = [...new Set(history.visiblePoints.map((p) => p.unit).filter(Boolean))]
@@ -88,57 +99,44 @@ const emptyText = computed(() => {
   return '所选时间范围内没有数据，请调整范围或测点后重新查询。'
 })
 
-onMounted(async () => {
-  const access = JSON.stringify([
-    auth.user?.user_id,
-    auth.session?.scope_mode,
-    auth.session?.scopes,
-    auth.session?.permissions,
-  ])
-  const current = () =>
-    !disposed &&
-    access ===
-      JSON.stringify([
-        auth.user?.user_id,
-        auth.session?.scope_mode,
-        auth.session?.scopes,
-        auth.session?.permissions,
-      ])
-  await history.load()
-  if (!current()) return
-  const { device_id: deviceId, point_id: pointId, at_ms: at } = route.query
-  if (typeof deviceId !== 'string' || typeof pointId !== 'string') return
-  const find = (nodes: HistoryTreeChild[]): HistoryDeviceNode | undefined => {
-    for (const node of nodes) {
-      if (node.isPoint) continue
-      if (node.id === deviceId) return node
-      const child = find(node.children ?? [])
-      if (child) return child
-    }
-  }
-  const device = find(history.tree)
-  if (!device) {
-    history.notice = '关联设备不在当前授权目录内，请检查设备范围。'
-    return
-  }
-  try {
-    const points = await history.ensurePoints(device)
-    if (!current()) return
-    const point = points.find((item) => item.pointId === pointId)
-    if (!point) {
-      history.notice = '关联测点已不存在或不支持历史查询。'
+watch(
+  () => history.accessKey,
+  async (access, _previous, onCleanup) => {
+    if (!auth.can('history.read')) return
+    let disposed = false
+    onCleanup(() => {
+      disposed = true
+    })
+    const current = () => !disposed && access === history.accessKey
+    await history.load()
+    if (!current() || history.error) return
+    const { device_id: deviceId, point_id: pointId, at_ms: at } = route.query
+    if (typeof deviceId !== 'string' || typeof pointId !== 'string') return
+    const device = history.findDevice(deviceId)
+    if (!device) {
+      history.notice = '关联设备不在当前授权目录内，请检查设备范围。'
       return
     }
-    history.clearSelection()
-    history.togglePoint(point)
-    const instant = Number(at)
-    if (Number.isFinite(instant) && instant > 0)
-      history.customRange = [instant - 1800000, Math.min(Date.now(), instant + 1800000)]
-    await history.query()
-  } catch (cause) {
-    history.notice = errorMessage(cause)
-  }
-})
+    try {
+      const points = await history.ensurePoints(device)
+      if (!current()) return
+      const point = points.find((item) => item.pointId === pointId)
+      if (!point) {
+        history.notice = '关联测点已不存在或不支持历史查询。'
+        return
+      }
+      history.clearSelection()
+      history.togglePoint(point)
+      const instant = Number(at)
+      if (Number.isFinite(instant) && instant > 0)
+        history.customRange = [instant - 1800000, Math.min(Date.now(), instant + 1800000)]
+      await history.query()
+    } catch (cause) {
+      if (current()) history.notice = errorMessage(cause)
+    }
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
@@ -272,47 +270,76 @@ onMounted(async () => {
           </div>
           <div class="flex items-center gap-4">
             <span
-              v-for="(series, index) in history.chartSeries"
-              :key="series.name"
+              v-for="item in legend"
+              :key="item.id"
               class="flex items-center gap-[6px] text-caption text-muted"
             >
-              <i class="dot" :style="{ backgroundColor: series.color }" />{{
-                legendName(history.visiblePoints[index]!.name, history.visiblePoints[index]!.unit)
-              }}
+              <i class="dot" :style="{ backgroundColor: item.color }" />{{ item.label }}
             </span>
-            <AppIcon name="maximize-2" :size="14" class="text-muted" />
+            <button
+              type="button"
+              class="inline-flex size-7 shrink-0 items-center justify-center rounded text-muted hover:bg-raised hover:text-ink"
+              aria-label="放大曲线"
+              title="放大曲线"
+              aria-haspopup="dialog"
+              @click="chartDialogOpen = true"
+            >
+              <AppIcon name="maximize-2" :size="14" />
+            </button>
           </div>
         </div>
         <div class="flex min-h-0 flex-1 flex-col p-4">
-          <LineChart
-            v-if="history.hasChartData"
-            :series="history.chartSeries"
-            :y-ticks="history.yTicks"
-            :x-labels="history.xLabels"
-          />
-          <div v-else class="flex flex-1 items-center justify-center text-small text-muted">
-            {{ emptyText }}
-          </div>
+          <Teleport :to="chartDialogPlot" :disabled="!chartDialogOpen || !chartDialogPlot">
+            <LineChart
+              v-if="history.hasChartData"
+              :series="history.chartSeries"
+              :y-ticks="history.yTicks"
+              :time-range="history.range"
+              :sample-interval-ms="history.intervalMs"
+              :format-y-tick="formatYTick"
+              :format-hover-time="sampleTime"
+              :format-axis-time="chartAxisTime"
+            />
+            <div v-else class="flex flex-1 items-center justify-center text-small text-muted">
+              {{ emptyText }}
+            </div>
+          </Teleport>
         </div>
       </section>
+
+      <el-dialog
+        v-model="chartDialogOpen"
+        title="趋势对比"
+        width="calc(100vw - 48px)"
+        append-to-body
+        align-center
+      >
+        <div v-if="legend.length" class="mb-3 flex flex-wrap justify-end gap-x-4 gap-y-1">
+          <span
+            v-for="item in legend"
+            :key="item.id"
+            class="flex items-center gap-[6px] text-caption text-muted"
+          >
+            <i class="dot" :style="{ backgroundColor: item.color }" />{{ item.label }}
+          </span>
+        </div>
+        <div ref="chartDialogPlot" class="flex h-[74dvh] min-w-0 flex-col" />
+      </el-dialog>
 
       <!-- 数据明细 -->
       <section class="panel flex h-[380px] shrink-0 flex-col overflow-hidden">
         <div class="panel-bar">
           <div class="flex items-center gap-2.5">
             <span class="text-body font-semibold text-ink">数据明细</span>
-            <span class="text-caption text-subtle"
-              >采样间隔 {{ history.interval
-              }}<template v-if="history.interval !== '原始数据'">
-                · 每个时间桶取最后一条样本</template
-              ></span
-            >
+            <span class="text-caption text-subtle">
+              采样间隔 {{ history.interval }} · 每个时间桶取最后一条样本
+            </span>
           </div>
           <span class="text-caption text-subtle">{{ history.rangeText }}</span>
         </div>
         <div class="min-h-0 flex-1 overflow-auto">
           <div class="dt-head sticky top-0 z-10">
-            <span class="dt-th dt-cell w-[200px]">时间</span>
+            <span class="dt-th dt-cell w-[200px]">时间桶起点</span>
             <span
               v-for="point in history.visiblePoints"
               :key="point.pointId"

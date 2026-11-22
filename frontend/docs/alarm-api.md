@@ -2,9 +2,9 @@
 
 告警中心位于 `/alarms`，历史查询位于 `/alarms?view=history`。页面与设备监视共用前台壳、设备范围树、指标卡、主题令牌与通用交互组件；状态由 Pinia 管理，API 调用集中在 `src/api/alarm.ts`。恢复与确认是独立事实，前端不会因确认操作而移除活动告警。
 
-当前 C++ Web 尚未实现本页需要的告警接口。前端不在接口失败时回退模拟数据，也不生成确认成功结果。以下为待对接的接口契约，字段类型见 `src/types/alarm.ts`。所有接口使用项目统一的 `{ data, meta }` 响应、同源 Cookie 和 `X-CSRF-Token`，业务参数放在 POST JSON 中。
+告警接口由 `ems-web` 提供。字段类型见 `src/types/alarm.ts`。所有接口使用项目统一的 `{ data, meta }` 响应、同源 Cookie 和 `X-CSRF-Token`，业务参数放在 POST JSON 中。具有整站读取范围的会话可在 `meta.alarm_archive` 获取已提交、已归档位置及待归档事件数。
 
-后端实施顺序、持久化模型、事务与验收矩阵见[告警后端接入实施计划](../../website/docs/processes/web/alarms.md)。公共仓储已开始实现，HTTP 接口仍待接入。
+后端持久化模型、事务与验收矩阵见[告警](../../website/docs/processes/web/alarms.md)。
 
 存储分工：时序数据库保存告警生命周期与历史状态，承担历史查询、详情和历史导出；关系库保存当前状态、首次确认、审计和可靠归档队列。跨库采用事务 outbox 补写；历史读取合并尚未归档的变更，时序库不可用时不回退为关系库历史结果。
 

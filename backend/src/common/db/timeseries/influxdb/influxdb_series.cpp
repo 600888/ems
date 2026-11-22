@@ -302,6 +302,81 @@ class InfluxSeries final : public ITimeSeriesDatabase {
         }
     }
 
+    /** @brief 读取连续归档内的告警行。 @param[in] query 固定范围。
+     * @param[in] ctx 期限。 @return 有界结果或错误。 */
+    core::Result<std::vector<ArchivedAlarmRow>> read_alarms(const AlarmArchiveQuery& query,
+                                                            const core::CallContext& ctx) override {
+        constexpr auto effect = core::WriteEffect::NotApplicable;
+        if (!detail::valid_alarm_query(query))
+            return core::make_error(core::ErrorCode::InvalidArgument, effect);
+        if (core::has_expired(ctx))
+            return core::make_error(core::ErrorCode::DeadlineExceeded, effect);
+        if (query.archived_seq == 0) return std::vector<ArchivedAlarmRow>{};
+
+        const auto budget = detail::alarm_read_budget(query);
+        const auto* measurement = query.events ? "alarm_event" : "alarm_state";
+        auto sql =
+            std::string("SELECT \"stream_seq\",\"payload\",\"alarm_id\",\"device_id\" FROM \"") +
+            measurement + "\" WHERE \"station_id\" = '" + hex(query.station_id.value()) +
+            "' AND \"stream_seq\" <= " + std::to_string(query.archived_seq);
+        if (!query.alarm_id.empty())
+            sql += " AND \"alarm_id\" = '" + hex(query.alarm_id.value()) + "'";
+        else
+            sql += " AND \"occurred_at_us\" >= " + std::to_string(query.start_us) +
+                   " AND \"occurred_at_us\" <= " + std::to_string(query.end_us) +
+                   " AND time >= " + std::to_string(query.start_us) + "u";
+        sql += " LIMIT " + std::to_string(budget + 1);
+
+        const auto request_ctx = request_context(options_, ctx);
+        std::string response;
+        try {
+            response = client(options_, request_ctx)->execute(sql);
+        } catch (const std::exception&) {
+            return core::make_error(core::has_expired(request_ctx)
+                                        ? core::ErrorCode::DeadlineExceeded
+                                        : core::ErrorCode::Unavailable,
+                                    effect, "InfluxDB alarm query failed");
+        }
+        try {
+            const auto root = Json::parse(response);
+            const auto& results = root.at("results");
+            if (!results.is_array() || results.size() != 1 || results[0].contains("error"))
+                return core::make_error(core::ErrorCode::Unavailable, effect,
+                                        "InfluxDB alarm query rejected");
+            std::vector<ArchivedAlarmRow> rows;
+            if (!results[0].contains("series")) return rows;
+            for (const auto& series : results[0].at("series")) {
+                if (series.at("name") != measurement) return corrupt();
+                const auto columns = series.at("columns").get<std::vector<std::string>>();
+                const auto index = [&](const char* name) {
+                    const auto it = std::find(columns.begin(), columns.end(), name);
+                    if (it == columns.end()) throw std::invalid_argument("alarm query column");
+                    return static_cast<std::size_t>(it - columns.begin());
+                };
+                const auto seq = index("stream_seq"), payload = index("payload");
+                const auto alarm = index("alarm_id"), device = index("device_id");
+                for (const auto& values : series.at("values")) {
+                    if (core::has_expired(ctx))
+                        return core::make_error(core::ErrorCode::DeadlineExceeded, effect);
+                    if (rows.size() == budget)
+                        return core::make_error(core::ErrorCode::ResourceExhausted, effect);
+                    if (!values.is_array() || values.size() != columns.size()) return corrupt();
+                    auto parsed = detail::read_alarm_row(query, integer(values.at(seq)),
+                                                         values.at(payload).get<std::string>());
+                    if (!core::is_ok(parsed)) return core::error_of(parsed);
+                    auto row = std::get<0>(std::move(parsed));
+                    if (values.at(alarm) != hex(row.alarm_id.value()) ||
+                        values.at(device) != hex(row.device_id.value()))
+                        return corrupt();
+                    rows.push_back(std::move(row));
+                }
+            }
+            return rows;
+        } catch (const std::exception&) {
+            return corrupt();
+        }
+    }
+
     core::Status write(const Sample& sample, const core::CallContext& ctx) override {
         return write_batch({sample}, ctx).front();
     }

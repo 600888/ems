@@ -292,6 +292,67 @@ class TaosSeriesStore final : public ITimeSeriesDatabase {
         return core::ok_status();
     }
 
+    /** @brief 读取连续归档内的告警行。 @param[in] query 固定范围。
+     * @param[in] ctx 期限。 @return 有界结果或错误。 */
+    core::Result<std::vector<ArchivedAlarmRow>> read_alarms(const AlarmArchiveQuery& query,
+                                                            const core::CallContext& ctx) override {
+        constexpr auto effect = core::WriteEffect::NotApplicable;
+        if (!detail::valid_alarm_query(query))
+            return core::make_error(core::ErrorCode::InvalidArgument, effect);
+        std::lock_guard<std::mutex> lock(mutex_);
+        if (core::has_expired(ctx))
+            return core::make_error(core::ErrorCode::DeadlineExceeded, effect);
+        if (query.archived_seq == 0) return std::vector<ArchivedAlarmRow>{};
+
+        const auto budget = detail::alarm_read_budget(query);
+        const auto* table = query.events ? "alarm_event" : "alarm_state";
+        auto sql = std::string("SELECT stream_seq,payload FROM ems_history.") + table +
+                   " WHERE station_id = ? AND stream_seq <= " + std::to_string(query.archived_seq);
+        if (!query.alarm_id.empty())
+            sql += " AND alarm_id = ?";
+        else
+            sql += " AND occurred_at_us >= " + std::to_string(query.start_us) +
+                   " AND occurred_at_us <= " + std::to_string(query.end_us);
+        sql += " LIMIT " + std::to_string(budget + 1);
+
+        TAOS_STMT2_OPTION options{};
+        StatementPtr statement(taos_stmt2_init(connection_.get(), &options));
+        if (!statement || taos_stmt2_prepare(statement.get(), sql.c_str(), 0) != 0)
+            return taos_error("alarm read prepare", effect);
+        const auto& station = query.station_id.value();
+        const auto& alarm = query.alarm_id.value();
+        auto station_size = static_cast<std::int32_t>(station.size());
+        auto alarm_size = static_cast<std::int32_t>(alarm.size());
+        TAOS_STMT2_BIND columns[] = {
+            bind_value(TSDB_DATA_TYPE_BINARY, const_cast<char*>(station.data()), &station_size),
+            bind_value(TSDB_DATA_TYPE_BINARY, const_cast<char*>(alarm.data()), &alarm_size)};
+        TAOS_STMT2_BIND* column_bindings[] = {columns};
+        TAOS_STMT2_BINDV bindings{1, nullptr, nullptr, column_bindings};
+        int affected = 0;
+        if (taos_stmt2_bind_param(statement.get(), &bindings, -1) != 0 ||
+            taos_stmt2_exec(statement.get(), &affected) != 0)
+            return taos_error("alarm read execute", effect);
+        ResultPtr result(taos_stmt2_result(statement.get()));
+        if (!result || taos_errno(result.get()) != 0 || taos_num_fields(result.get()) != 2)
+            return taos_error("alarm read result", effect);
+        std::vector<ArchivedAlarmRow> rows;
+        while (auto row = taos_fetch_row(result.get())) {
+            if (core::has_expired(ctx))
+                return core::make_error(core::ErrorCode::DeadlineExceeded, effect);
+            if (rows.size() == budget)
+                return core::make_error(core::ErrorCode::ResourceExhausted, effect);
+            const int* lengths = taos_fetch_lengths(result.get());
+            std::int64_t seq = 0;
+            if (!lengths || !read_scalar(row, lengths, 0, seq))
+                return core::make_error(core::ErrorCode::CorruptData, effect);
+            auto parsed = detail::read_alarm_row(query, seq, read_text(row, lengths, 1));
+            if (!core::is_ok(parsed)) return core::error_of(parsed);
+            rows.push_back(std::get<0>(std::move(parsed)));
+        }
+        if (taos_errno(result.get()) != 0) return taos_error("alarm read fetch", effect);
+        return rows;
+    }
+
     core::Status write(const Sample& sample, const core::CallContext& ctx) override {
         return write_batch({sample}, ctx).front();
     }

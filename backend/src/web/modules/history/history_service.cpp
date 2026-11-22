@@ -103,6 +103,7 @@ Json encode(const database::Sample& sample, std::int64_t timestamp) {
         sample.value);
     return {{"point_id", sample.point_id},
             {"timestamp", timestamp},
+            {"sample_timestamp", sample.source_time_us / 1000},
             {"value", value},
             {"quality_code", sample.quality}};
 }
@@ -124,7 +125,7 @@ DeviceResult HistoryService::execute(const Json& body, const Principal& actor,
     const auto end = integer(body, "end_ms", kMaxTimestampMs);
     const auto limit = integer(body, "max_rows", 10000, 1000);
     const auto interval = integer(body, "interval_ms", 3600000, 0);
-    const std::set<std::int64_t> intervals{0, 60000, 300000, 900000, 3600000};
+    const std::set<std::int64_t> intervals{0, 5000, 30000, 60000, 300000, 900000, 1800000, 3600000};
     if (end <= start || end - start > kMaxRangeMs || limit < 1 || !intervals.count(interval) ||
         !body.contains("point_ids") || !body.at("point_ids").is_array() ||
         body.at("point_ids").empty() || body.at("point_ids").size() > 6)

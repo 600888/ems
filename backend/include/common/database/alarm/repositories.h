@@ -11,6 +11,8 @@ namespace ems::database {
 
 /// TDengine 与 InfluxDB 共用的告警时间上限，按非负 Unix 微秒校验。
 constexpr core::UtcMicros kMaxAlarmArchiveTimeUs = 9223372036854775LL;
+constexpr std::uint32_t kMaxActiveAlarmRows = 20000;
+constexpr std::uint32_t kMaxPendingAlarmRows = 2048;
 
 struct AlarmOccurrence {
     std::string active_key;  ///< 站内稳定的设备、规则与条件实例键。
@@ -20,6 +22,11 @@ struct AlarmOccurrence {
     std::string device_name;
     std::string device_path;
     std::string trigger_summary;
+    std::string point_id;
+    std::string point_name;
+    std::string trigger_condition;
+    std::string recovery_condition;
+    std::string trigger_value;
 };
 
 struct AlarmRecovery {};
@@ -112,6 +119,17 @@ class IAlarmRepository {
                                                          const core::CallContext& ctx) = 0;
 
     /**
+     * @brief 以单次读取获取同站活动告警，供一致的列表和计数使用。
+     * @param[in,out] tx 调用方事务。
+     * @param[in] station_id 已核验的站 ID。
+     * @param[in] ctx 调用期限。
+     * @return 活动告警；超出预算时返回 ResourceExhausted。
+     */
+    virtual core::Result<std::vector<AlarmState>> active_snapshot(ITransaction& tx,
+                                                                  const core::StationId& station_id,
+                                                                  const core::CallContext& ctx) = 0;
+
+    /**
      * @brief 读取站的归档边界。
      * @param[in,out] tx 调用方事务。
      * @param[in] station_id 稳定站 ID。
@@ -121,6 +139,21 @@ class IAlarmRepository {
     virtual core::Result<AlarmArchiveProgress> progress(ITransaction& tx,
                                                         const core::StationId& station_id,
                                                         const core::CallContext& ctx) = 0;
+
+    /**
+     * @brief 读取固定边界内的未归档事件，含读取时已推进归档的原始行。
+     * @param[in,out] tx 调用方事务。
+     * @param[in] station_id 已核验的站 ID。
+     * @param[in] bounds 读取时固定的已归档和已提交位置。
+     * @param[in] alarm_id 详情查询的实例 ID；空 ID 读取完整尾部。
+     * @param[in] ctx 调用期限。
+     * @return 事件及完整状态，按站内事件顺序返回；超出预算时返回错误。
+     */
+    virtual core::Result<std::vector<AlarmArchiveItem>> pending(ITransaction& tx,
+                                                                const core::StationId& station_id,
+                                                                const AlarmArchiveProgress& bounds,
+                                                                const model::AlarmId& alarm_id,
+                                                                const core::CallContext& ctx) = 0;
 
     /**
      * @brief 读取尚未归档的首个事件。结束读取事务后才可写时序库。

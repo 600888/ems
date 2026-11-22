@@ -135,6 +135,9 @@ class Handler(http.server.BaseHTTPRequestHandler):
             tag_filters = re.findall(r'"(\w+)" = \'([^\']*)\'', query)
             bounds = re.findall(r'time (>=|>|<|=) (-?\d+)u', query)
             limit = int(re.search(r'LIMIT (\d+)', query)[1])
+            if measurement in ("alarm_event", "alarm_state"):
+                self.alarm_query(db, measurement, query, tag_filters, limit)
+                return
             assert "ORDER BY time ASC" in query
             rows = []
             for (stored_db, name, _, timestamp), (tags, fields) in list(self.server.rows.items()):
@@ -168,6 +171,23 @@ class Handler(http.server.BaseHTTPRequestHandler):
         except Exception as error:
             self.server.errors.append(str(error))
             self.reply({"error": "fixture rejected request"}, 500)
+
+    def alarm_query(self, db, measurement, query, tag_filters, limit):
+        upper = int(re.search(r'"stream_seq" <= (\d+)', query)[1])
+        lower_time = re.search(r'"occurred_at_us" >= (\d+)', query)
+        upper_time = re.search(r'"occurred_at_us" <= (\d+)', query)
+        values = []
+        for (stored_db, name, _, _), (tags, fields) in list(self.server.rows.items()):
+            if stored_db != db or name != measurement or fields["stream_seq"] > upper:
+                continue
+            if any(tags.get(key) != value for key, value in tag_filters):
+                continue
+            if lower_time and not int(lower_time[1]) <= fields["occurred_at_us"] <= int(upper_time[1]):
+                continue
+            values.append([fields["stream_seq"], fields["payload"], tags["alarm_id"], tags["device_id"]])
+        columns = ["stream_seq", "payload", "alarm_id", "device_id"]
+        self.reply({"results": [{"series": [{"name": measurement, "columns": columns,
+                                               "values": values[:limit]}]}]})
 
 
 def main():
