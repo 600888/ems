@@ -522,7 +522,7 @@ flowchart LR
 | 生命周期 | STARTDT 确认才就绪；重连清缓存；停止等待回调退出后卸载；Windows 独占端口绑定 |
 | 点契约 | CA:IOA:ASDU，支持 16 种监视 / 12 种命令类型，保留 IEC 品质和时标来源 |
 | 控制 | 确认匹配地址、类型、OA、值、选择位和限定词；可选 SBO；默认等待 ACT_CON 与 ACT_TERM |
-| 构建 | 独立包 iec104/1.0.0；EMS_BUILD_MODBUS=OFF、EMS_BUILD_DLT645=OFF 可只构建 IEC104，无需 libmodbus/Boost |
+| 构建 | 独立包 iec104/1.0.0，可关闭其他协议单独构建 |
 | 验证 | 新增 11 项 IEC104 报文集成测试，连同原有 13 项回归在 MinGW / MSVC 验证 |
 | 后续 | ABI v2、TLS、服务器远程控制仲裁、冗余配置、可靠事件历史；Linux/macOS 与现场实机验收 |
 
@@ -533,11 +533,11 @@ flowchart LR
 | 实施项 | 本次结果 |
 | --- | --- |
 | 参考实现 | ems_simulate 的 12 位表地址、00–04 类读取、需量时间与复合字段、密码写参 |
-| 动态边界 | Dlt645Protocol PIMPL + ABI v1 C 桥；静态集成仓库协议栈，Boost 类型不跨边界 |
+| 动态边界 | Dlt645Protocol PIMPL + ABI v1 C 桥；协议栈和 Asio 静态编入插件 |
 | 通信 | TCP / RTU 客户端；同一端点支持多个表地址；按实例串行调用 |
 | 只读出口 | 多表本地映像，仅暴露配置 DI；拒绝远端写入和管理命令 |
 | 兼容 | 通道 connection/settings/rtu_addr；bcd_endian=big 对接当前模拟器 |
-| 构建 | EMS_BUILD_DLT645 默认 ON；需 Boost 1.83+ 头文件；包 dlt645/1.0.0 |
+| 构建 | EMS_BUILD_DLT645 默认 ON，使用协议栈自带的 standalone Asio，安装包为 dlt645/1.0.0 |
 | 验证 | 新增 10 项集成测试；MSVC / MinGW 全后端各 131 项通过，模拟器 Python 库双向 TCP 互通通过 |
 | 待验收 | Linux/macOS 平台构建、真实 RTU 串口收发；ABI v1 不表达复合写入及管理命令 |
 

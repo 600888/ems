@@ -65,8 +65,9 @@ CMake 从客户端库附近自动查找认证插件，也可用 `EMS_DATABASE_MY
 任一通道无法初始化时清理已启动通道并返回非零退出码；设备暂时离线由原通道重连逻辑处理。
 进程使用 `conf/log.json` 中的 `ems-collector` 模块记录日志。
 
-通道状态及原始收发日志写入 `<EMS_ROOT>/log/net/channels/<通道名称>/<通道名称>.log`，
-中文及特殊字符在文件名中使用 UTF-8 百分号编码；Debug 构建的文件名带 `-debug`。
+通道状态及原始收发日志写入 `<EMS_ROOT>/log/ems-collector/channels/<通道名称>/<通道名称>.log`，
+目录及文件名保留中文和空格，路径分隔符等特殊字符使用百分号编码；Windows 使用宽字符
+文件接口，不依赖系统代码页。Debug 构建的文件名带 `-debug`。
 报文默认以 info 等级记录，与进程日志等级独立，格式为
 `[时间][协议][方向] 十六进制字节 (length=总长度,offset=偏移)`，
 方向为 `RX`、`TX` 或 `TX_FAILED`，不再输出微秒观察时标和连接标识。
@@ -77,7 +78,7 @@ CMake 从客户端库附近自动查找认证插件，也可用 `EMS_DATABASE_MY
 正常采集。Modbus TCP/RTU 和 DLT645 TCP/RTU 观察传输字节，接收可能分片或粘帧；
 IEC104 观察链路报文；DLT698 使用会话流量事件，串行 TX 不含底层后来添加的 FE 前导字节；
 IEC61850 客户端和服务端记录 MMS PDU，不包含 TCP/COTP 头。TX 表示到达协议栈发送观察点，
-不等同于远端确认；DLT698 失败写入标为 TX_FAILED，可能已发出部分字节。
+不等同于远端确认。DLT645 和 DLT698 将失败写入标为 `TX_FAILED`，记录提交写入的字节，实际可能只发出部分字节。
 Modbus 使用项目集成的 libmodbus 构建副本提供观察点；外部 libmodbus 安装不提供该扩展时，
 构建会提示 Modbus 原始报文日志不可用。观察器不重建报文，也不改变现场读写和重试行为。
 
